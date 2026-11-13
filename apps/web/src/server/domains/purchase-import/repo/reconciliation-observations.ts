@@ -25,7 +25,6 @@ import {
   purchase,
   sourceOrderObservation,
 } from "~/server/db/schema";
-import { orderEvidence } from "~/server/domains/purchase-import/repo/order-evidence";
 import {
   isLiveSourceOrder,
   type LiveSourceOrder,
@@ -152,7 +151,11 @@ export async function recordSourceOrderObservation(
     );
   const observationId = crypto.randomUUID();
   await append(databaseForTransaction(tx), [
-    evidenceRow(orderEvidence, { ...values, id: observationId }),
+    evidenceRow(
+      (await import("~/server/domains/purchase-import/repo/order-evidence"))
+        .orderEvidence,
+      { ...values, id: observationId },
+    ),
   ]);
   const [created] = await tx
     .select()

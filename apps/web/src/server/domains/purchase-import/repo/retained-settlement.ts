@@ -173,6 +173,7 @@ export async function prepareRetainedSettlementDiscovery(
     const paymentsById = new Map<PurchaseId, RetainedPaymentRow[]>();
     const ownersById = new Map<PurchaseId, Set<LedgerPartyId>>();
     for (const row of payments) {
+      if (!row.purchaseId) continue;
       const retained = paymentsById.get(row.purchaseId) ?? [];
       retained.push(row);
       paymentsById.set(row.purchaseId, retained);
@@ -364,11 +365,18 @@ async function competingClaimants(
     );
   return competingPaymentClaimants(
     { ...charge, amountMinor },
-    rows.map((row) => ({
-      ...row,
-      paidMinor: BigInt(row.paidMinor),
-      evidenceMinor: BigInt(row.evidenceMinor),
-    })),
+    rows.flatMap((row) =>
+      row.purchaseId
+        ? [
+            {
+              ...row,
+              purchaseId: row.purchaseId,
+              paidMinor: BigInt(row.paidMinor),
+              evidenceMinor: BigInt(row.evidenceMinor),
+            },
+          ]
+        : [],
+    ),
   );
 }
 

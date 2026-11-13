@@ -81,7 +81,6 @@ import {
 import { type ExistingExpenseSnapshot } from "~/server/domains/purchase-import/policy/import-lines";
 import { importLineWritePolicy } from "~/server/domains/purchase-import/policy/import-plan";
 import { linkExactOrderEmails } from "~/server/domains/purchase-import/repo/email-purchase-decision";
-import { retainedPaymentEvidence } from "~/server/domains/purchase-import/repo/order-evidence";
 import {
   type LiveSourceOrder,
   lockImportSourceClaimFamily,
@@ -1515,6 +1514,8 @@ export async function importVendorOrder(
         purchaseId,
         sourceClaimId,
       );
+      const { retainedPaymentEvidence } =
+        await import("~/server/domains/purchase-import/repo/order-evidence");
       if (payments.length)
         await append(
           databaseForTransaction(tx),

@@ -8,6 +8,7 @@ import {
   type FinancialAccountId,
   type PurchaseId,
 } from "@cubby/schemas/identifiers";
+import { importWriterInput } from "@cubby/schemas/purchase-import";
 import { commitPurchaseImportInput } from "@cubby/schemas/purchase-import";
 import { moneyToMinor } from "@cubby/shared";
 import { sql } from "drizzle-orm";
@@ -19,6 +20,7 @@ import { describe, expect, it } from "vitest";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
+import { evidenceBinding } from "~/server/db/kernel-schema";
 import {
   financialTransactionAllocation,
   inventoryEntry,
@@ -38,7 +40,13 @@ import {
   insertPurchaseEventRows,
   updatePurchaseEventWhere,
 } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import {
+  appendOrderEvidence,
+  orderEventKey,
+  paymentAmountKey,
+} from "~/server/domains/purchase-import/repo/order-evidence";
 import { purchasePaymentAccountsRelationAdapter } from "~/server/domains/purchase/repo/purchase-payment-accounts";
+import { decide, reconcileNow, recordSubject } from "~/server/kernel/api";
 import { dollarExpenseColumns } from "~/server/testing/repo.fixtures";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
 
@@ -58,6 +66,93 @@ const checksum = (seed: number) => seed.toString(16).padStart(64, "0");
 describe("settlement from retained order evidence", () => {
   const ctx = withTestDb();
   let seed = 0;
+
+  it("keeps an ambiguous order payment unbound until a same decision, then binds the complete set", async () => {
+    const setup = await world();
+    const run = await startImportRunFixture(ctx.db, setup.run);
+    const first = await charge(setup.card.id, {
+      amount: 27,
+      postedDate: "2026-09-02",
+    });
+    await charge(setup.card.id, { amount: 27, postedDate: "2026-09-02" });
+    const [observation] = await appendOrderEvidence(ctx.db, [
+      {
+        orderKey: `${setup.vendor.id}/order/SYNTHETIC-MATCH`,
+        input: importWriterInput.parse({
+          runId: run.id,
+          ledgerPartyId: setup.party.id,
+          vendorId: setup.vendor.id,
+          vendorAccountId: setup.account.id,
+          source: {
+            kind: "vendor_export",
+            externalKey: "synthetic:match",
+            checksum: "c".repeat(64),
+          },
+          extraction: {
+            status: "ready",
+            candidate: {
+              orderId: "SYNTHETIC-MATCH",
+              merchant: setup.vendor.name,
+              orderedAt: "2026-09-01T12:00:00Z",
+              currency: "USD",
+              printedGrandTotal: 27,
+              lines: [
+                {
+                  title: "Synthetic service",
+                  amount: 27,
+                  lineKind: "principal",
+                },
+              ],
+              payments: [
+                {
+                  amount: 27,
+                  chargedAt: "2026-09-02T12:00:00Z",
+                  tender: "card",
+                },
+              ],
+            },
+          },
+          primaryDocumentImageId: null,
+          screenshotImageId: null,
+        }),
+      },
+    ]);
+    if (!observation)
+      throw new Error("Synthetic accepted observation is missing");
+    const scope = { kind: "paymentMatch", key: paymentAmountKey(2700n) };
+    const [ambiguous] = await reconcileNow(ctx.db, [scope]);
+    expect(
+      ambiguous?.gaps.some((gap) =>
+        gap.actions.some((action) => action.kind === "same"),
+      ),
+    ).toBe(true);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(evidenceBinding)
+        .where(eq(evidenceBinding.factKind, "retainedPayment")),
+    ).toEqual([]);
+    await decide(ctx.db, ctx.actor, [
+      {
+        channel: "identity",
+        kind: "same",
+        subject: orderEventKey(observation),
+        field: recordSubject("financialTransaction", first.id),
+        scopes: [scope],
+      },
+    ]);
+    const [resolved] = await reconcileNow(ctx.db, [scope]);
+    expect(resolved?.status).toBe("applied");
+    expect(
+      await getDb(ctx.db)
+        .select({
+          event: evidenceBinding.eventKey,
+          basis: evidenceBinding.basis,
+        })
+        .from(evidenceBinding)
+        .where(eq(evidenceBinding.factKind, "retainedPayment")),
+    ).toEqual([{ event: `bank:${first.id}`, basis: "decision" }]);
+  });
 
   async function world() {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
@@ -234,10 +329,12 @@ describe("settlement from retained order evidence", () => {
       );
     const tally = { allocated: 0, reviewable: 0, failed: 0 };
     for (const visit of visits) {
+      const purchaseId = visit.purchaseId;
+      if (!purchaseId) continue;
       try {
         const outcome = await withTransaction(ctx.db, (tx) =>
           settlePurchaseFromRetainedPayments(tx, {
-            purchaseId: visit.purchaseId,
+            purchaseId,
             ledgerPartyId: parseEntityId("ledgerParty", visit.ledgerPartyId),
             actor: ctx.actor,
           }),

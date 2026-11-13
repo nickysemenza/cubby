@@ -57,7 +57,6 @@ import {
   bookingVendorSelection,
 } from "~/server/domains/vendor/policy/booking-vendor";
 import {
-  bindingWrites,
   defineReconciler,
   recordSubject,
   recordIdentity,
@@ -246,13 +245,13 @@ export const purchaseEvent = defineReconciler<Input>({
   scope: "purchaseEvent",
   lane: "money",
   version: 1,
-  after: ["bankEvent"],
+  after: ["bankEvent", "paymentMatch"],
   reads: [
     ...tableReads,
     source.evidence(manualTransactionEvidence),
     source.bindings,
   ],
-  writes: [...targets, bindingWrites],
+  writes: targets,
   asks: [merchantIdentityAsk, merchantSupportAsk, escrowAsk],
   async load(reads, keys) {
     const [
@@ -456,14 +455,7 @@ export const purchaseEvent = defineReconciler<Input>({
               Object.keys(seed.values).map((field) => [field, seed.decision!]),
             )
           : {};
-        const id = record(
-          c,
-          seed.target,
-          seed.naturalKey,
-          seed.values,
-          provenance,
-        );
-        if (seed.fact) c.bind({ kind: "manualEntry", id: seed.fact }, id);
+        record(c, seed.target, seed.naturalKey, seed.values, provenance);
       }
       for (const target of targets)
         for (const key of c.existing(target))
@@ -983,19 +975,6 @@ export const purchaseEvent = defineReconciler<Input>({
       amountMinor: rows.allocation.amountMinor,
       confirmsMerchant: rows.allocation.confirmsMerchant,
     });
-    for (const occurrence of sources) {
-      c.bind(
-        { kind: "sourceOccurrence", id: occurrence.id },
-        purchaseId,
-        existingTarget ? "decision" : "proven",
-      );
-      if (occurrence.currentObservationId)
-        c.bind(
-          { kind: "statementObservation", id: occurrence.currentObservationId },
-          purchaseId,
-          existingTarget ? "decision" : "proven",
-        );
-    }
     return c.done();
   },
 });

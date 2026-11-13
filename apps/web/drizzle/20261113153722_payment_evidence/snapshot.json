@@ -1,0 +1,192 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "e92ee114-9f19-45ae-8cf1-b204709d3eef",
+  "prevIds": [
+    "d4791849-58ef-4064-94d6-f91f33fa13e5"
+  ],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "PurchasePaymentEvidence",
+        "orderObservationId"
+      ],
+      "writes": [
+        "s|col|public.PurchasePaymentEvidence.orderObservationId",
+        "n|col|public.PurchasePaymentEvidence.orderObservationId",
+        "e|col|public.PurchasePaymentEvidence.orderObservationId"
+      ],
+      "reads": [
+        "n|tbl|public.PurchasePaymentEvidence",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "alter_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "PurchasePaymentEvidence",
+        "purchaseId"
+      ],
+      "writes": [
+        "s|colprop|public.PurchasePaymentEvidence.purchaseId.notNull"
+      ],
+      "reads": [
+        "n|tbl|public.PurchasePaymentEvidence",
+        "n|sch|public",
+        "n|col|public.PurchasePaymentEvidence.purchaseId"
+      ],
+      "sqlHash": "86d4f41458da500d"
+    },
+    {
+      "statementType": "alter_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "PurchasePaymentEvidence",
+        "sourceClaimId"
+      ],
+      "writes": [
+        "s|colprop|public.PurchasePaymentEvidence.sourceClaimId.notNull"
+      ],
+      "reads": [
+        "n|tbl|public.PurchasePaymentEvidence",
+        "n|sch|public",
+        "n|col|public.PurchasePaymentEvidence.sourceClaimId"
+      ],
+      "sqlHash": "68abbb7e9ab70d0d"
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "PurchasePaymentEvidence",
+        "PurchasePaymentEvidence_observation_index_key"
+      ],
+      "writes": [
+        "s|idx|public.PurchasePaymentEvidence_observation_index_key",
+        "n|idx|public.PurchasePaymentEvidence_observation_index_key",
+        "e|idx|public.PurchasePaymentEvidence_observation_index_key",
+        "n|rel|public.PurchasePaymentEvidence_observation_index_key"
+      ],
+      "reads": [
+        "n|tbl|public.PurchasePaymentEvidence",
+        "n|sch|public",
+        "n|col|public.PurchasePaymentEvidence.orderObservationId",
+        "n|col|public.PurchasePaymentEvidence.evidenceIndex"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "public",
+        "PurchasePaymentEvidence"
+      ],
+      "writes": [
+        "s|fk|public.PurchasePaymentEvidence.PurchasePaymentEvidence_orderObservationId_SourceOrderObservati",
+        "n|fk|public.PurchasePaymentEvidence.PurchasePaymentEvidence_orderObservationId_SourceOrderObservati",
+        "e|fk|public.PurchasePaymentEvidence.PurchasePaymentEvidence_orderObservationId_SourceOrderObservati",
+        "n|con|public.PurchasePaymentEvidence.PurchasePaymentEvidence_orderObservationId_SourceOrderObservati"
+      ],
+      "reads": [
+        "n|tbl|public.PurchasePaymentEvidence",
+        "n|sch|public",
+        "n|tbl|public.SourceOrderObservation",
+        "n|sch|public",
+        "n|col|public.PurchasePaymentEvidence.orderObservationId",
+        "n|col|public.SourceOrderObservation.id",
+        "e|uniqueness|public.SourceOrderObservation.id"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "PurchasePaymentEvidence",
+        "name": "orderObservationId",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "PurchasePaymentEvidence",
+        "name": "PurchasePaymentEvidence_observation_index_key",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "orderObservationId",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "evidenceIndex",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "PurchasePaymentEvidence",
+        "name": "PurchasePaymentEvidence_orderObservationId_SourceOrderObservati",
+        "nameExplicit": true,
+        "columns": [
+          "orderObservationId"
+        ],
+        "schemaTo": "public",
+        "tableTo": "SourceOrderObservation",
+        "columnsTo": [
+          "id"
+        ],
+        "onUpdate": "NO ACTION",
+        "onDelete": "NO ACTION",
+        "entityType": "fks"
+      }
+    },
+    {
+      "op": "alter",
+      "key": "columns\u0000[\"public\",\"PurchasePaymentEvidence\",\"purchaseId\"]",
+      "set": {
+        "notNull": false
+      }
+    },
+    {
+      "op": "alter",
+      "key": "columns\u0000[\"public\",\"PurchasePaymentEvidence\",\"sourceClaimId\"]",
+      "set": {
+        "notNull": false
+      }
+    }
+  ]
+}

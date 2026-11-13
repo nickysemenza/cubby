@@ -15,7 +15,11 @@ import {
   sourceOrderObservation,
   purchasePaymentEvidence,
 } from "~/server/db/schema";
-import { normalizeOrderKey } from "~/server/domains/purchase-import/repo/order-identity";
+import {
+  orderEventKey,
+  orderPaymentKeys,
+  paymentAmountKey,
+} from "~/server/domains/purchase-import/policy/payment-keys";
 import {
   append,
   defineEvidence,
@@ -23,34 +27,12 @@ import {
   rowKey,
 } from "~/server/kernel/api";
 import { jsonSnapshot, sha256CanonicalJson } from "~/server/lib/canonical-json";
-
-/** Every payer uses the same exact USD movement key, before either side exists. */
-export const paymentAmountKey = (amount: bigint) =>
-  `payment:amount:USD:${amount}`;
-export const paymentOrderKey = (vendorId: string, orderId: string) =>
-  `payment:order:${vendorId}:${normalizeOrderKey(orderId)}`;
-
-export const orderPaymentKeys = (
-  row: Pick<
-    typeof sourceOrderObservation.$inferSelect,
-    "vendorId" | "extraction"
-  >,
-): string[] => {
-  const candidate = row.extraction.candidate;
-  if (!candidate) return [];
-  return [
-    ...new Set([
-      ...(candidate.orderId
-        ? [paymentOrderKey(row.vendorId, candidate.orderId)]
-        : []),
-      ...(candidate.currency === "USD"
-        ? candidate.payments.map((payment) =>
-            paymentAmountKey(moneyToMinor(payment.amount)),
-          )
-        : []),
-    ]),
-  ];
-};
+export {
+  orderEventKey,
+  orderPaymentKeys,
+  paymentAmountKey,
+  paymentOrderKey,
+} from "~/server/domains/purchase-import/policy/payment-keys";
 
 /** Email and its originals resolve viewer ownership in one roster query. */
 export async function resolveMailOwners(db: Database, ids: readonly string[]) {
@@ -122,11 +104,12 @@ export const orderEvidence = defineEvidence({
   keys: (row) => [
     rowKey("SourceOrderObservation", row.id),
     `order:${row.orderKey}`,
+    orderEventKey(row),
     ...(row.emailId ? [rowKey("Email", row.emailId)] : []),
     ...orderPaymentKeys(row),
   ],
   discovers: (row) => [
-    { kind: "purchaseEvent", key: `order:${row.orderKey}` },
+    { kind: "purchaseEvent", key: orderEventKey(row) },
     ...orderPaymentKeys(row).map((key) => ({ kind: "paymentMatch", key })),
     ...(row.emailId ? [{ kind: "emailState", key: row.emailId }] : []),
   ],
@@ -199,7 +182,7 @@ export async function appendOrderEvidence(
   );
   await append(db, rows);
   if (!inputs.length) return [];
-  return repositoryQueries(db)
+  const observations = await repositoryQueries(db)
     .select()
     .from(sourceOrderObservation)
     .where(
@@ -207,5 +190,28 @@ export async function appendOrderEvidence(
         sourceOrderObservation.orderKey,
         inputs.map((row) => row.orderKey),
       ),
-    );
+    )
+    .orderBy(sourceOrderObservation.createdAt, sourceOrderObservation.id);
+  await append(
+    db,
+    observations.flatMap((observation) =>
+      observation.sourceClaimId !== null ||
+      observation.extraction.candidate?.currency !== "USD"
+        ? []
+        : (observation.extraction.candidate?.payments ?? []).map(
+            (payment, evidenceIndex) =>
+              evidenceRow(retainedPaymentEvidence, {
+                orderObservationId: observation.id,
+                amountMinor: moneyToMinor(payment.amount),
+                chargedAt: payment.chargedAt
+                  ? new Date(payment.chargedAt)
+                  : null,
+                cardLastFour: payment.cardLastFour ?? null,
+                tender: payment.tender ?? "unknown",
+                evidenceIndex,
+              }),
+          ),
+    ),
+  );
+  return observations;
 }

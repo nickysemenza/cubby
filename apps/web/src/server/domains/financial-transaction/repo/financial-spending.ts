@@ -1014,7 +1014,7 @@ async function prepareSpendingPayments(
     Record<string, Awaited<ReturnType<typeof purchasePayments>>>
   > = missing.length
     ? purchasePayments(db, missing).then((rows) =>
-        groupBy(rows, (row) => row.purchaseId),
+        groupBy(rows, (row) => row.purchaseId ?? ""),
       )
     : Promise.resolve({});
   const entries = ids.map((id) => {

@@ -68,10 +68,6 @@ import {
   HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
   mailSourceIdentityBlocked,
 } from "~/server/domains/purchase-import/repo/mail-source-identity";
-import {
-  appendEmailIdentity,
-  mailOriginalEvidence,
-} from "~/server/domains/purchase-import/repo/order-evidence";
 import { readImportSourceClaimFamily } from "~/server/domains/purchase-import/repo/source-claim-family";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { append, evidenceRow } from "~/server/kernel/api";
@@ -343,19 +339,18 @@ export async function saveEmail(
     orderMailId: input.orderMailId,
   };
   await withTransaction(db, async (tx) => {
-    const { row, created } = await appendEmailIdentity(
-      databaseForTransaction(tx),
-      {
-        where: messageWhere(input),
-        values: () => ({
-          ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
-          mailboxId: input.mailboxId,
-          provider: "gmail",
-          messageId: input.messageId,
-          ...fields,
-        }),
-      },
-    );
+    const { row, created } = await (
+      await import("~/server/domains/purchase-import/repo/order-evidence")
+    ).appendEmailIdentity(databaseForTransaction(tx), {
+      where: messageWhere(input),
+      values: () => ({
+        ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
+        mailboxId: input.mailboxId,
+        provider: "gmail",
+        messageId: input.messageId,
+        ...fields,
+      }),
+    });
     await supersedeLegacyEmail(tx, input);
     await recordChange(tx, { kind: "source", categories: ["email"] });
     if (created) return;
@@ -410,7 +405,9 @@ export async function markEmailRemoved(
   },
 ) {
   await withTransaction(db, async (tx) => {
-    const { row } = await appendEmailIdentity(databaseForTransaction(tx), {
+    const { row } = await (
+      await import("~/server/domains/purchase-import/repo/order-evidence")
+    ).appendEmailIdentity(databaseForTransaction(tx), {
       where: messageWhere(input),
       values: () => ({
         ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
@@ -448,21 +445,20 @@ export async function saveMailboxMetadata(
     messageId: input.mail.messageId,
   };
   await withTransaction(db, async (tx) => {
-    const { row, created } = await appendEmailIdentity(
-      databaseForTransaction(tx),
-      {
-        where: messageWhere(identity),
-        values: () =>
-          ({
-            ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
-            provider: "gmail",
-            mailboxId: identity.mailboxId,
-            messageId: identity.messageId,
-            checksum: input.checksum,
-            status: "pending",
-          }) satisfies Omit<typeof emailTable.$inferInsert, "shortcode">,
-      },
-    );
+    const { row, created } = await (
+      await import("~/server/domains/purchase-import/repo/order-evidence")
+    ).appendEmailIdentity(databaseForTransaction(tx), {
+      where: messageWhere(identity),
+      values: () =>
+        ({
+          ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
+          provider: "gmail",
+          mailboxId: identity.mailboxId,
+          messageId: identity.messageId,
+          checksum: input.checksum,
+          status: "pending",
+        }) satisfies Omit<typeof emailTable.$inferInsert, "shortcode">,
+    });
     const superseded = await supersedeLegacyEmail(tx, identity);
     const fields = mailboxMetadataFields(input, row);
     const changed =
@@ -836,11 +832,15 @@ export const upsertOrderMail = async (
         : crypto.randomUUID();
     if (id !== existing?.id)
       await append(databaseForTransaction(tx), [
-        evidenceRow(mailOriginalEvidence, {
-          id,
-          ledgerPartyId: ownerId,
-          ...fields,
-        }),
+        evidenceRow(
+          (await import("~/server/domains/purchase-import/repo/order-evidence"))
+            .mailOriginalEvidence,
+          {
+            id,
+            ledgerPartyId: ownerId,
+            ...fields,
+          },
+        ),
       ]);
     const [row] = await tx.select().from(orderMail).where(eq(orderMail.id, id));
     if (!row)

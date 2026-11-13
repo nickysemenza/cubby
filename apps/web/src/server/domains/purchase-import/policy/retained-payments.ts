@@ -64,9 +64,9 @@ export function normalizePaymentSet(
 ): RetainedPayment[] | "conflicting_sources" {
   const bySource = new Map<string, RetainedPayment[]>();
   for (const row of rows) {
-    const set = bySource.get(row.sourceClaimId) ?? [];
+    const set = bySource.get(row.sourceClaimId ?? "unclaimed") ?? [];
     set.push(row);
-    bySource.set(row.sourceClaimId, set);
+    bySource.set(row.sourceClaimId ?? "unclaimed", set);
   }
   const sets = [...bySource.values()];
   const signature = (set: RetainedPayment[]) =>

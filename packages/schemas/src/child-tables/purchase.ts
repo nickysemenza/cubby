@@ -79,15 +79,18 @@ export const purchaseChildren = [
       {
         key: "purchaseId",
         kind: "uuid",
-        notNull: true,
         type: "PurchaseId",
         reference: { table: "purchase", column: "id" },
       },
       {
         key: "sourceClaimId",
         kind: "uuid",
-        notNull: true,
         reference: { table: "importSourceClaim", column: "id" },
+      },
+      {
+        key: "orderObservationId",
+        kind: "uuid",
+        reference: { table: "sourceOrderObservation", column: "id" },
       },
       {
         key: "amountMinor",
@@ -130,6 +133,11 @@ export const purchaseChildren = [
         on: ["sourceClaimId", "purchaseId", "evidenceIndex"],
       },
       { name: "PurchasePaymentEvidence_purchase_idx", on: ["purchaseId"] },
+      {
+        name: "PurchasePaymentEvidence_observation_index_key",
+        unique: true,
+        on: ["orderObservationId", "evidenceIndex"],
+      },
       // Spending discovery's retained-payment window (charge day, exact
       // cents): its serializable range read locks only that day range.
       {
