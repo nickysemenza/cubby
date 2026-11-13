@@ -11,7 +11,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import {
@@ -30,6 +30,7 @@ import {
 import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { answering } from "~/server/domains/transaction-import/repo/statement-decision-port.fixtures";
+import * as statementSettlement from "~/server/domains/transaction-import/repo/statement-settlement";
 import { generateStatementSuggestionPage } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import { executeEntity } from "~/server/entity-kernel";
@@ -704,12 +705,19 @@ describe("cross-family Suggestion list", () => {
     });
     await record(ctx, [rowInput({ rawDescription: "EXAMPLE MKTPLACE PMTS" })]);
     await generate(ctx);
-    // Clean creation requires a kind label and categorized member spending.
-    await labelStatementSuggestions(ctx.db, {
-      port: answering({ kind: "purchase", counterparty: "business" }),
-      spendingAdvice: async () => advice,
-      runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
-    });
+    // Keep clean work pending to exercise a client list that drifts before bulk review.
+    const deferred = vi
+      .spyOn(statementSettlement, "settleStatementPage")
+      .mockResolvedValue(new Map());
+    try {
+      await labelStatementSuggestions(ctx.db, {
+        port: answering({ kind: "purchase", counterparty: "business" }),
+        spendingAdvice: async () => advice,
+        runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+      });
+    } finally {
+      deferred.mockRestore();
+    }
     const listed = await listSuggestionPage(ctx.db, {
       family: "statement_transaction",
     });

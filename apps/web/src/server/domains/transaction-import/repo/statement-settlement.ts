@@ -35,6 +35,7 @@ import {
 } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import type { KernelServicesFor } from "~/server/entity-kernel/adapter";
 import type { AutomaticSelection } from "~/server/generic/suggestions/repo/automatic-application";
+import { canonicalJson } from "~/server/lib/canonical-json";
 
 const log = createLogger("statement-settlement");
 
@@ -194,6 +195,16 @@ type Item = {
   solo: boolean;
 };
 
+type CurrentSettlementEntry = SettlementEntry & {
+  judgment: StatementTransactionJudgment | null;
+};
+
+// Spending can refresh in place without changing either publication hash.
+const publicationChanged = (fresh: CurrentSettlementEntry, item: Item) =>
+  fresh.suggestionId !== item.entry.suggestionId ||
+  fresh.evidenceFingerprint !== item.entry.evidenceFingerprint ||
+  canonicalJson(fresh.judgment) !== canonicalJson(item.judgment);
+
 const barrierOf = (judgment: StatementTransactionJudgment): Barrier => ({
   accountId: judgment.accountId,
   footprint: judgment.create ? statementFootprint(judgment) : null,
@@ -300,7 +311,7 @@ export async function settleStatementPage(
 
   /** Each charge's current live publication, after a rebuild replaced it. */
   const current = async (charges: readonly ChargeRef[]) => {
-    if (!charges.length) return new Map<string, SettlementEntry>();
+    if (!charges.length) return new Map<string, CurrentSettlementEntry>();
     const requested = requestedRows(
       charges.map((charge) => ({ ...charge })),
       { source: "text", chargeKey: "text" },
@@ -311,9 +322,10 @@ export async function settleStatementPage(
       source: string;
       chargeKey: string;
       evidenceFingerprint: string;
+      judgment: unknown;
     }>(
       sql`SELECT s.id, ${suggestionField("source")} AS source, ${suggestionField("chargeKey")} AS "chargeKey",
-        ${suggestionField("evidenceFingerprint")} AS "evidenceFingerprint"
+        ${suggestionField("evidenceFingerprint")} AS "evidenceFingerprint", s.judgment
       FROM "Suggestion" s
       WHERE s.family = ${sqlEnumConstant(suggestionFamily, suggestionFamily.enum.statement_transaction)} AND s.active
         AND s.status = ${sqlEnumConstant(suggestionStatus, suggestionStatus.enum.pending)}
@@ -328,6 +340,8 @@ export async function settleStatementPage(
           charge: { source: row.source, chargeKey: row.chargeKey },
           suggestionId: row.id,
           evidenceFingerprint: row.evidenceFingerprint,
+          judgment:
+            statementTransactionJudgment.safeParse(row.judgment).data ?? null,
         },
       ]),
     );
@@ -386,7 +400,7 @@ export async function settleStatementPage(
     const replaced: SettlementEntry[] = [];
     for (const item of affected) {
       const fresh = now.get(chargeId(item.entry.charge));
-      if (fresh?.suggestionId === item.entry.suggestionId) continue;
+      if (fresh && !publicationChanged(fresh, item)) continue;
       // A charge left without a publication has nothing to admit.
       if (fresh) replaced.push(fresh);
       else settle(item, { kind: "none" });
@@ -439,10 +453,7 @@ export async function settleStatementPage(
         return settle(item, {
           kind: input.mode === "label" ? "moved" : "none",
         });
-      if (
-        fresh.suggestionId !== item.entry.suggestionId ||
-        fresh.evidenceFingerprint !== item.entry.evidenceFingerprint
-      ) {
+      if (publicationChanged(fresh, item)) {
         const [reread] = await read([fresh]);
         // A label receipt replaced by rule output waits for its next page.
         if (!reread?.selection)
@@ -472,7 +483,7 @@ export async function settleStatementPage(
         );
         if (
           fresh &&
-          fresh.suggestionId !== target.entry.suggestionId &&
+          publicationChanged(fresh, target) &&
           replaced < ALONE_REPLACEMENTS
         ) {
           const [reread] = await read([fresh]);
@@ -495,10 +506,7 @@ export async function settleStatementPage(
       const fresh = (await current([item.entry.charge])).get(
         chargeId(item.entry.charge),
       );
-      if (
-        fresh?.suggestionId === target.entry.suggestionId &&
-        fresh.evidenceFingerprint === target.entry.evidenceFingerprint
-      )
+      if (fresh && !publicationChanged(fresh, target))
         return settle(item, {
           kind: "failed",
           error: new Error(
