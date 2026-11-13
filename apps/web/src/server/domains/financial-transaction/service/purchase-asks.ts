@@ -11,7 +11,6 @@ import {
 import {
   STATEMENT_TRANSACTION_KIND_FEATURE,
   STATEMENT_COUNTERPARTY_FEATURE,
-  STATEMENT_CHARGE_IDENTITY_FEATURE,
   MERCHANT_IDENTITY_FEATURE,
   MERCHANT_IDENTITY_SUPPORT_FEATURE,
   LOAN_ESCROW_DISBURSEMENT_FEATURE,
@@ -84,7 +83,6 @@ const escrowAnswer = (output: ModelOutput) =>
 export const statementAsks = {
   statementKindAsk: modelAskFor(STATEMENT_TRANSACTION_KIND_FEATURE),
   counterpartyAsk: modelAskFor(STATEMENT_COUNTERPARTY_FEATURE),
-  chargeIdentityAsk: modelAskFor(STATEMENT_CHARGE_IDENTITY_FEATURE),
   choiceRequest,
   choiceAnswer,
 };

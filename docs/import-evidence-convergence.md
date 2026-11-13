@@ -260,9 +260,18 @@ candidates unless the member chose standalone spending; older review-only spendi
 already settles and that may be this same charge, still needs review.
 
 Nearby candidates without explicit payment or member evidence require review
-only when known remaining Purchase capacity can cover the charge, or capacity
-is unknown. Settled Purchases and those with insufficient remaining capacity
-remain visible as context and do not prevent automatic new spending.
+while their remaining capacity is open, short of the charge or unknown; a
+settled one stops blocking only under the exclusion below, so a recurring
+charge at one Vendor books past last period's Purchase once that Purchase's
+own charge provably differs.
+
+A charge joins an existing Purchase, through an identity decision or a chosen
+Purchase, only when that Purchase's priced vendor lines in the charge's
+direction leave room for the whole charge. Unknown capacity, an unclassified
+line or partial coverage stays a decision gap, and no lump is added beside
+those lines; a Purchase with no such lines takes the charge as a lump. Moving a
+booked charge to another Purchase removes the Purchase, lump and shares its
+booking created, unless that Purchase holds other spending, which stays a gap.
 
 For positive charges, actual nonfuture vendor Expenses on partly paid
 same-Vendor Purchases outside that window or without dates also prevent
@@ -1068,22 +1077,21 @@ no observation → alias owner → transaction account → copied source judgmen
 loop. Member suppression is read from its Suggestion owner, without copying
 another current decision ledger into the occurrence.
 
-Cubby reconciles accepted revisions in one snapshot transaction. An automatic
-amount correction or withdrawal requires the original automatic-decision and
-Expense-lineage fingerprints, one unchanged generated lump, unchanged
-allocation and member shares, no itemization, claims or attached independent
-evidence, and current corroboration that agrees. Amount corrections update the
-transaction, allocation and Expense together. Withdrawal retires the generated
-Expense through supported writers, voids the transaction and keeps references
-and history. Edited, itemized or conflicting bookings stay in the Suggestions
-queue for individual FinancialTransaction/Expense review; recording source
-changes never silently overwrites them. A source date revision that changes the
-booking's effective funding date requires individual review of dated
-allocations and Expenses. Status/date-only refusals remain durable Suggestions
-even when the amount is unchanged; supported posting updates may proceed when
-the effective funding date stays unchanged. Current evidence that already
-agrees with the booked amount and lifecycle needs no write and opens no review,
-whatever the booking's decision provenance.
+Accepted revisions reconcile through the `bankEvent` and `purchaseEvent`
+scopes. A revised amount updates the transaction, its allocation and its
+generated lump together. Once a member adds lines or allocation slices to the
+booking, a revision whose slices no longer sum to the movement is a
+disagreement: the scope writes nothing automatic until evidence or a decision
+resolves it. A confirmed withdrawal or supersession removes the transaction its
+occurrence created, and its generated Purchase, lump, shares and allocation go
+with it. A transaction another bank event attaches or another live occurrence
+accepts stays. A transaction or booking carrying member decisions stays with an
+`unsupported` gap; permission to book a lump without order details is not such
+a decision, and account or kind readings of the withdrawn row hold nothing. A
+voided charge, one paired as a transfer and one whose kind leaves purchase, fee
+and refund, including by a member's kind decision, remove their generated
+booking under the same rule. Current evidence that already agrees with the
+booked amount and lifecycle needs no write and opens no review.
 
 ### Collections and withdrawal
 

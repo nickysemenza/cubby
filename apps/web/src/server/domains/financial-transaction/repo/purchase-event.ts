@@ -41,7 +41,11 @@ import {
   recordedSpendingOutcome,
   type CapacityRead,
 } from "~/server/domains/financial-transaction/policy/recorded-spending";
-import { decideSpendingCandidates } from "~/server/domains/financial-transaction/policy/spending-candidates";
+import {
+  blockingSpendingCandidates,
+  decideSpendingCandidates,
+  type CandidateSettlementFacts,
+} from "~/server/domains/financial-transaction/policy/spending-candidates";
 import { spendingCategoryForDiscovery } from "~/server/domains/financial-transaction/policy/spending-category";
 import { spendingBlocker } from "~/server/domains/financial-transaction/policy/spending-prerequisites";
 import { manualTransactionEvidence } from "~/server/domains/financial-transaction/repo/manual-evidence";
@@ -72,6 +76,7 @@ import { decisionKey, answerKey } from "~/server/kernel/keys";
 
 import type { purchaseAsks } from "../service/purchase-asks";
 import {
+  acceptedOccurrences,
   transactionAllocations,
   purchaseAllocations,
   purchaseExpenses,
@@ -97,6 +102,11 @@ type Input = {
   categories: (typeof spendingCategory.$inferSelect)[];
   payments: (typeof purchasePaymentEvidence.$inferSelect)[];
   occurrences: (typeof sourceOccurrence.$inferSelect)[];
+  /** The source occurrences behind each other charge that settles a loaded Purchase. */
+  settlementOccurrences: {
+    transactionId: string;
+    occurrence: typeof sourceOccurrence.$inferSelect;
+  }[];
   manuals: (typeof manualEntry.$inferSelect)[];
 };
 const targets = [
@@ -177,11 +187,23 @@ const tableReads = [
     ["purchaseId", "amountMinor", "chargedAt"],
     [amountPayments, purchasePayments],
   ),
-  source.table(sourceOccurrence, [
-    "acceptedTransactionId",
-    "currentObservationId",
-    "deletedAt",
-  ]),
+  source.table(
+    sourceOccurrence,
+    [
+      "acceptedTransactionId",
+      "currentObservationId",
+      "source",
+      "identityKind",
+      "identityScope",
+      "providerIdentity",
+      "physicalImportId",
+      "physicalPosition",
+      "disposition",
+      "supersededByOccurrenceId",
+      "deletedAt",
+    ],
+    [acceptedOccurrences],
+  ),
   source.table(recordKey, ["scopeKind", "scopeKey", "entity", "entityId"]),
   source.table(entityIdentity, [
     "kind",
@@ -236,6 +258,25 @@ function record(
       desired[field] = c.reference(entity, reference);
   }
   return c.record(target, naturalKey, desired, { provenance });
+}
+/**
+ * Member decisions on the booking itself hold it once its charge stops
+ * supporting spending. `book` only permits a lump and holds nothing.
+ */
+function decidedBooking(c: Pure, subject: string) {
+  return (
+    [...c.assignments(subject).keys()].some((field) => field !== "book") ||
+    targets.some((target) =>
+      c.existing(target).some((key) => {
+        const id = c.recordId(target, key);
+        return (
+          !!id &&
+          c.assignments(recordSubject(target.entity ?? target.name, id)).size >
+            0
+        );
+      }),
+    )
+  );
 }
 function ownKey(c: Pure, target: ColumnRef, fallback: string) {
   return c.existing(target)[0] ?? fallback;
@@ -687,12 +728,65 @@ export function createPurchaseEvent({
                   binding.scope.kind === "purchaseEvent" &&
                   binding.scope.key === key,
               ),
+              settlementOccurrences: [],
               manuals: manuals.get(`purchaseEvent:${key}`) ?? [],
             } satisfies Input,
           ] as const;
         }),
       );
-      return new Map(inputs);
+      // Settlement proof reads the occurrences behind every other charge that
+      // settles a loaded Purchase, once for the batch.
+      const settling = [
+        ...new Set(
+          inputs.flatMap(([key, input]) =>
+            input.allocations
+              .filter((row) => !row.deletedAt && row.transactionId !== key)
+              .map((row) => row.transactionId),
+          ),
+        ),
+      ];
+      const [settlingOwners, settlingAccepted] = settling.length
+        ? await Promise.all([
+            reads.select(
+              recordKey,
+              settling.map((id) => `record:financialTransaction:${id}`),
+              sql`${recordKey.scopeKind}='bankEvent' AND ${recordKey.entity}=${"financialTransaction"} AND ${recordKey.entityId}=ANY(${textArrayParam(settling)}::uuid[])`,
+            ),
+            reads.lookup(sourceOccurrence, acceptedOccurrences, settling),
+          ])
+        : [[], []];
+      const ownedOccurrences = await reads.rows(
+        sourceOccurrence,
+        settlingOwners
+          .filter((row) => !row.scopeKey.startsWith("manual:"))
+          .map((row) => row.scopeKey),
+      );
+      const settlementOccurrences = [
+        ...settlingOwners.flatMap((row) => {
+          const occurrence = ownedOccurrences.get(row.scopeKey);
+          return occurrence
+            ? [{ transactionId: row.entityId, occurrence }]
+            : [];
+        }),
+        ...settlingAccepted.flatMap((occurrence) =>
+          occurrence.acceptedTransactionId
+            ? [{ transactionId: occurrence.acceptedTransactionId, occurrence }]
+            : [],
+        ),
+      ];
+      return new Map(
+        inputs.map(([key, input]) => [
+          key,
+          {
+            ...input,
+            settlementOccurrences: settlementOccurrences.filter((entry) =>
+              input.allocations.some(
+                (row) => row.transactionId === entry.transactionId,
+              ),
+            ),
+          },
+        ]),
+      );
     },
     // oxlint-disable-next-line complexity -- prerequisite, identity and conservation refusals form one atomic money plan.
     reconcile(input, c) {
@@ -778,9 +872,6 @@ export function createPurchaseEvent({
         const slices = input.allocations.filter(
           (row) => !row.deletedAt && row.transactionId === input.key,
         );
-        const accepted =
-          input.bindings.some((binding) => binding.basis === "baseline") ||
-          seeds.some((seed) => seed.naturalKey.startsWith("legacy:"));
         for (const seed of seeds) {
           const id = c.identity(seed.target, seed.naturalKey).id;
           for (const [field, decision] of c.assignments(
@@ -823,7 +914,6 @@ export function createPurchaseEvent({
             : null;
         if (
           acceptedTransaction &&
-          accepted &&
           slices.length &&
           (projectedSlices.reduce((sum, value) => sum + value, 0n) !==
             acceptedTransaction.amount ||
@@ -831,7 +921,7 @@ export function createPurchaseEvent({
               aggregateSeeds[0]!.values.cost !== purchaseTotal))
         ) {
           c.disagree(
-            "the retained baseline spending and allocation slices disagree with the statement movement",
+            "the recorded spending and allocation slices disagree with the statement movement",
           );
         }
         for (const seed of seeds) c.identity(seed.target, seed.naturalKey);
@@ -871,7 +961,35 @@ export function createPurchaseEvent({
         ["void", "expected"].includes(transaction.status) ||
         transaction.ledgerTransferId
       ) {
-        retained(c);
+        // A removed, voided or reclassified charge supports no spending. Its
+        // generated booking goes unless a member decision holds it; a merged
+        // charge's booking now settles the survivor.
+        const stored = input.transactions.find((row) => row.id === input.key);
+        const survivor = stored
+          ? c.reference("financialTransaction", input.key)
+          : null;
+        if (
+          !stored ||
+          (survivor !== null && survivor !== input.key) ||
+          !targets.some((target) => c.existing(target).length)
+        ) {
+          retained(c);
+          return c.done();
+        }
+        if (decidedBooking(c, subject)) {
+          c.gap.unsupported(
+            "the charge no longer supports this spending, and the booking carries member decisions",
+          );
+          retained(c);
+          return c.done();
+        }
+        for (const target of targets)
+          for (const key of c.existing(target))
+            c.retire(
+              target,
+              key,
+              target === bookingVendors ? "keep" : "remove",
+            );
         return c.done();
       }
       const chosen = (field: string) =>
@@ -1176,7 +1294,90 @@ export function createPurchaseEvent({
         "financialTransaction",
         transaction.id,
       );
-      const same = candidates.filter(
+      const abs = (value: bigint) => (value < 0n ? -value : value);
+      const live = (row: (typeof input.occurrences)[number]) =>
+        !row.deletedAt &&
+        !row.supersededByOccurrenceId &&
+        row.disposition !== "ignored";
+      // Another provider ID in the same provider scope, or another position in
+      // the same collection, proves a different bank event of this source.
+      const otherEvent = (transactionId: string) => {
+        const settled = input.transactions.find(
+          (row) => row.id === transactionId,
+        );
+        if (
+          transaction.status === "posted" &&
+          settled?.status === "posted" &&
+          abs(settled.amount) !== abs(transaction.amount)
+        )
+          return true;
+        return input.settlementOccurrences.some(
+          ({ transactionId: id, occurrence: other }) =>
+            id === transactionId &&
+            live(other) &&
+            sources.some(
+              (own) =>
+                own.id !== other.id &&
+                own.source === other.source &&
+                ((own.identityKind === "provider" &&
+                  other.identityKind === "provider" &&
+                  own.identityScope === other.identityScope &&
+                  own.providerIdentity !== other.providerIdentity) ||
+                  (own.identityKind === "positioned" &&
+                    other.identityKind === "positioned" &&
+                    own.physicalImportId === other.physicalImportId &&
+                    own.physicalPosition !== other.physicalPosition)),
+            ),
+        );
+      };
+      const facts = new Map<string, CandidateSettlementFacts>(
+        candidates.map((candidate) => {
+          const capacity = graph(input, candidate.id);
+          const reimbursements = new Set(
+            capacity.lines
+              .filter((line) => line.economicRole === "reimbursement")
+              .map((line) => line.bookingTransactionCode),
+          );
+          return [
+            candidate.id,
+            {
+              availableMinor: availableSpendingMinor(
+                capacity,
+                transaction.amount,
+                transaction.id,
+              ),
+              paymentsMinor: input.payments
+                .filter((payment) => payment.purchaseId === candidate.id)
+                .map((payment) => payment.amountMinor),
+              otherSettlements: capacity.settlements
+                .filter(
+                  (settlement) =>
+                    settlement.transactionId !== transaction.id &&
+                    settlement.kind !== "income" &&
+                    !reimbursements.has(settlement.transactionCode) &&
+                    settlement.amountMinor < 0n === transaction.amount < 0n,
+                )
+                .map((settlement) => ({
+                  distinctEvent: otherEvent(settlement.transactionId),
+                })),
+              decided: !!c.decision(
+                "identity",
+                identitySubject,
+                recordSubject("purchase", candidate.id),
+              ),
+            },
+          ] as const;
+        }),
+      );
+      const blocking = blockingSpendingCandidates(
+        {
+          amountMinor: transaction.amount,
+          refund: transaction.kind === "refund",
+        },
+        candidates,
+        facts,
+      );
+      const same = blocking.filter(
         (candidate) =>
           c.decision(
             "identity",
@@ -1184,7 +1385,7 @@ export function createPurchaseEvent({
             recordSubject("purchase", candidate.id),
           )?.kind === "same",
       );
-      const unresolved = candidates.filter(
+      const unresolved = blocking.filter(
         (candidate) =>
           c.decision(
             "identity",
@@ -1227,7 +1428,10 @@ export function createPurchaseEvent({
         return c.done();
       }
       const existingTarget = input.purchases.find(
-        (row) => row.id === targetPurchase && !row.deletedAt,
+        (row) =>
+          row.id === targetPurchase &&
+          row.id !== existingPurchaseId &&
+          !row.deletedAt,
       );
       const resolved = input.vendors.find((row) => row.id === vendorRow.id);
       const waiting =
@@ -1266,13 +1470,72 @@ export function createPurchaseEvent({
         retained(c);
         return c.done();
       }
-      const remaining = existingTarget
+      // A charge joins an existing Purchase only where its lines leave room
+      // for it; a lump beside priced or unpriced lines counts spending twice.
+      const targetGraph = existingTarget
+        ? graph(input, existingTarget.id)
+        : undefined;
+      const targetLines = (targetGraph?.lines ?? []).filter(
+        (line) => !line.future && line.economicRole === "vendor",
+      );
+      const remaining = targetLines.length
         ? availableSpendingMinor(
-            graph(input, existingTarget.id),
+            targetGraph,
             transaction.amount,
             transaction.id,
           )
         : 0n;
+      const directional = targetLines.some(
+        (line) =>
+          line.costMinor !== null &&
+          (transaction.amount < 0n
+            ? line.costMinor < 0n && line.lineKind === "principal"
+            : line.costMinor >= 0n || line.lineKind !== "principal"),
+      );
+      if (
+        remaining === null ||
+        (directional &&
+          (transaction.amount < 0n
+            ? remaining > transaction.amount
+            : remaining < transaction.amount))
+      ) {
+        c.gap.decision(
+          remaining === null
+            ? "the chosen Purchase has an unpriced or unclassified line or an uncertain payment, so its remaining capacity for this charge is unknown"
+            : "the chosen Purchase's remaining capacity cannot cover this charge",
+        );
+        retained(c);
+        return c.done();
+      }
+      // Moving the charge retires the Purchase this scope created for it, which
+      // must not hold anyone else's spending.
+      const ownRecords = new Set(
+        targets.flatMap((target) =>
+          c.existing(target).map((key) => c.recordId(target, key)),
+        ),
+      );
+      if (
+        existingTarget &&
+        existingPurchaseId &&
+        (input.expenses.some(
+          (row) =>
+            !row.deletedAt &&
+            row.purchaseId === existingPurchaseId &&
+            !ownRecords.has(row.id),
+        ) ||
+          input.allocations.some(
+            (row) =>
+              !row.deletedAt &&
+              row.purchaseId === existingPurchaseId &&
+              row.transactionId !== transaction.id,
+          ))
+      ) {
+        c.gap.decision(
+          "the Purchase this charge booked holds other spending; reconcile it before moving the charge",
+        );
+        retained(c);
+        return c.done();
+      }
       const rows = statementBookingRows({
         charge: {
           transactionId: parseShortcodeFor(
@@ -1309,7 +1572,7 @@ export function createPurchaseEvent({
         trade: "other",
         beneficiaries: undefined,
         confirmsMerchant: value("confirmsMerchant") === true,
-        remainingBookedMinor: remaining ?? 0n,
+        remainingBookedMinor: directional ? remaining : 0n,
       });
       const purchaseKey = ownKey(c, purchaseRecords, "purchase");
       const purchaseId =
@@ -1324,23 +1587,29 @@ export function createPurchaseEvent({
         retained(c);
         return c.done();
       }
+      const declared = new Set<string>();
+      const book = (
+        target: ColumnRef,
+        naturalKey: string,
+        values: Parameters<Pure["record"]>[2],
+      ) => {
+        declared.add(`${target.name}:${naturalKey}`);
+        return record(c, target, naturalKey, values);
+      };
       if (!resolvedVendor)
-        record(c, bookingVendors, vendorNaturalKey, {
+        book(bookingVendors, vendorNaturalKey, {
           name: cleanName,
           aliases: merchant && merchant !== cleanName ? [merchant] : [],
         });
-      else
-        for (const key of c.existing(bookingVendors))
-          c.retire(bookingVendors, key, "keep");
       if (rows.purchase)
-        record(c, purchaseRecords, purchaseKey, {
+        book(purchaseRecords, purchaseKey, {
           ...rows.purchase,
           vendorId: vendorRow.id,
           purchaserOverrideId: purchaserChoice,
         });
       if (rows.expense) {
         const expenseKey = ownKey(c, expenseRecords, "expense");
-        const expenseId = record(c, expenseRecords, expenseKey, {
+        const expenseId = book(expenseRecords, expenseKey, {
           name: rows.expense.name,
           cost: rows.expense.costMinor,
           date: rows.expense.date,
@@ -1364,7 +1633,7 @@ export function createPurchaseEvent({
               ? c.reference("ledgerParty", share.partyId)
               : null;
           if (typeof share.weight === "number")
-            record(c, attributionRecords, `beneficiary:${index}`, {
+            book(attributionRecords, `beneficiary:${index}`, {
               expenseId,
               role: "beneficiary",
               ledgerPartyId: partyId,
@@ -1372,12 +1641,22 @@ export function createPurchaseEvent({
             });
         }
       }
-      record(c, allocationRecords, ownKey(c, allocationRecords, "allocation"), {
+      book(allocationRecords, ownKey(c, allocationRecords, "allocation"), {
         transactionId: transaction.id,
         purchaseId,
         amountMinor: rows.allocation.amountMinor,
         confirmsMerchant: rows.allocation.confirmsMerchant,
       });
+      // A charge that moved to another Purchase, or no longer needs its lump or
+      // a beneficiary share, removes what this scope booked for it before.
+      for (const target of targets)
+        for (const key of c.existing(target))
+          if (!declared.has(`${target.name}:${key}`))
+            c.retire(
+              target,
+              key,
+              target === bookingVendors ? "keep" : "remove",
+            );
       for (const occurrence of sources) {
         c.bind(
           { kind: "sourceOccurrence", id: occurrence.id },
