@@ -1,15 +1,6 @@
 import { financialTransactionKind } from "./financial-transaction-fields";
 import { z } from "zod";
 
-export const statementQuestionSubject = z.object({
-  descriptor: z.string().nullable(),
-  merchant: z.string().nullable(),
-  category: z.string().nullable(),
-  date: z.string(),
-  amount: z.number().finite(),
-  status: z.enum(["pending", "posted"]).nullable(),
-});
-
 export const STATEMENT_ANSWER_VERSIONS = {
   escrow: "2026-11-12.1",
   merchantIdentity: "2026-11-13.1",
