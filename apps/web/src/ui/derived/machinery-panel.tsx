@@ -1,4 +1,5 @@
 import {
+  machineryGapStatus,
   decisionChannelLabel,
   decisionKindLabel,
   kernelActorLabel,
@@ -46,13 +47,6 @@ const SOURCE_STATUS = {
 
 /** An unknown paid call requires a member decision before another send. */
 const unknownCall = (gap: MachineryGap) => gap.askState === "unknown";
-
-const gapStatus = (gap: MachineryGap): MachineryRowStatus =>
-  unknownCall(gap)
-    ? "blocked"
-    : gap.lastError && gap.attempts && gap.attempts.n >= gap.attempts.max
-      ? "failed"
-      : "gap";
 
 function Raw({ label, value }: { label: string; value: string }) {
   return (
@@ -319,7 +313,7 @@ export function MachineryPanel({
           <SourceStack
             label="Gaps"
             rows={read.gaps.items.map((gap, index) => {
-              const status = gapStatus(gap);
+              const status = machineryGapStatus(gap);
               return {
                 key: `${index}:${gap.input}`,
                 status: SOURCE_STATUS[status],

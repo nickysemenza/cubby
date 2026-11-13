@@ -727,3 +727,26 @@ export const runTargetState = z.enum([
   "unavailable",
 ]);
 export type RunTargetState = z.infer<typeof runTargetState>;
+
+/** Declared target presentation for every client. */
+export const runTargetStateOptions = [
+  { value: "pending", label: "Pending", stage: "waiting" },
+  { value: "prepared", label: "Prepared", stage: "working" },
+  { value: "completed", label: "Completed", stage: "done" },
+  { value: "skipped", label: "Skipped", stage: "ended" },
+  { value: "unresolved", label: "Unresolved", stage: "needs_you" },
+  { value: "needs_evidence", label: "Needs evidence", stage: "waiting" },
+  { value: "unavailable", label: "Unavailable", stage: "stuck" },
+] as const;
+export const imageProcessingJobStateOptions = [
+  { value: "pending", label: "Queued", stage: "waiting" },
+  {
+    value: "waiting_for_device",
+    label: "Waiting for Apple device",
+    stage: "waiting",
+  },
+  { value: "leased", label: "Processing", stage: "working" },
+  { value: "ready", label: "Done", stage: "done" },
+  { value: "skipped", label: "Skipped", stage: "ended" },
+  { value: "failed", label: "Needs attention", stage: "stuck" },
+] as const;

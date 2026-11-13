@@ -93,12 +93,15 @@ export async function readNeedsYou(
       FROM members m JOIN jsonb_to_recordset(${JSON.stringify(consumers)}::jsonb) consumer(entity text, kind text) ON consumer.kind = m."scopeKind"
       JOIN "Entity" e ON e.kind = consumer.entity AND e.id::text = m."scopeKey"
       WHERE ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL
+    ), unique_scopes AS (
+      SELECT DISTINCT ON ("scopeKind", "scopeKey") * FROM records
+      ORDER BY "scopeKind", "scopeKey", (entity = 'sourceOccurrence'), entity, shortcode
     ), ranked AS (
       SELECT *, row_number() OVER (PARTITION BY entity, shortcode ORDER BY ("firstGap" IS NULL), since NULLS LAST, "scopeKind", "scopeKey") AS rank,
         min(CASE stage WHEN ${STAGE.ended} THEN 0 WHEN ${STAGE.stuck} THEN 1
           WHEN ${STAGE.working} THEN 2 WHEN ${STAGE.needsYou} THEN 3 WHEN ${STAGE.waiting} THEN 4 ELSE 5 END)
           OVER (PARTITION BY entity, shortcode) AS severity
-      FROM records
+      FROM unique_scopes
     ), eligible AS (
       SELECT entity, shortcode,
         CASE severity WHEN 0 THEN ${STAGE.ended} WHEN 1 THEN ${STAGE.stuck} WHEN 2 THEN ${STAGE.working}
@@ -196,7 +199,10 @@ export async function readRunWork(
       ]);
       return runWork.parse({
         scopes: scopes.rows,
-        asks: asks.rows,
+        asks: asks.rows.map((ask) => ({
+          ...ask,
+          label: registry.asks.get(ask.feature)?.label ?? "Answer",
+        })),
         passes,
         totalCostMicros: asks.rows.reduce(
           (sum, row) => sum + row.costMicros,

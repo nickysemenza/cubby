@@ -475,3 +475,16 @@ export function dataQualityLabel(status: string): string {
       return `Unsupported quality: ${status}`;
   }
 }
+
+/** Twin of Swift FieldEnvelopePresentation.gapStatus. */
+export function machineryGapStatus(gap: {
+  askState?: string | null;
+  lastError: { class: string; raw: string } | null;
+  attempts: { n: number; max: number } | null;
+}): MachineryRowStatus {
+  return gap.askState === "unknown"
+    ? "blocked"
+    : gap.lastError && gap.attempts && gap.attempts.n >= gap.attempts.max
+      ? "failed"
+      : "gap";
+}

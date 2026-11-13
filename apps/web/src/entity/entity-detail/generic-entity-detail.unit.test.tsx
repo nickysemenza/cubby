@@ -1,5 +1,6 @@
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { fieldExplanationOutput } from "@cubby/schemas/field-explanation";
+import { machinery as machinerySchema } from "@cubby/schemas/kernel/machinery";
 import { testShortcode } from "@cubby/schemas/testing";
 import { TIER1_NUTRIENT_KEYS } from "@cubby/usda";
 import {
@@ -20,6 +21,7 @@ import { entityList } from "~/integrations/tanstack-query/generated/domains/enti
 import { entityMedia } from "~/integrations/tanstack-query/generated/domains/entityMedia.gen";
 import { entityTimeline } from "~/integrations/tanstack-query/generated/domains/entityTimeline.gen";
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/domains/fieldExplanation.gen";
+import { machinery } from "~/integrations/tanstack-query/generated/domains/machinery.gen";
 import { mock } from "~/lib/test/mock-schema";
 import { getEntityDetailOutputSchema } from "~/server/entity-reads/detail-contracts";
 import { getEntityListItemSchema } from "~/server/entity-reads/list-contracts";
@@ -189,6 +191,17 @@ describe("GenericEntityDetail", () => {
 
   it("keeps a gated Run quality check visible in Record quality", async () => {
     const record = { ...recordFor("run"), purpose: "photo_inventory" as const };
+    const machineryQuery = machinery.read.queryOptions({
+      entity: "run",
+      id: record.id,
+    });
+    harness.queryClient.setQueryDefaults(machineryQuery.queryKey, {
+      staleTime: Infinity,
+    });
+    harness.queryClient.setQueryData(machineryQuery.queryKey, {
+      machinery: mock(machinerySchema),
+      absorbed: null,
+    });
     const query = fieldExplanation.explain.queryOptions({
       entityKind: "run",
       entityId: record.id,

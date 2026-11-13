@@ -81,9 +81,16 @@ function NeedsYou<E extends GenericDetailEntity>({
   const itemsFailed =
     readRecordState(queryClient, entity, record)?.failed === true;
   const machinery = useMachinery({ entity, id: record.id });
-  const legacy = machinery.isSuccess && machinery.data.machinery === null;
-  const queue = useRecordWorkQueue(record.id, legacy && declared === undefined);
-  const rows = declared === undefined ? queue.rows : [];
+  const queue = useRecordWorkQueue(record.id, declared === undefined);
+  const rows =
+    declared === undefined
+      ? queue.rows.filter(
+          (row) =>
+            !machinery.data?.machinery?.gaps.items.some(
+              (gap) => gap.input === row.reason,
+            ),
+        )
+      : [];
   const named = new Set(
     rows.flatMap((row) => row.gaps.map((gap): string => gap.check)),
   );
@@ -91,7 +98,6 @@ function NeedsYou<E extends GenericDetailEntity>({
     ({ check }) => !named.has(check.check),
   );
   const count = items.length + rows.length + quality.length;
-  if (!legacy) return null;
   if (queue.error && declared === undefined)
     return <ErrorDisplay error={queue.error} title="Needs you" />;
   if (count === 0) return null;

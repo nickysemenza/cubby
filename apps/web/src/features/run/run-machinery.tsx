@@ -27,19 +27,19 @@ export function RunMachinery({ record }: { record: DetailRecordOf<"run"> }) {
   const rows = [
     ...work.scopes.map((scope) => ({
       key: `scope:${scope.kind}:${scope.key}`,
-      label: scope.firstGap ? `${scope.kind} · ${scope.firstGap}` : scope.kind,
+      label: scope.firstGap ?? "Record reconciliation",
       stage: scope.stage,
       detail: scope,
     })),
     ...work.asks.map((ask) => ({
       key: `ask:${ask.inputHash}`,
-      label: ask.feature,
+      label: ask.label,
       stage: ask.stage,
       detail: ask,
     })),
     ...work.passes.map((pass) => ({
       key: `pass:${pass.name}:${pass.key}`,
-      label: pass.name,
+      label: "Background work",
       stage: pass.stage,
       detail: pass,
     })),

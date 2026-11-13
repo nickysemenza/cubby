@@ -41,6 +41,7 @@ export const runWork = z.object({
       answeredAt: z.iso.datetime().nullable().default(null),
       lastError: z.string().nullable().default(null),
       feature: z.string(),
+      label: z.string(),
       state: z.enum(["queued", "sent", "answered", "unknown", "abandoned"]),
       stage: kernelStage,
       waitCause: kernelWaitCause.nullable(),

@@ -1,3 +1,4 @@
+import { imageProcessingJobStateOptions } from "@cubby/schemas/compiler/activity-fields";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type {
   ImageShortcode,
@@ -9,7 +10,6 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { ImageProcessingJobState } from "@cubby/schemas/image-processing";
 import { publicImageUrl } from "@cubby/schemas/image-summary";
-import type { KernelStage } from "@cubby/schemas/kernel/stage";
 import type {
   PhotoGroupReview as PhotoGroupDecision,
   PhotoGroupProposal,
@@ -3342,14 +3342,6 @@ function ProposalCard({
   );
 }
 
-const PROCESSING_LABEL = {
-  pending: "Queued",
-  waiting_for_device: "Waiting for Apple device",
-  leased: "Processing",
-  ready: "Done",
-  skipped: "Skipped",
-  failed: "Needs attention",
-} satisfies Record<ImageProcessingJobState, string>;
 const DESCRIPTION_BLOCKING = new Set<ImageProcessingJobState>([
   "pending",
   "waiting_for_device",
@@ -3366,16 +3358,6 @@ function awaitingDescriptions(
     return state != null && DESCRIPTION_BLOCKING.has(state);
   });
 }
-/** Each image processing state as its stage; `StateBadge` draws it. */
-const PROCESSING_STAGE = {
-  pending: "waiting",
-  waiting_for_device: "waiting",
-  leased: "working",
-  ready: "done",
-  skipped: "ended",
-  failed: "stuck",
-} satisfies Record<ImageProcessingJobState, KernelStage>;
-
 function ProcessingBadge({
   label,
   state,
@@ -3401,8 +3383,10 @@ function ProcessingBadge({
   const badge = (
     <StateBadge
       option={{
-        label: `${label}: ${PROCESSING_LABEL[state]}`,
-        stage: PROCESSING_STAGE[state],
+        label: `${label}: ${imageProcessingJobStateOptions.find((option) => option.value === state)!.label}`,
+        stage: imageProcessingJobStateOptions.find(
+          (option) => option.value === state,
+        )!.stage,
       }}
       phase="active"
     />
@@ -3413,7 +3397,7 @@ function ProcessingBadge({
       <TooltipTrigger
         render={<span className="inline-flex w-fit cursor-help" />}
         tabIndex={0}
-        aria-label={`${label}: ${PROCESSING_LABEL[state]}. ${explanation}`}
+        aria-label={`${label}: ${imageProcessingJobStateOptions.find((option) => option.value === state)!.label}. ${explanation}`}
       >
         {badge}
       </TooltipTrigger>

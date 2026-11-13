@@ -83,7 +83,7 @@ struct EntityHeroView<Actions: View>: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             let facts = RecordHeaderFacts(descriptor: descriptor, row: row)
-            if machinery.read == nil, facts.hasContent { facts }
+            if facts.hasContent { facts }
             RecordMachineryHeader(model: machinery, subject: imageSubject)
             actions
         }

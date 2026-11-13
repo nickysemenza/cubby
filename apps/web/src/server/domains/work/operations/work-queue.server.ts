@@ -11,9 +11,12 @@ import { readWorkStatus } from "~/server/domains/work/service/work-status";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
 export const workQueueHandlers = implementOperationDomain(workQueueContract, {
-  diagnostics: (context) => readKernelDiagnostics(context.db),
-  retry: (context, input) => retryKernelWork(context.db, input),
-  status: async (context) => readWorkStatus(context.db, new Date()),
+  diagnostics: (context) =>
+    readKernelDiagnostics(context.db, context.actorContext),
+  retry: (context, input) =>
+    retryKernelWork(context.db, input, context.actorContext),
+  status: async (context) =>
+    readWorkStatus(context.db, new Date(), context.actorContext),
   // Browser-only source projection; MCP reads machinery.needsYou.
   queue: async (context, input) => {
     const read = {

@@ -266,7 +266,11 @@ export function SuggestionsPage({
       </div>
       {search.status === "automatic" ? (
         <div className="px-2 py-2 md:px-4">
-          <AutomaticChanges record={parseRecordParam(search.record)?.code} />
+          <AutomaticChanges
+            key={search.auditFamily ?? "all"}
+            auditFamily={search.auditFamily}
+            record={parseRecordParam(search.record)?.code}
+          />
         </div>
       ) : (
         <SuggestionsTable

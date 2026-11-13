@@ -362,6 +362,11 @@ extension FieldEnvelopePresentation {
         return queue.eta.map { "\(base) · \(position) · \(etaLabel(instant($0)))" } ?? "\(base) · \(position)"
     }
 
+    public static func gapStatus(_ gap: MachineryGapsItemsItem) -> String {
+        if gap.askState == .value(.unknown) { return "blocked" }
+        return gap.lastError != nil && gap.attempts.map { $0.n >= $0.max } == true ? "failed" : "gap"
+    }
+
     public static func rowStatusLabel(_ status: String) -> String {
         switch status {
         case "used": "Used"

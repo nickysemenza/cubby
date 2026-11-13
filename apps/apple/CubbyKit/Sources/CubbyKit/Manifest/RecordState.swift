@@ -28,7 +28,7 @@ public struct RecordState: Sendable, Hashable {
     ) {
         self.option = option
         phase = option.statePhase
-        let declared = option.stage ?? (phase == .needs ? .needsYou : phase == .finished ? .ended : .working)
+        let declared = option.stage
         if stalled {
             role = .stalled
         } else if declared == .working || declared == .waiting {

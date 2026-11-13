@@ -1,6 +1,7 @@
 import { auditEntitySchema } from "@cubby/schemas/audit";
 import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
+import { workRecordTypeOptions } from "@cubby/schemas/work-queue";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
@@ -14,8 +15,14 @@ import { Button } from "~/ui/primitives/button";
 import { RecordLink } from "./suggestion-values";
 
 /** The audit provenance is the source for Cubby's changes, scoped like history. */
-export function AutomaticChanges({ record }: { record?: string }) {
-  const [family, setFamily] = useState<string | null>(null);
+export function AutomaticChanges({
+  record,
+  auditFamily,
+}: {
+  record?: string;
+  auditFamily?: string;
+}) {
+  const [family, setFamily] = useState<string | null>(auditFamily ?? null);
   const [entity, setEntity] = useState<string | null>(null);
   return (
     <section aria-label="Changes by Cubby" className="grid gap-2">
@@ -40,7 +47,9 @@ export function AutomaticChanges({ record }: { record?: string }) {
         clearable
         options={auditEntitySchema.options.map((value) => ({
           value,
-          label: value,
+          label:
+            workRecordTypeOptions.find((option) => option.value === value)
+              ?.label ?? value,
         }))}
         value={entity}
         onValueChange={setEntity}

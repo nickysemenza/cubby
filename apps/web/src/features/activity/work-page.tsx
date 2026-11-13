@@ -1,3 +1,4 @@
+import { MACHINERY_UNKNOWN_CALL_NOTE } from "@cubby/schemas/field-envelope-presentation";
 import { AGENT_BACKLOG_INPUT } from "@cubby/schemas/work-queue";
 import type { WorkStatus, WorkStuckItem } from "@cubby/schemas/work-status";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
@@ -31,7 +32,7 @@ const STATUS_INPUT = {};
 
 /** "2 background processes are stuck." and its peers: the page's always-on verdict. */
 function healthSentence(status: WorkStatus, now: number) {
-  const stuck = status.stuck.length;
+  const stuck = status.stuckCount;
   if (stuck)
     return stuck === 1
       ? "1 background process is stuck."
@@ -368,14 +369,11 @@ function KernelDiagnostics() {
           key={JSON.stringify(failure.target)}
           className="grid gap-1 border-b border-border py-2"
         >
-          <span className="text-xs">
-            {failure.target.type === "ask"
-              ? failure.target.id
-              : `${failure.target.kind}: ${failure.target.key}`}
-          </span>
+          <span className="text-xs">{failure.label}</span>
           <pre className="text-xs break-words whitespace-pre-wrap">
             {failure.error}
           </pre>
+          {failure.unknown ? <p>{MACHINERY_UNKNOWN_CALL_NOTE}</p> : null}
           <Button
             size="xs"
             variant="outline"
@@ -383,7 +381,7 @@ function KernelDiagnostics() {
             disabled={retry.isPending}
             onClick={() => retry.mutate(failure.target)}
           >
-            Retry
+            {failure.unknown ? "It was not sent: ask again" : "Retry"}
           </Button>
         </div>
       ))}

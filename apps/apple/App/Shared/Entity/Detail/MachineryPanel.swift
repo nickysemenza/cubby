@@ -177,8 +177,7 @@ struct MachineryPanel: View {
 
     private func gapRow(_ gap: MachineryGapsItemsItem) -> some View {
         let unknown = gap.askState == .value(.unknown)
-        let failed = gap.lastError != nil && gap.attempts.map { $0.n >= $0.max } == true
-        let status = unknown ? "blocked" : failed ? "failed" : "gap"
+        let status = Words.gapStatus(gap)
         return VStack(alignment: .leading, spacing: 6) {
             Text("\(Words.rowStatusLabel(status)) · \(gap.input)").fontWeight(.medium)
             Text("from \(Words.actorLabel(gap.actor))")

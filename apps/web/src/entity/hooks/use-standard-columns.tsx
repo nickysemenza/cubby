@@ -4,6 +4,7 @@ import {
   kernelStageLabel,
   machineryColumnLabel,
   machineryCostLabel,
+  machineryEtaLabel,
 } from "@cubby/schemas/field-envelope-presentation";
 import { machineryListFields } from "@cubby/schemas/kernel/machinery";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
@@ -36,6 +37,7 @@ import {
   multiSelectFilterFn,
   type RowLinkResolver,
 } from "~/entity/table/column-helpers";
+import { formatInstant } from "~/lib/date-format";
 import type { RuntimeFilterOptions } from "~/ui/combobox/filter-option-types";
 import { buildSelectColumn } from "~/ui/data-table/row-selection";
 import {
@@ -563,7 +565,11 @@ export function useStandardColumns<TData extends BaseListRow>({
                               : work.nextActor === "cubby" ||
                                   work.nextActor === "agent" ||
                                   work.nextActor === "time"
-                                ? (work.eta ?? "ETA unknown")
+                                ? machineryEtaLabel(
+                                    work.eta
+                                      ? formatInstant(work.eta, "monthDayTime")
+                                      : null,
+                                  )
                                 : null;
                     return (
                       <span className="break-words whitespace-normal tabular-nums">

@@ -2832,9 +2832,10 @@ source's candidate select projects the shared row shape through `selectWorkCandi
 assignment ledger. The browser Owner filter grants no private-source access; source
 operations still enforce current ownership.
 
-The Work page, Home, navigation and MCP read the kernel's `needsYou`: public records
-with a member-supplied gap, oldest first, with stage, the first gap and its offered
-actions. `machinery.needsYou` pages this population with `limit` and `offset`; the MCP
+The Work page, Home, navigation and MCP share `machinery.needsYou`: the union of
+public records with a kernel member gap and the member's human-executor Work
+sources. Shared scope gaps and records count once. Kernel gaps carry their stage,
+first gap and offered actions; other member work links to its owning record. `machinery.needsYou` pages this population with `limit` and `offset`; the MCP
 adapter exposes `pageSize` and an opaque continuation `cursor`.
 Record machinery holds the complete inputs and actions.
 

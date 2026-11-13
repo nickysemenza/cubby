@@ -29,6 +29,7 @@ export const workStatus = z.object({
   /** Work has waited a while but is still finishing. */
   behind: z.boolean(),
   stuck: z.array(workStuckItem),
+  stuckCount: z.number().int().nonnegative().default(0),
 });
 export type WorkStatus = z.infer<typeof workStatus>;
 
@@ -39,6 +40,7 @@ export const workRetryTarget = z.discriminatedUnion("type", [
   z.object({ type: z.literal("pass"), kind: z.string(), key: z.string() }),
 ]);
 export const workDiagnostics = z.object({
+  lastFinishedAt: z.iso.datetime().nullable(),
   groups: z.array(
     z.object({
       type: z.enum(["scope", "ask", "pass"]),
@@ -53,6 +55,8 @@ export const workDiagnostics = z.object({
   failures: z.array(
     z.object({
       target: workRetryTarget,
+      label: z.string(),
+      unknown: z.boolean(),
       error: z.string(),
       at: z.iso.datetime(),
     }),

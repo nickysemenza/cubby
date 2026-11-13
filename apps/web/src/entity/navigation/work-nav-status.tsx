@@ -24,7 +24,7 @@ function useWorkNavStatus() {
   const behind = needsYou.isError ? "Read failed" : null;
   return {
     needsYou: needsYou.data?.count ?? 0,
-    stuck: Boolean(data?.stuck.length),
+    stuck: Boolean(data?.stuckCount),
     behind: behind !== null,
   };
 }
