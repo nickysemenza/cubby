@@ -47,6 +47,7 @@ import {
 import type { AskKind, Json, Produced, ScopeRef, EvidenceRow } from "./define";
 import { markDirty } from "./dirty";
 import { askEnvelope, inputHashOf, type AskEnvelope } from "./envelope";
+import { enterHouseholdGate } from "./gate";
 import { answerKey } from "./keys";
 import { runProduce } from "./produce-ledger";
 import { KernelContractError } from "./reads";
@@ -255,6 +256,7 @@ async function commitAnswer(
   runId: string | null,
 ): Promise<void> {
   await repositoryTransactionDatabase(db, async (tx) => {
+    await enterHouseholdGate(tx);
     const q = repositoryQueries(tx);
     await q
       .insert(answer)

@@ -362,12 +362,14 @@ atomically; session timeouts bound in-flight statements. A member's write
 uses a 2 second `lock_timeout` and reports a lock timeout as a retryable
 wait.
 
-A command that records inputs and applies money in one transaction takes the gate before inserting those inputs or raising their revisions; an input-only transaction takes it with its first revision raise.
-
-Evidence appends and decision inserts take the gate with the revisions they raise; a
+The kernel's input writers own the gate for their inputs: evidence appends,
+decision inserts and answer inserts take it before they insert, so a writer
+never holds a source-identity or decision row while it waits for the gate. A
 rejection that invokes a money entity's deletion policy takes the gate before that policy
 runs; unique constraints on source identity decide a race between two writers of the same
-evidence.
+evidence. A writer that inserts a new record before raising its revisions
+takes the gate with that raise; until then it holds only the new row and
+key-share locks on the records it references.
 
 ### 7. Three work forms, one claim
 

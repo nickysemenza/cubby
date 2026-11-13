@@ -1,7 +1,7 @@
 /**
  * Evidence appends (ADR 0029 sections 1 and 5). Rows are insert-only; a
- * correction or withdrawal is a new row. An append takes the gate with the
- * revisions it raises; the evidence table's unique constraints on source
+ * correction or withdrawal is a new row. An append takes the gate before it
+ * inserts; the evidence table's unique constraints on source
  * identity decide a race between two writers of the same observation, and the
  * loser inserts nothing.
  * In the same transaction it records the rows' fact keys and dirties every
@@ -28,6 +28,7 @@ import type {
   ScopeRef,
 } from "./define";
 import { insertFactKeys, markDirty } from "./dirty";
+import { enterHouseholdGate } from "./gate";
 import { tableKey, columnKey } from "./keys";
 import type { KernelRegistry } from "./registry";
 
@@ -118,6 +119,7 @@ export async function append(
     groups.set(row.evidence.kind, group);
   }
   return repositoryTransactionDatabase(db, async (tx) => {
+    await enterHouseholdGate(tx);
     const q = repositoryQueries(tx);
     const facts: { kind: string; id: string; keys: Key[] }[] = [];
     const discovers: ScopeRef[] = [];

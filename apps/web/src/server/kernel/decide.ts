@@ -1,9 +1,9 @@
 /**
  * Decisions (ADR 0029 section 1): four independent channels, each resolved
  * by its newest row. A later assignment never removes a veto, and one
- * identity decision never removes another pair's. Inserts take the gate
- * with the revisions they raise; the scopes that read the subject are
- * dirtied in the same transaction. A
+ * identity decision never removes another pair's. The insert takes the
+ * gate first; the scopes that read the subject are dirtied in the same
+ * transaction. A
  * decision on an authored entity's field is applied by that entity's own
  * writer in the same transaction, and a `reject` runs the record's delete
  * policy and marks its `RecordKey` so its evidence does not recreate it.
@@ -29,6 +29,7 @@ import { settleAskOutcome } from "./ask";
 import { askOfSubject, askOutcomes, ASK_OUTCOME_FIELD } from "./ask-gap";
 import type { DecisionInput, DecisionRef, ScopeRef } from "./define";
 import { markDirty } from "./dirty";
+import { takeHouseholdGate } from "./gate";
 import { clearRejected, markRejected, removeRecords } from "./identity";
 import { decisionKey, hashCanonical, VETO_SEPARATOR } from "./keys";
 import { KernelContractError } from "./reads";
@@ -140,7 +141,8 @@ export async function decide(
     // The newest decision in a slot wins. One clock reading per statement
     // orders separate calls; each row's ordinal orders one call's rows.
     await q.execute(sql`
-      WITH base AS MATERIALIZED (SELECT clock_timestamp() AS at)
+      WITH gate AS MATERIALIZED (SELECT ${takeHouseholdGate}),
+        base AS MATERIALIZED (SELECT clock_timestamp() AS at FROM gate)
       INSERT INTO "Decision" (id, channel, subject, slot, field, kind, value, other, "actorKind", "actorId", "proposalHash", at)
       SELECT d.id, d.channel, d.subject, d.slot, d.field, d.kind, d.value, d.other, d."actorKind", d."actorId", d."proposalHash",
         base.at + d.ord * interval '1 microsecond'
