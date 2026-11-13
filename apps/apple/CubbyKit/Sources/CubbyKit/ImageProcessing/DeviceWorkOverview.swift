@@ -1,6 +1,6 @@
 import Foundation
 
-/// `job.deviceBacklog` worded for Activity's banner: parked Apple-device image work, how many
+/// `imageBacklog.deviceBacklog` worded for Activity's banner: parked Apple-device image work, how many
 /// devices claimed some in the last ten minutes, and the server's ETA at that pace. Every figure
 /// is the server's; this type only words them.
 public struct DeviceBacklogBanner: Sendable, Equatable {
@@ -17,14 +17,14 @@ public struct DeviceBacklogBanner: Sendable, Equatable {
         self.etaSeconds = etaSeconds
     }
 
-    init(_ output: JobDeviceBacklogOutput) {
+    init(_ output: ImageBacklogDeviceBacklogOutput) {
         self.init(
             waiting: output.waiting, runsWaiting: output.runsWaiting,
             workingDevices: output.workingDevices, etaSeconds: output.etaSeconds)
     }
 
     public static func load(client: CubbyClient) async throws -> Self {
-        Self(try await client.native_job_deviceBacklog(body: .object([:])))
+        Self(try await client.native_imageBacklog_deviceBacklog(body: .object([:])))
     }
 
     /// The banner shows only while work waits.

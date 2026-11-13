@@ -178,7 +178,7 @@ still unacknowledged stay in the outbox and replay on the next connection.
 While the companion processes images, one **Processing image queue** activity feeds
 Activity, the macOS sidebar and the iOS bottom accessory through the shared activity
 summary and aggregate progress. It shows **N running · M done**, plus **about X at this
-pace** when `job.deviceBacklog` supplies an ETA. Tapping opens Activity. User-started
+pace** when `imageBacklog.deviceBacklog` supplies an ETA. Tapping opens Activity. User-started
 work keeps first priority.
 
 On iOS the same queue activity appears on the Lock Screen and Dynamic Island, with
@@ -216,7 +216,7 @@ slot refills and result recording until the drain settles or processing stops.
 Completed commands count only after the server adopts a successful completed result;
 failed, skipped, normalized, superseded, released and cancelled attempts do not count.
 Recorded results waiting to deliver have their own count and diagnostic. At session start the worker
-requests `job.deviceBacklog`, then refreshes it every 45 seconds while processing.
+requests `imageBacklog.deviceBacklog`, then refreshes it every 45 seconds while processing.
 The first successful response freezes a total estimate from completed results, waiting
 jobs and outstanding local work; later responses refresh only the ETA, so newly queued
 images do not move the baseline. Until the first response arrives, progress is
@@ -264,7 +264,7 @@ worker's life, latches the app's update banner (the worker's client shares the a
 observer), and Activity shows "Update required to process images". Activity's "This device" row
 always names the worker phase (idle, connected, pulling, processing N, update required, paused
 from the web, automatic work off, asleep, disconnected with the last error). While image work
-waits for a device, a banner at the top reads `job.deviceBacklog` ("N images waiting for an Apple
+waits for a device, a banner at the top reads `imageBacklog.deviceBacklog` ("N images waiting for an Apple
 device · M working · about X at the current pace", the pace omitted without a server ETA) and, when
 no device claimed work recently and this one is not processing, says to keep Cubby open on a Mac.
 Below the device, Work lists Runs in progress and Runs needing attention (the manifest's

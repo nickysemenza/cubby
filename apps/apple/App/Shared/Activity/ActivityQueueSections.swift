@@ -105,12 +105,12 @@ private struct CompanionConnectionProgress: View {
     }
 }
 
-/// The top of Activity while image work is parked for an Apple device (`job.deviceBacklog`):
+/// The top of Activity while image work is parked for an Apple device (`imageBacklog.deviceBacklog`):
 /// how much waits, how many devices are working it, the server's ETA, and a nudge when nothing
 /// is processing.
 struct DeviceBacklogBannerSection: View {
     let backlog: DeviceBacklogBanner?
-    /// The latest `job.deviceBacklog` failure, verbatim; a shown banner keeps its last figures.
+    /// The latest `imageBacklog.deviceBacklog` failure, verbatim; a shown banner keeps its last figures.
     var error: String? = nil
     let thisDeviceProcessing: Bool
     /// Reloads the backlog; the failure keeps the raw message beside it.

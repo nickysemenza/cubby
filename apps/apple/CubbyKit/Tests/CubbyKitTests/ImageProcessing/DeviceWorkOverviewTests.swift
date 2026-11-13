@@ -3,7 +3,7 @@ import Testing
 
 @testable import CubbyKit
 
-/// Activity's device-work wording and grouping: the `job.deviceBacklog` banner, processing image
+/// Activity's device-work wording and grouping: the `imageBacklog.deviceBacklog` banner, processing image
 /// jobs split by the Device holding each lease, and the shared slot count. Synthetic codes only.
 @Suite("Device work overview")
 struct DeviceWorkOverviewTests {
@@ -11,7 +11,7 @@ struct DeviceWorkOverviewTests {
 
     @Test func bannerWordsTheServerFiguresWithItsEta() throws {
         let output = try JSONDecoder.cubby().decode(
-            JobDeviceBacklogOutput.self,
+            ImageBacklogDeviceBacklogOutput.self,
             from: Data(
                 #"{"waiting":240,"runsWaiting":2,"workingDevices":1,"claimsPerMinute":1.2,"etaSeconds":12000}"#
                     .utf8))
