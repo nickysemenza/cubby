@@ -1,9 +1,11 @@
 import type { EntityPhase } from "@cubby/schemas/entity-definitions/definition";
+import { kernelStageLabel } from "@cubby/schemas/field-envelope-presentation";
 import {
   describeRunWait,
   jobKindDeclaration,
   type RunWaitingOn,
 } from "@cubby/schemas/job";
+import type { KernelStage } from "@cubby/schemas/kernel/stage";
 import { PauseIcon } from "@phosphor-icons/react/dist/csr/Pause";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
@@ -13,46 +15,41 @@ import { formatInstant } from "~/lib/date-format";
 import { formatCount } from "~/lib/number-format";
 import { useDisplayNow } from "~/ui/hooks/use-display-now";
 
-type StateRole =
-  | "needs"
-  | "stalled"
-  | "failed"
-  | "running"
-  | "queued"
-  | "paused"
-  | "done"
-  | "ended";
+/**
+ * A state's treatment is its stage (ADR 0029 section 10): needs you and stuck
+ * are filled pills; working, waiting, done and ended are a dot or glyph and a
+ * label. `paused` is a waiting state drawn with the pause glyph.
+ */
+type StateRole = KernelStage | "paused";
 
 /**
- * Role decides the treatment. Needs-you, stalled and failed are filled pills;
- * running, queued, paused, done and ended are a dot or glyph and a label. A
- * wait refines an active state into queued or paused. A finished option is
- * done (positive) only when its declared colour is positive; any other
- * finished option (retried, cancelled, archived) ends neutral.
+ * The declared stage, else the phase's (needs is Needs you, finished is
+ * Ended, active is Working). Stalled work is Stuck; a wait refines Working
+ * into Waiting or paused. Colour never decides the role.
  */
 function stateRole({
   phase,
-  color,
+  stage,
   stalled,
-  failed,
   wait,
 }: {
   phase: EntityPhase;
-  color?: string;
+  stage?: KernelStage;
   stalled?: boolean;
-  failed?: boolean;
   wait?: RunWaitingOn;
 }): StateRole {
-  if (failed) return "failed";
-  if (stalled) return "stalled";
-  if (phase === "needs") return "needs";
-  if (phase === "finished")
-    return color === "positive" || color === "var(--positive)"
-      ? "done"
-      : "ended";
+  if (stalled) return "stuck";
+  const declared =
+    stage ??
+    (phase === "needs"
+      ? "needs_you"
+      : phase === "finished"
+        ? "ended"
+        : "working");
+  if (declared !== "working" && declared !== "waiting") return declared;
   if (wait?.reason === "paused") return "paused";
-  if (wait && wait.reason !== "in_progress") return "queued";
-  return "running";
+  if (wait && wait.reason !== "in_progress") return "waiting";
+  return declared;
 }
 
 /** The wait on the display clock, so "about 16 min" counts down between reads. */
@@ -116,10 +113,9 @@ const pillBase =
 
 /**
  * One state, drawn the same on a list row, the detail header and a batch row.
- * `option.color` is the option's declared tone and `phase` its `optionPhase`;
- * `reason` is muted text after the label; `wait` adds the queue position and estimate; `failed` is true for a
- * failure outcome. `size="header"` draws the larger pill and the wait's detail
- * lines.
+ * `option.stage` is the option's declared stage and `phase` its `optionPhase`;
+ * `reason` is muted text after the label; `wait` adds the queue position and
+ * estimate. `size="header"` draws the larger pill and the wait's detail lines.
  */
 export function StateBadge({
   option,
@@ -127,26 +123,18 @@ export function StateBadge({
   reason,
   wait,
   stalled,
-  failed,
   size = "row",
 }: {
-  option: { label: string; color?: string };
+  option: { label: string; stage?: KernelStage };
   phase: EntityPhase;
   reason?: string | null;
   wait?: RunWaitingOn;
   stalled?: boolean;
-  failed?: boolean;
   size?: "row" | "header";
 }) {
-  const role = stateRole({
-    phase,
-    color: option.color,
-    stalled,
-    failed,
-    wait,
-  });
+  const role = stateRole({ phase, stage: option.stage, stalled, wait });
   const waitText = useWaitText(wait);
-  const label = role === "stalled" ? "Stalled" : option.label;
+  const label = stalled ? kernelStageLabel("stuck") : option.label;
   const trailing =
     reason ?? (waitText ? withoutLabel(waitText, option.label) : null);
   const header = size === "header";
@@ -158,17 +146,17 @@ export function StateBadge({
   const jobs = header && wait?.jobs ? `Live Jobs: ${wait.jobs}` : null;
 
   const main =
-    role === "needs" ? (
+    role === "needs_you" ? (
       <span className={cn(pill, "bg-needs text-needs-foreground")}>
         <StateMark kind="needs" />
         {label}
       </span>
-    ) : role === "stalled" ? (
+    ) : role === "stuck" && stalled ? (
       <span className={cn(pill, "bg-stalled-surface text-stalled")}>
         <WarningIcon aria-hidden weight="bold" className="size-3" />
         {label}
       </span>
-    ) : role === "failed" ? (
+    ) : role === "stuck" ? (
       <span className={cn(pill, "bg-destructive-surface text-destructive")}>
         <StateMark kind="failed" />
         {label}
@@ -178,7 +166,7 @@ export function StateBadge({
         className={cn(
           "inline-flex min-w-0 shrink-0 items-center gap-1.5 font-medium whitespace-nowrap",
           "text-sm",
-          role === "running" && "text-running",
+          role === "working" && "text-running",
           role === "done" && "text-positive",
         )}
       >
@@ -193,9 +181,9 @@ export function StateBadge({
             aria-hidden
             className={cn(
               "size-2 shrink-0 rounded-full",
-              role === "running" && "bg-running",
+              role === "working" && "bg-running",
               role === "done" && "bg-positive",
-              role === "queued" && "border-[1.5px] border-queued",
+              role === "waiting" && "border-[1.5px] border-queued",
               role === "ended" && "bg-muted-foreground",
             )}
           />

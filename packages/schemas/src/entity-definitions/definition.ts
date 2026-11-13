@@ -14,6 +14,7 @@ import {
 import type { ShortcodeFor, ShortcodeType } from "@cubby/shared";
 import { z } from "zod";
 import { dataQuality } from "../data-quality-shape";
+import { kernelStage } from "../kernel/stage";
 import { sortDirection, listGroupByDimensionsSchema } from "../pagination";
 import {
   dataQualityCheckKind,
@@ -402,6 +403,8 @@ const buildMetadataSchemas = () => {
   const enumOptionStateFields = {
     /** The state phase this option places its record in; see `ENTITY_PHASES`. */
     phase: z.enum(ENTITY_PHASES).optional(),
+    /** The stage word a state option draws as (ADR 0029 section 10); `StateBadge` never reads colour. */
+    stage: kernelStage.optional(),
     /** What choosing a kind does, shown where the record explains its kind. */
     explanation: z
       .strictObject({
@@ -2881,6 +2884,8 @@ const buildMetadataSchemas = () => {
             meta: z.boolean({ error: "must be a boolean" }).optional(),
             color: nonEmptyString().optional(),
             role: z.enum(enumRoles).optional(),
+            /** A state roster's stage word; filters carry it with the option. */
+            stage: kernelStage.optional(),
             glyph: enumIconSchema.optional(),
             /**
              * The filter fields this preset sets on a `range` descriptor

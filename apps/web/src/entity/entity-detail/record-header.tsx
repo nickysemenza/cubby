@@ -7,6 +7,7 @@ import {
 import { displayItem } from "@cubby/schemas/entity-definitions/label-field";
 import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
 import { runWaitingOn, type RunWaitingOn } from "@cubby/schemas/job";
+import { kernelStage, type KernelStage } from "@cubby/schemas/kernel/stage";
 import type { QueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
@@ -38,6 +39,13 @@ const fieldOf = (
 const readField = (record: DetailRecordOf<GenericDetailEntity>, field: Field) =>
   readPathValue(record, field.display.readPath ?? field.readKey ?? field.key);
 
+const stagedOption = z.looseObject({ stage: kernelStage.optional() });
+
+/** The option's declared stage; colour never stands in for it. */
+function optionStage(option: unknown): KernelStage | undefined {
+  return stagedOption.safeParse(option).data?.stage;
+}
+
 /** The roster option a stored enum value names. */
 function optionOf(field: Field, raw: unknown) {
   if (typeof raw !== "string") return undefined;
@@ -47,7 +55,7 @@ function optionOf(field: Field, raw: unknown) {
 
 /** What `StateBadge` draws for the record's declared `presentation.state`. */
 export interface RecordState {
-  option: { label: string; color?: string };
+  option: { label: string; stage?: KernelStage };
   phase: EntityPhase;
   reason: string | null;
   wait: RunWaitingOn | undefined;
@@ -89,14 +97,12 @@ export function recordStateOf<E extends GenericDetailEntity>(
       ? undefined
       : runWaitingOn.safeParse(valueOf(state.wait));
   return {
-    option: { label: option?.label ?? raw, color: option?.color },
+    option: { label: option?.label ?? raw, stage: optionStage(option) },
     phase: option ? optionPhase(option) : "active",
     reason: text(state.reason),
     wait: wait?.success ? wait.data : undefined,
     stalled: state.stalled !== undefined && valueOf(state.stalled) === true,
-    // Display options carry the token as a CSS reference.
-    failed:
-      option?.color === "destructive" || option?.color === "var(--destructive)",
+    failed: optionStage(option) === "stuck",
   };
 }
 

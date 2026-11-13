@@ -122,6 +122,8 @@ type Presentation = {
   closed?: true;
   /** The state phase; unset derives it from `closed` (`optionPhase`). */
   phase?: import("./definition").EntityPhase;
+  /** The stage word a state option draws as. */
+  stage?: import("../kernel/stage").KernelStage;
 };
 /**
  * Marks `value` as the roster's quiet option. Controls carry it; filter presets share the

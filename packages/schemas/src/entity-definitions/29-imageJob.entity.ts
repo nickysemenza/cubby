@@ -33,43 +33,51 @@ const stateOptions = [
     value: "pending",
     label: "Queued",
     color: "neutral-status",
+    stage: "waiting",
   },
   {
     value: "waiting_for_device",
     label: "Waiting for Apple",
     color: "warning",
+    stage: "waiting",
   },
   {
     value: "leased",
     label: "Processing",
     color: "info",
+    stage: "working",
   },
   {
     value: "ready",
     label: "Completed",
     color: "positive",
+    stage: "done",
   },
   {
     value: "skipped",
     label: "Skipped",
     color: "neutral-status",
+    stage: "ended",
   },
   {
     value: "cloud_satisfied",
     label: "Satisfied by cloud",
     color: "neutral-status",
+    stage: "ended",
   },
   {
     // Deterministic refusals stop; repeated transient failures still retry.
     value: "failed",
     label: "Needs attention",
     color: "destructive",
+    stage: "stuck",
   },
 ] satisfies {
   value: string;
   label: string;
   color?: import("@cubby/shared/enum-palette").ColorToken;
   glyph?: import("@cubby/shared/enum-palette").EnumIcon;
+  stage?: import("../kernel/stage").KernelStage;
 }[];
 
 /**

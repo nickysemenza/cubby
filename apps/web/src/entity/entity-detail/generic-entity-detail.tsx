@@ -202,7 +202,6 @@ function headerStatus<E extends GenericDetailEntity>(
             }
             wait={state.wait}
             stalled={state.stalled}
-            failed={state.failed}
           />
         ) : chip !== null ? (
           <Badge variant="secondary">{chip}</Badge>
