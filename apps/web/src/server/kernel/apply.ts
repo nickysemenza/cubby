@@ -75,6 +75,7 @@ import {
 import { mergeRecords, removeRecords } from "./identity";
 import {
   canonicalJson,
+  decisionKey,
   bindingEventKey,
   bindingFactKey,
   recordSubject,
@@ -287,14 +288,59 @@ const emptyDifference = (): Difference => ({
 });
 const scopeId = (scope: ScopeRef) => `${scope.kind}\u0000${scope.key}`;
 
+/** Output membership keys are known from the plan, before any dirty claim is locked. */
+function plannedKeys(
+  computed: readonly Computed[],
+  options: ApplyOptions,
+): Key[] {
+  const keys = new Set<Key>();
+  const touch = (target: ColumnRef, row: ColumnValues) => {
+    keys.add(tableKey(target.name));
+    keys.add(rowKey(target.name, String(row.id)));
+    for (const key of target.keys?.(row) ?? []) keys.add(key);
+  };
+  for (const item of computed) {
+    if (!item.desired || item.error) continue;
+    const diff = difference(item, options);
+    for (const entry of diff.inserts)
+      touch(entry.target, { ...entry.values, id: entry.id });
+    for (const entry of diff.updates) {
+      touch(entry.target, entry.row);
+      touch(entry.target, { ...entry.row, ...entry.seen });
+    }
+    for (const entry of diff.removals)
+      touch(entry.target, entry.row ?? { id: entry.id });
+    for (const entry of [...diff.bindingsAdd, ...diff.bindingsRemove]) {
+      keys.add(bindingEventKey(entry.eventKey));
+      keys.add(bindingFactKey(entry.fact));
+    }
+    for (const entry of diff.merges) {
+      keys.add(tableKey(entry.target.name));
+      for (const id of [entry.survivorId, entry.absorbedId]) {
+        keys.add(rowKey(entry.target.name, id));
+        keys.add(decisionKey(recordSubject(recordEntity(entry.target), id)));
+      }
+      for (const binding of item.storedBindings) {
+        keys.add(bindingEventKey(binding.eventKey));
+        keys.add(bindingFactKey(binding.fact));
+      }
+    }
+  }
+  return [...keys];
+}
+
 /** Lock the union once, then compare every scope against that one input fence. */
 async function fenceBatch(
   q: Q,
   computed: readonly Computed[],
   claimed: readonly ClaimedScope[],
+  outputKeys: readonly Key[],
 ) {
   const keys = [
-    ...new Set(computed.flatMap((item) => [...item.keys.keys()])),
+    ...new Set([
+      ...computed.flatMap((item) => [...item.keys.keys()]),
+      ...outputKeys,
+    ]),
   ].sort();
   const revisions = await lockKeyRevs(q, keys);
   const rows = await q.execute<{
@@ -412,7 +458,12 @@ async function applyBatch(
   options: ApplyOptions,
 ): Promise<Outcome[]> {
   const q = repositoryQueries(tx);
-  const fenced = await fenceBatch(q, computed, claims);
+  const fenced = await fenceBatch(
+    q,
+    computed,
+    claims,
+    plannedKeys(computed, options),
+  );
   const plans: Plan[] = [];
   const drifts: { computed: Computed; diff: Difference }[] = [];
   const outcomes = [...fenced.outcomes];
@@ -548,7 +599,10 @@ async function applyBatch(
         }
         await insertRows(q, recordKey, recordKeys);
         await updateRecords(q, combined.updates);
-        for (const entry of combined.updates) touch(entry.target, entry.row);
+        for (const entry of combined.updates) {
+          touch(entry.target, { ...entry.row, ...entry.seen });
+          touch(entry.target, entry.row);
+        }
         await auditApply(tx, combined);
         const removals = new Map<string, Difference["removals"]>();
         for (const entry of combined.removals)
@@ -1013,22 +1067,7 @@ async function runLocked(
       });
       if (computed!.error instanceof LockedReadChangedError)
         throw computed!.error;
-      const fence = await q.execute<{
-        seq: string | number;
-        live: boolean;
-      }>(sql`
-        SELECT seq, ("claimToken" = ${claimed.token}::uuid AND "claimDeadline" > now()) AS live
-        FROM "ScopeDirty" WHERE "scopeKind" = ${scope.kind} AND "scopeKey" = ${scope.key}
-        FOR UPDATE`);
-      const row = fence.rows[0];
-      if (!row?.live) throw new ClaimLapsedError();
-      return applyOne(
-        tx,
-        registry,
-        computed!,
-        { ...claimed, seq: Number(row.seq) },
-        options,
-      );
+      return applyOne(tx, registry, computed!, claimed, options);
     });
   } catch (error) {
     if (isConflict(error)) {
