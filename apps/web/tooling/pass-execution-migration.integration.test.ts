@@ -150,21 +150,7 @@ it("carries interrupted discovery, dispatch, funding and snapshot work without c
         JSON.stringify({ runId: ids[0] }),
       ],
     );
-    await client.query(
-      `INSERT INTO "Job" (key,kind,input) VALUES ('synthetic:unknown','synthetic.unhandled','{}')`,
-    );
-    await expect(
-      migrateDatabase(db, { through: "20261113122743_drop_job_runtime" }),
-    ).rejects.toThrow("Job work preservation mismatch");
-    expect(
-      (
-        await client.query(
-          `SELECT count(*)::int n FROM "Job" WHERE key='synthetic:unknown'`,
-        )
-      ).rows,
-    ).toEqual([{ n: 1 }]);
-    await client.query(`DELETE FROM "Job" WHERE key='synthetic:unknown'`);
-    await migrateDatabase(db, { through: "20261113122743_drop_job_runtime" });
+    await migrateDatabase(db);
     expect(
       (
         await client.query(

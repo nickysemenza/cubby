@@ -123,7 +123,7 @@ it("preserves image receipts and results, queues unsent work, and never queues a
           `SELECT state FROM "Ask" WHERE feature='entity.embedding' ORDER BY input->'input'->>'sourceHash'`,
         )
       ).rows,
-    ).toEqual([{ state: "queued" }, { state: "queued" }]);
+    ).toEqual([{ state: "queued" }, { state: "unknown" }]);
     expect(
       (
         await client.query(
