@@ -158,9 +158,15 @@ function BackgroundWork({
       count={items.length ? formatCount(items.length) : undefined}
       ruled
     >
-      <p className="min-h-5.5 text-muted-foreground" data-testid="work-health">
+      {/* oxlint-disable jsx-a11y/prefer-tag-over-role -- The persistent health sentence is a paragraph. */}
+      <p
+        role="status"
+        className="min-h-5.5 text-muted-foreground"
+        data-testid="work-health"
+      >
         {sentence}
       </p>
+      {/* oxlint-enable jsx-a11y/prefer-tag-over-role */}
       <ul>
         {(expanded ? items : items.slice(0, STUCK_ROW_CAP)).map((item) => (
           <StuckRow key={item.key} item={item} onRetried={onRetried} />

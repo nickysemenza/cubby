@@ -184,12 +184,19 @@ export function StateBadge({
       // Bounded by the cell, not its inline wrappers: a narrow column clipped
       // the reason mid-word instead of ending it in an ellipsis.
       className="grid max-w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-0.5"
-      title={trailing ? `${label} · ${trailing}` : label}
+      title={
+        !header ? (trailing ? `${label} · ${trailing}` : label) : undefined
+      }
     >
       <span className="flex min-w-0 items-center gap-1.5">
         {main}
         {trailing ? (
-          <span className="min-w-0 truncate text-sm text-muted-foreground">
+          <span
+            className={cn(
+              "min-w-0 text-sm text-muted-foreground",
+              header ? "break-words" : "truncate",
+            )}
+          >
             {trailing}
           </span>
         ) : null}

@@ -15,7 +15,12 @@ struct ProgressMeter: View {
     var paused = false
     var showsLabel = true
 
-    private var title: String { [value.label, note].compactMap { $0 }.joined(separator: " · ") }
+    private var title: String {
+        [
+            value.label, value.failed > 0 ? "\(value.failed) failed" : nil,
+            value.stalled > 0 ? "\(value.stalled) stalled" : nil, note,
+        ].compactMap { $0 }.joined(separator: " · ")
+    }
 
     var body: some View {
         let layout =
@@ -31,7 +36,8 @@ struct ProgressMeter: View {
                     .font(variant == .row ? .caption : .subheadline)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
-                    .lineLimit(1)
+                    .lineLimit(variant == .row ? 1 : nil)
+                    .fixedSize(horizontal: false, vertical: variant == .block)
                     .truncationMode(.tail)
             }
         }
@@ -91,7 +97,7 @@ struct ProgressMeter: View {
 #Preview("Progress meters") {
     VStack(alignment: .leading, spacing: 16) {
         ProgressMeter(
-            value: .init(done: 5, failed: 1, active: 2, total: 12, unit: "orders"), note: "1 failed",
+            value: .init(done: 5, failed: 1, active: 2, total: 12, unit: "orders"),
             variant: .row)
         ProgressMeter(value: .init(done: 140, failed: 6, active: 20, queued: 34, total: 200, unit: "photos"))
         ProgressMeter(value: .init(done: 37, total: nil, unit: "emails"), variant: .row)

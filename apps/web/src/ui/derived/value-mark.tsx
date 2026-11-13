@@ -12,17 +12,10 @@ import {
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
 
-function UpdatingDot({
-  label = "Updating",
-  active = true,
-}: {
-  label?: string;
-  active?: boolean;
-}) {
+function UpdatingDot({ active = true }: { active?: boolean }) {
   return (
     <output
-      aria-label={label}
-      title={label}
+      aria-hidden="true"
       className="inline-flex size-3 shrink-0 items-center justify-center"
     >
       <span
@@ -102,19 +95,20 @@ export function FieldValueMark({
       )}
     >
       {inherited ? (
-        <span
-          className="w-3 shrink-0 text-muted-foreground"
-          aria-label="Inherited"
-        >
-          ↳
-        </span>
+        <>
+          <span
+            className="w-3 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          >
+            ↳
+          </span>
+          <span className="sr-only">Inherited, </span>
+        </>
       ) : null}
       <span className="min-w-0 truncate">
         {missing ? <MissingFieldValue interactive={interactive} /> : children}
       </span>
-      {!missing && stale ? (
-        <UpdatingDot label="Stale result" active={false} />
-      ) : null}
+      {!missing && stale ? <UpdatingDot active={false} /> : null}
     </span>
   );
 }

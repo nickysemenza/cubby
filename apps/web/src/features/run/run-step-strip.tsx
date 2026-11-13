@@ -42,7 +42,7 @@ export function RunStepStrip({
   const later = steps.some((step) => step.phase === "not_started");
   return (
     <div className={cn("grid gap-1.5", className)} data-testid="run-step-strip">
-      <p className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 text-sm">
+      <p className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 text-sm tabular-nums">
         <strong className="font-semibold text-foreground-strong">
           Step {overview.currentIndex + 1} of {steps.length}
         </strong>

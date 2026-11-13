@@ -235,10 +235,10 @@ export function DerivedFreshness({
         <p>
           {contextual
             ? stale
-              ? "Stale facts"
+              ? "Facts are out of date"
               : "Cached facts"
             : stale
-              ? "Stale result"
+              ? "Result is out of date"
               : "Cached result"}{" "}
           · Last computed <DateDisplay timestamp={result.computedAt} />
         </p>

@@ -23,7 +23,8 @@ struct StateBadge: View {
                     Text(trailingText)
                         .font(size == .header ? .subheadline : .caption)
                         .foregroundStyle(.secondary)
-                        .lineLimit(size == .header ? 2 : 1)
+                        .lineLimit(size == .header ? nil : 1)
+                        .fixedSize(horizontal: false, vertical: size == .header)
                         .truncationMode(.tail)
                 }
             }

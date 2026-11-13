@@ -50,9 +50,17 @@ function segments(value: ProgressValue, total: number): Segment[] {
 }
 
 function labelText(value: ProgressValue): string {
-  return value.total === null
-    ? `${value.done} ${value.unit}`
-    : `${value.done} of ${formatCount(value.total)} ${value.unit}`;
+  const count =
+    value.total === null
+      ? `${value.done} ${value.unit}`
+      : `${value.done} of ${formatCount(value.total)} ${value.unit}`;
+  return [
+    count,
+    value.failed ? `${value.failed} failed` : null,
+    value.stalled ? `${value.stalled} stalled` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 const dashes = Array.from({ length: 40 }, (_, n) => `dash-${n}`);
@@ -190,7 +198,7 @@ export function ProgressMeter({
   return (
     <span
       data-progress-meter=""
-      title={title}
+      title={variant === "row" ? title : undefined}
       // Bounded by the cell, not its inline wrappers, so a narrow column ends
       // the note, then the count, in an ellipsis instead of clipping.
       className={cn(
@@ -203,13 +211,22 @@ export function ProgressMeter({
     >
       <Track value={value} paused={paused} variant={variant} title={title} />
       {label === null ? null : (
-        <span className="min-w-0 truncate text-sm text-muted-foreground">
+        <span
+          className={cn(
+            "min-w-0 text-sm text-muted-foreground tabular-nums",
+            variant === "row" ? "truncate" : "break-words",
+          )}
+        >
           {label ?? (
             <>
               <b className="font-medium text-foreground">{value.done}</b>
               {text.slice(String(value.done).length)}
             </>
           )}
+          {label != null && value.failed ? <> · {value.failed} failed</> : null}
+          {label != null && value.stalled ? (
+            <> · {value.stalled} stalled</>
+          ) : null}
           {note ? <> · {note}</> : null}
         </span>
       )}
