@@ -657,6 +657,7 @@ async function heldProposals(
   if (options.releaseBaseline) return new Map();
   const held = computed.filter((item) => {
     if (item.error !== null || !item.desired) return false;
+    if (item.desired.disagreements.length) return false;
     try {
       return holdsBaseline(item, difference(item, options), options);
     } catch {
@@ -739,19 +740,21 @@ async function applyBatch(
           ]
         : [...item.computed.desired.gaps],
     });
-    // Approval releases the baseline itself; an input-triggered hold shows
-    // the baseline-released computation, or nothing it cannot apply. The
-    // decision changes this apply makes are not part of what is proposed.
-    const shown = options.releaseBaseline
-      ? item.computed
-      : proposals.get(scopeId(item.computed.scope));
+    // A disagreement is shown as computed and cannot be approved. Otherwise
+    // approval releases the baseline itself, and an input-triggered hold
+    // shows the baseline-released computation approval applies, without the
+    // decision changes this apply makes, or nothing it cannot apply.
+    const disagrees = item.computed.desired.disagreements.length > 0;
+    const shown =
+      options.releaseBaseline || disagrees
+        ? item.computed
+        : proposals.get(scopeId(item.computed.scope));
     if (heldBaseline && shown?.desired && shown.error === null)
       drifts.push({
         computed: shown,
-        diff: withoutApplied(
-          difference(shown, { releaseBaseline: true }),
-          diff,
-        ),
+        diff: disagrees
+          ? proposed
+          : withoutApplied(difference(shown, { releaseBaseline: true }), diff),
       });
   }
   if (!plans.length) return outcomes;

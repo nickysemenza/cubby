@@ -385,6 +385,12 @@ async function claimForApproval(
 
 export type ApprovalOutcome = "applied" | "stale" | "busy" | "missing";
 
+const disagreementsOf = (difference: unknown): unknown[] =>
+  z
+    .object({ disagreements: z.array(z.unknown()).default([]) })
+    .catch({ disagreements: [] })
+    .parse(difference).disagreements;
+
 /**
  * Approve one scope's proposal by its hash. Approval recomputes the scope
  * under the current rules with the baseline released; a proposal stored under
@@ -409,6 +415,8 @@ export async function approveDrift(
     );
   if (!proposal) return "missing";
   if (proposal.proposalHash !== proposalHash) return "stale";
+  // Evidence or a decision resolves a disagreement; approval cannot.
+  if (disagreementsOf(proposal.difference).length) return "stale";
   if (!options.recorded)
     await decide(db, registry, actor, [
       {
