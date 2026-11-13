@@ -484,8 +484,13 @@ describe("evidence-facts kernel", () => {
 
   it("shares a household claim partition across inline Asks, queued Asks and Passes", async () => {
     const limit = { partition: "synthetic.agent-turn", slots: 2 };
+    let calls = 0;
     const ask = defineAsk({
       feature: "fixture.partition",
+      produce: async () => {
+        calls++;
+        return { output: "synthetic answer" };
+      },
       producer: "model",
       promptVersion: "1",
       input: z.string(),
@@ -514,6 +519,10 @@ describe("evidence-facts kernel", () => {
     const heldPass = await claimPass(ctx.db, [pass]);
     expect(first).not.toBeNull();
     expect(heldPass).not.toBeNull();
+    await expect(kernel.withAsk(ctx.db, ask, "blocked")).rejects.toThrow(
+      "partition is full",
+    );
+    expect(calls).toBe(0);
     expect(await claimAsk(ctx.db, ids[1]!, limit)).toBeNull();
     expect(await claimAsks(ctx.db, [ask], 8)).toEqual([]);
     const [parked] = (
@@ -527,6 +536,10 @@ describe("evidence-facts kernel", () => {
       future: true,
     });
     await releaseClaim(q, { table: "Ask", id: ids[0]! }, first!.token);
+    expect(await kernel.withAsk(ctx.db, ask, "admitted")).toBe(
+      "synthetic answer",
+    );
+    expect(calls).toBe(1);
     await q.execute(
       sql`UPDATE "Ask" SET "availableAt" = now() WHERE feature = ${ask.feature}`,
     );
