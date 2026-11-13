@@ -18,9 +18,14 @@ import { defineReadIndex } from "~/server/kernel/api";
 
 export const transactionCandidates = defineReadIndex(financialTransaction, {
   name: "transaction.accountAmount",
-  values: (row) => [`${row.accountId}:${row.amount}`],
+  values: (row) =>
+    (row.transactionDate ?? row.postedDate)
+      ? [
+          `${row.accountId}:${row.amount}:${row.transactionDate ?? row.postedDate}`,
+        ]
+      : [],
   where: (values) =>
-    sql`EXISTS (SELECT 1 FROM jsonb_to_recordset(${JSON.stringify(values.map((value) => ({ account: value.slice(0, 36), amount: value.slice(37) })))}::jsonb) candidate(account uuid, amount bigint) WHERE ${financialTransaction.accountId}=candidate.account AND ${financialTransaction.amount}=candidate.amount)`,
+    sql`EXISTS (SELECT 1 FROM jsonb_to_recordset(${JSON.stringify(values.map((value) => ({ account: value.slice(0, 36), amount: value.split(":")[1], date: value.split(":")[2] })))}::jsonb) candidate(account uuid, amount bigint, date text) WHERE ${financialTransaction.accountId}=candidate.account AND ${financialTransaction.amount}=candidate.amount AND coalesce(${financialTransaction.transactionDate}, ${financialTransaction.postedDate})::text=candidate.date)`,
 });
 export const acceptedOccurrences = defineReadIndex(sourceOccurrence, {
   name: "occurrence.transaction",

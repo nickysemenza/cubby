@@ -16,7 +16,10 @@ import {
   sourceTransactionRecord,
   vendor,
 } from "~/server/db/schema";
-import { withinPostingDateWindow } from "~/server/domains/financial-transaction/policy/settlement-window";
+import {
+  POSTING_WINDOW_DAYS,
+  withinPostingDateWindow,
+} from "~/server/domains/financial-transaction/policy/settlement-window";
 import { mergeBankEvents } from "~/server/domains/financial-transaction/repo/bank-merge";
 import {
   statementEffectiveMovement,
@@ -275,14 +278,27 @@ export const bankEvent = defineReconciler<BankInput>({
           const current = observationsForScope.find(
             (row) => row.id === occurrence?.currentObservationId,
           );
+          // oxlint-disable-next-line cubby/no-ad-hoc-calendar-day -- statement dates and the settlement window use UTC calendar days.
+          const dates = current
+            ? Array.from({ length: POSTING_WINDOW_DAYS * 2 + 1 }, (_, index) =>
+                new Date(
+                  Date.parse(current.statementDate) +
+                    (index - POSTING_WINDOW_DAYS) * 86_400_000,
+                )
+                  .toISOString()
+                  .slice(0, 10),
+              )
+            : [];
           const candidates = current
             ? await scoped.lookup(
                 financialTransaction,
                 transactionCandidates,
-                accounts.flatMap((account) => [
-                  `${account.id}:${current.providerAmount}`,
-                  `${account.id}:${-current.providerAmount}`,
-                ]),
+                accounts.flatMap((account) =>
+                  dates.flatMap((date) => [
+                    `${account.id}:${current.providerAmount}:${date}`,
+                    `${account.id}:${-current.providerAmount}:${date}`,
+                  ]),
+                ),
               )
             : [];
           const accepted = await scoped.lookup(

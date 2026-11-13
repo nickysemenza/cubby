@@ -32,6 +32,8 @@ import { isShortcodeEntity } from "~/server/entity-kernel/repo/entity-identity";
 import { isEntityShortcodeCollision } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { findPgError } from "~/server/errors/db-errors";
 import { recordChange } from "~/server/generic/changes/repo/change";
+import { classifyWorkFailure } from "~/server/kernel/failure";
+import { WorkTargetError } from "~/server/kernel/work-errors";
 
 import {
   askGapState,
@@ -66,7 +68,6 @@ import type {
 import { difference, type Difference } from "./diff";
 import { insertFactKeys, lockKeyRevs, markDirty } from "./dirty";
 import { recordDrifts } from "./drift";
-import { classifyWorkFailure } from "./failure";
 import {
   enterWriteTransaction,
   HouseholdWriteBusyError,
@@ -87,7 +88,6 @@ import {
 import { KernelContractError, LockedReadChangedError } from "./reads";
 import type { KernelRegistry } from "./registry";
 import { wakeAfterCommit } from "./wake";
-import { WorkTargetError } from "./work-errors";
 
 type Q = Pick<
   RepositoryQueryClient,
