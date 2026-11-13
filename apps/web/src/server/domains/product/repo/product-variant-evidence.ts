@@ -76,15 +76,20 @@ export async function historicalConflictInputsChanged(
 ) {
   if (conflictIds.length === 0) return true;
   const prior = z
-    .object({ rows: z.array(z.object({ fingerprint: z.string().nullable() })) })
+    .object({ rows: z.array(z.object({ fingerprint: z.string().nullable(), repointed: z.boolean() })) })
     .parse(
       await getDb(db).execute(sql`
-    SELECT fingerprint FROM ${productPairObservationsSql} evidence WHERE evidence.id::text=ANY(${textArrayParam(conflictIds)})
+    SELECT evidence.fingerprint,
+      (first."mergedIntoId" IS NOT NULL OR second."mergedIntoId" IS NOT NULL) AS repointed
+    FROM ${productPairObservationsSql} evidence
+    JOIN "Entity" first ON first.id=evidence."recordId"::uuid
+    JOIN "Entity" second ON second.id=(evidence.data->>'otherId')::uuid
+    WHERE evidence.id::text=ANY(${textArrayParam(conflictIds)})
   `),
     ).rows;
   return (
     prior.length === new Set(conflictIds).size &&
-    prior.every((row) => row.fingerprint !== currentFingerprint)
+    prior.every((row) => !row.repointed && row.fingerprint !== currentFingerprint)
   );
 }
 

@@ -1,3 +1,4 @@
+import {enterHouseholdWrite} from "~/server/kernel/api";
 import { ledgerPartyId, type RunId } from "@cubby/schemas/identifiers";
 import {
   mailboxDiscoveryInput,
@@ -22,8 +23,7 @@ export async function lockMailDiscoveryAdmission(
   db: Database,
   input: { ledgerPartyId: string; mailboxId: string },
 ): Promise<void> {
-  await getDb(db).execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(
-    'cubby-mail-discovery:' || ${input.ledgerPartyId}::uuid::text || ':' || ${input.mailboxId}, 0))`);
+  await enterHouseholdWrite(db);
 }
 
 /** Resolve immutable mailbox identity before taking a Run lock, then revalidate it. */

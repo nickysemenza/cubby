@@ -67,7 +67,6 @@ import { tombstoneEntityIdentities } from "~/server/entity-kernel/repo/entity-id
 import type { AuditEntryInput } from "~/server/generic/audit-log/repo/audit-log";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { softDeleteEntitySearchArtifactsTx } from "~/server/generic/embedding/repo/entity-embedding-cleanup";
-import { retireSuggestionTargetsTx } from "~/server/generic/suggestions/repo/suggestion-state";
 
 import { assertNoOrdinaryReferences } from "./ordinary-reference-guard";
 
@@ -174,7 +173,6 @@ export const cascadeRemoval = async <E extends RemovableEntity>(
   }
   // Retirement covers every review family, including import findings: their
   // Suggestions and their decisions stay as history.
-  await retireSuggestionTargetsTx(tx, entity, [...ids]);
   await retireRunFindingTargetsTx(tx, entity, [...ids]);
 
   // An exception is a decision about one entity's evidence (ADR 0006); it

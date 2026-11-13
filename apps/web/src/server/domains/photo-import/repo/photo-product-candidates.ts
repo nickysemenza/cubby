@@ -1,3 +1,4 @@
+import {acceptedOrders} from "~/server/domains/purchase-import/repo/accepted-order-read";
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   parseEntityId,
@@ -82,55 +83,10 @@ export async function loadPhotoAcceptedSourceLines(
     ),
   ];
   if (!purchaseIds.length) return result;
-  const orders = await getDb(db)
-    .select({
-      id: importSourceOrder.id,
-      purchaseId: importSourceOrder.purchaseId,
-      extraction: sourceOrderObservation.extraction,
-    })
-    .from(importSourceOrder)
-    .innerJoin(
-      importSourceClaim,
-      eq(importSourceClaim.id, importSourceOrder.sourceClaimId),
-    )
-    .innerJoin(
-      ledgerParty,
-      and(
-        eq(ledgerParty.id, importSourceClaim.ledgerPartyId),
-        eq(ledgerParty.userId, actor.userId),
-        eq(ledgerParty.kind, ledgerPartyKind.enum.member),
-        notDeleted(ledgerParty),
-      ),
-    )
-    .innerJoin(
-      purchase,
-      and(eq(purchase.id, importSourceOrder.purchaseId), notDeleted(purchase)),
-    )
-    .innerJoin(
-      sourceOrderObservation,
-      and(
-        eq(sourceOrderObservation.id, importSourceOrder.acceptedObservationId),
-        eq(
-          sourceOrderObservation.sourceClaimId,
-          importSourceOrder.sourceClaimId,
-        ),
-        eq(sourceOrderObservation.orderKey, importSourceOrder.orderKey),
-        sourceObservationIdentitySql(
-          "purchase",
-          sourceOrderObservation.purchaseId,
-          importSourceOrder.purchaseId,
-        ),
-        sourceObservationIdentitySql(
-          "vendor",
-          sourceOrderObservation.vendorId,
-          purchase.vendorId,
-        ),
-        eq(sourceOrderObservation.checksum, importSourceOrder.checksum),
-      ),
-    )
-    .where(inArray(importSourceOrder.purchaseId, purchaseIds))
-    .orderBy(importSourceOrder.id)
-    .limit(1000);
+  const orders=await getDb(db).select({id:acceptedOrders.id,purchaseId:acceptedOrders.purchaseId,extraction:acceptedOrders.extraction})
+    .from(acceptedOrders).innerJoin(ledgerParty,and(eq(ledgerParty.id,acceptedOrders.ledgerPartyId),eq(ledgerParty.userId,actor.userId),notDeleted(ledgerParty)))
+    .innerJoin(purchase,and(eq(purchase.id,acceptedOrders.purchaseId),notDeleted(purchase)))
+    .where(inArray(acceptedOrders.purchaseId,purchaseIds)).orderBy(acceptedOrders.id).limit(1000);
   for (const order of orders) {
     const parsed = importExtractionOutcome.safeParse(order.extraction);
     if (!parsed.success || parsed.data.status !== "ready") continue;

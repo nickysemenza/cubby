@@ -83,7 +83,7 @@ import { loadGmailCursor } from "~/server/domains/purchase-import/repo/gmail/per
 import { listMemberMailboxes } from "~/server/domains/purchase-import/repo/gmail/targets";
 import { vendorSearchTerms } from "~/server/domains/purchase-import/repo/gmail/vendor-identity";
 import { vendorMailQueries } from "~/server/domains/purchase-import/repo/gmail/vendor-mail-scope";
-import { lockSenderAttributionAddress } from "~/server/domains/purchase-import/repo/sender-attribution";
+import {enterHouseholdWrite} from "~/server/kernel/api";
 import { readSenderAttributions } from "~/server/domains/purchase-import/repo/sender-attribution-read";
 import { foldChargeInto } from "~/server/domains/purchase/repo/purchase";
 import {
@@ -592,7 +592,7 @@ async function lockVendorSenderSet(
     ),
   );
   for (const address of [...locked].sort())
-    await lockSenderAttributionAddress(tx, address);
+    await enterHouseholdWrite(tx);
   const current = await tx
     .select({ id: vendor.id, senders: vendor.orderEmailSenders })
     .from(vendor)

@@ -14,15 +14,12 @@ import {
 } from "@cubby/schemas/kernel/machinery";
 import { sql, type SQL } from "drizzle-orm";
 
+import {householdWrite} from "./gate";
 import { describeErrorCauses } from "~/lib/error-diagnostics";
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db/database";
 import { textArrayParam } from "~/server/db/helpers/array-param";
-import {
-  repositoryQueries,
-  repositoryTransactionDatabase,
-  type RepositoryQueryClient,
-} from "~/server/db/repository-access.boundary";
+import {repositoryQueries, type RepositoryQueryClient} from "~/server/db/repository-access.boundary";
 import { JobSupersededError } from "~/server/generic/jobs/errors";
 import {
   classifyJobFailure,
@@ -289,11 +286,8 @@ async function withPartition<T>(
   if (!limit) return work(repositoryQueries(db), Number.MAX_SAFE_INTEGER);
   if (!limit.partition || !Number.isInteger(limit.slots) || limit.slots < 1)
     throw new Error("Invalid claim partition");
-  return repositoryTransactionDatabase(db, async (tx) => {
+  return householdWrite(db, async (tx) => {
     const q = repositoryQueries(tx);
-    await q.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtextextended('kernel.partition:' || ${limit.partition}, 0))`,
-    );
     const held = await q.execute<{ n: number }>(sql`SELECT (
       (SELECT count(*) FROM "Ask" WHERE "claimPartition" = ${limit.partition} AND "claimToken" IS NOT NULL AND "claimDeadline" > now() AND "cancelledAt" IS NULL)
       + (SELECT count(*) FROM "Pass" WHERE "claimPartition" = ${limit.partition} AND "claimToken" IS NOT NULL AND "claimDeadline" > now() AND "cancelledAt" IS NULL)

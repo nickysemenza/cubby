@@ -1,6 +1,7 @@
+import {enterHouseholdWrite} from "~/server/kernel/api";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { RunId } from "@cubby/schemas/identifiers";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import {and, desc, eq, inArray, isNull} from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
@@ -88,9 +89,7 @@ export async function admitMaintenancePass(
     : `maintenance:nightly:${admission.householdDate}`;
   return withTransactionDatabase(db, async (tx) => {
     if (clientKey) {
-      await getDb(tx).execute(
-        sql`SELECT pg_advisory_xact_lock(hashtextextended(${clientKey}, 0))`,
-      );
+      await enterHouseholdWrite(tx);
       const [already] = await getDb(tx)
         .select({ id: run.id, status: run.status })
         .from(run)

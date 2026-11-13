@@ -161,10 +161,11 @@ export async function appendOrderEvidence(
     orderKey: string;
     emailId?: string | null;
     answerHash?: string | null;
+    lineIds?: readonly string[];
   }[],
 ) {
   const rows = await Promise.all(
-    inputs.map(async ({ input, orderKey, emailId, answerHash }) => {
+    inputs.map(async ({ input, orderKey, emailId, answerHash, lineIds }) => {
       const extraction = importExtractionOutcome.parse(input.extraction);
       const productBindings = (extraction.candidate?.lines ?? []).map(
         (_, lineIndex) => {
@@ -173,6 +174,8 @@ export async function appendOrderEvidence(
           );
           return {
             lineIndex,
+            stableLineId: lineIds?.[lineIndex],
+            createProduct: resolution?.kind === "new",
             productId:
               resolution?.kind === "existing" ? resolution.productId : null,
           };

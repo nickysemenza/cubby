@@ -7,23 +7,20 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import {
-  databaseForTransaction,
+  withTransaction,
   notDeleted,
-  withSnapshotWrite,
 } from "~/server/db/helpers";
 import {
   financialTransaction,
   financialTransactionAllocation,
   purchase,
 } from "~/server/db/schema";
-import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { transactionSettlementConflicts } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 import { createAppError } from "~/server/errors/app-error";
 import { setDataException } from "~/server/generic/data-quality/repo/exceptions";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
-  lockUpdatePurchases,
   updateFinancialTransaction,
 } from "./financial-transaction";
 
@@ -79,19 +76,17 @@ export async function applyFinancialSettlementAllocation(
   input: FinancialSettlementAllocationInput,
   actor: ActorContext,
 ) {
-  return withSnapshotWrite(
+  const {householdWrite}=await import("~/server/kernel/api");
+  return householdWrite(
     db,
-    async (tx) => {
-      const txDb = databaseForTransaction(tx);
+    async (txDb) => withTransaction(txDb, async tx => {
       const id = await resolveOrThrow(
         txDb,
         "financialTransaction",
         input.transactionId,
       );
-      await lockFinancialTransactionSources(tx, [input.transactionId]);
-      await lockUpdatePurchases(tx, [
-        { id, data: { allocations: input.allocations } },
-      ]);
+
+
       await tx
         .select({ id: financialTransaction.id })
         .from(financialTransaction)
@@ -101,7 +96,7 @@ export async function applyFinancialSettlementAllocation(
             notDeleted(financialTransaction),
           ),
         )
-        .for("update");
+;
       const current = await tx
         .select({
           purchaseId: purchase.shortcode,
@@ -161,7 +156,6 @@ export async function applyFinancialSettlementAllocation(
         transactionId: input.transactionId,
         allocations: input.allocations,
       };
-    },
-    { isolationLevel: "serializable" },
+    }),
   );
 }

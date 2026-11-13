@@ -1,3 +1,4 @@
+import {acceptedOrders} from "~/server/domains/purchase-import/repo/accepted-order-read";
 import { expenseEconomicRoleSchema } from "@cubby/schemas/expense-fields";
 import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
 import {
@@ -29,7 +30,6 @@ import {
   email as emailTable,
   expense,
   financialTransactionAllocation,
-  importSourceOrder,
   purchase,
   vendorAccount,
 } from "~/server/db/schema";
@@ -178,9 +178,9 @@ export async function readExistingOrderCandidates(
               // Accepted import sources already itemize; only a bare booking qualifies.
               notExists(
                 database
-                  .select({ id: importSourceOrder.id })
-                  .from(importSourceOrder)
-                  .where(eq(importSourceOrder.purchaseId, purchase.id)),
+                  .select({ id: acceptedOrders.id })
+                  .from(acceptedOrders)
+                  .where(eq(acceptedOrders.purchaseId, purchase.id)),
               ),
               exists(
                 database

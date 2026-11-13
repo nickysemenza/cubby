@@ -1,3 +1,4 @@
+import {acceptedOrders} from "~/server/domains/purchase-import/repo/accepted-order-read";
 import { systemActor } from "@cubby/schemas/context";
 import { emailLinkEvidenceKind } from "@cubby/schemas/email-fields";
 import { MAIL_IMPORT_GAP_EXECUTOR } from "@cubby/schemas/email-fields";
@@ -62,7 +63,6 @@ import {
 import { requestedRows } from "~/server/db/helpers/requested";
 import {
   ledgerParty,
-  importSourceOrder,
   purchase,
   vendor,
   vendorAccount,
@@ -278,21 +278,17 @@ async function importedPurchaseRechecks(
       orderId: purchase.orderId,
       vendorId: vendor.shortcode,
       vendorUuid: vendor.id,
-      sourceId: importSourceOrder.id,
-      checksum: importSourceOrder.checksum,
-      outputFingerprint: importSourceOrder.outputFingerprint,
+      sourceId: acceptedOrders.id,
+      checksum: acceptedOrders.checksum,
+      outputFingerprint: acceptedOrders.contentFingerprint,
       evidenceAt:
-        sql<Date>`least(coalesce(${sourceOrderObservation.createdAt}, ${importSourceOrder.createdAt}), ${importSourceOrder.updatedAt})`.mapWith(
-          importSourceOrder.createdAt,
+        sql<Date>`${acceptedOrders.createdAt}`.mapWith(
+          acceptedOrders.createdAt,
         ),
     })
-    .from(importSourceOrder)
-    .innerJoin(purchase, eq(purchase.id, importSourceOrder.purchaseId))
+    .from(acceptedOrders)
+    .innerJoin(purchase, eq(purchase.id, acceptedOrders.purchaseId))
     .innerJoin(vendor, eq(vendor.id, purchase.vendorId))
-    .leftJoin(
-      sourceOrderObservation,
-      eq(sourceOrderObservation.id, importSourceOrder.acceptedObservationId),
-    )
     .innerJoin(
       vendorAccount,
       and(
@@ -315,7 +311,7 @@ async function importedPurchaseRechecks(
             ),
       ),
     )
-    .orderBy(asc(importSourceOrder.id));
+    .orderBy(asc(acceptedOrders.id));
   const groups = new Map<string, typeof rows>();
   for (const row of rows)
     groups.set(row.purchaseId, [...(groups.get(row.purchaseId) ?? []), row]);
@@ -1118,7 +1114,7 @@ const awaitedOrderKeySql = normalizedOrderIdSql(
  * was imported or linked. Null while it has not.
  */
 const waitedSourceSettledSql = sql`SELECT max(at) AS at FROM (
-  SELECT greatest(x.created, (SELECT max(accepted."updatedAt") FROM ${importSourceOrder} accepted
+  SELECT greatest(x.created, (SELECT max(accepted."createdAt") FROM ${acceptedOrders} accepted
       WHERE accepted."purchaseId" = x.id)) AS at
   FROM unnest(keyed.ids, keyed.created, keyed.vendor_ids, keyed.parties) AS x(id, created, vendor_id, party)
   WHERE newest.result #>> '{mailOutcome,judgment,waitingOn,kind}' = ${"order"}

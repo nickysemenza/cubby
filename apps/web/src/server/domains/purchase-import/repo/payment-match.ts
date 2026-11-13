@@ -6,7 +6,8 @@ import { moneyToMinor } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { decision, manualEntry } from "~/server/db/kernel-schema";
+import {repositoryQueries} from "~/server/db/repository-access.boundary";
+import { decision, manualEntry, recordKey } from "~/server/db/kernel-schema";
 import {
   financialAccount,
   financialTransaction,
@@ -47,6 +48,7 @@ type Payment = typeof purchasePaymentEvidence.$inferSelect;
 type Movement = typeof financialTransaction.$inferSelect;
 type Input = {
   key: string;
+  records: (typeof recordKey.$inferSelect)[];
   orders: Order[];
   payments: Payment[];
   transactions: Movement[];
@@ -311,6 +313,7 @@ export const paymentMatch = defineReconciler<Input>({
       "deletedAt",
     ]),
     source.table(vendor, ["name", "aliases", "deletedAt"]),
+    source.table(recordKey, ["scopeKind", "scopeKey", "entity", "entityId"]),
     source.table(manualEntry, ["entity", "payload"]),
     source.table(decision, [
       "channel",
@@ -331,6 +334,7 @@ export const paymentMatch = defineReconciler<Input>({
       vendors,
       manuals,
       recordDecisions,
+      records,
     ] = await Promise.all([
       reads.select(sourceOrderObservation, keys, sql`true`),
       reads.select(purchasePaymentEvidence, keys, sql`true`),
@@ -343,6 +347,7 @@ export const paymentMatch = defineReconciler<Input>({
         [],
         sql`${decision.channel} = ${decisionChannel.enum.assignment} AND ${decision.value}->>${"table"} = ${"FinancialTransactionAllocation"}`,
       ),
+      reads.prepare([recordKey], db => repositoryQueries(db).select().from(recordKey)),
     ]);
     const bindings = await reads.bindings({
       facts: [
@@ -367,7 +372,8 @@ export const paymentMatch = defineReconciler<Input>({
         {
           key,
           orders,
-          payments,
+          records,
+              payments,
           transactions,
           accounts,
           vendors,
@@ -512,7 +518,7 @@ export const paymentMatch = defineReconciler<Input>({
       }
       const accepted =
         bindingFor(input, orderEvidence.kind, order.id) ??
-        heads
+        input.orders
           .filter((row) => orderEventKey(row) === event)
           .map((row) => bindingFor(input, orderEvidence.kind, row.id))
           .find((row) => row !== undefined);
@@ -540,8 +546,14 @@ export const paymentMatch = defineReconciler<Input>({
           })
           .map(orderEventKey)
           .sort()[0] === event;
+      const linked = c.decision("assignment", event, "purchaseId") ??
+        (order.emailId ? c.decision("assignment", `email:${order.emailId}`, "purchaseId") : null);
+      const chosenId = linked?.kind === "set" && typeof linked.value === "string"
+        ? c.reference("purchase", linked.value) : order.purchaseId;
+      const chosenScope = input.records.find((record) => record.entity === "purchase" &&
+        record.entityId === chosenId && record.scopeKind === "purchaseEvent")?.scopeKey;
       const resolvedEvent =
-        accepted?.eventKey ??
+        chosenScope ?? accepted?.eventKey ??
         (firstOrderForBank ? existingBankEvent?.transactionId : null) ??
         event;
       const resolvedScope =

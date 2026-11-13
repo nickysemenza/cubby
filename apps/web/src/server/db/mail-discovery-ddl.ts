@@ -33,7 +33,6 @@ BEGIN
         AND OLD.progress->>'admissionRequestedAt' IS NOT DISTINCT FROM NEW.progress->>'admissionRequestedAt'))
     THEN RETURN NEW; END IF;
   END IF;
-  PERFORM pg_advisory_xact_lock(hashtextextended('cubby-mail-discovery:' || NEW."ledgerPartyId"::text || ':' || mailbox, 0));
   -- A changed row version refuses an admission made from an older snapshot.
   -- This write follows the Run lock, matching coverage publication's order.
   INSERT INTO "MailboxCursor" ("ledgerPartyId", provider, "mailboxId", "admissionVersion")

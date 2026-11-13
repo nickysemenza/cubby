@@ -1,59 +1,37 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { ExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import {
-  type LedgerPartyId,
-  parseEntityId,
   type ProductId,
-  type RunId,
-  type VendorId,
   runEntityId,
 } from "@cubby/schemas/identifiers";
 import {
   commitPurchaseImportInput,
   commitPurchaseImportOut,
   extractedPurchaseLine,
-  importExtractionOutcome,
-  importSourceKind,
+  importWriterInput,
   preparePurchaseImportInput,
   preparePurchaseImportOut,
   importOperationStatusInput,
   importOperationStatusOut,
   type CommitPurchaseImportInput,
-  type ExtractedPurchaseLine,
   type PreparePurchaseImportInput,
   type PurchaseImportRunExecution,
 } from "@cubby/schemas/purchase-import";
-import { minorToMoney } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { createLogger } from "@cubby/worker-tracing";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { DecisionPort } from "~/server/ai/decision-model";
 import type { Database } from "~/server/db";
 import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import {
   getDb,
   notDeleted,
-  withTransaction,
-  databaseForTransaction,
-  withTransactionDatabase,
 } from "~/server/db/helpers";
 import {
-  expense,
-  importPreparedLine,
-  importPreparedOrder,
-  email as emailTable,
-  emailPurchaseDecision,
-  orderMailEvent,
   product,
   purchase,
-  run as runTable,
-  vendor,
+  sourceOrderObservation,
 } from "~/server/db/schema";
-import { readEmailPurchaseAssociations } from "~/server/domains/email/repo/email-purchase-associations";
-import { decideExpenseLineRole } from "~/server/domains/expense/service/expense-line-role";
 import { amazonAsin } from "~/server/domains/product/repo/amazon-asin";
 import {
   externalIdKey,
@@ -69,87 +47,36 @@ import {
   findProductNameCandidates,
   PRODUCT_IDENTITY_REVIEW_REASON,
 } from "~/server/domains/product/repo/resolve-names";
-import { auditAllImportBatches } from "~/server/domains/purchase-import/operations/run-review";
 import {
   type ImportScope,
   loadImportScope,
   canonicalMailSourceKey,
-  parseMailSourceKey,
   type RetainedMailSource,
-  retainedMailSource,
   readUnchangedMailSource,
 } from "~/server/domains/purchase-import/repo/import-scope";
-import { releaseUnsettledMailRunSources } from "~/server/domains/purchase-import/repo/mail-run-membership";
 import {
   MODEL_STYLE_MATCH_REASON,
   modelStyleTokens,
   sharesModelWithinManufacturer,
 } from "~/server/domains/purchase-import/repo/manufacturer-identity";
-import { resolveImportSourceOrder } from "~/server/domains/purchase-import/repo/source-claim-family";
 import { sourceOrderKey } from "~/server/domains/purchase-import/repo/source-order-key";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeAtomicOperation } from "~/server/domains/run/repo/operation";
 import { assertRunCapability } from "~/server/domains/run/repo/purpose-policy";
 import { readOperation } from "~/server/domains/run/repo/run-operation";
-import { createAppError } from "~/server/errors/app-error";
-import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-import { readExistingOrderCandidates } from "../repo/existing-order-candidates";
-import { ensureMailVendorAccount } from "../repo/gmail/mail-account";
 import {
   importVendorCandidates,
   resolveImportVendor,
 } from "../repo/import-vendor";
-import {
-  canonicalOrderId,
-  findVendorOrderOwner,
-  normalizeOrderKey,
-  reviewedVendorOrderOwner,
-} from "../repo/order-identity";
-import { importVendorOrder } from "../repo/writer";
 import { lineIdentifierRequests } from "../repo/writer-decisions";
-import { chooseLineStage } from "../service/line-stage";
-import { attachOrderLineThumbnails } from "./line-thumbnails";
-import {
-  prepareMailAttachmentDecisions,
-  type PreparedMailAttachmentDecisions,
-} from "./mail-attachment-purpose";
-import {
-  applyMailSourceAdmissions,
-  prepareMailSourceAdmissions,
-} from "./mail-source-admission";
-import { linkImportedMail } from "./mail-tool";
 
-type ImportedMailCommit = Parameters<typeof linkImportedMail>[1];
 
-function collectImportedMail(
-  imports: Map<string, ImportedMailCommit>,
-  input: ImportedMailCommit,
-) {
-  const existing = imports.get(input.mail.id);
-  if (existing) existing.purchases.push(...input.purchases);
-  else imports.set(input.mail.id, input);
-}
-
-const operationArgs = (input: {
-  prepareOperationId: string;
-  defaultTrade?: CommitPurchaseImportInput["defaultTrade"];
-  defaultProjectId?: CommitPurchaseImportInput["defaultProjectId"];
-  resolutions: CommitPurchaseImportInput["resolutions"];
-}) => ({
-  prepareOperationId: input.prepareOperationId,
-  defaultTrade: input.defaultTrade,
-  defaultProjectId: input.defaultProjectId,
-  resolutions: input.resolutions,
-});
-
-/**
- * The Run an import call writes under: Pi names its own Run by private id, a
- * member names the Run its preparation returned, and a member's preparation
- * without either opens one (keyed by its operation id, so a retried
- * preparation finds the same Run).
- */
+import {householdWrite, decide} from "~/server/kernel/api";
+import {recordKey,evidenceBinding} from "~/server/db/kernel-schema";
+import {appendOrderEvidence,orderEventKey,orderPaymentKeys} from "../repo/order-evidence";
+import {settleOrderEvidence} from "../repo/settle-order-evidence";
 async function importRunScope(
   db: Database,
   actor: ActorContext,
@@ -177,13 +104,6 @@ async function importRunScope(
   return loadImportScope(db, runId, actor);
 }
 
-const log = createLogger("purchase-import");
-
-/**
- * An order's Vendor: named by id, matched or created from its named seller
- * (`resolveImportVendor`), else the import Run's own. A named seller also
- * returns the candidates it was matched against, read before any creation.
- */
 async function preparedOrderVendor(
   db: Database,
   order: PreparePurchaseImportInput["orders"][number],
@@ -221,122 +141,6 @@ async function preparedOrderVendor(
   )
     throw new Error("This Mail import is limited to its selected Vendor.");
   return { vendorId, vendorCandidates };
-}
-
-/**
- * The one live Purchase of this Vendor a retained Email is already linked
- * to. An order with no order id cannot converge on an existing Purchase by
- * (Vendor, order id), so importing it without a target would book its lines
- * a second time; the reviewed link is the target instead. An Email linked to
- * several Purchases stays ambiguous and keeps no default.
- */
-async function soleLinkedPurchase(
-  db: Database,
-  mail: RetainedMailSource | null,
-  vendorId: VendorId,
-) {
-  if (!mail) return null;
-  const [message] = await getDb(db)
-    .select({ id: emailTable.id })
-    .from(emailTable)
-    .where(
-      and(
-        eq(emailTable.ledgerPartyId, mail.ledgerPartyId),
-        eq(emailTable.provider, "gmail"),
-        eq(emailTable.mailboxId, mail.mailboxId),
-        eq(emailTable.messageId, mail.messageId),
-        notDeleted(emailTable),
-      ),
-    )
-    .limit(1);
-  if (!message) return null;
-  const linked = (
-    await readEmailPurchaseAssociations(db, parseEntityId("email", message.id))
-  ).filter((row) => !row.purchaseDeleted);
-  const [only] = linked;
-  if (!only || linked.length !== 1) return null;
-  const [target] = await getDb(db)
-    .select({ vendorId: purchase.vendorId })
-    .from(purchase)
-    .where(eq(purchase.id, only.id))
-    .limit(1);
-  return target?.vendorId === vendorId
-    ? { id: only.id, shortcode: only.shortcode }
-    : null;
-}
-
-/**
- * A mail order with no target must not silently become a second Purchase of
- * an order Cubby already holds. When no Purchase carries its order id, every
- * existing-order candidate the claim showed (a Purchase from the same thread
- * whose order id does not differ, or a statement lump of the printed total)
- * must be the target or named in `distinctFromPurchases`. Candidacy alone
- * never chooses the target.
- */
-async function assertExistingOrdersReviewed(
-  db: Database,
-  input: {
-    mail: RetainedMailSource | null;
-    vendorId: VendorId;
-    orderId: string | null;
-    total: number | null;
-    distinctFrom: readonly string[];
-  },
-) {
-  const { mail } = input;
-  if (!mail) return;
-  const orderId = canonicalOrderId(input.orderId);
-  if (
-    orderId &&
-    (await findVendorOrderOwner(db, { vendorId: input.vendorId, orderId }))
-      .kind !== "none"
-  )
-    return;
-  // Every candidate, not the claim's display: a hidden match must still block.
-  const candidates = await readExistingOrderCandidates(
-    db,
-    {
-      ledgerPartyId: mail.ledgerPartyId,
-      vendorId: input.vendorId,
-      mailboxId: mail.mailboxId,
-      messageId: mail.messageId,
-      threadId: mail.threadId,
-      receivedAt: mail.receivedAt,
-    },
-    { lumpAmount: input.total },
-  );
-  const distinct = new Set(input.distinctFrom);
-  const unreviewed = candidates.filter(
-    (candidate) =>
-      !distinct.has(candidate.id) &&
-      (candidate.basis === "thread"
-        ? candidate.orderId === null ||
-          orderId === null ||
-          normalizeOrderKey(candidate.orderId) === normalizeOrderKey(orderId)
-        : input.total !== null),
-  );
-  if (unreviewed.length)
-    throw new Error(
-      `${unreviewed.map((candidate) => `${candidate.id} (${candidate.basis === "thread" ? "same Email thread" : "statement booking"})`).join(", ")} may already hold this order. Compare identifiers, lines, totals and dates, then set targetPurchaseId to the same order or name each in distinctFromPurchases.`,
-    );
-}
-
-/** Each order's verified retained Email, checked before any write. */
-async function retainedMailSources(
-  db: Database,
-  scope: ImportScope,
-  orders: PreparePurchaseImportInput["orders"],
-) {
-  const retained = new Map<
-    PreparePurchaseImportInput["orders"][number],
-    RetainedMailSource | null
-  >();
-  for (const order of orders)
-    retained.set(
-      order,
-      await retainedMailSource(db, scope, order.source, order.evidenceChecksum),
-    );
-  return retained;
 }
 
 async function productCandidates(
@@ -438,1105 +242,123 @@ async function productCandidates(
     }));
 }
 
-type TargetRow = typeof purchase.$inferSelect;
 
 /** The writer's own target fences, checked at prepare and again at commit. */
-function assertReviewedTarget(
-  input: {
-    vendorId: VendorId;
-    orderId: string | null;
-    targetPurchaseId?: string | null;
-  },
-  found: {
-    chosen: TargetRow | undefined;
-    ordered: TargetRow | undefined;
-    claim: { purchaseId: string } | undefined;
-  },
-) {
-  const { chosen, ordered, claim } = found;
-  if (input.targetPurchaseId && !chosen)
-    throw new Error("The reviewed Purchase target no longer exists.");
-  // A fresh no-ID original may converge on the reviewed Purchase that already
-  // knows its order id; the writer keeps that id (see importVendorOrder).
-  if (
-    chosen &&
-    (chosen.vendorId !== input.vendorId ||
-      (chosen.orderId !== null &&
-        input.orderId !== null &&
-        normalizeOrderKey(chosen.orderId) !== normalizeOrderKey(input.orderId)))
-  )
-    throw new Error(
-      "The reviewed Purchase target has a different vendor or order identity.",
-    );
-  if (chosen && ordered && chosen.id !== ordered.id)
-    throw new Error(
-      "Another Purchase already owns this vendor order. Review the two Purchases before importing.",
-    );
-  if (chosen && claim && claim.purchaseId !== chosen.id)
-    throw new Error("This source already belongs to a different Purchase.");
-}
 
-async function computeTargetFingerprint(
-  db: Database,
-  input: {
-    ledgerPartyId: LedgerPartyId;
-    vendorId: VendorId;
-    sourceKind: z.infer<typeof importSourceKind>;
-    sourceExternalKey: string;
-    orderId: string | null;
-    targetPurchaseId?: string | null;
-  },
-) {
-  const database = getDb(db);
-  const retained = await resolveImportSourceOrder(
-    database,
-    {
-      ledgerPartyId: input.ledgerPartyId,
-      kind: input.sourceKind,
-      externalKey: input.sourceExternalKey,
-      orderKey: sourceOrderKey(input),
-    },
-    { lock: "share", writable: true },
-  );
-  const claim = retained?.association;
-  const ordered = await reviewedVendorOrderOwner(
-    db,
-    { vendorId: input.vendorId, orderId: input.orderId },
-    input.targetPurchaseId,
-  );
-  const [chosen] = input.targetPurchaseId
-    ? await database
-        .select()
-        .from(purchase)
-        .where(
-          and(
-            eq(purchase.id, parseEntityId("purchase", input.targetPurchaseId)),
-            notDeleted(purchase),
-          ),
-        )
-        .limit(1)
-    : [];
-  assertReviewedTarget(input, { chosen, ordered, claim });
-  const target = chosen ?? ordered;
-  const expenses = target
-    ? await database
-        .select({ id: expense.id, updatedAt: expense.updatedAt })
-        .from(expense)
-        .where(and(eq(expense.purchaseId, target.id), notDeleted(expense)))
-        .orderBy(asc(expense.id))
-    : [];
-  return sha256Hex(
-    JSON.stringify({
-      claim: claim
-        ? {
-            id: claim.id,
-            checksum: claim.checksum,
-            purchaseId: claim.purchaseId,
-            updatedAt: claim.updatedAt.toISOString(),
-          }
-        : null,
-      target: target
-        ? {
-            ...target,
-            statedTotal:
-              target.statedTotal === null
-                ? null
-                : minorToMoney(target.statedTotal),
-            updatedAt: target.updatedAt.toISOString(),
-          }
-        : null,
-      expenses: expenses.map((row) => ({
-        id: row.id,
-        updatedAt: row.updatedAt.toISOString(),
-      })),
-    }),
-  );
-}
-
-const computeEvidenceFingerprint = (input: {
-  source: unknown;
-  evidenceChecksum: string;
-  extractionRevision: string;
-  extraction: unknown;
-  primaryDocumentImageId: string | null;
-  screenshotImageId: string | null;
-}) => sha256Hex(JSON.stringify(input));
-
-type StoredPreparation = {
-  order: typeof importPreparedOrder.$inferSelect;
-  lines: Array<typeof importPreparedLine.$inferSelect>;
-};
-
-async function loadPreparation(
-  db: Database,
-  runId: RunId,
-  prepareOperationId: string,
-): Promise<StoredPreparation[]> {
-  const database = getDb(db);
-  const orders = await database
-    .select()
-    .from(importPreparedOrder)
-    .where(
-      and(
-        eq(importPreparedOrder.runId, runId),
-        eq(importPreparedOrder.prepareOperationId, prepareOperationId),
-      ),
-    )
-    .orderBy(asc(importPreparedOrder.createdAt), asc(importPreparedOrder.id));
-  if (orders.length === 0) throw new Error("Prepared import was not found");
-  const lines = await database
-    .select()
-    .from(importPreparedLine)
-    .where(
-      inArray(
-        importPreparedLine.preparedOrderId,
-        orders.map(({ id }) => id),
-      ),
-    )
-    .orderBy(
-      asc(importPreparedLine.preparedOrderId),
-      asc(importPreparedLine.position),
-    );
-  return orders.map((order) => ({
-    order,
-    lines: lines.filter((line) => line.preparedOrderId === order.id),
-  }));
-}
-
-// Two orders of one source with the same Vendor and order id (or both
-// without one) would collapse into one source order on commit.
-function claimDistinctSourceOrder(
-  seen: Set<string>,
-  order: PreparePurchaseImportInput["orders"][number],
-  vendorId: VendorId,
-) {
-  const key = JSON.stringify([
-    order.source.kind,
-    order.source.externalKey,
-    sourceOrderKey({
-      vendorId,
-      orderId: order.extraction.candidate?.orderId ?? null,
-    }),
-  ]);
-  if (seen.has(key))
-    throw new Error(
-      "Two orders from one source name the same Vendor and order id; prepare distinct orders or one order.",
-    );
-  seen.add(key);
-}
-
-/** Called under the Run lock, after completed-operation replay and before any business writes. */
-async function assertLiveImportScope(
-  db: Database,
-  actor: ActorContext,
-  expected: ImportScope,
-) {
-  const live = await loadImportScope(db, expected.runId, actor);
-  if (live.status !== "running")
-    throw new Error(`Purchase import run is fenced in ${live.status}`);
-  if (
-    live.ledgerPartyId !== expected.ledgerPartyId ||
-    live.vendorAccountId !== expected.vendorAccountId ||
-    live.vendorId !== expected.vendorId ||
-    live.purpose !== expected.purpose
-  )
-    throw new Error("Purchase import run scope changed during preparation");
-}
-
-export async function preparePurchaseImport(
-  db: Database,
-  rawInput: PreparePurchaseImportInput,
-  actor: ActorContext,
-  decisionPort?: DecisionPort,
-) {
-  const parsed = preparePurchaseImportInput.parse(rawInput);
-  const scope = await importRunScope(db, actor, parsed._runExecution, true);
-  assertRunCapability(scope.purpose, "prepare");
-  // Before the operation ledger: a nested attachment key and its stored form
-  // are one source, so retries and the writer see a single identity.
-  const input = {
-    ...parsed,
-    orders: await Promise.all(
-      parsed.orders.map(async (order) => ({
-        ...order,
-        source: {
-          ...order.source,
-          externalKey: await canonicalMailSourceKey(
-            db,
-            scope.ledgerPartyId,
-            order.source,
-          ),
-        },
-      })),
-    ),
-  };
-  return executeAtomicOperation(
-    db,
-    {
-      runId: scope.runId,
-      operationId: input._runExecution.operationId,
-      kind: "prepare_purchase_import",
-      // Only the orders: the envelope is not part of a preparation's identity.
-      payload: input.orders,
-      subject: "Preparation",
-    },
-    async (ledger) => {
-      const recorded = await ledger.replay(getDb(db), preparePurchaseImportOut);
-      if (recorded) return recorded;
-      const prior = await priorPreparation(db, scope.runId, input.orders);
-      if (prior) return prior;
-      // Invalid keys or altered originals never reach paid source judgments.
-      // The writer repeats these checks under its transaction after admission.
-      if (scope.purpose === "mail_import")
-        for (const order of input.orders)
-          await readUnchangedMailSource(
-            db,
-            scope,
-            order.source,
-            order.evidenceChecksum,
-          );
-      const admissions =
-        scope.purpose === "mail_import"
-          ? await prepareMailSourceAdmissions(
-              db,
-              scope.runId,
-              input.orders.flatMap(({ source, via }) => {
-                const { mailboxId, messageId } = parseMailSourceKey(
-                  source.externalKey,
-                );
-                return (source.kind === "mail_message" ||
-                  source.kind === "mail_attachment") &&
-                  mailboxId &&
-                  messageId
-                  ? [{ mailboxId, messageId, via }]
-                  : [];
-              }),
-              actor,
-              decisionPort,
-            )
-          : [];
-      return withTransactionDatabase(db, async (transactionDb) => {
-        const database = getDb(transactionDb);
-        // Lock the Run before the operation: cancellation uses the same order.
-        await database
-          .select({ id: runTable.id })
-          .from(runTable)
-          .where(eq(runTable.id, scope.runId))
-          .for("no key update");
-        const replayed = await ledger.replay(
-          database,
-          preparePurchaseImportOut,
-        );
-        if (replayed) return replayed;
-        await assertLiveImportScope(transactionDb, actor, scope);
-        // After replay: a completed prepare returns its recorded result even
-        // once its Email is excluded or resolved.
-        await applyMailSourceAdmissions(
-          transactionDb,
-          scope.runId,
-          admissions,
-          {
-            requireAttribution: true,
-          },
-        );
-        const retainedMail = await retainedMailSources(
-          transactionDb,
-          scope,
-          input.orders,
-        );
-        await ledger.start(database);
-
-        const outputOrders = [];
-        const sourceOrders = new Set<string>();
-        for (const order of input.orders) {
-          const { vendorId, vendorCandidates } = await preparedOrderVendor(
-            transactionDb,
-            order,
-            scope,
-            retainedMail.get(order),
-            actor,
-          );
-          claimDistinctSourceOrder(sourceOrders, order, vendorId);
-          const primaryDocumentImageId = order.primaryDocumentImageId
-            ? await resolveOrThrow(
-                transactionDb,
-                "image",
-                order.primaryDocumentImageId,
-              )
-            : null;
-          const screenshotImageId = order.screenshotImageId
-            ? await resolveOrThrow(
-                transactionDb,
-                "image",
-                order.screenshotImageId,
-              )
-            : null;
-          const candidate = order.extraction.candidate;
-          if (!candidate)
-            throw new Error(
-              "Unreadable imports cannot be prepared without a candidate",
-            );
-          // Resolve parser-abstained roles before publishing a prepared order.
-          // The source extraction remains immutable/checksum evidence; the
-          // prepared line is the authoritative role used by roster and commit.
-          const preparedCandidateLines: ExtractedPurchaseLine[] = [];
-          for (const [position, line] of candidate.lines.entries()) {
-            let lineKind: ExpenseLineKind =
-              line.lineKind === "unclassified"
-                ? await decideExpenseLineRole(
-                    { name: line.title, cost: line.amount, notes: null },
-                    {
-                      db: transactionDb,
-                      runId: scope.runId,
-                      operation: `purchase-import.expense-line-role:${order.stableOrderId}:${order.lineIds[position] ?? position}`,
-                    },
-                    decisionPort,
-                  )
-                : line.lineKind;
-            // An inferred positive discount on a forward receipt lacks reversal
-            // evidence. Keep the signed source amount and require role review;
-            // explicit source roles can represent documented corrections.
-            if (
-              line.lineKind === "unclassified" &&
-              lineKind === "discount" &&
-              line.amount !== null &&
-              line.amount > 0 &&
-              (candidate.printedGrandTotal === null ||
-                candidate.printedGrandTotal >= 0)
-            )
-              lineKind = "unclassified";
-            preparedCandidateLines.push({ ...line, lineKind });
-          }
-          const linkedTarget =
-            order.targetPurchaseId || candidate.orderId !== null
-              ? null
-              : await soleLinkedPurchase(
-                  transactionDb,
-                  retainedMail.get(order) ?? null,
-                  vendorId,
-                );
-          const targetPurchaseId = order.targetPurchaseId
-            ? await resolveOrThrow(
-                transactionDb,
-                "purchase",
-                order.targetPurchaseId,
-              )
-            : (linkedTarget?.id ?? null);
-          if (!targetPurchaseId)
-            await assertExistingOrdersReviewed(transactionDb, {
-              mail: retainedMail.get(order) ?? null,
-              vendorId,
-              orderId: candidate.orderId,
-              total:
-                candidate.currency === "USD"
-                  ? candidate.printedGrandTotal
-                  : null,
-              distinctFrom: order.distinctFromPurchases ?? [],
-            });
-          const targetFingerprint = await computeTargetFingerprint(
-            transactionDb,
-            {
-              ledgerPartyId: scope.ledgerPartyId,
-              vendorId,
-              sourceKind: order.source.kind,
-              sourceExternalKey: order.source.externalKey,
-              orderId: candidate.orderId,
-              targetPurchaseId,
-            },
-          );
-          const evidenceFingerprint = await computeEvidenceFingerprint({
-            source: order.source,
-            evidenceChecksum: order.evidenceChecksum,
-            extractionRevision: order.extractionRevision,
-            extraction: order.extraction,
-            primaryDocumentImageId,
-            screenshotImageId,
-          });
-          const [storedOrder] = await database
-            .insert(importPreparedOrder)
-            .values({
-              runId: scope.runId,
-              vendorId,
-              prepareOperationId: input._runExecution.operationId,
-              itemOperationId: order.itemOperationId,
-              stableOrderId: order.stableOrderId,
-              targetPurchaseId,
-              sourceKind: order.source.kind,
-              sourceExternalKey: order.source.externalKey,
-              sourceChecksum: order.source.checksum,
-              evidenceChecksum: order.evidenceChecksum,
-              extractionRevision: order.extractionRevision,
-              extraction: order.extraction,
-              primaryDocumentImageId,
-              screenshotImageId,
-              targetFingerprint,
-              evidenceFingerprint,
-            })
-            .returning({ id: importPreparedOrder.id });
-          if (!storedOrder) throw new Error("Prepared order was not persisted");
-
-          const outputLines = [];
-          const exactRequests: ExternalIdPair[][] = [];
-          for (const line of preparedCandidateLines) {
-            const source =
-              line.sku || amazonAsin(line.productUrl)
-                ? await resolveProductIdentifierSource(transactionDb, {
-                    url: line.productUrl,
-                    vendorId,
-                  })
-                : "";
-            exactRequests.push(lineIdentifierRequests(source, line));
-          }
-          const exactHits = await findProductsByExternalIds(
-            transactionDb,
-            exactRequests.flat(),
-          );
-          for (const [position, line] of preparedCandidateLines.entries()) {
-            const stableLineId = order.lineIds[position];
-            if (!stableLineId) throw new Error("Prepared line id is missing");
-            // Tax, shipping and other adjustments never resolve a Product.
-            const candidates =
-              line.lineKind === "principal"
-                ? await productCandidates(
-                    transactionDb,
-                    exactRequests[position] ?? [],
-                    exactHits,
-                    line,
-                  )
-                : [];
-            const identifiers = Object.fromEntries(
-              [
-                line.sku ? ["sku", line.sku] : null,
-                amazonAsin(line.productUrl)
-                  ? ["asin", amazonAsin(line.productUrl)!]
-                  : null,
-                line.productUrl ? ["productUrl", line.productUrl] : null,
-              ].filter((entry): entry is [string, string] => entry !== null),
-            );
-            await database.insert(importPreparedLine).values({
-              preparedOrderId: storedOrder.id,
-              stableLineId,
-              position,
-              line,
-              identifiers,
-              candidates,
-            });
-            outputLines.push({
-              stableLineId,
-              title: line.title,
-              amount: line.amount,
-              identifiers,
-              candidates,
-              requiresProductResolution: line.lineKind === "principal",
-            });
-          }
-          outputOrders.push({
-            targetPurchaseId:
-              order.targetPurchaseId ?? linkedTarget?.shortcode ?? null,
-            stableOrderId: order.stableOrderId,
-            itemOperationId: order.itemOperationId,
-            source: order.source,
-            orderId: candidate.orderId,
-            targetFingerprint,
-            evidenceFingerprint,
-            vendorCandidates,
-            lines: outputLines,
-          });
-        }
-
-        const result = preparePurchaseImportOut.parse({
-          runId: scope.shortcode,
-          operationId: input._runExecution.operationId,
-          status: "running",
-          orders: outputOrders,
-        });
-        await ledger.complete(database, result);
-        return result;
-      });
-    },
-  );
-}
-
-/**
- * A preparation an earlier prepare operation of this Run already recorded for
- * these items, such as a retried coordinator's repeat under a new operation id.
- * Identical orders read back that preparation (commit names its operation id);
- * any other overlap with prepared items is a conflict naming it.
- */
-async function priorPreparation(
-  db: Database,
-  runId: RunId,
-  orders: PreparePurchaseImportInput["orders"],
-) {
-  const database = getDb(db);
-  const prepared = await database
-    .select({
-      prepareOperationId: importPreparedOrder.prepareOperationId,
-      itemOperationId: importPreparedOrder.itemOperationId,
-    })
-    .from(importPreparedOrder)
-    .where(
-      and(
-        eq(importPreparedOrder.runId, runId),
-        inArray(
-          importPreparedOrder.itemOperationId,
-          orders.map((order) => order.itemOperationId),
-        ),
-      ),
-    );
-  const [first] = prepared;
-  if (!first) return undefined;
-  const operation = await readOperation(database, {
-    runId,
-    operationId: first.prepareOperationId,
-  });
-  if (
-    prepared.length === orders.length &&
-    prepared.every(
-      (row) => row.prepareOperationId === first.prepareOperationId,
-    ) &&
-    operation?.state === "completed" &&
-    operation.inputFingerprint === (await sha256Hex(JSON.stringify(orders)))
-  )
-    return preparePurchaseImportOut.parse(operation.result);
-  throw createAppError(
-    "PURCHASE_IMPORT_ITEM_PREPARED",
-    `This Run already prepared ${prepared
-      .map(
-        (row) =>
-          `itemOperationId ${row.itemOperationId} under prepare operation ${row.prepareOperationId}`,
-      )
-      .join(
-        ", ",
-      )} (${operation?.state ?? "unrecorded"}) with different orders. Commit that preparation by its prepareOperationId, or prepare changed evidence under new itemOperationIds.`,
-  );
-}
-
-async function finalizeReviewRun(
-  db: Database,
-  runId: RunId,
-  operationId: string,
-) {
-  const [finished] = await getDb(db)
-    .select({ status: runTable.status, auditedAt: runTable.auditedAt })
-    .from(runTable)
-    .where(eq(runTable.id, runId));
-  // The saved commit can replay after its required audit ended the Run.
-  if (finished?.status === "needs_review" && finished.auditedAt !== null)
-    return;
-  await auditAllImportBatches(db, {
-    runId,
-    operationId: `${operationId}:required-audit`,
-  });
-  await withTransaction(db, async (tx) => {
-    const [stopped] = await tx
-      .update(runTable)
-      .set({
-        status: "needs_review",
-        auditedAt: new Date(),
-        endedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(runTable.id, runEntityId.parse(runId)),
-          eq(runTable.status, "running"),
-        ),
-      )
-      .returning({ purpose: runTable.purpose, input: runTable.input });
-    if (stopped)
-      await (
-        await import("~/server/kernel/api")
-      ).emitWrites(databaseForTransaction(tx), {
-        table: runTable,
-        entity: "run",
-        ids: [runId],
-        columns: ["status", "endedAt", "updatedAt"],
-      });
-    if (stopped?.purpose === "mail_import" && stopped.input !== null)
-      await releaseUnsettledMailRunSources(tx, runEntityId.parse(runId));
-  });
-}
-
-/**
- * A recorded commit result: the public result plus the `requiresReview` that
- * finalizes the Run on replay (absent on the oldest rows, which read false).
- */
-const recordedCommit = commitPurchaseImportOut.extend({
-  requiresReview: z.boolean().default(false),
+const acceptedPreparation = preparePurchaseImportOut.extend({
+  acceptedOrders: z.array(z.object({stableOrderId: z.string(), observationId: z.uuid(), lineIds: z.array(z.string())})),
 });
 
-// The transaction deliberately keeps replay, evidence, resolution, and write
-// fences together so no partial extraction can escape as a business effect.
-export async function commitPurchaseImport(
-  db: Database,
-  rawInput: CommitPurchaseImportInput,
-  actor: ActorContext,
-  decisionPort?: DecisionPort,
-  followUps: {
-    /** Best-effort work on the Products this commit created; never fails it. */
-    onProductsCreated?: (productIds: ProductId[]) => Promise<void>;
-  } = {},
-) {
-  const input = commitPurchaseImportInput.parse(rawInput);
-  const scope = await importRunScope(db, actor, input._runExecution, false);
-  assertRunCapability(scope.purpose, "commit_purchase_import");
-  const transactionResult = await executeAtomicOperation(
-    db,
-    {
-      runId: scope.runId,
-      operationId: input._runExecution.operationId,
-      kind: "commit_purchase_import",
-      payload: operationArgs(input),
-      subject: "Commit",
-      recordFailure: true,
-    },
-    async (ledger) => {
-      const replayed = await ledger.replay(getDb(db), recordedCommit);
-      if (replayed) {
-        const { requiresReview, ...result } = replayed;
-        return { result, requiresReview };
+export async function preparePurchaseImport(db: Database, rawInput: PreparePurchaseImportInput,
+  actor: ActorContext, _decisionPort?: DecisionPort) {
+  const input = preparePurchaseImportInput.parse(rawInput);
+  const scope = await importRunScope(db, actor, input._runExecution, true);
+  assertRunCapability(scope.purpose, "prepare");
+  return executeAtomicOperation(db, {runId:scope.runId, operationId:input._runExecution.operationId,
+    kind:"prepare_purchase_import",payload:input.orders,subject:"Preparation"}, async ledger =>
+    householdWrite(db, async database => {
+      const replay = await ledger.replay(getDb(database), acceptedPreparation);
+      if (replay) return preparePurchaseImportOut.parse(replay);
+      if (["completed","cancelled","failed"].includes(scope.status)) throw new Error("Import Run is not active");
+      const prepared = [];
+      for (const order of input.orders) {
+        const source = {...order.source, externalKey: await canonicalMailSourceKey(database,scope.ledgerPartyId,order.source)};
+        const mail = await readUnchangedMailSource(database,scope,source,order.evidenceChecksum);
+        const {vendorId,vendorCandidates} = await preparedOrderVendor(database,order,scope,mail,actor);
+        const primaryDocumentImageId = order.primaryDocumentImageId ? await resolveOrThrow(database,"image",order.primaryDocumentImageId) : null;
+        const screenshotImageId = order.screenshotImageId ? await resolveOrThrow(database,"image",order.screenshotImageId) : null;
+        prepared.push({order,mail,vendorCandidates,input: importWriterInput.parse({runId:scope.runId,
+          ledgerPartyId:scope.ledgerPartyId,vendorId,vendorAccountId:scope.vendorAccountId,source,
+          extraction:order.extraction,primaryDocumentImageId,screenshotImageId})});
       }
-      if (scope.status !== "running")
-        throw new Error(`Purchase import run is fenced in ${scope.status}`);
-      const preparedAttachments = new Map<
-        string,
-        PreparedMailAttachmentDecisions
-      >();
-      for (const { order } of await loadPreparation(
-        db,
-        scope.runId,
-        input.prepareOperationId,
-      )) {
-        const mail = await retainedMailSource(
-          db,
-          scope,
-          {
-            kind: importSourceKind.parse(order.sourceKind),
-            externalKey: order.sourceExternalKey,
-            checksum: order.sourceChecksum,
-          },
-          order.evidenceChecksum,
-        );
-        if (mail && !preparedAttachments.has(mail.id))
-          preparedAttachments.set(
-            mail.id,
-            await prepareMailAttachmentDecisions(
-              db,
-              mail,
-              { ...actor, runId: scope.runId },
-              decisionPort,
-            ),
-          );
+      const observations = await appendOrderEvidence(database,prepared.map(({input,order,mail})=>({input,
+        orderKey:sourceOrderKey({vendorId:input.vendorId,orderId:input.extraction.candidate?.orderId ?? null,orderLocator:order.stableOrderId}),
+        emailId:mail?.emailId,lineIds:order.lineIds})));
+      const outputOrders = [];
+      const acceptedOrders = [];
+      const decisions = [];
+      for (const {order,input,vendorCandidates} of prepared) {
+        const observation = [...observations].reverse().find(row=>row.checksum===input.source.checksum && row.sourceExternalKey===input.source.externalKey && row.vendorId===input.vendorId);
+        if (!observation) throw new Error("Accepted extraction is missing");
+        const target = order.targetPurchaseId ? await resolveOrThrow(database,"purchase",order.targetPurchaseId) : null;
+        if (target) decisions.push({channel:"assignment" as const,kind:"set" as const,subject:orderEventKey(observation),field:"purchaseId",value:target,
+          scopes:orderPaymentKeys(observation).map(key=>({kind:"paymentMatch",key}))});
+        const lines = [];
+        for (const [index,line] of (input.extraction.candidate?.lines ?? []).entries()) {
+          const identifierSource = line.sku || amazonAsin(line.productUrl)
+            ? await resolveProductIdentifierSource(database,{url:line.productUrl,vendorId:input.vendorId}) : "";
+          const requests = lineIdentifierRequests(identifierSource,line);
+          const hits = await findProductsByExternalIds(database,requests);
+          lines.push({stableLineId:order.lineIds[index], title:line.title,amount:line.amount,
+            identifiers:Object.fromEntries([...(line.sku?[["sku",line.sku]]:[]),...(line.productUrl?[["productUrl",line.productUrl]]:[])]),
+            candidates:line.lineKind === "principal" ? await productCandidates(database,requests,hits,line) : [],
+            requiresProductResolution:line.lineKind === "principal"});
+        }
+        outputOrders.push({stableOrderId:order.stableOrderId,itemOperationId:order.itemOperationId,source:input.source,
+          orderId:input.extraction.candidate?.orderId ?? null, targetPurchaseId:order.targetPurchaseId ?? null,
+          targetFingerprint:await sha256Hex(target ?? orderEventKey(observation)), evidenceFingerprint:observation.contentFingerprint,
+          vendorCandidates,lines});
+        acceptedOrders.push({stableOrderId:order.stableOrderId,observationId:observation.id,lineIds:order.lineIds});
       }
-      // oxlint-disable-next-line complexity -- Ledger publication, source settlement and its recovery wake share this transaction.
-      return withTransactionDatabase(db, async (transactionDb) => {
-        const database = getDb(transactionDb);
-        // Lock the Run before the operation: cancellation uses the same order.
-        await database
-          .select({ id: runTable.id })
-          .from(runTable)
-          .where(eq(runTable.id, scope.runId))
-          .for("no key update");
-        const replayed = await ledger.replay(database, recordedCommit, {
-          forUpdate: true,
-        });
-        if (replayed) {
-          const { requiresReview, ...result } = replayed;
-          return { result, requiresReview };
-        }
-        await assertLiveImportScope(transactionDb, actor, scope);
-        const prepared = await loadPreparation(
-          transactionDb,
-          scope.runId,
-          input.prepareOperationId,
-        );
-        // A prepared Vendor may have been deleted or merged away since
-        // prepare; the commit must not book a Purchase against it.
-        const orderVendor = async (order: StoredPreparation["order"]) => {
-          const vendorId = order.vendorId ?? scope.vendorId;
-          if (!vendorId)
-            throw new Error("Prepared purchase import order has no Vendor");
-          if (
-            scope.purpose === "mail_import" &&
-            scope.vendorId &&
-            vendorId !== scope.vendorId
-          )
-            throw new Error(
-              "This Mail import is limited to its selected Vendor.",
-            );
-          const [live] = await getDb(transactionDb)
-            .select({ id: vendor.id })
-            .from(vendor)
-            .where(and(eq(vendor.id, vendorId), notDeleted(vendor)));
-          if (!live)
-            throw new Error(
-              "The prepared order's Vendor was deleted or merged; prepare it again.",
-            );
-          return vendorId;
-        };
-        const mailSources = new Map<string, RetainedMailSource | null>();
-        for (const { order } of prepared)
-          mailSources.set(
-            order.id,
-            await retainedMailSource(
-              transactionDb,
-              scope,
-              {
-                kind: importSourceKind.parse(order.sourceKind),
-                externalKey: order.sourceExternalKey,
-                checksum: order.sourceChecksum,
-              },
-              order.evidenceChecksum,
-            ),
-          );
-        const defaultProjectId = input.defaultProjectId
-          ? await resolveOrThrow(
-              transactionDb,
-              "project",
-              input.defaultProjectId,
-            )
-          : null;
-        await ledger.start(database);
-        for (const { order } of prepared) {
-          const extraction = importExtractionOutcome.parse(order.extraction);
-          if (!extraction.candidate)
-            throw new Error("Prepared purchase import order has no candidate");
-          const targetFingerprint = await computeTargetFingerprint(
-            transactionDb,
-            {
-              ledgerPartyId: scope.ledgerPartyId,
-              vendorId: await orderVendor(order),
-              sourceKind: importSourceKind.parse(order.sourceKind),
-              sourceExternalKey: order.sourceExternalKey,
-              orderId: extraction.candidate?.orderId ?? null,
-              targetPurchaseId: order.targetPurchaseId,
-            },
-          );
-          const evidenceFingerprint = await computeEvidenceFingerprint({
-            source: {
-              kind: importSourceKind.parse(order.sourceKind),
-              externalKey: order.sourceExternalKey,
-              checksum: order.sourceChecksum,
-            },
-            evidenceChecksum: order.evidenceChecksum,
-            extractionRevision: order.extractionRevision,
-            extraction,
-            primaryDocumentImageId: order.primaryDocumentImageId,
-            screenshotImageId: order.screenshotImageId,
-          });
-          if (
-            targetFingerprint !== order.targetFingerprint ||
-            evidenceFingerprint !== order.evidenceFingerprint
-          ) {
-            throw new Error(
-              "Prepared target or evidence changed before commit",
-            );
-          }
-        }
-        const resolutionMap = new Map(
-          input.resolutions.map((resolution) => [
-            `${resolution.stableOrderId}:${resolution.stableLineId}`,
-            resolution.resolution,
-          ]),
-        );
-        if (resolutionMap.size !== input.resolutions.length)
-          throw new Error("Product resolutions contain duplicate line ids");
-        const items = [];
-        // Mail orders whose line thumbnails are fetched after commit.
-        const thumbnailWork: Parameters<typeof attachOrderLineThumbnails>[1][] =
-          [];
-        const importedMail = new Map<string, ImportedMailCommit>();
-        const createdProductIds: ProductId[] = [];
-        let requiresReview = false;
-        // Adjustment lines (tax/shipping/discount/etc.) never carry a
-        // Product, so the caller's resolution roster is keyed to principal
-        // lines only — track which entries a real line actually consumed
-        // instead of requiring one resolution per line below.
-        const consumedResolutionIds = new Set<string>();
-        for (const { order, lines } of prepared) {
-          const extraction = importExtractionOutcome.parse(order.extraction);
-          if (!extraction.candidate)
-            throw new Error("Prepared purchase import order has no candidate");
-          const productResolutions = [];
-          for (const line of lines) {
-            const parsedLine = extractedPurchaseLine.parse(line.line);
-            const resolutionId = `${order.stableOrderId}:${line.stableLineId}`;
-            const resolution = resolutionMap.get(resolutionId);
-            if (!resolution) {
-              if (parsedLine.lineKind === "principal")
-                throw new Error(
-                  `Missing product resolution for ${order.stableOrderId}/${line.stableLineId}`,
-                );
-              continue;
-            }
-            consumedResolutionIds.add(resolutionId);
-            if (resolution.kind === "existing") {
-              productResolutions.push({
-                kind: "existing" as const,
-                lineIndex: line.position,
-                productId: await resolveOrThrow(
-                  transactionDb,
-                  "product",
-                  resolution.productId,
-                ),
-              });
-            } else if (resolution.kind === "new") {
-              const distinctFrom = [];
-              for (const distinct of resolution.distinctFrom ?? [])
-                distinctFrom.push({
-                  ...distinct,
-                  productId: await resolveOrThrow(
-                    transactionDb,
-                    "product",
-                    distinct.productId,
-                  ),
-                });
-              productResolutions.push({
-                kind: "new" as const,
-                lineIndex: line.position,
-                distinctFrom,
-              });
-            } else if (resolution.kind === "expense_only") {
-              productResolutions.push({
-                kind: "expense_only" as const,
-                lineIndex: line.position,
-              });
-            } else {
-              requiresReview ||=
-                scope.purpose !== "mail_import" &&
-                parsedLine.lineKind === "principal";
-              productResolutions.push({
-                kind: "unresolved" as const,
-                lineIndex: line.position,
-                reason: resolution.reason,
-              });
-            }
-          }
-          const vendorId = await orderVendor(order);
-          const mailSource = mailSources.get(order.id) ?? null;
-          // A mail import's Purchase belongs to the member's (mail-only)
-          // VendorAccount.
-          const vendorAccountId =
-            scope.vendorAccountId ??
-            (mailSource
-              ? (
-                  await ensureMailVendorAccount(transactionDb, {
-                    vendorId,
-                    ledgerPartyId: scope.ledgerPartyId,
-                  })
-                ).id
-              : null);
-          const result = await importVendorOrder(
-            transactionDb,
-            {
-              targetPurchaseId: order.targetPurchaseId,
-              defaultTrade: input.defaultTrade,
-              defaultProjectId: defaultProjectId ?? undefined,
-              runId: scope.runId,
-              ledgerPartyId: scope.ledgerPartyId,
-              vendorId,
-              vendorAccountId,
-              source: {
-                kind: importSourceKind.parse(order.sourceKind),
-                externalKey: order.sourceExternalKey,
-                checksum: order.sourceChecksum,
-              },
-              extraction: {
-                ...extraction,
-                candidate: {
-                  ...extraction.candidate,
-                  lines: extraction.candidate.lines.map(
-                    (originalLine, index) => {
-                      const preparedLine = lines.find(
-                        (entry) => entry.position === index,
-                      );
-                      if (!preparedLine)
-                        throw new Error(`Prepared line ${index} is missing`);
-                      return {
-                        ...originalLine,
-                        lineKind: extractedPurchaseLine.parse(preparedLine.line)
-                          .lineKind,
-                      };
-                    },
-                  ),
-                },
-              },
-              primaryDocumentImageId: order.primaryDocumentImageId,
-              screenshotImageId: order.screenshotImageId,
-              productResolutions,
-            },
-            actor.userId,
-            // Without a commit default the import never invents a Purchase
-            // purpose: inheritance resolves first, then only still
-            // unassigned principal lines get Other.
-            {
-              applyUnassignedPurposeFallback: input.defaultTrade === undefined,
-              onProductCreated: (productId) =>
-                createdProductIds.push(productId),
-              resolveReversal: (index, line) =>
-                chooseLineStage(
-                  transactionDb,
-                  scope.runId,
-                  index,
-                  line,
-                  "reversal",
-                ),
-            },
-          );
-          const [written] = result.purchaseId
-            ? await database
-                .select({ shortcode: purchase.shortcode })
-                .from(purchase)
-                .where(
-                  eq(purchase.id, parseEntityId("purchase", result.purchaseId)),
-                )
-                .limit(1)
-            : [];
-          // An attachment's commit links and settles its parent Email.
-          const linksMail = result.outcome !== "conflict";
-          // A member's dismissal of this Email for the Purchase the writer
-          // reached wins over the import; the whole commit rolls back.
-          // linkOrderMail refuses it for a linked Email; this covers the
-          // conflict outcome that is not linked.
-          if (result.purchaseId && mailSource && !linksMail) {
-            const [dismissed] = await database
-              .select({ id: emailPurchaseDecision.id })
-              .from(emailPurchaseDecision)
-              .innerJoin(
-                orderMailEvent,
-                eq(orderMailEvent.id, emailPurchaseDecision.eventId),
-              )
-              .where(
-                and(
-                  eq(orderMailEvent.orderMailId, mailSource.id),
-                  eq(
-                    emailPurchaseDecision.purchaseId,
-                    parseEntityId("purchase", result.purchaseId),
-                  ),
-                  eq(emailPurchaseDecision.decision, "dismissed"),
-                  eq(emailPurchaseDecision.active, true),
-                ),
-              )
-              .limit(1);
-            if (dismissed)
-              throw new Error(
-                "A member dismissed this Email for that Purchase; review the Email before importing it.",
-              );
-          }
-          if (result.purchaseId && mailSource && linksMail) {
-            const attachmentDecisions = preparedAttachments.get(mailSource.id);
-            if (!attachmentDecisions)
-              throw new Error("Email attachment purposes were not reviewed.");
-            const target: Parameters<
-              typeof linkImportedMail
-            >[1]["purchases"][number] = {
-              event: extraction.candidate?.sourceEvent ?? "confirmation",
-              purchaseId: result.purchaseId,
-            };
-            collectImportedMail(importedMail, {
-              mail: mailSource,
-              purchases: [target],
-              actorUserId: actor.userId,
-              runId: scope.runId,
-              attachmentDecisions,
-            });
-            if (result.outcome === "created" || result.outcome === "updated")
-              thumbnailWork.push({
-                purchaseId: parseEntityId("purchase", result.purchaseId),
-                mailContent: mailSource.content,
-                lines: extraction.candidate?.lines ?? [],
-              });
-          }
-          items.push({
-            stableOrderId: order.stableOrderId,
-            outcome: result.outcome,
-            purchaseId: written?.shortcode ?? null,
-            findingCount: result.findingIds.length,
-          });
-        }
-        if (resolutionMap.size !== consumedResolutionIds.size)
-          throw new Error("Product resolutions include unknown line ids");
-        for (const emailImport of importedMail.values())
-          await linkImportedMail(transactionDb, emailImport);
-        if (
-          importedMail.size > 0 &&
-          items.some(
-            (item) => item.outcome === "created" || item.outcome === "updated",
-          )
-        )
-          await (
-            await import("~/server/workflows/background-tasks/publish")
-          ).publishBackgroundTasks(
-            transactionDb,
-            [
-              {
-                kind: "maintenance.purchase-discovery",
-                requestedAt: new Date().toISOString(),
-              },
-            ],
-            { source: "mail-import-evidence" },
-          );
-        const publicResult = commitPurchaseImportOut.parse({
-          runId: scope.shortcode,
-          operationId: input._runExecution.operationId,
-          status: requiresReview ? "needs_review" : "running",
-          items,
-        });
-        await ledger.complete(database, {
-          ...publicResult,
-          requiresReview,
-        });
-        // A member's own import Run ends with its commit; Pi's Mail import
-        // Run continues with its next Email.
-        const memberImport = scope.purpose === "file_import" && !requiresReview;
-        await database
-          .update(runTable)
-          .set({
-            status: memberImport ? "completed" : "running",
-            endedAt: memberImport ? new Date() : null,
-            failureCode: null,
-            updatedAt: new Date(),
-          })
-          .where(eq(runTable.id, scope.runId));
-        await (
-          await import("~/server/kernel/api")
-        ).emitWrites(transactionDb, {
-          table: runTable,
-          entity: "run",
-          ids: [scope.runId],
-          columns: ["status", "endedAt", "updatedAt"],
-        });
-        await recordChange(transactionDb, {
-          kind: "source",
-          categories: ["run"],
-        });
-        return {
-          result: publicResult,
-          requiresReview,
-          thumbnailWork,
-          createdProductIds,
-        };
-      });
-    },
-  );
-  // Network work stays outside the import transaction; each is best-effort.
-  for (const work of transactionResult.thumbnailWork ?? [])
-    await attachOrderLineThumbnails(db, work);
-  if (transactionResult.requiresReview) {
-    await finalizeReviewRun(db, scope.runId, input._runExecution.operationId);
-  }
-  const createdProductIds = transactionResult.createdProductIds ?? [];
-  if (createdProductIds.length > 0 && followUps.onProductsCreated)
-    await followUps.onProductsCreated(createdProductIds).catch((error) =>
-      log.warn("Post-commit Product follow-up failed", {
-        runId: scope.runId,
-        error: scrubErrorMessage(String(error)),
-      }),
-    );
-  return transactionResult.result;
+      if(decisions.length) await decide(database,actor,decisions);
+      await settleOrderEvidence(database,observations);
+      const result = acceptedPreparation.parse({runId:scope.shortcode,operationId:input._runExecution.operationId,
+        status:"running",orders:outputOrders,acceptedOrders});
+      await ledger.complete(getDb(database),result);
+      return preparePurchaseImportOut.parse(result);
+    }));
 }
 
+export async function commitPurchaseImport(db: Database,rawInput: CommitPurchaseImportInput,actor: ActorContext,
+  _decisionPort?: DecisionPort, hooks?: {onProductsCreated?: (ids: ProductId[])=>Promise<void>}) {
+  const input=commitPurchaseImportInput.parse(rawInput);
+  const scope=await importRunScope(db,actor,input._runExecution,false);
+  assertRunCapability(scope.purpose,"commit_purchase_import");
+  return executeAtomicOperation(db,{runId:scope.runId,operationId:input._runExecution.operationId,
+    kind:"commit_purchase_import",payload:input,subject:"Commit"}, async ledger=> householdWrite(db, async database=> {
+      const replay=await ledger.replay(getDb(database),commitPurchaseImportOut); if(replay) return replay;
+      const recorded=await readOperation(getDb(database),{runId:scope.runId,operationId:input.prepareOperationId});
+      const preparation=acceptedPreparation.parse(recorded?.result);
+      const observations=await getDb(database).select().from(sourceOrderObservation)
+        .where(inArray(sourceOrderObservation.id,preparation.acceptedOrders.map(row=>row.observationId)));
+      const decisions=[];
+      const projectId=input.defaultProjectId ? await resolveOrThrow(database,"project",input.defaultProjectId) : undefined;
+      for(const prepared of preparation.acceptedOrders) {
+        const observation=observations.find(row=>row.id===prepared.observationId)!;
+        const event=orderEventKey(observation);
+        const scopes=[{kind:"purchaseEvent",key:event},...orderPaymentKeys(observation).map(key=>({kind:"paymentMatch",key}))];
+        const subject=`purchaseEvent:${event}`;
+        for(const [field,value] of Object.entries({defaultTrade:input.defaultTrade,defaultProjectId:projectId}))
+          if(value !== undefined) decisions.push({channel:"assignment" as const,kind:"set" as const,subject,field,value,scopes});
+        for(const choice of input.resolutions.filter(row=>row.stableOrderId===prepared.stableOrderId)) {
+          const index=prepared.lineIds.indexOf(choice.stableLineId); if(index<0) throw new Error("Unknown prepared line");
+          const resolution=choice.resolution;
+          const value=resolution.kind === "existing" ? {...resolution,productId:await resolveOrThrow(database,"product",resolution.productId)} : resolution;
+          decisions.push({channel:"assignment" as const,kind:"set" as const,subject,field:`line:${choice.stableLineId}`,value,scopes});
+        }
+      }
+      await decide(database,actor,decisions);
+      const outcomes=await settleOrderEvidence(database,observations);
+      const records=await getDb(database).select().from(recordKey).where(and(eq(recordKey.scopeKind,"purchaseEvent"),eq(recordKey.entity,"purchase")));
+      const purchases=await getDb(database).select({id:purchase.id,shortcode:purchase.shortcode}).from(purchase).where(notDeleted(purchase));
+      const bindings=await getDb(database).select().from(evidenceBinding).where(and(eq(evidenceBinding.factKind,"orderObservation"),inArray(evidenceBinding.factId,observations.map(row=>row.id))));
+      const items=preparation.acceptedOrders.map(prepared=> {
+        const observation=observations.find(row=>row.id===prepared.observationId)!;
+        const key=bindings.find(row=>row.factId===observation.id)?.eventKey ?? orderEventKey(observation);
+        const owned=records.find(row=>row.scopeKey===key);
+        const saved=purchases.find(row=>row.id===owned?.entityId);
+        return {stableOrderId:prepared.stableOrderId,outcome:saved?"updated":"conflict",purchaseId:saved?.shortcode ?? null,
+          findingCount:outcomes.filter(row=>row.scope.key===key).flatMap(row=>row.gaps).length};
+      });
+      const result=commitPurchaseImportOut.parse({runId:scope.shortcode,operationId:input._runExecution.operationId,status:"running",items});
+      await ledger.complete(getDb(database),result);
+      if(hooks?.onProductsCreated) {
+        const created=await getDb(database).select({id:product.id}).from(product).innerJoin(recordKey,and(eq(recordKey.entityId,product.id),eq(recordKey.entity,"product"),inArray(recordKey.scopeKey,observations.map(orderEventKey))));
+        if(created.length) await hooks.onProductsCreated(created.map(row=>row.id));
+      }
+      return result;
+    }));
+}
 export async function purchaseImportOperationStatus(
   db: Database,
   rawInput: z.input<typeof importOperationStatusInput>,

@@ -1,3 +1,5 @@
+import {uuidArrayParam} from "~/server/db/helpers/query";
+import {acceptedOrderPurchasesSql} from "~/server/domains/purchase-import/repo/accepted-order-read";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { acceptedSourceOrder } from "@cubby/schemas/purchase-import";
 import { createLogger } from "@cubby/worker-tracing";
@@ -65,70 +67,23 @@ export async function loadProductIdentifierClaims(
   } = {},
 ) {
   if (targetId && typeof targetId !== "string" && !targetId.length) return [];
-  const rows = await getDb(db)
-    .select({
-      bindings: sql<unknown>`jsonb_agg(jsonb_build_object(
-        'bindingId', ${importSourceProduct.id},
-        'productId', ${product.id},
-        'lineIndex', ${importSourceProduct.lineIndex}
-      ))`,
-      sourceOrderId: importSourceOrder.id,
-      sourceClaimId: importSourceClaim.id,
-      original: importSourceOrder.originalOrder,
-      acceptedChecksum: importSourceOrder.checksum,
-      originalExternalKey: importSourceClaim.externalKey,
-      vendorId: purchase.vendorId,
-    })
-    .from(importSourceProduct)
-    .innerJoin(
-      importSourceOrder,
-      eq(importSourceOrder.id, importSourceProduct.sourceOrderId),
-    )
-    .innerJoin(
-      importSourceClaim,
-      eq(importSourceClaim.id, importSourceOrder.sourceClaimId),
-    )
-    .innerJoin(purchase, eq(purchase.id, importSourceOrder.purchaseId))
-    .leftJoin(
-      expense,
-      and(
-        eq(expense.id, importSourceProduct.expenseId),
-        eq(expense.purchaseId, purchase.id),
-        notDeleted(expense),
-      ),
-    )
-    .leftJoin(
-      entityLink,
-      and(
-        eq(entityLink.kind, "purchaseProduct"),
-        eq(entityLink.fromEntityId, purchase.id),
-        eq(entityLink.toEntityId, importSourceProduct.productId),
-        notDeleted(entityLink),
-      ),
-    )
-    // An incomplete order can name Products without inventing an Expense.
-    // That identity must still have its current generic Purchase/Product link.
-    .innerJoin(
-      product,
-      eq(
-        product.id,
-        sql`CASE WHEN ${importSourceProduct.expenseId} IS NOT NULL
-      THEN ${expense.productId} ELSE ${entityLink.toEntityId} END`,
-      ),
-    )
-    .where(
-      and(
-        notDeleted(product),
-        notDeleted(purchase),
-        targetId
-          ? inArray(
-              product.id,
-              typeof targetId === "string" ? [targetId] : [...targetId],
-            )
-          : undefined,
-      ),
-    )
-    .groupBy(importSourceOrder.id, importSourceClaim.id, purchase.id);
+  const result=await getDb(db).execute(sql`
+    SELECT accepted.id AS "sourceOrderId", coalesce(accepted."sourceClaimId",accepted.id) AS "sourceClaimId",
+      jsonb_build_object('checksum',accepted.checksum,'extraction',accepted.extraction) AS original,
+      accepted.checksum AS "acceptedChecksum", accepted."sourceExternalKey" AS "originalExternalKey", accepted."vendorId",
+      jsonb_agg(jsonb_build_object('bindingId',md5(accepted.id::text || ':' || (binding->>'lineIndex'))::uuid,
+        'productId',catalog.id,'lineIndex',(binding->>'lineIndex')::int)) AS bindings
+    FROM ${acceptedOrderPurchasesSql} accepted
+    CROSS JOIN LATERAL jsonb_array_elements(accepted."productBindings") binding
+    LEFT JOIN "RecordKey" owned ON owned.entity='expense' AND owned."scopeKind"='purchaseEvent'
+      AND owned."scopeKey"=(SELECT p."scopeKey" FROM "RecordKey" p WHERE p.entity='purchase' AND p."entityId"=accepted."boundPurchaseId" LIMIT 1)
+      AND owned."naturalKey"='line:' || coalesce(binding->>'stableLineId',binding->>'lineIndex')
+    LEFT JOIN "Expense" line ON line.id=coalesce((binding->>'legacyExpenseId')::uuid,owned."entityId"::uuid) AND ${notDeleted("line")}
+    JOIN "Entity" identity ON identity.id=coalesce(line."productId",(binding->>'productId')::uuid)
+    JOIN "Product" catalog ON catalog.id=coalesce(identity."mergedIntoId",identity.id) AND ${notDeleted("catalog")}
+    WHERE ${targetId ? sql`catalog.id=ANY(${uuidArrayParam(typeof targetId === "string" ? [targetId]:[...targetId])})` : sql`true`}
+    GROUP BY accepted.id,accepted."sourceClaimId",accepted.checksum,accepted.extraction,accepted."sourceExternalKey",accepted."vendorId"`);
+  const rows=z.object({rows:z.array(z.object({sourceOrderId:z.string(),sourceClaimId:z.string(),original:z.json(),acceptedChecksum:z.string(),originalExternalKey:z.string(),vendorId:z.string(),bindings:z.json()}))}).parse(result).rows;
   const candidates = [];
   // Keep the receipt and its live bindings in one statement, without sending
   // the entire receipt once per line. Validate the whole accepted order first.

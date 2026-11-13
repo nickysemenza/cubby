@@ -1,3 +1,4 @@
+import {enterHouseholdWrite} from "~/server/kernel/api";
 import { randomUUID } from "node:crypto";
 
 import { entitySchema } from "@cubby/schemas/entity";
@@ -29,7 +30,6 @@ import {
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import {
   financialEvidenceAmountMinor,
-  lockFinancialEvidenceKeys,
 } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import { createAppError } from "~/server/errors/app-error";
@@ -161,22 +161,12 @@ export async function lockFinancialTransactionSources(
         .from(financialTransaction)
         .where(inArray(financialTransaction.shortcode, [...codes]))
     : [];
-  await lockFinancialEvidenceKeys(
-    tx,
-    "reviewed-booking",
-    targets.map((target) => `transaction:${target.id}`),
-  );
+  await enterHouseholdWrite(tx);
   const retainedRefs = await financialSourceRefsFor(
     tx,
     targets.map((target) => target.id),
   );
-  await lockFinancialEvidenceKeys(
-    tx,
-    "transaction-ref",
-    [...refs, ...[...retainedRefs.values()].flat()]
-      .filter((ref) => !occurrenceCode(ref).success)
-      .map(refKey),
-  );
+  await enterHouseholdWrite(tx);
   const occurrences = refs.flatMap((ref) => {
     const code = occurrenceCode(ref);
     return code.success ? [code.data] : [];
@@ -211,13 +201,7 @@ export async function lockFinancialSourceOccurrences(
   const retainedRefs = transactionIds.length
     ? [...(await financialSourceRefsFor(tx, transactionIds)).values()].flat()
     : [];
-  await lockFinancialEvidenceKeys(
-    tx,
-    "transaction-ref",
-    [...refs, ...retainedRefs]
-      .filter((ref) => !occurrenceCode(ref).success)
-      .map(refKey),
-  );
+  await enterHouseholdWrite(tx);
   const codes = refs.flatMap((ref) => {
     const code = occurrenceCode(ref);
     return code.success ? [code.data] : [];
@@ -652,11 +636,7 @@ export async function lockFreshFinancialSources(
     return refs.length ? [{ refs }] : [];
   });
   if (aliasEntries.length)
-    await lockFinancialEvidenceKeys(
-      tx,
-      "transaction-ref",
-      aliasEntries.flatMap(({ refs }) => refs.map(refKey)),
-    );
+    await enterHouseholdWrite(tx);
   const codesOf = (refs: readonly SourceRef[]) =>
     uniq(
       refs.flatMap((ref) => {

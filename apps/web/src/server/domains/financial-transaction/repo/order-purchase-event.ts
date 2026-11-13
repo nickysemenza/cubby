@@ -8,6 +8,7 @@ import {
   allocationRecords,
   attributionRecords,
   bookingVendors,
+  importedProducts,
 } from "~/server/domains/financial-transaction/repo/purchase-event-records";
 import { recordPurchaseValue } from "~/server/domains/financial-transaction/repo/purchase-record";
 import {
@@ -26,13 +27,14 @@ const targets = [
   allocationRecords,
   attributionRecords,
   bookingVendors,
+  importedProducts,
 ];
 const keep = (c: Pure) => {
   for (const target of targets)
     for (const key of c.existing(target)) c.retire(target, key, "keep");
   return c.done();
 };
-const ownKeyFor = (c: Pure, target: typeof purchaseRecords, id: string) =>
+const ownKeyFor = (c: Pure, target: ColumnRef, id: string) =>
   c.existing(target).find((key) => c.recordId(target, key) === id);
 
 /** Accepted order facts complete the same purchase event in either arrival order. */
@@ -356,7 +358,16 @@ export function reconcileOrderPurchase(
     : [];
   for (const order of allLines)
     for (const line of order.lines) {
-      const key = `${order.refund ? `refund:${order.observation.id}:` : ""}line:${line.lineIndex}`;
+      const key = line.binding?.legacyExpenseId
+        ? ownKeyFor(c, expenseRecords, line.binding.legacyExpenseId) ?? `legacy:${line.binding.legacyExpenseId}`
+        : `${order.refund ? `refund:${order.observation.id}:` : ""}line:${line.binding?.stableLineId ?? line.lineIndex}`;
+      const resolution = c.decision("assignment", `purchaseEvent:${input.key}`, `line:${line.binding?.stableLineId ?? line.lineIndex}`);
+      const choice = resolution?.value && typeof resolution.value === "object" && !Array.isArray(resolution.value)
+        ? resolution.value : null;
+      const productId = choice?.kind === "new" || (!choice && line.binding?.createProduct)
+        ? c.record(importedProducts, `product:${key}`, {name: line.title}, {authored: true})
+        : choice?.kind === "existing" && typeof choice.productId === "string"
+          ? c.reference("product",choice.productId) : choice ? null : line.productId;
       const carried = oldLump
         ? replacementLineFields({
             aggregate: acceptedLump!,
@@ -405,9 +416,9 @@ export function reconcileOrderPurchase(
               ? (carried?.spendingCategoryId ?? null)
               : null,
           notes: carried?.notes ?? null,
-          productId: lumpChoices.get("productId")?.value ?? line.productId,
+          productId: lumpChoices.get("productId")?.value ?? productId,
           productQuantity:
-            line.productId || lumpChoices.has("productId")
+            productId || lumpChoices.has("productId")
               ? (line.quantity ?? 1)
               : null,
           url: line.productUrl ?? null,

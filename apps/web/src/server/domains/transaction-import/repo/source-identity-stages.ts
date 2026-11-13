@@ -1,3 +1,4 @@
+import {enterHouseholdWrite} from "~/server/kernel/api";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { SourceTransactionRecordId } from "@cubby/schemas/identifiers";
 import {
@@ -26,7 +27,6 @@ import {
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import {
   financialEvidenceAmountMinor,
-  lockFinancialEvidenceKeys,
 } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import {
@@ -62,7 +62,7 @@ export async function lockAndLoadSourceIdentity(
     return constraintViolation(
       "The reviewed source observation is no longer live.",
     );
-  await lockFinancialEvidenceKeys(tx, "source", [initial.source]);
+  await enterHouseholdWrite(tx);
   const initialOwners = await db
     .select()
     .from(sourceOccurrence)
@@ -82,14 +82,7 @@ export async function lockAndLoadSourceIdentity(
           .where(eq(financialTransaction.shortcode, input.transactionId))
           .then((rows) => rows.map(transactionDollars))
       : [];
-  await lockFinancialEvidenceKeys(tx, "reviewed-booking", [
-    ...initialOwners.flatMap((owner) =>
-      owner.acceptedTransactionId
-        ? [`transaction:${owner.acceptedTransactionId}`]
-        : [],
-    ),
-    ...(chosenTransaction ? [`transaction:${chosenTransaction.id}`] : []),
-  ]);
+  await enterHouseholdWrite(tx);
   const owners = initialOwners.length
     ? await db
         .select()

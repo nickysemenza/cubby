@@ -1,3 +1,4 @@
+import {householdWrite} from "~/server/kernel/api";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ExpenseId, InventoryId } from "@cubby/schemas/identifiers";
 import type { InventoryOwnershipSelection } from "@cubby/schemas/inventory-ownership";
@@ -21,7 +22,6 @@ import {
   type InventoryRawOwnership,
 } from "~/server/domains/inventory/repo/slot";
 import { createAppError } from "~/server/errors/app-error";
-import { isSerializationFailure } from "~/server/errors/db-errors";
 import {
   type AuditEntryInput,
   computeChanges,
@@ -38,25 +38,8 @@ import {
   loadEffectiveInventoryOwnership,
 } from "./ownership";
 
-const withSerializableConfirmation = async <Result>(
-  db: Database,
-  confirm: (tx: DrizzleTransaction) => Promise<Result>,
-): Promise<Result> => {
-  try {
-    return await withTransaction(db, confirm, {
-      isolationLevel: "serializable",
-    });
-  } catch (error) {
-    if (isSerializationFailure(error)) {
-      throw createAppError(
-        "INVENTORY_STALE",
-        "Ownership evidence changed during confirmation. Refresh and review it again.",
-        error,
-      );
-    }
-    throw error;
-  }
-};
+const withOwnershipConfirmation = <Result>(db: Database,confirm: (tx: DrizzleTransaction)=>Promise<Result>) =>
+  householdWrite(db, database=>withTransaction(database,confirm));
 
 const resolveRawOwnership = async (
   tx: DrizzleTransaction,
@@ -270,7 +253,7 @@ export const confirmInventoryOwnership = async (
   quantity: number | undefined,
   actor: ActorContext,
 ): Promise<InventoryId[]> =>
-  await withSerializableConfirmation(db, async (tx) => {
+  await withOwnershipConfirmation(db, async (tx) => {
     const row = await tx.query.inventoryEntry.findFirst({
       where: {
         RAW: (table: PgTable) =>
@@ -326,7 +309,7 @@ export const confirmInventoryExpenseBeneficiary = async (
   expectedEvidenceFingerprint: string,
   actor: ActorContext,
 ) =>
-  await withSerializableConfirmation(db, async (tx) => {
+  await withOwnershipConfirmation(db, async (tx) => {
     const inventory = await tx.query.inventoryEntry.findFirst({
       where: {
         RAW: (table: PgTable) =>

@@ -40,7 +40,7 @@ import {
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { advisoryXactLock } from "~/server/db/advisory-lock";
+import {enterHouseholdWrite} from "~/server/kernel/api";
 import { vendorAccountLabelSql } from "~/server/db/computed/vendor-account-label";
 import {
   databaseForTransaction,
@@ -537,7 +537,7 @@ export async function controlRun(
     throw new Error("Only the member this Run belongs to can control it");
   return withTransaction(db, async (tx) => {
     if (scope.vendorAccountId)
-      await advisoryXactLock(tx, "run-vendor-account", scope.vendorAccountId);
+      await enterHouseholdWrite(tx);
     const [locked] = await tx
       .select({
         status: runTable.status,

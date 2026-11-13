@@ -9,12 +9,12 @@ export const paymentAmountKey = (amount: bigint) =>
 export const orderEventKey = (
   row: Pick<
     typeof sourceOrderObservation.$inferSelect,
-    "vendorId" | "orderKey" | "extraction"
+    "ledgerPartyId" | "vendorId" | "orderKey" | "extraction"
   >,
 ) =>
   row.extraction.candidate?.orderId
-    ? `order:${row.vendorId}/order/${normalizeOrderKey(row.extraction.candidate.orderId)}`
-    : `order:${row.orderKey}`;
+    ? `order:${row.ledgerPartyId}:${row.vendorId}/order/${normalizeOrderKey(row.extraction.candidate.orderId)}`
+    : `order:${row.ledgerPartyId}:${row.orderKey}`;
 export const paymentOrderKey = (vendorId: string, orderId: string) =>
   `payment:order:${vendorId}:${normalizeOrderKey(orderId)}`;
 

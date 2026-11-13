@@ -16,19 +16,8 @@ import { emailReviewsSql } from "./email-decision-sql";
 const { rule, decision, model, resolution } = mailboxClassificationStage.enum;
 const automatedStagesSql = sql`(${rule}, ${decision}, ${model})`;
 
-/** Accepted observations point at the reconciler's canonical Purchase identity. */
-export const acceptedOrderPurchasesSql = sql`(
-  SELECT observation.*, coalesce(owner."entityId", observation."purchaseId") AS "boundPurchaseId"
-  FROM "SourceOrderObservation" observation
-  LEFT JOIN LATERAL (
-    SELECT * FROM "EvidenceBinding" binding WHERE binding."factKind"='orderObservation'
-      AND binding."factId"=observation.id::text
-    ORDER BY CASE binding.basis WHEN ${bindingBasis.enum.decision} THEN 0 WHEN ${bindingBasis.enum.baseline} THEN 1 ELSE 2 END LIMIT 1
-  ) binding ON true
-  LEFT JOIN "RecordKey" owner ON owner.entity=${entitySchema.enum.purchase} AND owner."scopeKind"='purchaseEvent'
-    AND owner."scopeKey"=CASE WHEN binding.basis=${bindingBasis.enum.baseline} AND binding."scopeKind"='purchaseEvent'
-      THEN binding."scopeKey" ELSE binding."eventKey" END AND owner."mergedAt" IS NULL
-)`;
+export {acceptedOrderPurchasesSql} from "~/server/domains/purchase-import/repo/accepted-order-read";
+import {acceptedOrderPurchasesSql} from "~/server/domains/purchase-import/repo/accepted-order-read";
 
 export const emailAcceptedEvidenceSql = (
   includeDeleted = false,

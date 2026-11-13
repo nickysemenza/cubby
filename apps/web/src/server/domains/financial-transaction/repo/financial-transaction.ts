@@ -1,3 +1,4 @@
+import {enterHouseholdWrite} from "~/server/kernel/api";
 import type { ActorContext } from "@cubby/schemas/context";
 import { financialTransactionRawOut as rawFinancialTransactionOut } from "@cubby/schemas/entity-contracts/financialTransaction";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
@@ -60,7 +61,6 @@ import {
   updateBankTransactions,
 } from "~/server/domains/financial-transaction/repo/bank-mutations";
 import { allocationIntegrityDefectSql } from "~/server/domains/financial-transaction/repo/financial-allocation-integrity";
-import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { financialTransactionItemizationSql } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
 import {
   acceptFreshFinancialSources,
@@ -960,11 +960,7 @@ export async function updateFinancialTransactions(
     updates.map((update) => update.shortcode),
   );
   await withTransaction(db, async (tx) => {
-    await lockFinancialEvidenceKeys(
-      tx,
-      "reviewed-booking",
-      ids.map((id) => `transaction:${id}`),
-    );
+    await enterHouseholdWrite(tx);
     const sourceOwners = await lockFinancialSourceOccurrences(
       tx,
       updates.flatMap(({ data }) => data.sourceRefs ?? []),
@@ -1339,19 +1335,9 @@ export const lockFinancialTransactionDeletion = async (
   tx: DrizzleTransaction,
   ids: FinancialTransactionId[],
 ): Promise<void> => {
-  await lockFinancialEvidenceKeys(
-    tx,
-    "reviewed-booking",
-    ids.map((id) => `transaction:${id}`),
-  );
+  await enterHouseholdWrite(tx);
   const refs = await financialSourceRefsFor(tx, ids);
-  await lockFinancialEvidenceKeys(
-    tx,
-    "transaction-ref",
-    [...refs.values()]
-      .flat()
-      .map((ref) => JSON.stringify([ref.source, ref.externalId])),
-  );
+  await enterHouseholdWrite(tx);
   await tx
     .select({ id: sourceOccurrence.id })
     .from(sourceOccurrence)

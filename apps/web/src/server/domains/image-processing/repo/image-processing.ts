@@ -1,3 +1,4 @@
+import {enterHouseholdWrite} from "~/server/kernel/api";
 import type { AiAnalysisRuntime } from "@cubby/schemas/ai";
 import {
   parseEntityId,
@@ -585,9 +586,7 @@ export type DeviceImageClaimBatch = {
  * empty and wait for the next ring while rows it could take sit locked.
  */
 export async function lockDevicePulls(db: Database) {
-  await getDb(db).execute(
-    sql`SELECT pg_advisory_xact_lock(hashtextextended('image-device-pull', 0))`,
-  );
+  await enterHouseholdWrite(db);
 }
 
 /** An active, member-visible Run's image work leads the claim order. */

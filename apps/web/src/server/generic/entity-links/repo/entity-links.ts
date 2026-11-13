@@ -1,3 +1,4 @@
+import {enterHouseholdWrite} from "~/server/kernel/api";
 import {
   ENTITY_LINK_KINDS,
   type EntityLinkEnd,
@@ -21,7 +22,7 @@ import { groupBy, sumBy, uniq } from "es-toolkit";
 
 import { findDirectedDependencyCycles } from "~/server/db/helpers/dependency-graph";
 import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
-import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
+
 import { entityIdentity, entityLink } from "~/server/db/retained-tables";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
@@ -209,9 +210,7 @@ async function lockLinkKind(
   kind: EntityLinkKind,
 ): Promise<void> {
   const lockKey = `cubby:entity-link:${kind}`;
-  await unwrapDb(tx).execute(
-    sql`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`,
-  );
+  await enterHouseholdWrite(tx);
 }
 
 /**

@@ -1,3 +1,4 @@
+import {enterHouseholdWrite} from "~/server/kernel/api";
 import type { ActorContext } from "@cubby/schemas/context";
 import { emailLinkEvidenceKind } from "@cubby/schemas/email-fields";
 import type { EntityRef } from "@cubby/schemas/entity";
@@ -210,9 +211,7 @@ export async function captureEmailConnectionBasis(
     .sort((a, b) => (a.eventId ?? "").localeCompare(b.eventId ?? ""))[0];
   if (!chosen?.eventId) return { source, target, dependencies: null };
   if (lock)
-    await getDb(db).execute(
-      sql`SELECT pg_advisory_xact_lock(hashtextextended(${`email-link-event:${chosen.eventId}`},0))`,
-    );
+    await enterHouseholdWrite(db);
   const eventQuery = getDb(db)
     .select({
       id: orderMailEvent.id,

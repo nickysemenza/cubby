@@ -120,6 +120,7 @@ const productIdentity = defineReconciler<Input>({
     });
     const historical = history.some(
       (prior) =>
+        prior.productIds.some((id) => c.reference("product", id) !== id) ||
         !observed.fingerprint ||
         !prior.fingerprint ||
         prior.fingerprint === observed.fingerprint,

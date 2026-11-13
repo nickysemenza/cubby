@@ -1,3 +1,4 @@
+import {enterHouseholdWrite} from "~/server/kernel/api";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { SourceTransactionRecordId } from "@cubby/schemas/identifiers";
 import { decisionChannel, decisionKind } from "@cubby/schemas/kernel/stage";
@@ -9,7 +10,6 @@ import { isTransaction, unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { uuidArrayParam } from "~/server/db/helpers/query";
 import { sourceOccurrence, sourceTransactionRecord } from "~/server/db/schema";
-import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { tombstoneEntityIdentities } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { createAppError } from "~/server/errors/app-error";
 
@@ -73,26 +73,14 @@ export async function lockSourceObservationRemoval(
     })
     .from(sourceTransactionRecord)
     .where(inArray(sourceTransactionRecord.id, [...ids]));
-  await lockFinancialEvidenceKeys(
-    tx,
-    "source",
-    observations.map((row) => row.source),
-  );
+  await enterHouseholdWrite(tx);
   const ownerIds = observations.map((row) => row.occurrenceId);
   if (!ownerIds.length) return;
   const before = await db
     .select()
     .from(sourceOccurrence)
     .where(inArray(sourceOccurrence.id, ownerIds));
-  await lockFinancialEvidenceKeys(
-    tx,
-    "reviewed-booking",
-    before.flatMap((owner) =>
-      owner.acceptedTransactionId
-        ? [`transaction:${owner.acceptedTransactionId}`]
-        : [],
-    ),
-  );
+  await enterHouseholdWrite(tx);
   const locked = await db
     .select()
     .from(sourceOccurrence)

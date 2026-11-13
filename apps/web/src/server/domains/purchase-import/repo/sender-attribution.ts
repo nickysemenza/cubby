@@ -1,3 +1,4 @@
+import {enterHouseholdWrite} from "~/server/kernel/api";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { VendorId } from "@cubby/schemas/identifiers";
 import type { SenderAttribution } from "@cubby/schemas/mail-coverage";
@@ -14,31 +15,6 @@ import { readSenderAttributions } from "~/server/domains/purchase-import/repo/se
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { recordChange } from "~/server/generic/changes/repo/change";
 type Db = Database | DrizzleTransaction;
-
-/** Acquire in address order before Vendor locks; late receipt learning must never wait on a merger. */
-export async function lockSenderAttributionAddress(
-  db: Db,
-  address: string,
-  tryOnly = false,
-): Promise<boolean> {
-  // Receipt learning and member reassignment can claim the same previously unmapped address.
-  const key = `vendor-sender:${address}`;
-  const client = unwrapDb(db);
-  if (tryOnly) {
-    const result = z
-      .object({ rows: z.array(z.object({ acquired: z.boolean() })) })
-      .parse(
-        await client.execute(
-          sql`SELECT pg_try_advisory_xact_lock(hashtextextended(${key}, 0)) AS acquired`,
-        ),
-      ).rows[0];
-    if (!result?.acquired) return false;
-  } else
-    await client.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`,
-    );
-  return true;
-}
 
 /** Accepted receipt evidence can add an address; a member's exclusion is never automatically reversed. */
 export async function learnAcceptedSender(
@@ -69,7 +45,7 @@ async function learnFromProof(
   )
     return false;
   const client = unwrapDb(db);
-  if (!(await lockSenderAttributionAddress(db, address, true))) return false;
+  await enterHouseholdWrite(db);
   const [row] = await client
     .select()
     .from(vendor)
@@ -123,7 +99,7 @@ export async function setSenderAttribution(
       "This provider-wide address serves multiple sellers; use receipt-level attribution.",
     );
   const client = unwrapDb(db);
-  await lockSenderAttributionAddress(db, input.sender);
+  await enterHouseholdWrite(db);
   const rows = await client
     .select()
     .from(vendor)
@@ -226,7 +202,7 @@ export async function learnAcceptedSenders(
     .sort((a, b) => a.sender.localeCompare(b.sender))
     .slice(0, LEARN_PAGE);
   for (const proof of eligible)
-    await lockSenderAttributionAddress(db, proof.sender);
+    await enterHouseholdWrite(db);
   let learned = 0;
   for (const proof of eligible) {
     const seller = vendors.find(

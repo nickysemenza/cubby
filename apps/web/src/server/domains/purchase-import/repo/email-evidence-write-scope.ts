@@ -1,10 +1,10 @@
+import {householdWrite} from "~/server/kernel/api";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import type { Database } from "~/server/db/database";
 import {
   repositoryParentDatabase,
   repositoryQueries,
-  repositorySnapshotWriteDatabase,
 } from "~/server/db/repository-access.boundary";
 
 class EmailEvidenceScope {
@@ -64,10 +64,7 @@ export async function withEmailEvidenceWrite<T>(
     );
   const entry: ActiveScope = { scope: null };
   return current.run(entry, () =>
-    repositorySnapshotWriteDatabase(db, async (transactionDb) => {
-      // Email intake and relevance correction can race with member review; their owning-row
-      // locks and this serializable retry boundary recheck the retained decisions.
-      // Unrelated Emails need no shared serialization key.
+    householdWrite(db, async (transactionDb) => {
       const scope = new EmailEvidenceScope();
       registered.set(scope, transactionDb);
       entry.scope = scope;

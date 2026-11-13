@@ -5,6 +5,7 @@ import {
   expenseAttribution,
   financialTransactionAllocation,
   purchase,
+  product,
   vendor,
 } from "~/server/db/schema";
 import { writes, type Pure } from "~/server/kernel/api";
@@ -121,3 +122,6 @@ export function restorePurchaseValues(values: Parameters<Pure["record"]>[2]) {
     ]),
   );
 }
+
+/** Imported catalog identity is created atomically with the line that proves it. */
+export const importedProducts = writes(product, [], {entity: "product", createOnly: ["name"]});

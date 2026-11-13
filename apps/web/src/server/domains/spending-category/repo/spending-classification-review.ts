@@ -1,3 +1,4 @@
+import {householdWrite} from "~/server/kernel/api";
 import { createHash } from "node:crypto";
 
 import { parseShortcodeFor, type ExpenseId } from "@cubby/schemas/identifiers";
@@ -19,7 +20,6 @@ import {
   unwrapDb,
   uuidArrayParam,
   withTransactionDatabase,
-  withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
 import { product, productCategory, entityExternalId } from "~/server/db/schema";
 import {
@@ -610,7 +610,7 @@ export async function applySpendingClassificationReview(
           ...input.request.mergeIds,
         ])
       : [];
-  return withSnapshotWriteDatabase(
+  return householdWrite(
     ctx.db,
     async (db) => {
       if (mergedCategories.length)
@@ -679,6 +679,5 @@ export async function applySpendingClassificationReview(
         impact,
       };
     },
-    { isolationLevel: "serializable" },
   );
 }

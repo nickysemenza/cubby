@@ -79,7 +79,7 @@ import {
   redistributeReplacementAttributions,
 } from "./aggregate-replacement";
 import { commitSourceOrderReconciliation } from "./reconciliation";
-import { lockFindingSettlement } from "./reconciliation-state";
+import {enterHouseholdWrite} from "~/server/kernel/api";
 import { existingExpenses, lineProductResolver } from "./writer";
 import { receiptProductQuantity } from "./writer-plan";
 
@@ -503,7 +503,7 @@ export async function resolveRunFinding(
       "ask_member needs the one question the member must answer.",
     );
   return withTransaction(db, async (tx) => {
-    await lockFindingSettlement(tx, input.id, actor);
+    await enterHouseholdWrite(tx);
     const [finding] = await tx
       .select({
         id: runFindingColumns.id,

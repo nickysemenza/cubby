@@ -1,3 +1,4 @@
+import {enterHouseholdWrite} from "~/server/kernel/api";
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   type FinancialAccountCreateInput,
@@ -47,7 +48,6 @@ import {
   vendor,
 } from "~/server/db/schema";
 import { financialAccountSearch } from "~/server/domains/financial-account/repo/search-read-financial-account";
-import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
   resolveMemberAssignee,
   lockLedgerPartiesForReference,
@@ -434,15 +434,7 @@ export const createFinancialAccount = defineMutationWriter({
         ? withCardIdentityFields(data.identity, data)
         : data.identity;
     const id = await withTransaction(db, async (tx) => {
-      await lockFinancialEvidenceKeys(
-        tx,
-        "account-alias",
-        data.sourceAliases.flatMap((alias) =>
-          alias.externalAccountId
-            ? [`${alias.source}\0${alias.externalAccountId}`]
-            : [],
-        ),
-      );
+      await enterHouseholdWrite(tx);
       await assertAliasesAvailable(tx, data.sourceAliases);
       const {
         ledgerPartyId,
@@ -553,15 +545,7 @@ export const updateFinancialAccount = defineMutationWriter({
         data.primaryCardholderId,
       );
       if (data.sourceAliases !== undefined) {
-        await lockFinancialEvidenceKeys(
-          tx,
-          "account-alias",
-          data.sourceAliases.flatMap((alias) =>
-            alias.externalAccountId
-              ? [`${alias.source}\0${alias.externalAccountId}`]
-              : [],
-          ),
-        );
+        await enterHouseholdWrite(tx);
         await assertAliasesAvailable(tx, data.sourceAliases, accountId);
       }
       const ledgerPartyId =

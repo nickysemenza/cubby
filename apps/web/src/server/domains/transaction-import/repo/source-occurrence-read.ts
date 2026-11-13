@@ -75,7 +75,8 @@ async function loadOccurrenceClosures(
       expenses AS MATERIALIZED (SELECT * FROM "Expense" WHERE "purchaseId" IN (SELECT id FROM purchases)),
       memberships AS MATERIALIZED (SELECT * FROM ${transactionImportRecord} WHERE "statementRowId" IN (SELECT id FROM observations)),
       aliases AS MATERIALIZED (SELECT * FROM observation_aliases UNION SELECT * FROM bindings),
-      judgments AS MATERIALIZED (SELECT * FROM "SourceObservationAnnotation" WHERE "observationId" IN (SELECT id FROM observations)),
+      judgments AS MATERIALIZED (SELECT d.* FROM "Decision" d WHERE d.subject IN (
+        SELECT 'sourceObservation:' || id FROM observations UNION SELECT 'bank:' || id FROM owners)),
       collections AS MATERIALIZED (SELECT * FROM "TransactionImport" WHERE id IN (SELECT "importId" FROM memberships)),
       attribution AS MATERIALIZED (SELECT * FROM "ExpenseAttribution" WHERE "expenseId" IN (SELECT id FROM expenses)),
       transfers AS MATERIALIZED (SELECT * FROM "LedgerTransfer" WHERE id IN (SELECT "ledgerTransferId" FROM transactions)),

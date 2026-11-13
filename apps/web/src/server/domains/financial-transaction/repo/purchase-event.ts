@@ -49,6 +49,7 @@ import {
   allocationRecords,
   attributionRecords,
   bookingVendors,
+  importedProducts,
   expenseRecords,
   purchaseEventTables,
   purchaseRecords,
@@ -102,6 +103,7 @@ const targets = [
   allocationRecords,
   attributionRecords,
   bookingVendors,
+  importedProducts,
 ];
 const tableReads = [
   source.table(financialTransaction, [

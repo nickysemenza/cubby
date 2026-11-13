@@ -1,3 +1,4 @@
+import {acceptedOrderPurchasesSql,acceptedOrderLinesSql} from "~/server/domains/purchase-import/repo/accepted-order-read";
 import {
   expenseLineBasisSchema,
   expenseLineKindSchema,
@@ -190,28 +191,15 @@ const purchaseHasLinkedGoodsSql = (alias: string): SQL => sql`(
 )`;
 
 const purchaseHasForeignItemsSql = (purchaseId: SQL): SQL<boolean> => {
-  const completeSource = related(importSourceOrder, (order) =>
-    eq(order.purchaseId, purchaseId),
-  )
-    .where((order) => {
-      const principalCount = sql`jsonb_array_length(jsonb_path_query_array(${order.originalOrder}, ${'$.extraction.candidate.lines[*] ? (@.lineKind == "principal")'}::jsonpath))`;
-      const matchedCount = related(
-        importSourceProduct,
-        (binding) => sql`${binding.sourceOrderId} = ${order.id}
-      AND (${order.originalOrder} #> '{extraction,candidate,lines}') -> ${binding.lineIndex} ->> ${"lineKind"} = ${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.principal)}`,
-      )
-        .join(
-          expense,
-          (
-            item,
-            binding,
-          ) => sql`${item.id} = ${binding.expenseId} AND ${item.purchaseId} = ${purchaseId}
-      AND ${item.future} = false AND ${item.lineKind} = ${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.principal)} AND ${item.lineBasis} = ${sqlEnumConstant(expenseLineBasisSchema, expenseLineBasisSchema.enum.item_line)}`,
-        )
-        .countDistinct((item) => item.id);
-      return sql`${foreignReceiptSourceSql(order.originalOrder)} AND ${principalCount} > 0 AND ${matchedCount} = ${principalCount}`;
-    })
-    .exists();
+  const completeSource = sql`EXISTS(SELECT 1 FROM ${acceptedOrderPurchasesSql} accepted
+    WHERE accepted."boundPurchaseId"::uuid=${purchaseId}
+    AND ${foreignReceiptSourceSql(sql`jsonb_build_object('extraction',accepted.extraction)`)}
+    AND jsonb_array_length(jsonb_path_query_array(accepted.extraction,'$.candidate.lines[*] ? (@.lineKind == "principal")')) > 0
+    AND (SELECT count(DISTINCT item.id) FROM ${acceptedOrderLinesSql} binding
+      JOIN "Expense" item ON item.id=binding."expenseId" AND ${notDeleted("item")}
+        AND item."purchaseId"=${purchaseId} AND NOT item.future AND item."lineKind"='principal' AND item."lineBasis"='item_line'
+      WHERE binding."sourceOrderId"=accepted.id AND (accepted.extraction#>'{candidate,lines}')->binding."lineIndex"->>'lineKind'='principal')
+    =jsonb_array_length(jsonb_path_query_array(accepted.extraction,'$.candidate.lines[*] ? (@.lineKind == "principal")')))`;
   const unmatched = related(
     expense,
     (item) => sql`${item.purchaseId} = ${purchaseId}

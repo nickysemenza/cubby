@@ -16,7 +16,7 @@ import { purchase, vendorAccount } from "~/server/db/schema";
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 
 import { normalizedOrderIdSql, normalizeOrderKey } from "./order-identity";
-import { lockPartySettlement } from "./retained-settlement";
+import {enterHouseholdWrite} from "~/server/kernel/api";
 import { recordRunWrites } from "./run-audit";
 
 /**
@@ -61,7 +61,7 @@ export async function createNoticePurchase(
 ): Promise<ShortcodeFor<"purchase"> | null> {
   if (!input.actor.runId)
     throw new Error("A notice Purchase is written under its mail import Run");
-  await lockPartySettlement(tx, input.ledgerPartyId);
+  await enterHouseholdWrite(tx);
   const [held] = await tx
     .select({ id: purchase.id })
     .from(purchase)

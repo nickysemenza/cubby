@@ -1,3 +1,4 @@
+import {acceptedOrderPurchasesSql} from "~/server/domains/purchase-import/repo/accepted-order-read";
 import {
   financialTransactionStatus,
   purchaseSettlementKinds,
@@ -159,8 +160,8 @@ async function loadPurchaseQualityRecords(
       spendingCategoryId: purchase.spendingCategoryId,
       spendingCategoryOrigin: purchase.spendingCategoryOrigin,
       orderEvidence: vendor.orderEvidence,
-      expectsOrderId: sql<boolean>`EXISTS (SELECT 1 FROM "ImportSourceOrder" dq_order
-      WHERE dq_order."purchaseId" = ${purchase.id} AND dq_order."orderKey" LIKE '%/order/%')`,
+      expectsOrderId: sql<boolean>`EXISTS (SELECT 1 FROM ${acceptedOrderPurchasesSql} dq_order
+      WHERE dq_order."boundPurchaseId"::uuid = ${purchase.id} AND dq_order."orderKey" LIKE '%/order/%')`,
       expectation: sql<string>`${purchaseItemizationExpectationSql("Purchase")}`,
       hasPrimaryDocument: sql<boolean>`${purchaseHasPrimaryDocumentSql("Purchase")}`,
       hasItemization: sql<boolean>`${purchaseHasItemizationSql("Purchase")}`,

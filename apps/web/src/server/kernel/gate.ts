@@ -78,3 +78,12 @@ export async function householdWrite<T>(
     throw error;
   }
 }
+
+/** Join the household gate of an already open write transaction. */
+export async function enterHouseholdWrite(
+  db: Database | import("~/server/db/repository-access.boundary").RepositoryQueryTransaction,
+): Promise<void> {
+  const q = repositoryQueries(db);
+  if (!("rollback" in q)) throw new Error("The household gate requires a write transaction");
+  await enterWriteTransaction(q, {lane: "money", mode: "member"});
+}

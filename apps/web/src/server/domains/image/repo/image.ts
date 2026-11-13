@@ -179,7 +179,6 @@ import {
   type ShortcodeTable,
 } from "~/server/generic/shortcode/repo/shortcode-tables";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { retireSuggestionTargetsTx } from "~/server/generic/suggestions/repo/suggestion-state";
 
 /** The attachment role already chose gallery storage for this target. */
 const galleryTarget = (entity: AttachableImageEntity): GalleryEntity => {
@@ -1945,7 +1944,6 @@ const deleteImagesTx = async (
   }
 
   await softDeleteEntitySearchArtifactsTx(tx, "image", ids);
-  await retireSuggestionTargetsTx(tx, "image", ids);
   await tombstoneEntityIdentities(tx, ids);
   await tx.delete(image).where(inArray(image.id, ids));
   await recordChange(tx, {

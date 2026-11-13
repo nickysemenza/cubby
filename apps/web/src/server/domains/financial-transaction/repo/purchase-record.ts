@@ -41,5 +41,6 @@ export function recordPurchaseValue(
     if (typeof reference === "string")
       desired[field] = c.reference(entity, reference);
   }
+  if ("productId" in desired && !desired.productId) desired.productQuantity = null;
   return c.record(target, naturalKey, desired, { provenance, authored });
 }

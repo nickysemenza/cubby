@@ -347,6 +347,9 @@ export const sourceOrderObservationBindings = z.array(
   z.object({
     lineIndex: z.number().int().nonnegative(),
     productId: entityIdSchema("product").nullable(),
+    createProduct: z.boolean().optional(),
+    stableLineId: z.string().optional(),
+    legacyExpenseId: z.uuid().optional(),
   }),
 );
 export type SourceOrderObservationBindings = z.infer<

@@ -1,3 +1,4 @@
+import {acceptedOrderPurchasesSql} from "~/server/domains/purchase-import/repo/accepted-order-read";
 import { sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
@@ -24,11 +25,8 @@ export const workPurchaseSourceOwners = (id: SQL): SQL => sql`ARRAY(
     UNION ALL
     SELECT unnest(${workRunOwners(sql`p."runId"`)}) WHERE p."vendorAccountId" IS NULL
     UNION ALL
-    SELECT CASE WHEN claim."vendorAccountId" IS NOT NULL THEN account."ledgerPartyId" ELSE claim."ledgerPartyId" END
-    FROM "ImportSourceOrder" accepted
-    JOIN "ImportSourceClaim" claim ON claim.id = accepted."sourceClaimId"
-    LEFT JOIN "VendorAccount" account ON account.id = claim."vendorAccountId" AND ${notDeleted(alias(vendorAccount, "account"))}
-    WHERE accepted."purchaseId" = p.id
+    SELECT accepted."ledgerPartyId"
+    FROM ${acceptedOrderPurchasesSql} accepted WHERE accepted."boundPurchaseId"::uuid=p.id
   ) authority
   WHERE p.id = ${id} AND ${notDeleted(alias(purchase, "p"))}
 )`;

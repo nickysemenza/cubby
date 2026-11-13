@@ -28,6 +28,7 @@ export function orderBookingInput(
     lines: (candidate?.lines ?? []).map((line, lineIndex) => ({
       ...line,
       lineIndex,
+      binding: observation.productBindings.find((binding) => binding.lineIndex === lineIndex),
       amountMinor: line.amount === null ? null : moneyToMinor(line.amount),
       productId:
         observation.productBindings.find(

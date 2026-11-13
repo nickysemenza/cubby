@@ -159,32 +159,24 @@ const publicRunOperations = (runId: RunId) =>
 const iso = (value: Date | null) => value?.toISOString() ?? null;
 
 async function loadPreparedReviewRows(db: Database, runId: RunId) {
-  const database = getDb(db);
-  return database
-    .select({
-      orderId: importPreparedOrder.id,
-      stableOrderId: importPreparedOrder.stableOrderId,
-      prepareOperationId: importPreparedOrder.prepareOperationId,
-      itemOperationId: importPreparedOrder.itemOperationId,
-      sourceKind: importPreparedOrder.sourceKind,
-      externalKey: importPreparedOrder.sourceExternalKey,
-      preparedAt: importPreparedOrder.createdAt,
-      stableLineId: importPreparedLine.stableLineId,
-      line: importPreparedLine.line,
-      identifiers: importPreparedLine.identifiers,
-      candidates: importPreparedLine.candidates,
-    })
-    .from(importPreparedOrder)
-    .leftJoin(
-      importPreparedLine,
-      eq(importPreparedLine.preparedOrderId, importPreparedOrder.id),
-    )
-    .where(eq(importPreparedOrder.runId, runId))
-    .orderBy(
-      asc(importPreparedOrder.createdAt),
-      asc(importPreparedOrder.id),
-      asc(importPreparedLine.position),
-    );
+  const result=await getDb(db).execute(sql`
+    SELECT observation.id::text AS "orderId", prepared->>'stableOrderId' AS "stableOrderId",
+      operation."operationId" AS "prepareOperationId", prepared->>'itemOperationId' AS "itemOperationId",
+      prepared#>>'{source,kind}' AS "sourceKind",prepared#>>'{source,externalKey}' AS "externalKey",
+      operation."createdAt" AS "preparedAt", line->>'stableLineId' AS "stableLineId",
+      observation.extraction#>'{candidate,lines}'->(line_position-1)::int AS line,
+      line->'identifiers' AS identifiers,line->'candidates' AS candidates
+    FROM "RunOperation" operation
+    CROSS JOIN LATERAL jsonb_array_elements(operation.result->'orders') prepared
+    JOIN LATERAL jsonb_array_elements(operation.result->'acceptedOrders') accepted
+      ON accepted->>'stableOrderId'=prepared->>'stableOrderId'
+    JOIN "SourceOrderObservation" observation ON observation.id=(accepted->>'observationId')::uuid
+    LEFT JOIN LATERAL jsonb_array_elements(prepared->'lines') WITH ORDINALITY AS lines(line,line_position) ON true
+    WHERE operation."runId"=${runId} AND operation.kind='prepare_purchase_import' AND operation.state='completed'
+    ORDER BY operation."createdAt",observation.id,line_position`);
+  return z.object({rows:z.array(z.object({orderId:z.string(),stableOrderId:z.string(),prepareOperationId:z.string(),itemOperationId:z.string(),
+    sourceKind:preparePurchaseImportOut.shape.orders.element.shape.source.shape.kind,externalKey:z.string(),preparedAt:z.coerce.date(),
+    stableLineId:z.string().nullable(),line:z.json().nullable(),identifiers:z.json().nullable(),candidates:z.json().nullable()}))}).parse(result).rows;
 }
 
 function projectPreparedOrders(

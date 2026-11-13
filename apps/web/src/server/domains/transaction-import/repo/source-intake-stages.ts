@@ -1,3 +1,4 @@
+import {enterHouseholdWrite} from "~/server/kernel/api";
 import type { ActorContext } from "@cubby/schemas/context";
 import { sourceOccurrenceIdentityKind } from "@cubby/schemas/source-occurrence-fields";
 import type { RecordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
@@ -18,7 +19,6 @@ import {
   transactionImportRecord,
   financialEvidenceAlias,
 } from "~/server/db/schema";
-import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import type {
   Identity,
   ObservationRef,
@@ -200,7 +200,7 @@ export async function lockAndLoadSourceIntake(
 ): Promise<SourceIntakeLoaded> {
   const query = unwrapDb(tx);
   const { source } = input.import;
-  await lockFinancialEvidenceKeys(tx, "source", [`intake:${source}`]);
+  await enterHouseholdWrite(tx);
   const [existingBatch] = await query
     .select()
     .from(transactionImport)
@@ -340,15 +340,7 @@ export async function lockAndLoadSourceIntake(
       aliasOwnerIds.includes(owner.id) ||
       memberOwnerIds.includes(owner.id),
   );
-  await lockFinancialEvidenceKeys(
-    tx,
-    "reviewed-booking",
-    relevant.flatMap((owner) =>
-      owner.acceptedTransactionId
-        ? [`transaction:${owner.acceptedTransactionId}`]
-        : [],
-    ),
-  );
+  await enterHouseholdWrite(tx);
   const targetIds = [
     ...new Set(
       relevant.flatMap((owner) =>

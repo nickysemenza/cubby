@@ -82,7 +82,7 @@ export {
   AskUnknownError,
   type AskWaiters,
 } from "./ask";
-export { householdWrite, HouseholdWriteBusyError } from "./gate";
+export { householdWrite, enterHouseholdWrite, HouseholdWriteBusyError } from "./gate";
 export { OwnedColumnWriteError } from "~/server/db/owned-columns";
 export {
   entityMerge,

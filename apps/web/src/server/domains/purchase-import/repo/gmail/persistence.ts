@@ -855,20 +855,6 @@ export const upsertOrderMail = async (
       .update(emailTable)
       .set({ orderMailId: row.id })
       .where(eq(emailTable.id, email.id));
-    const family = await readImportSourceClaimFamily(
-      tx,
-      {
-        ledgerPartyId: row.ledgerPartyId,
-        kind: "mail_message",
-        externalKey: `gmail:${email.mailboxId}:${email.messageId}`,
-      },
-      { lock: "update", writable: true },
-    );
-    if (family && family.root.checksum !== row.rawChecksum)
-      await tx
-        .update(importSourceClaim)
-        .set({ checksum: row.rawChecksum, updatedAt: new Date() })
-        .where(eq(importSourceClaim.id, family.root.id));
     await recordChange(tx, { kind: "source", categories: ["email"] });
     return row.id;
   });

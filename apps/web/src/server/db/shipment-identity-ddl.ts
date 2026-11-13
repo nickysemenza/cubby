@@ -69,21 +69,6 @@ LANGUAGE sql STABLE AS $$
   GROUP BY s.id, s.shortcode, s."purchaseId", w.first_day, w.last_day
 $$;
 
-CREATE OR REPLACE FUNCTION shipment_identity_lock() RETURNS trigger
-LANGUAGE plpgsql AS $$
-BEGIN
-  PERFORM pg_advisory_xact_lock(hashtextextended('shipment-evidence-intake', 0));
-  -- Advisory locks alone cannot refresh REPEATABLE READ snapshots. Updating a
-  -- shared row forces stale snapshots to abort instead of admitting duplicates.
-  IF current_setting('cubby.shipment_identity_locked', true) IS DISTINCT FROM txid_current()::text THEN
-    INSERT INTO "ShipmentIdentityLock" (key, revision) VALUES ('tracking', 1)
-      ON CONFLICT (key) DO UPDATE SET revision = "ShipmentIdentityLock".revision + 1;
-    PERFORM set_config('cubby.shipment_identity_locked', txid_current()::text, true);
-  END IF;
-  IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
-  RETURN NEW;
-END $$;
-
 CREATE OR REPLACE FUNCTION shipment_identity_check() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE p_id uuid; ids uuid[]; refs jsonb; w record; other record;
@@ -122,12 +107,6 @@ BEGIN
   RETURN NULL;
 END $$;
 
-DROP TRIGGER IF EXISTS "Shipment_identity_lock" ON "Shipment";
-CREATE TRIGGER "Shipment_identity_lock" BEFORE INSERT OR UPDATE OR DELETE ON "Shipment"
-  FOR EACH ROW EXECUTE FUNCTION shipment_identity_lock();
-DROP TRIGGER IF EXISTS "ShipmentObservation_identity_lock" ON "ShipmentObservation";
-CREATE TRIGGER "ShipmentObservation_identity_lock" BEFORE INSERT OR UPDATE OR DELETE ON "ShipmentObservation"
-  FOR EACH ROW EXECUTE FUNCTION shipment_identity_lock();
 DROP TRIGGER IF EXISTS "Shipment_tracking_period_unique" ON "Shipment";
 CREATE CONSTRAINT TRIGGER "Shipment_tracking_period_unique" AFTER INSERT OR UPDATE ON "Shipment"
   DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION shipment_identity_check();

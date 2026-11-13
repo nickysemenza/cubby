@@ -1,3 +1,4 @@
+import {acceptedOrders} from "~/server/domains/purchase-import/repo/accepted-order-read";
 import type {
   EmailOrderKeys,
   EmailTrackingKeys,
@@ -18,7 +19,6 @@ import {
   email as emailTable,
   expense,
   product,
-  importSourceOrder,
   orderMailAttachment,
   purchase,
   vendor,
@@ -411,15 +411,15 @@ export async function readMailRuleCandidates(
   const accepted = rows.length
     ? await getDb(db)
         .select({
-          purchaseId: importSourceOrder.purchaseId,
-          checksum: importSourceOrder.checksum,
-          sourceClaimId: importSourceOrder.sourceClaimId,
-          orderKey: importSourceOrder.orderKey,
+          purchaseId: acceptedOrders.purchaseId,
+          checksum: acceptedOrders.checksum,
+          sourceClaimId: acceptedOrders.sourceClaimId,
+          orderKey: acceptedOrders.orderKey,
         })
-        .from(importSourceOrder)
+        .from(acceptedOrders)
         .where(
           inArray(
-            importSourceOrder.purchaseId,
+            acceptedOrders.purchaseId,
             rows.map((row) => row.id),
           ),
         )

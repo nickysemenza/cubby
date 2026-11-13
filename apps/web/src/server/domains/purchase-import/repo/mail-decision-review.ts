@@ -18,7 +18,6 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import {
-  suggestionTable,
   email,
   emailClassificationObservation,
   emailReview,
@@ -149,26 +148,7 @@ export async function resolveMailDecisionHandle(
   // Problems findings are resolved by their own path.
   if (finding)
     throw new Error("run_finding Suggestions are not reviewed as Suggestions");
-  const [retained] = await client
-    .select({ subject: suggestionTable.subject })
-    .from(suggestionTable)
-    .where(
-      and(
-        eq(suggestionTable.id, id),
-        eq(suggestionTable.family, "email_relevance"),
-      ),
-    )
-    .limit(1);
-  const predictionId = suggestionSubjects.email_relevance.safeParse(
-    retained?.subject,
-  ).data?.observationId;
-  if (!predictionId) return null;
-  const [prediction] = await client
-    .select()
-    .from(emailClassificationObservation)
-    .where(eq(emailClassificationObservation.id, predictionId))
-    .limit(1);
-  return prediction ? observationHandle(prediction) : null;
+  return null;
 }
 
 function emailRelevanceApplication(

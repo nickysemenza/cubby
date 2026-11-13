@@ -40,6 +40,7 @@ import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity
 import { JobDeferredError } from "~/server/generic/jobs/errors";
 
 import {
+  enterHouseholdWrite,
   cancelRunAsks,
   retryRunAsks,
   createKernel,
@@ -1300,6 +1301,17 @@ describe("evidence-facts kernel", () => {
         waitCause: null,
       });
     }
+  });
+
+  it("joins only an active household write transaction and shares one advisory gate", async () => {
+    await expect(enterHouseholdWrite(ctx.db)).rejects.toThrow("requires a write transaction");
+    await repositoryTransactionDatabase(ctx.db, async database => {
+      await enterHouseholdWrite(database);
+      await enterHouseholdWrite(database);
+      const locks=await repositoryQueries(database).execute<{count:number}>(sql`
+        SELECT count(*)::int AS count FROM pg_locks WHERE pid=pg_backend_pid() AND locktype='advisory' AND granted`);
+      expect(locks.rows[0]?.count).toBe(1);
+    });
   });
 
   it("shares a household claim partition across inline Asks, queued Asks and Passes", async () => {
