@@ -38,6 +38,43 @@ Derived data needs no migration-time backfill; its owner is
 [Background derived data](../entities.md#background-derived-data). Temporary
 stale badges do not justify a staged cutover.
 
+## Accepted input preservation
+
+The evidence/facts cutover runs through the ordinary Deploy transaction before
+Worker startup. It needs no Worker, producer call or operator write. Its copy
+projection is shared with the inspection command:
+
+```sh
+pnpm --dir apps/web exec tsx tooling/inspect-accepted-input-cutover.ts '<read-only-copy-database-url>'
+```
+
+Supply the URL explicitly. Inspection starts a repeatable-read, read-only
+transaction and emits aggregate mapping counts, prospective verification
+failures and held-value counts. It neither runs migrations nor prints source
+values or identifiers. Run it against a copy with the predecessor schema;
+inspection of a database that already contracted the source tables refuses.
+The migration's row-by-row checks remain authoritative for the actual copy.
+
+The cutover acquires `ACCESS EXCLUSIVE` on its declared source and destination
+tables before reading, including the identity, audit, money, catalog and kernel
+tables. It preserves exact minor units, rejected identities and merge redirects;
+accepted records enter as baseline bindings at version zero. The first sweep
+proposes disagreements as drift. Missing or ambiguous field authority remains
+person-held with unknown actor metadata when attribution is unproven.
+
+Allow approximately three to ten minutes for the copy and indexed inserts at
+tens of thousands of bank events and Expenses. This is an estimate, not a
+production measurement; retained proposal payloads, audit size and database
+compute affect it. The ordinary lock timeout and transaction retry policy apply,
+and the Deploy timeout bounds the complete pending migration transaction.
+
+Read back identities, accepted snapshots, requester receipts, unknown in-flight
+asks and exact money totals after release. The `archive` schema retains
+`AiEvaluation_preimage`, `AiEvaluationRequest_preimage` and
+`AuditLog_authority_preimage`; these have no live foreign keys, triggers or
+indexes. Retained Suggestion, AiAnalysis and mail evidence tables stay while
+their domain readers use them.
+
 ## Staged destructive migration (rare)
 
 Use this only when a destructive step must wait until the Worker that stops
