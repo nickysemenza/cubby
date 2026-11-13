@@ -62,6 +62,20 @@ it("carries held values, paid results, redirects and every accepted money row", 
       `INSERT INTO "AiEvaluationRequest" (id,"evaluationId","runId",receipt,sequence) VALUES ($1,$2,$3,'{"retained":"terminal-requester"}',8)`,
       [cutoverId(97), cutoverId(96), cutoverId(14)],
     );
+    await client.query(
+      `INSERT INTO "AiEvaluationRequest" (id,"evaluationId","runId",receipt,sequence) VALUES ($1,$2,$5,'{"retained":"older-coalesced"}',8),($3,$4,$5,'{"retained":"newer-coalesced"}',9)`,
+      [
+        cutoverId(98),
+        cutoverId(69),
+        cutoverId(99),
+        cutoverId(79),
+        cutoverId(14),
+      ],
+    );
+    await client.query(
+      `UPDATE "AiEvaluation" SET "runAt"='2026-01-01' WHERE id=$1`,
+      [cutoverId(79)],
+    );
     const retained = `SELECT jsonb_agg(payload ORDER BY name,payload::text) value FROM (
       SELECT 'EmailPurchaseDecision' name,to_jsonb(t) payload FROM "EmailPurchaseDecision" t
       UNION ALL SELECT 'EmailReview',to_jsonb(t) FROM "EmailReview" t
@@ -208,6 +222,30 @@ it("carries held values, paid results, redirects and every accepted money row", 
         )
       ).rows,
     ).toEqual([{ receipt: { retained: "requester" }, sequence: 7 }]);
+    expect(
+      (
+        await client.query(
+          `SELECT receipt,sequence FROM "AskScope" WHERE "askId"=$1 AND "scopeKind"='run'`,
+          [cutoverId(69)],
+        )
+      ).rows,
+    ).toEqual([{ receipt: { retained: "newer-coalesced" }, sequence: 9 }]);
+    expect(
+      (
+        await client.query(
+          `SELECT "availableAt"::date::text available_date FROM "Ask" WHERE id=$1`,
+          [cutoverId(69)],
+        )
+      ).rows,
+    ).toEqual([{ available_date: "2026-01-01" }]);
+    expect(
+      (
+        await client.query(
+          `SELECT count(*)::int n FROM archive."AiEvaluationRequest_preimage" WHERE id=ANY($1::uuid[])`,
+          [[cutoverId(98), cutoverId(99)]],
+        )
+      ).rows,
+    ).toEqual([{ n: 2 }]);
     expect(
       (
         await client.query(
