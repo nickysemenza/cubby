@@ -75,35 +75,10 @@ async function memberParty(context: AuthenticatedRequestContext) {
 /** Resolve public entity scopes before estimating or creating any Sweep work. */
 async function sweepScopes(
   input: SweepStartInput,
-  db: import("~/server/db/database").Database,
 ): Promise<SweepFamilyScope[]> {
   return Promise.all(
     input.families.map(async (entry): Promise<SweepFamilyScope> => {
       switch (entry.family) {
-        case "statement_transaction":
-          return {
-            family: entry.family,
-            scope: {
-              importId: entry.importId
-                ? (
-                    await resolveOrThrow(
-                      db,
-                      entry.importId,
-                      "transactionImport",
-                    )
-                  ).id
-                : undefined,
-              accountIds: entry.accountIds
-                ? await Promise.all(
-                    entry.accountIds.map(
-                      async (code) =>
-                        (await resolveOrThrow(db, code, "financialAccount")).id,
-                    ),
-                  )
-                : undefined,
-              since: entry.since,
-            },
-          };
         case "field":
           return {
             family: entry.family,
@@ -395,7 +370,7 @@ export const runHandlers = implementOperationDomain(runContract, {
     const { startSweep } = await import("../service/sweep");
     const runId = await startSweep(context.db, context.actorContext, {
       trigger: "manual",
-      families: await sweepScopes(input, context.db),
+      families: await sweepScopes(input),
     });
     const [row] = await getDb(context.db)
       .select({ shortcode: runTable.shortcode })
@@ -407,10 +382,7 @@ export const runHandlers = implementOperationDomain(runContract, {
     await memberParty(context);
     const { estimateSweep } = await import("../service/sweep");
     return {
-      families: await estimateSweep(
-        context.db,
-        await sweepScopes(input, context.db),
-      ),
+      families: await estimateSweep(context.db, await sweepScopes(input)),
     };
   },
   retryStep: async (context, { runId, stepKey }) => {

@@ -48,11 +48,6 @@ const DECISION_ENTITY_OPTIONS = suggestionEntities.map((entity) => ({
 
 const FAMILY_ROWS = [
   {
-    family: "statement_transaction",
-    label: "Statements",
-    hint: "reconcile statement evidence",
-  },
-  {
     family: "field",
     label: SWEEP_FAMILY_LABEL.field,
     hint: "categories and other decision fields",
@@ -61,7 +56,6 @@ const FAMILY_ROWS = [
 
 /** The unit of each family's first counted step, which the estimate reports. */
 const FAMILY_NOUN = {
-  statement_transaction: "scope",
   field: "entity",
 } satisfies Record<Family, string>;
 
@@ -220,7 +214,6 @@ export function FindSuggestionsDialog({
           families: FAMILY_ROWS.flatMap(
             ({ family }): SweepStartInput["families"] => {
               if (!families.has(family)) return [];
-              if (family === "statement_transaction") return [{ family }];
               return [
                 {
                   family,
@@ -273,13 +266,6 @@ export function FindSuggestionsDialog({
         <div>
           <FamilyRow
             {...FAMILY_ROWS[0]}
-            checked={families.has("statement_transaction")}
-            onChecked={(checked) => toggle("statement_transaction", checked)}
-          >
-            <span>All statement scopes</span>
-          </FamilyRow>
-          <FamilyRow
-            {...FAMILY_ROWS[1]}
             checked={families.has("field")}
             onChecked={(checked) => toggle("field", checked)}
           >

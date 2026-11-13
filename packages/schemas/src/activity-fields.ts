@@ -568,15 +568,6 @@ export const RUN_KINDS = {
     progress: "steps",
     steps: [
       {
-        key: "statement_reconcile",
-        label: "Statements: reconcile",
-        purpose: "Reconciles selected statement evidence and exposes its gaps.",
-        action: "Reconciling statements",
-        unit: "scopes",
-        input: counted,
-        family: "statement_transaction",
-      },
-      {
         key: "field_roster",
         label: "Fields: roster",
         purpose: "Queues an evaluation for each record's decision fields.",
