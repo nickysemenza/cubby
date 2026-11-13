@@ -1970,12 +1970,14 @@ describe("statement row ledger", () => {
             })
             .where(eq(sourceOccurrence.id, source.id)),
         );
-        await getDb(ctx.db)
-          .update(sourceTransactionRecord)
-          .set({ providerTransactionId: null })
-          .where(
-            sql`${sourceTransactionRecord.occurrenceId} IN (${source.id},${other.id})`,
-          );
+        await historicalEvidenceFixture(ctx.db, async (db) =>
+          db
+            .update(sourceTransactionRecord)
+            .set({ providerTransactionId: null })
+            .where(
+              sql`${sourceTransactionRecord.occurrenceId} IN (${source.id},${other.id})`,
+            ),
+        );
         await getDb(ctx.db)
           .insert(financialEvidenceAlias)
           .values(

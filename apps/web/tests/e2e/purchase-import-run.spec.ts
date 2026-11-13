@@ -299,10 +299,10 @@ test("imports saved order mail from its Email page and follows the live Run to t
   await runLink.click();
   await expect(page).toHaveURL(new RegExp(`/runs/${runShortcode}$`, "u"));
   // Lower report sections load once in view, as a member scrolling here sees.
-  await page.getByRole("link", { name: "Processing", exact: true }).click();
+  await page.getByRole("link", { name: "Work", exact: true }).last().click();
   await expect(
-    page.getByText(/^(Updating live|Last update .+ ago)$/u),
-  ).toBeVisible();
+    page.getByRole("region", { name: "Work", exact: true }),
+  ).toContainText("passes");
   await expect.poll(async () => agent.emitted()).toContain("mail-read");
   expect((await vendorPurchases(seed.vendor.id)).purchases).toEqual([]);
   await agent.release("original-read");
