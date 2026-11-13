@@ -63,8 +63,6 @@ import type {
   ColumnValues,
   Key,
   IndexChange,
-  ReadIndex,
-  IndexMembership,
   Outcome,
   Reconciler,
   ScopeRef,
@@ -79,9 +77,14 @@ import {
 } from "./gate";
 import { mergeRecords, removeRecords } from "./identity";
 import {
+  indexFacts,
+  membershipKeys,
+  relatedMemberships,
+  rowIndexKeys,
+} from "./index-keys";
+import {
   canonicalJson,
   decisionKey,
-  indexKey,
   columnKey,
   bindingEventKey,
   bindingFactKey,
@@ -422,11 +425,7 @@ function plannedKeys(
     keys.add(rowKey(target.name, String(row.id)));
     keys.add(`record:${recordEntity(target)}:${String(row.id)}`);
     for (const key of target.keys?.(row) ?? []) keys.add(key);
-    for (const index of (registry.indexes.get(target.name) ?? []).filter(
-      (index) => !index.related,
-    ))
-      for (const value of index.values(row))
-        keys.add(indexKey(index.name, value));
+    for (const key of rowIndexKeys(registry, target.name, row)) keys.add(key);
   };
   for (const item of computed) {
     if (!item.desired || item.error) continue;
@@ -523,43 +522,6 @@ function changesOf(diff: Difference): IndexChange[] {
     })),
   ];
 }
-async function relatedMemberships(
-  db: Database,
-  registry: KernelRegistry,
-  changes: readonly IndexChange[],
-) {
-  const result = new Map<ReadIndex, readonly IndexMembership[]>();
-  const indexes = new Map(
-    [...registry.indexes.values()]
-      .flat()
-      .filter((index) => index.related)
-      .map((index) => [index.name, index]),
-  );
-  for (const index of indexes.values()) {
-    if (
-      !changes.some((change) =>
-        index.related!.tables.some(
-          (table) => getTableName(table) === change.table,
-        ),
-      )
-    )
-      continue;
-    result.set(index, await index.related!.load(db, changes));
-  }
-  return result;
-}
-const membershipKeys = (
-  memberships: ReadonlyMap<ReadIndex, readonly IndexMembership[]>,
-  matching: boolean,
-) =>
-  [...memberships].flatMap(([index, rows]) =>
-    rows.flatMap((row) =>
-      !matching || row.matches
-        ? row.values.map((value) => indexKey(index.name, value))
-        : [],
-    ),
-  );
-
 /** Lock the union once, then compare every scope against that one input fence. */
 async function fenceBatch(
   q: Q,
@@ -872,11 +834,8 @@ async function applyBatch(
     changed.add(rowKey(target.name, String(row.id)));
     changed.add(`record:${recordEntity(target)}:${String(row.id)}`);
     for (const key of target.keys?.(row) ?? []) changed.add(key);
-    for (const index of (registry.indexes.get(target.name) ?? []).filter(
-      (index) => !index.related,
-    ))
-      for (const value of index.values(row))
-        changed.add(indexKey(index.name, value));
+    for (const key of rowIndexKeys(registry, target.name, row))
+      changed.add(key);
     discovered.push(...(target.discovers?.(row) ?? []));
     if (target.entity) entities.add(target.entity);
   };
@@ -909,26 +868,14 @@ async function applyBatch(
           for (const row of rows) touch(group[0]!.target, row);
         }
         await insertRows(q, recordKey, recordKeys);
-        const indexed = combined.inserts.flatMap((entry) => {
-          const indexes = (
-            registry.indexes.get(entry.target.name) ?? []
-          ).filter((index) => !index.related);
-          const row = { ...entry.values, id: entry.id };
-          return indexes.length
-            ? [
-                {
-                  kind: `index:${entry.target.name}`,
-                  id: entry.id,
-                  keys: indexes.flatMap((index) =>
-                    index
-                      .values(row)
-                      .map((value) => indexKey(index.name, value)),
-                  ),
-                },
-              ]
-            : [];
-        });
-        await insertFactKeys(q, indexed);
+        await insertFactKeys(
+          q,
+          combined.inserts.flatMap((entry) =>
+            indexFacts(registry, entry.target.name, [
+              { ...entry.values, id: entry.id },
+            ]),
+          ),
+        );
         await updateRecords(q, combined.updates);
         for (const entry of combined.updates) {
           touch(entry.target, { ...entry.row, ...entry.seen });

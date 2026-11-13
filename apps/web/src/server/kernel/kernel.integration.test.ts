@@ -53,6 +53,7 @@ import {
   defineReconciler,
   source,
   defineEvidence,
+  defineReadIndex,
   writes,
   definePass,
   evidenceRow,
@@ -2587,7 +2588,7 @@ describe("evidence-facts kernel", () => {
 
   it("keeps a member's decision through recomputation", async () => {
     let calls = 0;
-    const { kernel } = kernelWith({
+    const { kernel, fixture } = kernelWith({
       categorize: async () => {
         calls++;
         return "Groceries";
@@ -2656,9 +2657,49 @@ describe("evidence-facts kernel", () => {
           sql`SELECT coalesce(max(rev), 0)::int AS rev FROM "KeyRev" WHERE key=${`table:${PURCHASE_TABLE}`}`,
         )
       ).rows[0]!.rev;
+    // A scope whose index lookup found no purchase for the original receipt.
+    const byReceipt = defineReadIndex(fixturePurchase, {
+      name: "fixture.purchase.receipt",
+      values: (row) => (row.receiptId ? [row.receiptId] : []),
+      where: (values) => inArray(fixturePurchase.receiptId, [...values]),
+    });
+    const watcher = defineReconciler<number>({
+      scope: "fixture.receipt-purchases",
+      lane: "catalog",
+      version: 1,
+      reads: [source.table(fixturePurchase, ["receiptId"], [byReceipt])],
+      writes: [],
+      async load(reads, keys) {
+        return new Map(
+          await Promise.all(
+            keys.map(
+              async (key) =>
+                [
+                  key,
+                  (
+                    await reads
+                      .for(key)
+                      .lookup(fixturePurchase, byReceipt, [key])
+                  ).length,
+                ] as const,
+            ),
+          ),
+        );
+      },
+      reconcile(_input, c) {
+        return c.done();
+      },
+    });
+    const watching = createKernel([
+      fixture.module,
+      defineModule({ name: "watch", reconcilers: [watcher] }),
+    ]);
+    const watched = { kind: watcher.scope, key: originalReceipt!.id };
+    await watching.reconcileNow(ctx.db, [watched]);
+    expect(await dirtyCount(ctx.db)).toBe(0);
     const beforeRepoint = await rosterRev();
     const changed = await repositoryTransactionDatabase(ctx.db, (tx) =>
-      kernel.repointOwnedReference(tx, {
+      watching.repointOwnedReference(tx, {
         table: fixturePurchase,
         column: "receiptId",
         fromIds: [stored!.receiptId!],
@@ -2703,6 +2744,13 @@ describe("evidence-facts kernel", () => {
     ).toBeNull();
     expect(changed).toBe(1);
     expect(await rosterRev()).toBe(beforeRepoint + 1);
+    expect(
+      (
+        await repositoryQueries(ctx.db).execute<{ key: string }>(
+          sql`SELECT "scopeKey" AS key FROM "ScopeDirty" WHERE "scopeKind" = ${watcher.scope}`,
+        )
+      ).rows,
+    ).toEqual([{ key: watched.key }]);
     expect(
       await repositoryTransactionDatabase(ctx.db, (tx) =>
         kernel.repointOwnedReference(tx, {

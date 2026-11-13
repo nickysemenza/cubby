@@ -28,6 +28,7 @@ import {
   defineModule,
   type AskKind,
   type ColumnRef,
+  type ColumnValues,
   type DecisionInput,
   type DecisionRef,
   type DomainModule,
@@ -47,7 +48,8 @@ import {
 } from "./drift";
 import { householdWrite } from "./gate";
 import { mergeRecords, type MergeVerdict } from "./identity";
-import { rowKey, tableKey, indexKey, columnKey } from "./keys";
+import { membershipKeys, reindexRows, relatedMemberships } from "./index-keys";
+import { rowKey, tableKey, columnKey } from "./keys";
 import { machinery } from "./machinery";
 import { startPass } from "./pass";
 import { loadMachineryRows, type MachineryListRow } from "./projection";
@@ -286,74 +288,38 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
           ...indexed.flatMap((row) => row.keys),
         );
       }
-      const indexes = (bound.indexes.get(name) ?? []).filter(
-        (index) => !index.related,
-      );
-      if (indexes.length && write.ids.length) {
-        const q = repositoryQueries(db);
-        const kind = `index:${name}`;
-        const previous = await q
-          .select()
-          .from(factKey)
-          .where(
-            and(
-              eq(factKey.factKind, kind),
-              inArray(factKey.factId, [...write.ids]),
-            ),
-          );
-        const rows = await q
-          .select()
-          .from(indexes[0]!.table)
-          .where(inArray(idColumn(indexes[0]!.table), [...write.ids]));
-        const indexed = rows.map((row) => ({
-          kind,
-          id: String(row.id),
-          keys: indexes.flatMap((index) =>
-            index.values(row).map((value) => indexKey(index.name, value)),
-          ),
-        }));
-        await q
-          .delete(factKey)
-          .where(
-            and(
-              eq(factKey.factKind, kind),
-              inArray(factKey.factId, [...write.ids]),
-            ),
-          );
-        await insertFactKeys(q, indexed);
-        evidenceKeys.push(
-          ...previous.map((row) => row.key),
-          ...indexed.flatMap((row) => row.keys),
-        );
-      }
-      for (const index of new Map(
+      const indexed =
+        (bound.indexes.get(name) ?? []).find((index) => !index.related)
+          ?.table ??
         [...bound.indexes.values()]
           .flat()
-          .filter((index) => index.related)
-          .map((index) => [index.name, index]),
-      ).values()) {
-        const table = index.related!.tables.find(
-          (table) => getTableName(table) === name,
-        );
-        if (!table || !write.ids.length) continue;
-        const rows = await repositoryQueries(db)
+          .flatMap((index) => index.related?.tables ?? [])
+          .find((table) => getTableName(table) === name);
+      if (indexed && write.ids.length) {
+        const rows: ColumnValues[] = await repositoryQueries(db)
           .select()
-          .from(table)
-          .where(inArray(idColumn(table), [...write.ids]));
-        const memberships = await index.related!.load(
-          db,
-          rows.map((row) => ({
-            table: name,
-            id: String(row.id),
-            before: null,
-            after: row,
-          })),
-        );
+          .from(indexed)
+          .where(inArray(idColumn(indexed), [...write.ids]));
         evidenceKeys.push(
-          ...memberships.flatMap((row) =>
-            row.matches
-              ? row.values.map((value) => indexKey(index.name, value))
-              : [],
+          ...(await reindexRows(
+            repositoryQueries(db),
+            bound,
+            name,
+            write.ids,
+            rows,
+          )),
+          ...membershipKeys(
+            await relatedMemberships(
+              db,
+              bound,
+              rows.map((row) => ({
+                table: name,
+                id: String(row.id),
+                before: null,
+                after: row,
+              })),
+            ),
+            true,
           ),
         );
       }

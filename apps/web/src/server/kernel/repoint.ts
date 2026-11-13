@@ -6,7 +6,14 @@ import type { Database } from "~/server/db/database";
 import { withKernelApply } from "~/server/db/kernel-apply-context";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 
-import { markDirty } from "./dirty";
+import type { ColumnValues } from "./define";
+import { lockKeyRevs, markDirty } from "./dirty";
+import {
+  membershipKeys,
+  reindexRows,
+  relatedMemberships,
+  rowIndexKeys,
+} from "./index-keys";
 import { rowKey, tableKey } from "./keys";
 import { KernelContractError, idColumn } from "./reads";
 import type { KernelRegistry } from "./registry";
@@ -63,7 +70,34 @@ export async function repointOwnedReference(
       : undefined,
   );
   const before = await q.select().from(table).where(where);
-  const rows = await withKernelApply(
+  const name = config.name;
+  const rowKeys = (row: ColumnValues) => [
+    rowKey(name, String(row.id)),
+    ...targets.flatMap((target) => target.keys?.(row) ?? []),
+    ...rowIndexKeys(registry, name, row),
+  ];
+  const planned = before.map((row) => ({
+    table: name,
+    id: String(row.id),
+    before: row,
+    after: { ...row, [column]: toId },
+  }));
+  const prior = await relatedMemberships(tx, registry, planned);
+  // Revisions before rows, the order a kernel apply takes them in.
+  await lockKeyRevs(
+    q,
+    [
+      ...new Set([
+        tableKey(name),
+        ...planned.flatMap((change) => [
+          ...rowKeys(change.before),
+          ...rowKeys(change.after),
+        ]),
+        ...membershipKeys(prior, false),
+      ]),
+    ].sort(),
+  );
+  const rows: ColumnValues[] = await withKernelApply(
     null,
     async () =>
       await repositoryQueries(tx)
@@ -72,12 +106,30 @@ export async function repointOwnedReference(
         .where(where)
         .returning(),
   );
+  const current = await relatedMemberships(
+    tx,
+    registry,
+    rows.map((row) => ({
+      table: name,
+      id: String(row.id),
+      before: before.find((entry) => entry.id === row.id) ?? null,
+      after: row,
+    })),
+  );
   const changed = await markDirty(repositoryQueries(tx), registry, {
     keys: [
-      ...(rows.length ? [tableKey(config.name)] : []),
-      ...[...before, ...rows].flatMap((row) => [
-        rowKey(config.name, String(row.id)),
-        ...targets.flatMap((target) => target.keys?.(row) ?? []),
+      ...new Set([
+        ...(rows.length ? [tableKey(name)] : []),
+        ...[...before, ...rows].flatMap(rowKeys),
+        ...(await reindexRows(
+          q,
+          registry,
+          name,
+          rows.map((row) => String(row.id)),
+          rows,
+        )),
+        ...membershipKeys(prior, true),
+        ...membershipKeys(current, true),
       ]),
     ],
     reason: "reference-repoint",
