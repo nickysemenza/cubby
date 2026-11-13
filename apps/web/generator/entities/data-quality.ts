@@ -28,15 +28,31 @@ const DATA_QUALITY_SORT = "dataQuality";
 const DATA_QUALITY_LIST_RENDERER = "data-quality";
 
 const STATUS_OPTIONS = [
-  { value: "complete", label: "Complete", color: "var(--slate)" },
+  { value: "complete", label: "Done", stage: "done", color: "var(--slate)" },
   {
     value: "complete_with_exceptions",
-    label: "Complete with exceptions",
+    label: "Done",
+    stage: "done",
     color: "var(--plum)",
   },
-  { value: "needs_data", label: "Needs data", color: "var(--warning)" },
-  { value: "defect", label: "Defect", color: "var(--destructive)" },
-  { value: "not_assessed", label: "Not assessed", color: "var(--slate)" },
+  {
+    value: "needs_data",
+    label: "Needs you",
+    stage: "needs_you",
+    color: "var(--warning)",
+  },
+  {
+    value: "defect",
+    label: "Stuck",
+    stage: "stuck",
+    color: "var(--destructive)",
+  },
+  {
+    value: "not_assessed",
+    label: "Waiting",
+    stage: "waiting",
+    color: "var(--slate)",
+  },
 ] as const;
 
 const qualityField = (entityKey: string, listHidden = false): EntityField => ({

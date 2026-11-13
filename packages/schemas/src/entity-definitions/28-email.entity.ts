@@ -8,6 +8,7 @@ import { z } from "zod";
 import { dateTime } from "../codec";
 import {
   EMAIL_IMPORT_OUTCOME_DETAIL_LABEL,
+  EMAIL_IMPORT_OUTCOME_STAGE,
   EMAIL_LINK_STATE_LABEL,
   emailImportOutcome,
   emailImportOutcomeDetail,
@@ -127,6 +128,7 @@ const IMPORT_OUTCOME_PRESENTATION = {
 const importOutcomeOptions = emailImportOutcome.options.map((value) => ({
   value,
   label: EMAIL_IMPORT_OUTCOME_DETAIL_LABEL[value],
+  stage: EMAIL_IMPORT_OUTCOME_STAGE[value],
   ...IMPORT_OUTCOME_PRESENTATION[value],
 }));
 

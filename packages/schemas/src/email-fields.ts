@@ -1,3 +1,4 @@
+import type { KernelStage } from "./kernel/stage";
 import { z } from "zod";
 import {
   entityIdSchema,
@@ -143,6 +144,19 @@ export const EMAIL_IMPORT_OUTCOME_DETAIL_LABEL = {
   unrelated: "Unrelated",
   not_imported: "Not imported",
 } as const satisfies Record<EmailImportOutcome, string>;
+
+/** The declared stage of each ordinary import outcome option. */
+export const EMAIL_IMPORT_OUTCOME_STAGE = {
+  imported: "done",
+  linked: "done",
+  waiting: "waiting",
+  needs_research: "waiting",
+  needs_member: "needs_you",
+  importing: "working",
+  failed: "stuck",
+  unrelated: "ended",
+  not_imported: "waiting",
+} as const satisfies Record<EmailImportOutcome, KernelStage>;
 
 /** The import's stage; the detailed outcome remains its own filter. */
 export const EMAIL_IMPORT_OUTCOME_LABEL = {
