@@ -132,6 +132,49 @@ describe("fields scope", () => {
     await kernel.run(ctx.db, RUN);
     expect((await stored(id)).kind).toBe("garden");
   });
+  it("dismisses a proposal on a blank field without assigning None or requiring a current value", async () => {
+    const record = await createRepoEntity(ctx, "project", {
+      name: "Synthetic blank field review",
+      kind: "household",
+    });
+    const proposal = await seedFieldSuggestion(ctx.db, {
+      entity: "project",
+      recordId: record.entityId,
+      field: "emoji",
+      suggestedValue: "🪴",
+      confidence: 0.7,
+    });
+    await expect(
+      reviewSuggestion(ctx.db, kernelCtx(ctx), {
+        suggestionId: proposal.id,
+        operationId: "synthetic-blank-dismiss",
+        verdict: "dismissed",
+        intent: "history",
+        expectedFingerprint: proposal.id,
+      }),
+    ).resolves.toMatchObject({ status: "decided" });
+    expect((await stored(record.entityId)).emoji).toBeNull();
+    const { decision } = await import("~/server/db/kernel-schema");
+    const decisions = await getDb(ctx.db)
+      .select()
+      .from(decision)
+      .where(eq(decision.subject, `project:${record.entityId}`));
+    expect(decisions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          channel: "veto",
+          field: "emoji",
+          value: "🪴",
+        }),
+      ]),
+    );
+    expect(
+      decisions.filter(
+        (row) => row.field === "emoji" && row.channel === "assignment",
+      ),
+    ).toEqual([]);
+  });
+
   it("keeps vetoes independent of corrections and replays only the exact field command", async () => {
     const record = await createRepoEntity(ctx, "project", {
       name: "Synthetic field review",

@@ -89,7 +89,11 @@ export async function reviewGap(
     if (!proposal) throw new Error("This Answer proposes no value");
     if (input.verdict === "correct" && input.intent !== "apply")
       throw new Error("Accept a field through its form or its apply action");
-    if (input.verdict !== "correct" && input.verdict !== "wrong")
+    if (
+      input.verdict !== "correct" &&
+      input.verdict !== "wrong" &&
+      input.verdict !== "dismissed"
+    )
       throw new Error("A field gap accepts a value, a correction or a veto");
     const value = input.correction.present
       ? input.correction.value
@@ -104,7 +108,7 @@ export async function reviewGap(
       const { decide, reconcileNow } = await import("~/server/kernel/api");
       const subject = `${captured.entity}:${captured.recordId}`;
       const decisions = [];
-      if (input.verdict === "wrong")
+      if (input.verdict === "wrong" || input.verdict === "dismissed")
         decisions.push({
           channel: "veto" as const,
           kind: "veto" as const,
