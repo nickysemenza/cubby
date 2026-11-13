@@ -1,7 +1,10 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import { actorInRun, systemActor } from "@cubby/schemas/context";
 import { financialAccountSourceAliases } from "@cubby/schemas/financial-account";
-import { financialBookingInput } from "@cubby/schemas/financial-booking";
+import {
+  financialSpendingAdvice,
+  financialBookingInput,
+} from "@cubby/schemas/financial-booking";
 import {
   FINANCIAL_STATEMENT_IMPORT_MAX_ROWS,
   financialTransactionKind,
@@ -19,15 +22,18 @@ import { type RunStepError } from "@cubby/schemas/run-step";
 import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import { sourceTransactionRecordProviderStatus } from "@cubby/schemas/source-transaction-record";
 import {
+  statementAdviceFromAnswers,
+  statementSpendingAnswersComplete,
+} from "@cubby/schemas/statement-answers";
+import {
   type StatementCounterparty,
   type StatementKindVotes,
   type StatementTransactionCandidate,
   statementTransactionAction,
   statementTransactionJudgment,
   type StatementTransactionJudgment,
-  STATEMENT_LABEL_REVISION,
-  statementLabelCheckpoint,
-  type StatementLabelCheckpoint,
+  statementAnswers,
+  type StatementAnswers,
   statementApplicationOrder,
 } from "@cubby/schemas/statement-suggestion";
 import {
@@ -38,6 +44,7 @@ import {
   type SuggestionProducer,
   feedbackEvent,
   feedbackVerdict,
+  suggestionSuppression,
 } from "@cubby/schemas/suggestion";
 import { statementSuggestionRow } from "@cubby/schemas/suggestion-list";
 import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
@@ -52,6 +59,7 @@ import { forEachConcurrently } from "~/lib/concurrency-limiter";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { plainDateDaysBetween } from "~/lib/household-date";
 import { type Database } from "~/server/db";
+import { advisoryXactLockSequence } from "~/server/db/advisory-lock";
 import { advisoryLockKey } from "~/server/db/advisory-lock";
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import { sourceOccurrenceHasUnresolvedHistory } from "~/server/db/computed/source-occurrence-history-sql";
@@ -62,7 +70,6 @@ import {
   unwrapDb,
   withTransaction,
   withTransactionDatabase,
-  withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
 import { withAfterCommitScope } from "~/server/db/helpers/core";
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -72,9 +79,10 @@ import { requestedRows } from "~/server/db/helpers/requested";
 import { transactionImportRecord } from "~/server/db/retained-tables";
 import { suggestionTable } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
+import { liveHouseholdLoan } from "~/server/domains/financial-account/repo/purchaser";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { financialSourceReferenceRows } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
-import type { FinancialSpendingPage } from "~/server/domains/financial-transaction/repo/financial-spending";
+import { resolveFinancialSpendingVendors } from "~/server/domains/financial-transaction/repo/financial-spending";
 import {
   previewFinancialTransactionImport,
   prepareFinancialStatementPreview,
@@ -100,15 +108,16 @@ import {
   suggestionRefKey,
 } from "~/server/domains/transaction-import/repo/statement-charge";
 import {
+  statementEffectiveMovement,
+  statementLoanInput,
+  type StatementMovementInput,
+} from "~/server/domains/transaction-import/repo/statement-effective-movement";
+import {
   chargeId,
   previewRowFor,
   type ChargeRef,
 } from "~/server/domains/transaction-import/repo/statement-input";
-import {
-  statementLabelInputs,
-  statementLabelSubject,
-  statementCandidateSubject,
-} from "~/server/domains/transaction-import/repo/statement-label-input";
+import { mergeStatementAnswers } from "~/server/domains/transaction-import/repo/statement-label-input";
 import {
   readStatementSuggestions,
   statementSuggestionFacts,
@@ -119,8 +128,6 @@ import { STATEMENT_SUGGESTION_REVISION } from "~/server/domains/transaction-impo
 import {
   kindAgreed,
   decideStatementKind,
-  offRailPerson,
-  isLoanPayment,
   type OwnAccount,
   ownAccountNamed,
   statementTransactionKind,
@@ -163,16 +170,11 @@ import {
 } from "~/server/generic/suggestions/repo/suggestion-presentation";
 import {
   countSuggestionLabelBacklog,
-  inSuggestionBatches,
-  lockSuggestionSlots,
-  publishReplacements,
   publishSuggestion,
   publishSuggestionBatches,
-  revisionSuppresses,
   type SuggestionFamily,
   type SuggestionOutcome,
   type SuggestionRow,
-  unchangedSuggestions,
 } from "~/server/generic/suggestions/repo/suggestion-publication";
 import {
   statementRecords,
@@ -198,25 +200,20 @@ import {
   type StatementSuggestionScope,
 } from "./statement-input";
 import {
-  changedStatementBooking,
-  prepareStatementSpending,
   prepareStatementSpendings,
-  prepareStatementSpendingFacts,
   prepareStatementSpendingPage,
+  prepareStatementSpendingFacts,
 } from "./statement-spending";
 
 const STATE = "Suggestion";
 const log = createLogger("statement-suggestions");
 const pendingStatementState = sql`${suggestionTable.family} = ${suggestionFamily.enum.statement_transaction} AND ${suggestionTable.active} AND ${suggestionTable.status} = ${suggestionStatus.enum.pending}`;
 
-/**
- * Bump when only bulk-acceptability changes. Labels ride on top of the
- * evidence fingerprint, so a stricter clean rule would otherwise leave
- * labelled judgments looking current; this republishes them without
- * renaming the revision, which the automatic attach rule's measured windows
- * are keyed by.
- */
-const STATEMENT_CLEAN_POLICY = "2026-11-12.1";
+/** Frozen storage hash scheme; question answers and policy stamps stay outside it. */
+const STATEMENT_HASH_SCHEME = {
+  revision: "2026-11-12.1",
+  cleanPolicy: "2026-11-12.1",
+} as const;
 const STATEMENT_SUGGESTION_PAGE = FINANCIAL_STATEMENT_IMPORT_MAX_ROWS;
 /** A hold's posted twin lands within this window, and a vanished hold is judged after it. */
 const PENDING_POST_WINDOW_DAYS = 7;
@@ -229,7 +226,7 @@ const HISTORY_MIN_TRANSACTIONS = 2;
  * Each holds a pooled connection, and a Worker invocation's pool holds two;
  * more only queue for a connection while holding their slot keys' turn.
  */
-export const STATEMENT_PUBLISH_CONCURRENCY = 2;
+const STATEMENT_PUBLISH_CONCURRENCY = 2;
 
 export function statementChargeFromWorkRef(ref: string): ChargeRef | null {
   const match = /^charge:([^:]+):(.+)$/.exec(ref);
@@ -384,7 +381,15 @@ async function loadObservations(
     accountDescriptor: String(row.accountDescriptor),
     statementDate: plainDateOf(row.statementDate),
     providerAmount: Number(row.providerAmount),
-    amount: Number(row.amount),
+    amount: statementEffectiveMovement({
+      providerAmount: Number(row.providerAmount),
+      description:
+        row.rawDescription === null ? null : String(row.rawDescription),
+      merchant: row.merchant === null ? null : String(row.merchant),
+      sourceCategory:
+        row.sourceCategory === null ? null : String(row.sourceCategory),
+      loan: null,
+    }).effectiveAmount,
     merchant: row.merchant === null ? null : String(row.merchant),
     rawDescription: String(row.rawDescription),
     sourceCategory:
@@ -560,7 +565,7 @@ async function siblingsFor(
       FROM p JOIN "SourceTransactionRecord" o ON o.source = p.source
       JOIN "SourceOccurrence" owner ON owner.id=o."occurrenceId"
         AND normalize(o."accountDescriptor", NFKC) = normalize(p.descriptor, NFKC)
-        AND o."providerAmountMinor" = p.amount
+        AND abs(o."providerAmountMinor") = abs(p.amount)
         AND o."statementDate" BETWEEN p.day - ${SIBLING_WINDOW_DAYS}::int AND p.day + ${SIBLING_WINDOW_DAYS}::int
         AND ${notDeleted("o")}
         AND owner.shortcode <> p."chargeKey"
@@ -597,15 +602,46 @@ async function siblingsFor(
   const sources = new Map(
     proposals.map(({ charge }) => [chargeId(charge), charge.source]),
   );
+  const candidates = rows.flatMap((row) =>
+    row.siblings.map((chargeKey) => ({
+      source: sources.get(row.key)!,
+      chargeKey: String(chargeKey),
+    })),
+  );
+  const projected = candidates.length
+    ? await prepareChargePreviews(db, uniqueCharges(candidates))
+    : null;
+  const amounts = new Map(
+    (projected?.grouped ?? []).map(({ charge, canonical }) => [
+      chargeId(charge),
+      canonical.amount,
+    ]),
+  );
+  const ownAmounts = new Map(
+    proposals.map(({ charge, observations }) => [
+      chargeId(charge),
+      observations[0]!.amount,
+    ]),
+  );
   for (const row of rows) {
     const source = sources.get(row.key);
     if (source)
       result.set(
         row.key,
-        row.siblings.map((chargeKey) => ({
-          source,
-          chargeKey: String(chargeKey),
-        })),
+        row.siblings
+          .filter((chargeKey) => {
+            const amount = amounts.get(
+              chargeId({ source, chargeKey: String(chargeKey) }),
+            );
+            return (
+              amount !== undefined &&
+              cents(amount) === cents(ownAmounts.get(row.key)!)
+            );
+          })
+          .map((chargeKey) => ({
+            source,
+            chargeKey: String(chargeKey),
+          })),
       );
   }
   return result;
@@ -664,7 +700,7 @@ async function copyMembersFor(
     ),
     o AS MATERIALIZED (
       SELECT DISTINCT p.key, o.source, owner.shortcode AS "chargeKey"
-      FROM p JOIN "SourceTransactionRecord" o ON o."providerAmountMinor" = p.amount
+      FROM p JOIN "SourceTransactionRecord" o ON abs(o."providerAmountMinor") = abs(p.amount)
       JOIN "SourceOccurrence" owner ON owner.id=o."occurrenceId"
         AND o."statementDate" BETWEEN p.day - ${2 * SIBLING_WINDOW_DAYS}::int AND p.day + ${2 * SIBLING_WINDOW_DAYS}::int
         AND ${notDeleted("o")} AND owner."withdrawnAt" IS NULL
@@ -738,7 +774,11 @@ async function copyMembersFor(
       .filter((row) => row.key === chargeId(charge))
       .flatMap((row) => {
         const other = member({ source: row.source, chargeKey: row.chargeKey });
-        return other && other.accountCode === self.accountCode ? [other] : [];
+        return other &&
+          other.accountCode === self.accountCode &&
+          cents(other.canonical.amount) === cents(self.canonical.amount)
+          ? [other]
+          : [];
       });
     if (others.some((other) => other.charge.source !== charge.source))
       result.set(chargeId(charge), [self, ...others]);
@@ -1203,6 +1243,31 @@ async function prepareChargePreviews(
       ),
     },
   );
+  for (const input of grouped) {
+    const projected = preview.rows.find(
+      (row) => row.key === chargeId(input.charge),
+    );
+    const account = preparation.accounts.find(
+      (a) => a.shortcode === projected?.accountId,
+    );
+    for (const observation of input.observations)
+      observation.amount = statementEffectiveMovement({
+        providerAmount: observation.providerAmount,
+        description: observation.rawDescription,
+        merchant: observation.merchant,
+        sourceCategory: observation.sourceCategory,
+        loan: statementLoanInput(
+          {
+            source: observation.source,
+            account: observation.accountDescriptor,
+            providerAccountId: observation.providerAccountId,
+          },
+          account,
+          preparation.accounts,
+          input.observations,
+        ),
+      }).effectiveAmount;
+  }
   return {
     grouped,
     matchedByCharge,
@@ -1378,104 +1443,100 @@ type LoanPaymentEvidence = {
 async function loanEvidence(
   db: Database,
   accounts: readonly OwnAccount[],
-  accountIds: readonly string[],
+  _accountIds: readonly string[],
   grouped: PreparedChargePreviews["grouped"],
   previewByKey: ReadonlyMap<
     string,
     PreparedChargePreviews["preview"]["rows"][number]
   >,
   ids: ReadonlyMap<string, string>,
+  preparation: Awaited<ReturnType<typeof prepareFinancialStatementPreview>>,
 ) {
-  const allLoanIds = accounts
-    .filter((account) => account.kind === "loan")
-    .map((account) => account.id);
-  const loanPayments: {
-    accountId: string;
-    amount: number;
-    date: string;
-    key: string;
-  }[] = allLoanIds.length
-    ? (
-        await unwrapDb(db).execute<{
-          accountId: string;
-          amount: string;
-          date: string;
-          key: string;
-        }>(sql`
-        SELECT s.judgment->>'accountId' AS "accountId", s.judgment->${statementTransactionAction.enum.create}->>'amount' AS amount,
-          s.judgment->>'statementDate' AS date,
-          'stmt:' || (s.data->>${"source"}) || ':' || (s.data->>'chargeKey') AS key
-        FROM "Suggestion" s
-        WHERE s.family = ${suggestionFamily.enum.statement_transaction} AND s.active AND s.status = ${suggestionStatus.enum.pending}
-          AND s.judgment->>'accountId' = ANY(${textArrayParam(allLoanIds)})
-          AND upper(trim(coalesce(s.judgment->${statementTransactionAction.enum.create}->>'rawDescription', s.judgment->${statementTransactionAction.enum.create}->>'merchant'))) = 'PAYMENT'
-          AND (s.judgment->${statementTransactionAction.enum.create}->>'amount')::numeric < 0
-        UNION ALL
-        SELECT ft."accountId"::text, (ft."amountMinor"::numeric / 100)::text,
-          coalesce(ft."postedDate", ft."transactionDate")::text, 'ftx:' || ft.shortcode
-        FROM "FinancialTransaction" ft
-        WHERE ft."accountId" = ANY(${uuidArrayParam(allLoanIds)}) AND ${notDeleted("ft")}
-          AND ft.status <> ${financialTransactionStatus.enum.void} AND ft.kind = ${financialTransactionKind.enum.account_transfer} AND ft."amountMinor" < 0
-          AND coalesce(ft."postedDate", ft."transactionDate") IS NOT NULL
-          AND upper(trim(coalesce(ft."rawDescription", ft.merchant))) = 'PAYMENT'
-      `)
-      ).rows.map((row) => ({ ...row, amount: Number(row.amount) }))
+  const loans = accounts.filter((account) =>
+    liveHouseholdLoan(preparation.accounts.find((a) => a.id === account.id)),
+  );
+  const allLoanIds = loans.map((account) => account.id);
+  const evidence = allLoanIds.length
+    ? await getDb(db).execute<{
+        accountId: string;
+        providerAmount: number;
+        description: string | null;
+        merchant: string | null;
+        sourceCategory: string | null;
+        date: string;
+        key: string;
+        source: string | null;
+        account: string | null;
+        providerAccountId: string | null;
+      }>(
+        sql`
+    SELECT s.judgment->>'accountId' AS "accountId", (r."providerAmountMinor"::numeric/100)::float8 AS "providerAmount",
+      r."rawDescription" AS description, r.merchant, r."sourceCategory", s.judgment->>'statementDate' AS date,
+      'stmt:' || (s.data->>${financialTransactionSourceRef.keyof().enum.source}) || ':' || (s.data->>'chargeKey') AS key,
+      r.source, r."accountDescriptor" AS account, r."providerAccountId"
+    FROM "Suggestion" s JOIN "SourceTransactionRecord" r ON r.id=s."recordId"
+    WHERE s.family=${suggestionFamily.enum.statement_transaction} AND s.active AND s.status=${suggestionStatus.enum.pending}
+      AND s.judgment->>'accountId'=ANY(${textArrayParam(allLoanIds)}) AND ${notDeleted("r")}
+    UNION ALL
+    SELECT ft."accountId"::text, (-ft."amountMinor"::numeric/100)::float8, ft."rawDescription", ft.merchant, NULL::text,
+      coalesce(ft."postedDate", ft."transactionDate")::text, 'ftx:' || ft.shortcode, NULL::text, NULL::text, NULL::text
+    FROM "FinancialTransaction" ft WHERE ft."accountId"=ANY(${uuidArrayParam(allLoanIds)}) AND ${notDeleted("ft")}
+      AND ft.status<>${financialTransactionStatus.enum.void} AND coalesce(ft."postedDate",ft."transactionDate") IS NOT NULL
+  `,
+        "objects",
+      )
     : [];
   for (const { charge, canonical } of grouped) {
     const row = previewByKey.get(chargeId(charge));
     const accountId = row?.accountId ? ids.get(row.accountId) : undefined;
-    if (
-      accountId &&
-      row &&
-      allLoanIds.includes(accountId) &&
-      row.proposed.amount < 0 &&
-      (canonical.rawDescription ?? canonical.merchant ?? "")
-        .trim()
-        .toUpperCase() === "PAYMENT"
-    )
-      loanPayments.push({
+    if (accountId && allLoanIds.includes(accountId))
+      evidence.push({
         accountId,
-        amount: row.proposed.amount,
+        providerAmount: canonical.providerAmount,
+        description: canonical.rawDescription,
+        merchant: canonical.merchant,
+        sourceCategory: canonical.sourceCategory,
         date: canonical.statementDate,
         key: `stmt:${chargeId(charge)}`,
+        source: canonical.source,
+        account: canonical.accountDescriptor,
+        providerAccountId: canonical.providerAccountId,
       });
   }
-  // An unlinked escrow credit is income only when neither recorded nor
-  // pending spending on the loan could be its original disbursement.
-  const loans = accounts
-    .filter(
-      (account) => account.kind === "loan" && accountIds.includes(account.id),
-    )
-    .map((account) => account.id);
-  const loansWithPossibleOriginal = new Set(
-    loans.length
-      ? (
-          await unwrapDb(db).execute<{ id: string }>(sql`
-          SELECT loan.id FROM unnest(${uuidArrayParam(loans)}) AS loan(id)
-          WHERE EXISTS (SELECT 1 FROM "FinancialTransaction" ft
-            WHERE ft."accountId" = loan.id AND ${notDeleted("ft")}
-              AND ft.status <> ${financialTransactionStatus.enum.void} AND ft.kind = ${financialTransactionKind.enum.purchase} AND ft."amountMinor" > 0)
-          OR EXISTS (SELECT 1 FROM "Suggestion" s
-            WHERE s.family = ${suggestionFamily.enum.statement_transaction} AND s.active AND s.status = ${suggestionStatus.enum.pending}
-              AND s.judgment->>'accountId' = loan.id::text
-              AND (s.judgment->${statementTransactionAction.enum.create}->>'amount')::numeric > 0
-              AND upper(trim(coalesce(s.judgment->${statementTransactionAction.enum.create}->>'rawDescription', s.judgment->${statementTransactionAction.enum.create}->>'merchant', ''))) <> 'PAYMENT')
-        `)
-        ).rows.map((row) => row.id)
-      : [],
-  );
-  for (const { charge, canonical } of grouped) {
-    const row = previewByKey.get(chargeId(charge));
-    const accountId = row?.accountId ? ids.get(row.accountId) : undefined;
+  const loanPayments: LoanPaymentEvidence[] = [];
+  const loansWithPossibleOriginal = new Set<string>();
+  for (const row of evidence) {
+    const account = loans.find((a) => a.id === row.accountId)!;
+    const movement = statementEffectiveMovement({
+      ...row,
+      providerAmount: Number(row.providerAmount),
+      loan:
+        row.source && row.account
+          ? statementLoanInput(
+              {
+                source: row.source,
+                account: row.account,
+                providerAccountId: row.providerAccountId,
+              },
+              preparation.accounts.find((a) => a.id === account.id),
+              preparation.accounts,
+              grouped.find((g) => chargeId(g.charge) === row.key.slice(5))
+                ?.observations ?? [row],
+            )
+          : { providerVendorNames: account.names, proven: true },
+    });
+    if (movement.movementClass === "loan_payment")
+      loanPayments.push({
+        accountId: row.accountId,
+        amount: movement.effectiveAmount,
+        date: row.date,
+        key: row.key,
+      });
     if (
-      accountId &&
-      loans.includes(accountId) &&
-      row!.proposed.amount > 0 &&
-      (canonical.rawDescription ?? canonical.merchant ?? "")
-        .trim()
-        .toUpperCase() !== "PAYMENT"
+      movement.effectiveAmount > 0 &&
+      movement.movementClass !== "loan_payment"
     )
-      loansWithPossibleOriginal.add(accountId);
+      loansWithPossibleOriginal.add(row.accountId);
   }
   return { loanPayments, loansWithPossibleOriginal };
 }
@@ -1489,6 +1550,7 @@ function loanStatementDecision(input: {
   loanPayments: readonly LoanPaymentEvidence[];
   accounts: readonly OwnAccount[];
   pair: StatementTransactionJudgment["transferPair"];
+  movement: ReturnType<typeof statementEffectiveMovement>;
 }) {
   const {
     account,
@@ -1501,15 +1563,12 @@ function loanStatementDecision(input: {
     pair,
   } = input;
   let reviewReason: string | null = null;
-  const descriptor = (canonical.rawDescription ?? canonical.merchant ?? "")
-    .trim()
-    .toUpperCase();
-  const loanCredit = account?.kind === "loan" && statementAmount < 0;
+  const movement = input.movement;
+  reviewReason = movement.reviewReason;
   const escrowKind =
-    loanCredit && descriptor === "INTEREST ON ESC"
+    movement.movementClass === "escrow_interest"
       ? ("interest" as const)
-      : loanCredit &&
-          descriptor === "ESCROW REFUND" &&
+      : movement.movementClass === "escrow_refund" &&
           !loansWithPossibleOriginal.has(accountId)
         ? ("income" as const)
         : null;
@@ -1544,8 +1603,11 @@ function loanStatementDecision(input: {
   )
     reviewReason =
       "A matching loan payment needs its transfer pair resolved before this checking entry can be recorded.";
+  if (movement.movementClass === "loan_payment" && !pair?.clean)
+    reviewReason =
+      "A loan payment needs its transfer pair resolved before it can be recorded.";
   const transfer = account
-    ? isLoanPayment(account, canonical)
+    ? movement.movementClass === "loan_payment"
       ? { accountId: null, ledgerTransfer: false }
       : matchingLoanPayments.length
         ? {
@@ -1618,6 +1680,7 @@ export async function buildChargeProposals(
     grouped,
     previewByKey,
     ids,
+    preparation,
   );
   const [pendingTransactions, siblings, eligibility, history, copies] =
     await Promise.all([
@@ -1791,7 +1854,27 @@ export async function buildChargeProposals(
       candidates.some((c) => c.transactionId === pending.id),
     );
     const account = accountById.get(accountId);
+    const resolvedAccount = preparation.accounts.find(
+      (a) => a.id === accountId,
+    );
+    const movement = statementEffectiveMovement({
+      providerAmount: canonical.providerAmount,
+      description: canonical.rawDescription,
+      merchant: canonical.merchant,
+      sourceCategory: canonical.sourceCategory,
+      loan: statementLoanInput(
+        {
+          source: canonical.source,
+          account: canonical.accountDescriptor,
+          providerAccountId: canonical.providerAccountId,
+        },
+        resolvedAccount,
+        preparation.accounts,
+        rows,
+      ),
+    });
     const loanDecision = loanStatementDecision({
+      movement,
       account,
       accountId,
       canonical,
@@ -1883,9 +1966,10 @@ export async function buildChargeProposals(
   );
   const proposals: ChargeProposal[] = [];
   for (const { charge, canonical, rows, judgment } of pending) {
+    // Accepted non-spending money needs no spending advice or live publication.
     if (
-      !judgment.reviewReason &&
       judgment.recommended === "book" &&
+      !judgment.reviewReason &&
       judgment.spending?.status === "deferred"
     )
       continue;
@@ -1916,12 +2000,14 @@ async function finishProposal(
   providerScopeCharges?: readonly ChargeRef[],
 ): Promise<ChargeProposal> {
   suggestionJudgments.statement_transaction.parse(judgment);
+  // Spending derives from live Vendors; unchanged rows refresh it in place, so a
+  // Vendor or alias edit neither republishes nor reopens a dismissal.
+  const { spending: _spending, ...evidence } = judgment;
   const fingerprint = await sha256Hex(
     canonicalJson({
-      revision: STATEMENT_SUGGESTION_REVISION,
-      cleanPolicy: STATEMENT_CLEAN_POLICY,
+      ...STATEMENT_HASH_SCHEME,
       ...(providerScopeFingerprint ? { providerScopeFingerprint } : {}),
-      judgment,
+      judgment: evidence,
       observations: observations
         .map((row) => [
           row.id,
@@ -1957,7 +2043,7 @@ async function finishProposal(
 }
 
 /** Model labels ride on the evidence fingerprint rather than replacing it. */
-export async function labelledProposal(
+async function labelledProposal(
   proposal: ChargeProposal,
   labelled: StatementTransactionJudgment,
 ): Promise<ChargeProposal> {
@@ -1973,7 +2059,6 @@ export async function labelledProposal(
       canonicalJson(
         jsonSnapshot.parse({
           evidence: proposal.evidenceFingerprint,
-          spending: judgment.spending,
           candidates: judgment.candidates.map((c) => [
             c.transactionId,
             c.label,
@@ -2137,17 +2222,22 @@ async function postedTwinExists(
   hold: PendingTransaction,
   date: string,
 ): Promise<boolean> {
-  const rows = await unwrapDb(db).execute<{
-    amount: string;
-    statementDate: unknown;
-  }>(
+  const preparation = await prepareFinancialStatementPreview(db);
+  const account = preparation.accounts.find((a) => a.id === hold.accountId);
+  const rows = await unwrapDb(db).execute<
+    StatementMovementInput & {
+      statementDate: unknown;
+      source: string;
+      account: string;
+      providerAccountId: string | null;
+    }
+  >(
     sql`
-    SELECT r.amount, r."statementDate" FROM ${sourceObservationFacts} r
+    SELECT r."providerAmount", r."rawDescription" AS description, r.merchant, r."sourceCategory", r."statementDate", r.source, r."accountDescriptor" AS account, r."providerAccountId" FROM ${sourceObservationFacts} r
     WHERE ${notDeleted("r")}
       AND r."providerStatus" IS DISTINCT FROM ${sourceTransactionRecordProviderStatus.enum.pending}
       AND r."statementDate" BETWEEN ${date}::date - ${PENDING_POST_WINDOW_DAYS}::int
         AND ${date}::date + ${PENDING_POST_WINDOW_DAYS}::int
-      AND sign(r.amount) = sign(${hold.amount}::numeric)
       AND r."accountDescriptor" IN (
         SELECT held."accountDescriptor" FROM ${sourceObservationFacts} held
         WHERE held.id = ANY(${uuidArrayParam(hold.pendingRowIds)})
@@ -2158,7 +2248,14 @@ async function postedTwinExists(
   return rows.some((row) =>
     pendingPostedMatch(
       { amount: hold.amount, date },
-      { amount: Number(row.amount), date: plainDateOf(row.statementDate) },
+      {
+        amount: statementEffectiveMovement({
+          ...row,
+          providerAmount: Number(row.providerAmount),
+          loan: statementLoanInput(row, account, preparation.accounts, rows),
+        }).effectiveAmount,
+        date: plainDateOf(row.statementDate),
+      },
     ),
   );
 }
@@ -2173,11 +2270,6 @@ type PublishOutcome =
 const isIdentityHold = (judgment: StatementTransactionJudgment) =>
   judgment.reviewReason === PROVIDER_IDENTITY_REVIEW ||
   judgment.reviewReason === OCCURRENCE_IDENTITY_REVIEW;
-
-const isSettledBooking = (judgment: StatementTransactionJudgment) =>
-  !judgment.reviewReason &&
-  judgment.recommended === "book" &&
-  judgment.spending?.status === "already_booked";
 
 /**
  * Held source identity has one review surface, Source identity review. Its
@@ -2312,46 +2404,6 @@ async function retireSettledChargeAdvice(
   );
 }
 
-function publishedOffRailPerson(judgment: unknown) {
-  const create =
-    suggestionJudgments.statement_transaction.safeParse(judgment).data?.create;
-  return create ? offRailPerson(create) : false;
-}
-
-type ReusablePublication = Pick<
-  typeof suggestionTable.$inferSelect,
-  "active" | "fingerprint"
-> & {
-  producer: SuggestionProducer | null;
-  evidenceFingerprint: string | null;
-  judgment: unknown;
-};
-
-/** Paid labels survive only while the actual model inputs and policy still agree. */
-function reusableRuleLabels<
-  Row extends ReusablePublication & {
-    needsLabel: string | null;
-    status: string;
-  },
->(prior: readonly Row[], proposal: ChargeProposal) {
-  if (!proposal.judgment.create || proposal.judgment.reviewReason)
-    return undefined;
-  const inputs = canonicalJson(statementLabelInputs(proposal.judgment));
-  return prior.find((row) => {
-    if (
-      row.needsLabel !== "false" ||
-      row.producer?.kind !== "model" ||
-      row.producer.revision !== STATEMENT_LABEL_REVISION ||
-      !["pending", "superseded"].includes(row.status)
-    )
-      return false;
-    const previous = suggestionJudgments.statement_transaction.parse(
-      row.judgment,
-    );
-    return canonicalJson(statementLabelInputs(previous)) === inputs;
-  });
-}
-
 const countLabels = (value: StatementTransactionJudgment) =>
   value.candidates.filter((entry) => entry.label !== null).length +
   (value.create
@@ -2364,7 +2416,9 @@ function chargePublication(
   producer: SuggestionProducer,
   priorCount: number,
   applicationOrder: z.infer<typeof statementApplicationOrder> | null = null,
-  checkpoint: StatementLabelCheckpoint | undefined = undefined,
+  answers: StatementAnswers = statementAnswers.parse({}),
+  isLoan = false,
+  vendorResolved = false,
 ) {
   const { charge, judgment } = proposal;
   return {
@@ -2403,13 +2457,15 @@ function chargePublication(
         evidenceFingerprint: proposal.evidenceFingerprint,
         // Rule output awaits the decision model's labels: candidate
         // identity, and the kind and counterparty of every create.
-        needsLabel:
-          producer.kind === "rule" &&
-          judgment.create !== null &&
-          !judgment.reviewReason,
+        needsLabel: needsStatementAnswers(
+          judgment,
+          answers,
+          isLoan,
+          vendorResolved,
+        ),
         applicationPending: producer.kind === "model",
         ...(applicationOrder && { applicationOrder }),
-        ...(checkpoint && { labelCheckpoint: checkpoint }),
+        answers,
         ...automaticRuleStamp(
           judgment.reviewReason ? [] : matchStatementRules(judgment),
         ),
@@ -2422,7 +2478,7 @@ function chargePublication(
 type ChargePublicationHistory = SuggestionRow & {
   producer: SuggestionProducer | null;
   needsLabel: string | null;
-  checkpoint: unknown;
+  answers: unknown;
   applicationPending: string | null;
   applicationOrder: unknown;
 };
@@ -2473,7 +2529,7 @@ async function priorStatementPublications(
       data,
       producer: suggestionProducer.nullable().parse(row.producer),
       needsLabel: jsonText(data.needsLabel),
-      checkpoint: data.labelCheckpoint ?? null,
+      answers: data.answers ?? {},
       applicationPending: jsonText(data.applicationPending),
       applicationOrder: data.applicationOrder ?? null,
     };
@@ -2532,47 +2588,6 @@ type ChargeState = ChargeRef & {
   shortcode: string | null;
 };
 
-/**
- * Live labelled rows whose booking, replanned from their retained advice with
- * current facts, no longer matches what they publish. Labelled spending is in
- * the row fingerprint, but a rule re-run matches the row on unchanged evidence
- * before replanning, so this is the only place the drift surfaces.
- */
-async function driftedLabelledBookings(
-  db: Database,
-  rows: readonly ChargePublicationHistory[],
-  page: FinancialSpendingPage | undefined,
-): Promise<ReadonlySet<string>> {
-  const labelled = rows.flatMap((row) => {
-    if (
-      !row.active ||
-      row.status !== suggestionStatus.enum.pending ||
-      row.producer?.kind !== "model"
-    )
-      return [];
-    const judgment = statementTransactionJudgment.safeParse(row.judgment);
-    return judgment.success && judgment.data.spending
-      ? [{ id: row.id, judgment: judgment.data }]
-      : [];
-  });
-  if (!labelled.length) return new Set();
-  const replanned = await prepareStatementSpendings(
-    db,
-    labelled.map(({ judgment }) => ({
-      judgment,
-      advice: judgment.spending?.request.advice ?? null,
-    })),
-    page,
-  );
-  return new Set(
-    labelled.flatMap(({ id, judgment }, index) =>
-      changedStatementBooking(judgment.spending, replanned[index]).length
-        ? [id]
-        : [],
-    ),
-  );
-}
-
 /** Current charge states, read after the slot locks. */
 async function currentChargeStates(
   db: Database,
@@ -2595,335 +2610,68 @@ const chargeSettled = (
   state.superseded ||
   (state.shortcode !== null && judgment.recommended !== "book");
 
-/** The latest saved checkpoint whose label subject still matches the judgment. */
-const savedRuleCheckpoint = (
-  rows: readonly ChargePublicationHistory[],
-  judgment: StatementTransactionJudgment,
-) =>
-  rows
-    .flatMap((row) => {
-      const saved = statementLabelCheckpoint.nullable().parse(row.checkpoint);
-      return saved ? [saved] : [];
-    })
-    .find(
-      (saved) =>
-        saved.revision === STATEMENT_LABEL_REVISION &&
-        canonicalJson(statementLabelSubject(saved.judgment)) ===
-          canonicalJson(statementLabelSubject(judgment)),
-    );
-
 type StatementCandidate = {
   proposal: ChargeProposal;
-  /** A complete label publication's active-input fence and checkpoint. */
-  labelPublication?: {
-    evidenceFingerprint: string;
-    checkpoint: StatementLabelCheckpoint;
-  };
-  /** The spending checkpoint kept when a rule re-run reuses paid labels. */
-  retainedCheckpoint?: StatementLabelCheckpoint;
+  answers?: StatementAnswers;
+  isLoan?: boolean;
+  vendorResolved?: boolean;
 };
-
 type StatementPublicationFacts = {
   states: Map<string, ChargeState>;
-  history: Map<string, ChargePublicationHistory[]>;
-  /** Live labelled rows whose booking replan moved. */
-  drifted: ReadonlySet<string>;
-  /** Charges whose settled booking is still booked. */
-  alreadyBooked: ReadonlySet<string>;
-  /** Rule re-runs that keep paid labels, prepared together. */
-  reused: Map<
-    string,
-    { candidate: StatementCandidate; producer: SuggestionProducer }
-  >;
+  projected: Map<string, StatementCandidate>;
 };
 
-/**
- * A rule re-run retains model labels only while their label revision agrees
- * and their booking still replans the same, and republishes a person label the
- * rail rule now reads as a business.
- */
-const obsoleteLabels = (
-  row: ChargePublicationHistory,
-  producer: SuggestionProducer,
-  drifted: ReadonlySet<string> | undefined,
+const statementRevisionSuppresses = (
+  row: SuggestionRow,
+  f: { fingerprint: string; evidenceFingerprint: string | null },
 ) =>
-  producer.kind === "rule" &&
-  row.producer?.kind === "model" &&
-  (row.producer.revision !== STATEMENT_LABEL_REVISION ||
-    publishedOffRailPerson(row.judgment) ||
-    drifted?.has(row.id) === true);
+  row.active &&
+  (suggestionSuppression.parse(row.suppression).fingerprint === null ||
+    (row.fingerprint === f.fingerprint &&
+      row.evidenceFingerprint === f.evidenceFingerprint));
 
-/**
- * Every candidate's shared current reads, and the retirements each precheck
- * would repeat, once per publication set. Batch and single admission take this
- * same path, so no candidate defers to a one-at-a-time writer.
- */
-async function loadStatementPublication(
-  tx: Database,
-  candidates: readonly StatementCandidate[],
-  rows: readonly (readonly ChargePublicationHistory[])[],
-  producer: SuggestionProducer,
-): Promise<StatementPublicationFacts> {
-  const proposals = candidates.map(({ proposal }) => proposal);
-  const states = await currentChargeStates(
-    tx,
-    proposals.map(({ charge }) => charge),
+function needsStatementAnswers(
+  judgment: StatementTransactionJudgment,
+  answers: StatementAnswers,
+  isLoan = false,
+  vendorResolved = false,
+) {
+  if (!judgment.create || judgment.reviewReason) return false;
+  return (
+    judgment.candidates.some((c) => !answers.candidates[c.transactionId]) ||
+    (!judgment.transfer && (!answers.kind || !answers.counterparty)) ||
+    !statementSpendingAnswersComplete(
+      judgment.create,
+      isLoan,
+      answers,
+      vendorResolved,
+    )
   );
-  const history = await priorStatementPublications(tx, proposals);
-  // Generic publication skips a suppressed candidate before its precheck.
-  const admitted = candidates.flatMap((candidate, index) => {
-    const { proposal } = candidate;
-    const slot = rows[index] ?? [];
-    return isIdentityHold(proposal.judgment) ||
-      slot.some(
-        (row) =>
-          row.suppression !== null &&
-          revisionSuppresses(row, {
-            fingerprint: proposal.fingerprint,
-            evidenceFingerprint: proposal.evidenceFingerprint,
-          }),
-      )
-      ? []
-      : [{ candidate, slot }];
-  });
-  // One bank event is one Suggestion: its copies wait for this primary, so
-  // advice they published before the pairing retires with this publication.
-  // Retiring every copy first keeps the outcome independent of set order.
-  const copies = uniqueCharges(
-    admitted.flatMap(({ candidate }) => candidate.proposal.judgment.copies),
-  );
-  if (copies.length)
-    await transitionSuggestionStates(
-      tx,
-      sql`${pendingStatementState} AND (${suggestionField("source", STATE)}, ${suggestionField("chargeKey", STATE)}) IN (${tuples(copies)})`,
-      { active: false, status: "superseded" },
-    );
-  await retireRetainedStatementAdvice(
-    tx,
-    admitted.flatMap(({ candidate, slot }) =>
-      slot.some(
-        (row) => row.active && row.status === suggestionStatus.enum.pending,
-      )
-        ? [candidate.proposal]
-        : [],
-    ),
-  );
-  // A charge matched, ignored or superseded after it was listed resolves as
-  // settled. A prior commit may have lost its after-commit retirement effect:
-  // replaying that exact charge finishes the effect instead of leaving advice.
-  const settled = admitted.flatMap(({ candidate: { proposal } }) => {
-    const state = states.get(chargeId(proposal.charge));
-    return proposal.judgment.recommended !== "void" &&
-      state &&
-      chargeSettled(state, proposal.judgment)
-      ? [proposal.charge]
-      : [];
-  });
-  await retireSettledChargeAdvice(tx, settled);
-  const settledKeys = new Set(settled.map(chargeId));
-  const live = admitted.filter(
-    ({ candidate }) => !settledKeys.has(chargeId(candidate.proposal.charge)),
-  );
-  const booked = live.filter(({ candidate }) =>
-    isSettledBooking(candidate.proposal.judgment),
-  );
-  const labelled = rows
-    .flat()
-    .filter(
-      (row) =>
-        row.active &&
-        row.status === suggestionStatus.enum.pending &&
-        row.producer?.kind === "model",
-    );
-  const reusable = producer.kind === "rule" ? live : [];
-  // A slot that stays unchanged publishes nothing, so its reuse is only
-  // planned here; the drift check below may still make it obsolete.
-  const reuse = planReusedLabels(reusable, history);
-  // One facts page for every replan in this set, so the drift check, the
-  // reused labels and settled bookings plan against the same snapshot reads.
-  const judgments = [
-    ...booked.map(({ candidate }) => candidate.proposal.judgment),
-    ...labelled.flatMap((row) => {
-      const judgment = statementTransactionJudgment.safeParse(row.judgment);
-      return judgment.success ? [judgment.data] : [];
-    }),
-    ...reuse.map(({ judgment }) => judgment),
-  ];
-  // Reused labels plan with their retained advice, whose Vendor names the
-  // page reads up front with the stored rows' own.
-  const page = judgments.some((judgment) => judgment.create)
-    ? await prepareStatementSpendingFacts(
-        tx,
-        judgments,
-        reuse.flatMap(({ previous }) => {
-          const name = previous.spending?.request.advice?.vendorName;
-          return name ? [name] : [];
-        }),
-      )
-    : undefined;
-  const fresh = await prepareStatementSpendings(
-    tx,
-    booked.map(({ candidate: { proposal } }) => ({
-      judgment: proposal.judgment,
-      advice: proposal.judgment.spending?.request.advice ?? null,
-    })),
-    page,
-  );
-  const drifted = await driftedLabelledBookings(tx, labelled, page);
-  return {
-    states,
-    history,
-    drifted,
-    alreadyBooked: new Set(
-      booked.flatMap(({ candidate }, index) =>
-        fresh[index]?.status === "already_booked"
-          ? [chargeId(candidate.proposal.charge)]
-          : [],
-      ),
-    ),
-    reused: await finishReusedLabels(
-      tx,
-      // A slot that stays unchanged publishes nothing, so needs no replan.
-      reuse.filter(
-        ({ candidate: { proposal }, slot }) =>
-          !slot.some(
-            (row) =>
-              row.active &&
-              !obsoleteLabels(row, producer, drifted) &&
-              (row.fingerprint === proposal.fingerprint ||
-                row.evidenceFingerprint === proposal.evidenceFingerprint),
-          ),
-      ),
-      page,
-      producer,
-    ),
-  };
 }
 
-/**
- * Retain paid votes, not their old rule/history conclusions: restore each
- * reusable charge's labels. Evidence still gets a fresh fingerprint and
- * current apply-time validation.
- */
-function planReusedLabels(
-  entries: readonly {
-    candidate: StatementCandidate;
-    slot: readonly ChargePublicationHistory[];
-  }[],
-  history: ReadonlyMap<string, ChargePublicationHistory[]>,
+/** Apply completed votes to today's rules, never restore yesterday's judgment. */
+function applyStatementAnswers(
+  judgment: StatementTransactionJudgment,
+  answers: StatementAnswers,
 ) {
-  return entries.flatMap(({ candidate, slot }) => {
-    const { proposal } = candidate;
-    if (!proposal.judgment.create) return [];
-    const reusable = reusableRuleLabels(
-      [...slot, ...(history.get(chargeId(proposal.charge)) ?? [])],
-      proposal,
-    );
-    if (!reusable) return [];
-    const previous = suggestionJudgments.statement_transaction.safeParse(
-      reusable.judgment,
-    );
-    const previousProducer = reusable.producer;
-    if (
-      !previous.success ||
-      !previous.data.create ||
-      previousProducer?.kind !== "model"
-    )
-      return [];
-    const judgment = structuredClone(proposal.judgment);
-    const create = judgment.create!;
+  for (const candidate of judgment.candidates)
+    candidate.label =
+      answers.candidates[candidate.transactionId]?.value ?? null;
+  if (judgment.create)
     Object.assign(
-      create,
+      judgment.create,
       decideStatementKind({
-        amount: create.amount,
-        votes: { ...create.votes, label: previous.data.create.votes.label },
+        amount: judgment.create.amount,
+        votes: { ...judgment.create.votes, label: answers.kind?.value ?? null },
         counterparty: {
-          ...create.counterparty,
-          label: previous.data.create.counterparty.label,
+          ...judgment.create.counterparty,
+          label: answers.counterparty?.value ?? null,
         },
         transfer: judgment.transfer,
-        descriptor: create,
+        descriptor: judgment.create,
       }),
     );
-    // Equal label inputs carry the same candidates; one that lost its saved
-    // label publishes as rule output that needs labels, never failing the set.
-    const labels = judgment.candidates.map(
-      (entry) =>
-        previous.data.candidates.find(
-          (saved) => saved.transactionId === entry.transactionId,
-        )?.label,
-    );
-    if (labels.some((label) => label === undefined)) return [];
-    for (const [index, entry] of judgment.candidates.entries())
-      entry.label = labels[index]!;
-    judgment.recommended = statementRecommendation(judgment);
-    return [
-      {
-        candidate,
-        slot,
-        judgment,
-        previous: previous.data,
-        previousProducer,
-        checkpoint: reusable.checkpoint,
-      },
-    ];
-  });
-}
-
-/**
- * Replan reused labels' spending from their retained advice for the whole
- * set, keeping model provenance where advice or a deferral needs it.
- */
-async function finishReusedLabels(
-  tx: Database,
-  planned: ReturnType<typeof planReusedLabels>,
-  page: FinancialSpendingPage | undefined,
-  producer: SuggestionProducer,
-): Promise<StatementPublicationFacts["reused"]> {
-  const plans = await prepareStatementSpendings(
-    tx,
-    planned.map(({ judgment, previous }) => ({
-      judgment,
-      advice: previous.spending?.request.advice ?? null,
-    })),
-    page,
-  );
-  const reused: StatementPublicationFacts["reused"] = new Map();
-  for (const [index, entry] of planned.entries()) {
-    const { candidate, judgment, previous, previousProducer } = entry;
-    const { proposal } = candidate;
-    judgment.spending = plans[index] ?? null;
-    judgment.clean = isClean(judgment, proposal.canonical.amount);
-    const labelled = {
-      ...candidate,
-      proposal: await labelledProposal(proposal, judgment),
-    };
-    reused.set(
-      chargeId(proposal.charge),
-      judgment.spending?.status === "deferred" ||
-        previous.spending?.request.advice
-        ? { candidate: labelled, producer: previousProducer }
-        : {
-            candidate: {
-              ...labelled,
-              retainedCheckpoint: statementLabelCheckpoint.parse({
-                revision: STATEMENT_LABEL_REVISION,
-                model: previousProducer.model,
-                models:
-                  statementLabelCheckpoint.nullable().parse(entry.checkpoint)
-                    ?.models ??
-                  (previousProducer.model ? [previousProducer.model] : []),
-                judgment,
-                kind: true,
-                counterparty: true,
-                spending: false,
-              }),
-            },
-            producer,
-          },
-    );
-  }
-  return reused;
+  judgment.recommended = statementRecommendation(judgment);
 }
 
 /**
@@ -2943,6 +2691,7 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
   applicationError:
     "Statement application requires a Transaction suggestion Suggestion",
   financial: true,
+  replaced: "deactivate",
   suppressionKey: (subject) => ({
     scope: "statement_transaction",
     candidateKey: `${subject.source}:${subject.chargeKey}`,
@@ -2970,12 +2719,12 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
   }),
   fingerprint: ({ proposal }) => proposal.fingerprint,
   evidenceFingerprint: ({ proposal }) => proposal.evidenceFingerprint,
-  suppresses: revisionSuppresses,
+  suppresses: statementRevisionSuppresses,
   row: (row) => ({
     ...row,
     producer: suggestionProducer.nullable().parse(row.producer),
     needsLabel: jsonText(row.data.needsLabel),
-    checkpoint: row.data.labelCheckpoint ?? null,
+    answers: row.data.answers ?? {},
     applicationPending: jsonText(row.data.applicationPending),
     applicationOrder: row.data.applicationOrder ?? null,
   }),
@@ -2984,99 +2733,289 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
       tx,
       candidates.map(({ proposal }) => proposal),
     ),
-  load: (tx, candidates, _batch, rows, producer) =>
-    loadStatementPublication(tx, candidates, rows, producer),
-  batchable: ({ proposal }) => proposal.judgment.recommended !== "void",
-  async precheck(
-    _tx,
-    { proposal, labelPublication },
-    rows,
-    _producer,
-    context,
-  ) {
-    const { charge, judgment } = proposal;
-    // Source identity review owns an unproven occurrence; a Suggestion that can
-    // only be dismissed would duplicate that queue.
-    if (isIdentityHold(judgment)) return { kind: "retire", reason: "held" };
-    // A charge matched, ignored or superseded after it was listed (an accept or
-    // an import-page attach in between) needs no suggestion; its advice retired
-    // with the batch's load. Holds are matched by the hold transaction itself.
-    const state = context.loaded.states.get(chargeId(charge));
-    if (
-      judgment.recommended !== "void" &&
-      state &&
-      chargeSettled(state, judgment)
-    )
-      return { kind: "resolved", reason: "settled" };
-    if (context.loaded.alreadyBooked.has(chargeId(charge)))
-      return { kind: "retire", reason: "settled" };
-    // Complete labels publish their checkpoint in this transaction instead of
-    // first rewriting the rule row. Preserve that writer's active-input fence.
-    if (
-      labelPublication &&
-      !rows.some(
-        (row) =>
-          row.active &&
-          row.status === suggestionStatus.enum.pending &&
-          row.evidenceFingerprint === labelPublication.evidenceFingerprint,
-      )
-    )
-      throw new Error(
-        "Statement label publication lost its active evidence fence",
+  async load(tx, candidates, _batch, rows) {
+    const proposals = candidates.map(({ proposal }) => proposal);
+    const history = await priorStatementPublications(tx, proposals);
+    const vendorNames = [
+      ...rows.flat(),
+      ...[...history.values()].flat(),
+    ].flatMap((row) => {
+      const parsed = statementAnswers.safeParse(row.answers);
+      const name = parsed.success && parsed.data.merchant?.identity.value?.name;
+      return name ? [name] : [];
+    });
+    const hasAnswers = [...rows.flat(), ...[...history.values()].flat()].some(
+      (row) => {
+        const answers = statementAnswers.safeParse(row.answers).data;
+        return (
+          answers &&
+          (answers.kind ||
+            answers.counterparty ||
+            Object.keys(answers.candidates).length ||
+            answers.escrow ||
+            answers.merchant)
+        );
+      },
+    );
+    const projectAnswered = async () => {
+      const spending = await prepareStatementSpendingFacts(
+        tx,
+        proposals.map((proposal) => proposal.judgment),
+        vendorNames,
       );
+      const projected = candidates.map((candidate, index) => {
+        const retained = [
+          ...new Map(
+            [
+              ...(rows[index] ?? []),
+              ...(history.get(chargeId(candidate.proposal.charge)) ?? []),
+            ].map((row) => [row.id, row]),
+          ).values(),
+        ].sort(
+          (a, b) =>
+            b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
+        );
+        const judgment = structuredClone(candidate.proposal.judgment);
+        const isLoan = liveHouseholdLoan(
+          spending.accounts.get(judgment.accountId),
+        );
+        let answers = mergeStatementAnswers(
+          judgment,
+          retained.map((row) => row.answers),
+          isLoan,
+        );
+        applyStatementAnswers(judgment, answers);
+        answers = mergeStatementAnswers(
+          judgment,
+          retained.map((row) => row.answers),
+          isLoan,
+        );
+        return {
+          candidate,
+          judgment,
+          answers,
+          isLoan,
+          advice: financialSpendingAdvice.parse(
+            statementAdviceFromAnswers(answers),
+          ),
+        };
+      });
+      const plans = await prepareStatementSpendings(tx, projected, spending);
+      return Promise.all(
+        projected.map(async (entry, index) => {
+          const { candidate, judgment, answers, isLoan } = entry;
+          const merchant =
+            judgment.create?.merchant?.trim() ||
+            judgment.create?.rawDescription?.trim();
+          const [named] = merchant
+            ? await resolveFinancialSpendingVendors(tx, [merchant], spending)
+            : [];
+          const vendorResolved = Boolean(
+            named?.row && !named.candidates.length,
+          );
+          judgment.spending = plans[index] ?? null;
+          judgment.clean =
+            !needsStatementAnswers(judgment, answers, isLoan, vendorResolved) &&
+            isClean(
+              judgment,
+              judgment.create?.amount ?? candidate.proposal.canonical.amount,
+            );
+          return {
+            proposal: await labelledProposal(candidate.proposal, judgment),
+            answers,
+            isLoan,
+            vendorResolved,
+          };
+        }),
+      );
+    };
+    const projectedCandidates = hasAnswers
+      ? await projectAnswered()
+      : await Promise.all(
+          candidates.map(async ({ proposal }) => {
+            const answers = statementAnswers.parse({});
+            const judgment = structuredClone(proposal.judgment);
+            judgment.clean =
+              !needsStatementAnswers(judgment, answers) &&
+              isClean(
+                judgment,
+                judgment.create?.amount ?? proposal.canonical.amount,
+              );
+            return {
+              proposal: await labelledProposal(proposal, judgment),
+              answers,
+              isLoan: false,
+              vendorResolved: false,
+            };
+          }),
+        );
+    const admitted = projectedCandidates.filter(
+      (candidate, index) =>
+        !isIdentityHold(candidate.proposal.judgment) &&
+        !(rows[index] ?? []).some(
+          (row) =>
+            row.suppression !== null &&
+            statementRevisionSuppresses(row, candidate.proposal),
+        ),
+    );
+    await retireRetainedStatementAdvice(
+      tx,
+      admitted.map((candidate) => candidate.proposal),
+    );
+    const copies = uniqueCharges(
+      admitted.flatMap((candidate) => candidate.proposal.judgment.copies),
+    );
+    if (copies.length)
+      await transitionSuggestionStates(
+        tx,
+        sql`${pendingStatementState} AND (${suggestionField("source", STATE)}, ${suggestionField("chargeKey", STATE)}) IN (${tuples(copies)})`,
+        { active: false, status: "superseded" },
+      );
+    return {
+      states: await currentChargeStates(
+        tx,
+        proposals.map((proposal) => proposal.charge),
+      ),
+      projected: new Map(
+        projectedCandidates.map((candidate) => [
+          chargeId(candidate.proposal.charge),
+          candidate,
+        ]),
+      ),
+    };
+  },
+  sameEvidenceUnchanged: false,
+  async projectLoaded(_tx, candidate, _rows, producer, context) {
+    const projected = context.loaded.projected.get(
+      chargeId(candidate.proposal.charge),
+    )!;
+    const {
+      answers = statementAnswers.parse({}),
+      proposal: { judgment },
+      isLoan,
+      vendorResolved,
+    } = projected;
+    const models = [
+      ...new Set(
+        [
+          answers.kind,
+          answers.counterparty,
+          ...Object.values(answers.candidates),
+          answers.escrow,
+          answers.merchant?.identity,
+          answers.merchant?.support,
+        ].flatMap((a) => a?.models ?? []),
+      ),
+    ];
+    return {
+      candidate: projected,
+      producer: needsStatementAnswers(judgment, answers, isLoan, vendorResolved)
+        ? producer
+        : {
+            ...producer,
+            kind: "model" as const,
+            model: models.length === 1 ? models[0]! : null,
+          },
+    };
+  },
+  batchable: ({ proposal }) => proposal.judgment.recommended !== "void",
+  async precheck(_tx, { proposal }, _rows, _producer, context) {
+    if (isIdentityHold(proposal.judgment))
+      return { kind: "retire", reason: "held" };
+    const state = context.loaded.states.get(chargeId(proposal.charge));
+    if (
+      proposal.judgment.recommended !== "void" &&
+      state &&
+      chargeSettled(state, proposal.judgment)
+    )
+      return { kind: "retire", reason: "settled" };
+    if (
+      !proposal.judgment.reviewReason &&
+      proposal.judgment.recommended === "book" &&
+      proposal.judgment.spending?.status === "already_booked"
+    )
+      return { kind: "retire", reason: "settled" };
     return undefined;
   },
-  // A rule re-run retains model labels only while their label revision agrees,
-  // and republishes a person label the rail rule now reads as a business.
-  // A booking whose replan from its retained advice moved (another writer's
-  // Purchase, Vendor or category) republishes rather than refusing every pass.
-  obsolete: (row, producer, loaded) =>
-    obsoleteLabels(row, producer, loaded?.drifted),
   onUnchanged: "none",
-  // Paid labels a rule re-run keeps were prepared for the whole set at load.
-  prepare: async (_tx, candidate, _rows, producer, context) =>
-    context.loaded.reused.get(chargeId(candidate.proposal.charge)) ?? {
-      candidate,
-      producer,
-    },
-  publication(
-    { proposal, labelPublication, retainedCheckpoint },
-    rows,
-    producer,
-  ) {
-    const { judgment } = proposal;
-    const inputPosition = rows.find(
-      (row) => row.active && row.status === "pending",
+  async refreshUnchanged(tx, rows, candidate, _context) {
+    const judgment = candidate.proposal.judgment;
+    const answers = candidate.answers ?? statementAnswers.parse({});
+    const isLoan = candidate.isLoan ?? false;
+    const vendorResolved = candidate.vendorResolved ?? false;
+    const needsLabel = needsStatementAnswers(
+      judgment,
+      answers,
+      isLoan,
+      vendorResolved,
     );
-    const applicationOrder =
-      producer.kind === "model" && inputPosition
-        ? (statementApplicationOrder
-            .nullable()
-            .parse(inputPosition.applicationOrder) ?? {
-            createdAt: inputPosition.createdAt,
-            id: inputPosition.id,
-          })
-        : null;
-    const checkpoint =
-      retainedCheckpoint ??
-      (producer.kind === "rule"
-        ? savedRuleCheckpoint(rows, judgment)
-        : labelPublication
-          ? statementLabelCheckpoint.parse(labelPublication.checkpoint)
-          : statementLabelCheckpoint.safeParse({
-              revision: producer.revision,
-              model: producer.model,
-              models: producer.model ? [producer.model] : [],
-              judgment,
-              kind: true,
-              counterparty: true,
-            }).data);
+    const refresh = (row: ChargePublicationHistory) => ({
+      ...row.data,
+      answers: z.json().parse(jsonSnapshot.parse(answers)),
+      needsLabel,
+      ...(row.needsLabel === "true" && !needsLabel
+        ? {
+            applicationPending: true,
+            applicationOrder: statementApplicationOrder
+              .nullable()
+              .parse(row.applicationOrder) ?? {
+              createdAt: row.createdAt,
+              id: row.id,
+            },
+          }
+        : {}),
+      ...automaticRuleStamp(
+        judgment.reviewReason ? [] : matchStatementRules(judgment),
+      ),
+    });
+    const changed = rows.filter(
+      (row) =>
+        row.status === "pending" &&
+        (canonicalJson(row.data) !== canonicalJson(refresh(row)) ||
+          canonicalJson(jsonSnapshot.parse(row.judgment)) !==
+            canonicalJson(judgment)),
+    );
+    if (changed.length)
+      await transitionSuggestionStates(
+        tx,
+        inArray(
+          suggestionTable.id,
+          changed.map((row) => row.id),
+        ),
+        (row) => {
+          const retained = changed.find((saved) => saved.id === row.id)!;
+          return { data: refresh(retained), judgment };
+        },
+      );
+    return rows.map((row) =>
+      changed.includes(row)
+        ? {
+            ...row,
+            data: refresh(row),
+            judgment,
+            needsLabel: String(needsLabel),
+          }
+        : row,
+    );
+  },
+  publication({ proposal, answers, isLoan, vendorResolved }, rows, producer) {
+    const position = rows.find((row) => row.active && row.status === "pending");
+    const order = position
+      ? (statementApplicationOrder
+          .nullable()
+          .parse(position.applicationOrder) ?? {
+          createdAt: position.createdAt,
+          id: position.id,
+        })
+      : null;
     return chargePublication(
       proposal,
       producer,
       rows.length,
-      applicationOrder,
-      checkpoint,
+      order,
+      answers,
+      isLoan,
+      vendorResolved,
     );
   },
   async afterPublish(tx, published) {
@@ -3389,19 +3328,13 @@ function statementOutcome(
  * dismissal holds for its current evidence revision, an unchanged fingerprint is left
  * alone, and anything else is retired before the new one takes the charge.
  */
-export async function publishChargeProposal(
+async function publishChargeProposal(
   db: Database,
   proposal: ChargeProposal,
   producer: SuggestionProducer,
-  labelPublication?: StatementCandidate["labelPublication"],
 ): Promise<StatementPublishResult> {
   return statementOutcome(
-    await publishSuggestion(
-      db,
-      statementSuggestions,
-      { proposal, labelPublication },
-      producer,
-    ),
+    await publishSuggestion(db, statementSuggestions, { proposal }, producer),
     producer,
   );
 }
@@ -3452,324 +3385,12 @@ export async function repairStatementApplicationReceipts(
   });
 }
 
-export type CompleteStatementLabelPublication = {
-  proposal: ChargeProposal;
-  evidenceFingerprint: string;
-  checkpoint: StatementLabelCheckpoint;
-  producer: SuggestionProducer & { kind: "model" };
-};
-
-export type StatementLabelPublicationResult =
-  | {
-      kind: "ready";
-      origin: "published" | "recovered";
-      receipt: {
-        suggestionId: string;
-        evidenceFingerprint: string;
-        applicationOrder: z.infer<typeof statementApplicationOrder> | null;
-      };
-    }
-  | {
-      kind: "resolved";
-      reason: Exclude<PublishOutcome, "published"> | "out_of_scope";
-    }
-  | { kind: "failed"; error: unknown };
-
-/** New writes and recovery use the same locks, evidence fences and receipt owner. */
-async function publishCompleteLabelBatch(
-  db: Database,
-  entries: readonly CompleteStatementLabelPublication[],
-  scope?: StatementSuggestionScope,
-): Promise<Map<string, StatementLabelPublicationResult>> {
-  const publish = async (tx: Database) => {
-    await assertWorkflowEffect(tx);
-    const prior = await lockSuggestionSlots(
-      tx,
-      statementSuggestions,
-      entries.map(({ proposal }) => ({ proposal })),
-    );
-    const charges = tuples(entries.map(({ proposal }) => proposal.charge));
-    const current = await currentChargeStates(
-      tx,
-      entries.map(({ proposal }) => proposal.charge),
-    );
-    const outcomes = new Map<string, StatementLabelPublicationResult>();
-    const scopedIds = scope
-      ? await statementLabelTargetsInScope(
-          tx,
-          scope,
-          prior.flatMap((history) =>
-            history
-              .filter(
-                (row) =>
-                  row.active && row.status === suggestionStatus.enum.pending,
-              )
-              .map((row) => row.id),
-          ),
-        )
-      : null;
-    await assertProviderIdentityPublication(
-      tx,
-      entries
-        .filter((_, index) => {
-          const pending = prior[index]!.filter(
-            (row) => row.active && row.status === suggestionStatus.enum.pending,
-          );
-          return (
-            !scopedIds ||
-            !pending.length ||
-            pending.some((row) => scopedIds.has(row.id))
-          );
-        })
-        .map(({ proposal }) => proposal),
-    );
-    const publications: Array<{
-      entry: CompleteStatementLabelPublication;
-      history: ChargePublicationHistory[];
-      applicationOrder: z.infer<typeof statementApplicationOrder> | null;
-    }> = [];
-    const retirementIds: string[] = [];
-    for (const [index, entry] of entries.entries()) {
-      const { proposal } = entry;
-      const id = chargeId(proposal.charge);
-      const history = prior[index]!;
-      // Check the live resolver before publication and receipt recovery, not
-      // merely the account retained on the previously admitted Suggestion.
-      const pending = history.filter(
-        (row) => row.active && row.status === suggestionStatus.enum.pending,
-      );
-      if (
-        scopedIds &&
-        pending.length &&
-        !pending.some((row) => scopedIds.has(row.id))
-      ) {
-        outcomes.set(id, { kind: "resolved", reason: "out_of_scope" });
-        continue;
-      }
-      const checkpoint = statementLabelCheckpoint.parse(entry.checkpoint);
-      if (
-        checkpoint.revision !== STATEMENT_LABEL_REVISION ||
-        !checkpoint.spending ||
-        (proposal.judgment.create &&
-          (!checkpoint.kind || !checkpoint.counterparty)) ||
-        proposal.judgment.candidates.some(
-          (candidate) => candidate.label === null,
-        ) ||
-        canonicalJson(checkpoint.judgment) !== canonicalJson(proposal.judgment)
-      )
-        throw new Error(
-          "Complete statement publication requires its complete label checkpoint",
-        );
-      if (
-        history.some(
-          (row) =>
-            row.active &&
-            row.suppression !== null &&
-            (row.fingerprint === proposal.fingerprint ||
-              row.evidenceFingerprint === proposal.evidenceFingerprint),
-        )
-      ) {
-        outcomes.set(id, { kind: "resolved", reason: "suppressed" });
-        continue;
-      }
-      const state = current.get(id);
-      if (
-        proposal.judgment.recommended !== "void" &&
-        state &&
-        chargeSettled(state, proposal.judgment)
-      ) {
-        await retireSettledChargeAdvice(tx, [proposal.charge]);
-        outcomes.set(id, { kind: "resolved", reason: "settled" });
-        continue;
-      }
-      if (isSettledBooking(proposal.judgment)) {
-        const fresh = await prepareStatementSpending(tx, proposal.judgment);
-        if (fresh?.status === "already_booked") {
-          await transitionSuggestionStates(
-            tx,
-            sql`${pendingStatementState} AND ${suggestionField("source", STATE)}=${proposal.charge.source} AND ${suggestionField("chargeKey", STATE)}=${proposal.charge.chargeKey}`,
-            { active: false, status: "superseded" },
-          );
-          outcomes.set(id, { kind: "resolved", reason: "settled" });
-          continue;
-        }
-      }
-      // A committed later-round publication already replaced the old input.
-      // Recover its receipt before testing that input's now-obsolete fence.
-      const recovered = history.find(
-        (row) =>
-          row.active &&
-          row.status === suggestionStatus.enum.pending &&
-          row.fingerprint === proposal.fingerprint &&
-          row.evidenceFingerprint === proposal.evidenceFingerprint &&
-          row.producer?.kind === "model" &&
-          row.producer.revision === STATEMENT_LABEL_REVISION &&
-          statementLabelCheckpoint.nullable().parse(row.checkpoint)
-            ?.revision === STATEMENT_LABEL_REVISION,
-      );
-      if (recovered) {
-        if (recovered.applicationPending === "true") {
-          outcomes.set(id, {
-            kind: "ready",
-            origin: "recovered",
-            receipt: {
-              suggestionId: recovered.id,
-              evidenceFingerprint: proposal.evidenceFingerprint,
-              applicationOrder: statementApplicationOrder
-                .nullable()
-                .parse(recovered.applicationOrder),
-            },
-          });
-          retirementIds.push(recovered.id);
-        } else outcomes.set(id, { kind: "resolved", reason: "unchanged" });
-        continue;
-      }
-      if (
-        !history.some(
-          (row) =>
-            row.active &&
-            row.status === suggestionStatus.enum.pending &&
-            row.evidenceFingerprint === entry.evidenceFingerprint,
-        )
-      )
-        throw new Error(
-          "Statement label publication lost its active evidence fence",
-        );
-      if (
-        (
-          await unchangedSuggestions(
-            statementSuggestions,
-            history,
-            { proposal },
-            entry.producer,
-          )
-        ).length
-      ) {
-        outcomes.set(id, { kind: "resolved", reason: "unchanged" });
-        continue;
-      }
-      const inputPosition = history.find(
-        (row) => row.active && row.status === suggestionStatus.enum.pending,
-      );
-      const applicationOrder = inputPosition
-        ? (statementApplicationOrder
-            .nullable()
-            .parse(inputPosition.applicationOrder) ?? {
-            createdAt: inputPosition.createdAt,
-            id: inputPosition.id,
-          })
-        : null;
-      if (!state) {
-        const outcome = await publishChargeProposal(
-          tx,
-          proposal,
-          entry.producer,
-          entry,
-        );
-        outcomes.set(
-          id,
-          outcome.outcome === "published"
-            ? {
-                kind: "ready",
-                origin: "published",
-                receipt: {
-                  suggestionId: outcome.suggestionId,
-                  evidenceFingerprint: proposal.evidenceFingerprint,
-                  applicationOrder,
-                },
-              }
-            : { kind: "resolved", reason: outcome.outcome },
-        );
-        continue;
-      }
-      publications.push({
-        entry: { ...entry, checkpoint },
-        history,
-        applicationOrder,
-      });
-    }
-    if (publications.length) {
-      // A label round keeps the rule row it replaces as history.
-      const published = await publishReplacements(
-        tx,
-        { replaced: "deactivate" },
-        publications.map(({ entry, history, applicationOrder }) => ({
-          rows: history,
-          publication: chargePublication(
-            entry.proposal,
-            entry.producer,
-            history.length,
-            applicationOrder,
-            entry.checkpoint,
-          ),
-        })),
-      );
-      for (const [index, publication] of publications.entries()) {
-        const suggestion = published[index];
-        if (!suggestion)
-          throw new Error("Statement publication returned no receipt");
-        retirementIds.push(suggestion.id);
-        outcomes.set(chargeId(publication.entry.proposal.charge), {
-          kind: "ready",
-          origin: "published",
-          receipt: {
-            suggestionId: suggestion.id,
-            evidenceFingerprint: publication.entry.proposal.evidenceFingerprint,
-            applicationOrder: publication.applicationOrder,
-          },
-        });
-      }
-    }
-    // Recovery-only batches must finish the lost effect too.
-    await enrollStatementPublicationRetirement(tx, {
-      charges,
-      suggestionIds: retirementIds,
-    });
-    return outcomes;
-  };
-  return scope
-    ? withSnapshotWriteDatabase(db, publish, { isolationLevel: "serializable" })
-    : withTransactionDatabase(db, publish);
-}
-
-/** Isolate failed entries without replaying a committed publication as a new write. */
-export async function publishCompleteStatementLabels(
-  db: Database,
-  entries: readonly CompleteStatementLabelPublication[],
-  scope?: StatementSuggestionScope,
-): Promise<Map<string, StatementLabelPublicationResult>> {
-  if (
-    new Set(entries.map((entry) => chargeId(entry.proposal.charge))).size !==
-    entries.length
-  )
-    throw new Error(
-      "Complete statement publication contains duplicate charges",
-    );
-  const key = (entry: CompleteStatementLabelPublication) =>
-    chargeId(entry.proposal.charge);
-  const outcomes = new Map<string, StatementLabelPublicationResult>();
-  await inSuggestionBatches(entries, {
-    concurrency: STATEMENT_PUBLISH_CONCURRENCY,
-    label: suggestionFamily.enum.statement_transaction,
-    batch: async (batch) => {
-      const published = await publishCompleteLabelBatch(db, batch, scope);
-      return batch.map((entry) => published.get(key(entry)));
-    },
-    one: async (entry) => {
-      const outcome = (await publishCompleteLabelBatch(db, [entry], scope)).get(
-        key(entry),
-      );
-      if (!outcome)
-        throw new Error("Statement label publication lost its entry");
-      return outcome;
-    },
-    onOutcome: (entry, outcome) => outcomes.set(key(entry), outcome),
-    onFailure: (entry, error) =>
-      outcomes.set(key(entry), { kind: "failed", error }),
-  });
-  return outcomes;
-}
-
+/**
+ * A page's proposals in as few builds as its evidence allows. A build that
+ * throws splits in half, so healthy charges keep one shared build and only a
+ * malformed charge fails, with its own error. `built` names every charge whose
+ * build completed, the only charges a rebuild may retire advice for.
+ */
 const ruleProducer = (runId: RunId | null): SuggestionProducer => ({
   kind: "rule",
   model: null,
@@ -3787,13 +3408,7 @@ const statementGenerationFailure = (
   message: runFailureText(error instanceof Error ? error : String(error)),
 });
 
-/**
- * A page's proposals in as few builds as its evidence allows. A build that
- * throws splits in half, so healthy charges keep one shared build and only a
- * malformed charge fails, with its own error. `built` names every charge whose
- * build completed, the only charges a rebuild may retire advice for.
- */
-export async function buildChargeProposalsIsolated(
+async function buildChargeProposalsIsolated(
   db: Database,
   charges: readonly ChargeRef[],
   onFailure: (charge: ChargeRef, error: Error) => void,
@@ -3829,7 +3444,7 @@ export async function buildChargeProposalsIsolated(
 }
 
 /** Run `fn`, then refresh every charge it queued with `regenerateChargesAfterCommit` once. */
-export const coalesceChargeRefreshes = <T>(
+const coalesceChargeRefreshes = <T>(
   fn: () => Promise<T>,
   finish?: (flush: () => Promise<void>) => Promise<void>,
 ) => withAfterCommitScope(fn, finish);
@@ -4081,13 +3696,20 @@ export async function retryStatementGenerationRefs(
 }
 
 /** Keep the publication proposal graph out of the application frame. */
-async function publishStatementGenerationPage(
+export async function publishAndSettleStatementCharges(
   db: Database,
-  charges: readonly ChargeRef[],
-  scope: StatementSuggestionScope | undefined,
-  runId: RunId | null,
-  failed: RunStepError[],
+  input: {
+    charges: readonly ChargeRef[];
+    scope?: StatementSuggestionScope;
+    runId: RunId | null;
+    servicesFor: KernelServicesFor;
+    mode?: "generation" | "label";
+    budgetSpent?: () => boolean;
+    time?: <T>(phase: string, work: () => Promise<T>) => Promise<T>;
+  },
 ) {
+  const { charges, scope, runId } = input;
+  const failed: RunStepError[] = [];
   const suggestionIds = new Map<string, string[]>();
   let published = 0;
   let labelsReused = 0;
@@ -4169,7 +3791,26 @@ async function publishStatementGenerationPage(
     },
   );
   const publishedAt = performance.now();
+  const { settleStatementPage } =
+    await import("~/server/domains/transaction-import/repo/statement-settlement");
+  const settlement = await coalesceChargeRefreshes(() =>
+    settleStatementPage(db, {
+      mode: input.mode ?? "generation",
+      scope,
+      servicesFor: input.servicesFor,
+      budgetSpent: input.budgetSpent,
+      time: input.time,
+      entries: proposals.flatMap(({ charge }) => {
+        const [suggestionId] = suggestionIds.get(chargeId(charge)) ?? [];
+        return suggestionId
+          ? [{ charge, suggestionId, evidenceFingerprint: null }]
+          : [];
+      }),
+    }),
+  );
   return {
+    settlement,
+    failed,
     charges: proposals.map(({ charge }) => charge),
     suggestionIds,
     published,
@@ -4217,7 +3858,7 @@ export async function generateStatementSuggestionPage(
     1,
     Math.min(
       input.limit ?? STATEMENT_SUGGESTION_PAGE,
-      // Import generation also admits money writes before its checkpoint.
+      // Every generation page admits money writes before recording progress.
       input.scope?.importId
         ? JOB_PAGE_LIMITS.statementApplicationsPerPage
         : JOB_PAGE_LIMITS.statementGenerationPerPage,
@@ -4240,65 +3881,43 @@ export async function generateStatementSuggestionPage(
   const selectedAt = performance.now();
   const {
     charges: proposalCharges,
-    suggestionIds,
     published,
     labelsReused,
     unchanged,
     outOfScope,
     preparedAt,
     publishedAt,
-  } = await publishStatementGenerationPage(
-    db,
-    charges.filter((charge) => !twins.has(chargeId(charge))),
-    input.scope,
-    input.runId,
-    failed,
-  );
+    settlement,
+    failed: publicationFailures,
+  } = await publishAndSettleStatementCharges(db, {
+    charges: charges.filter((charge) => !twins.has(chargeId(charge))),
+    scope: input.scope,
+    runId: input.runId,
+    servicesFor: input.servicesFor,
+  });
+  failed.push(...publicationFailures);
   const unfinished: ChargeRef[] = [];
-  if (input.scope?.importId) {
-    const { recoverSettlementObligations, settleStatementPage } =
-      await import("~/server/domains/transaction-import/repo/statement-settlement");
-    // A replayed page's applied charges left the selection; its range still
-    // covers them, and a short page covers everything after the cursor.
-    await recoverSettlementObligations(db, {
-      since: input.recoverSince ?? null,
-      scope: input.scope,
-      within: input.retryCharges
-        ? { kind: "charges", charges: input.retryCharges }
-        : {
-            kind: "range",
-            after: input.after,
-            through: charges.length === limit ? charges.at(-1)! : null,
-          },
-    });
-    // Each write's neighbour refresh joins one page-wide refresh at the end.
-    await coalesceChargeRefreshes(async () => {
-      const outcomes = await settleStatementPage(db, {
-        mode: "generation",
-        scope: input.scope,
-        servicesFor: input.servicesFor,
-        entries: proposalCharges.flatMap((charge) => {
-          const [suggestionId] = suggestionIds.get(chargeId(charge)) ?? [];
-          return suggestionId &&
-            !failed.some(
-              (failure) => failure.ref === `charge:${chargeId(charge)}`,
-            )
-            ? [{ charge, suggestionId, evidenceFingerprint: null }]
-            : [];
-        }),
-      });
-      for (const charge of proposalCharges) {
-        const outcome = outcomes.get(chargeId(charge));
-        if (outcome?.kind === "failed")
-          failed.push(
-            statementGenerationFailure(
-              `charge:${chargeId(charge)}`,
-              outcome.error,
-            ),
-          );
-        else if (outcome?.kind === "unfinished") unfinished.push(charge);
-      }
-    });
+  const { recoverSettlementObligations } =
+    await import("~/server/domains/transaction-import/repo/statement-settlement");
+  await recoverSettlementObligations(db, {
+    since: input.recoverSince ?? null,
+    scope: input.scope,
+    within: input.retryCharges
+      ? { kind: "charges", charges: input.retryCharges }
+      : {
+          kind: "range",
+          after: input.after,
+          through: charges.length === limit ? charges.at(-1)! : null,
+        },
+  });
+  for (const charge of proposalCharges) {
+    const outcome = settlement.get(chargeId(charge));
+    if (outcome?.kind === "failed")
+      failed.push(
+        statementGenerationFailure(`charge:${chargeId(charge)}`, outcome.error),
+      );
+    else if (outcome?.kind === "unfinished" || outcome?.kind === "moved")
+      unfinished.push(charge);
   }
   const timings = {
     selection: Math.round(selectedAt - startedAt),
@@ -4432,126 +4051,111 @@ export type LabelCursor = z.infer<typeof statementApplicationOrder> & {
   inclusive?: boolean;
 };
 
-/** A partial judgment is unpublished work, not a new advisory suggestion. */
-export async function recordStatementLabelCheckpoint(
+type StatementAnswerWrite = { charge: ChargeRef; answers: StatementAnswers };
+type StatementAnswerWriteOutcome = "saved" | "moved" | "out_of_scope";
+
+/** Save a page under the same slot locks as publication; moved answers stay cached. */
+export async function recordStatementAnswerBatch(
   db: Database,
   input: {
-    charge: ChargeRef;
-    evidenceFingerprint: string;
-    checkpoint: StatementLabelCheckpoint;
+    entries: readonly StatementAnswerWrite[];
     scope?: StatementSuggestionScope;
   },
-): Promise<"saved" | "settled" | "moved" | "out_of_scope"> {
-  const checkpoint = statementLabelCheckpoint.parse(input.checkpoint);
-  const save = async (
-    tx: Database,
-  ): Promise<"saved" | "settled" | "moved" | "out_of_scope"> => {
+): Promise<Map<string, StatementAnswerWriteOutcome>> {
+  const outcomes = new Map<string, StatementAnswerWriteOutcome>();
+  if (!input.entries.length) return outcomes;
+  return withTransactionDatabase(db, async (tx) => {
     await assertWorkflowEffect(tx);
-    if (input.scope) {
-      const rows = await unwrapDb(tx).execute<{ id: string }>(
-        sql`
-        SELECT s.id FROM "Suggestion" s WHERE ${pendingSuggestion()}
-          AND ${suggestionField("source")} = ${input.charge.source}
-          AND ${suggestionField("chargeKey")} = ${input.charge.chargeKey}
-          AND ${suggestionField("evidenceFingerprint")} = ${input.evidenceFingerprint}
-      `,
-        "objects",
-      );
-      if (
-        rows.length &&
-        !(
-          await statementLabelTargetsInScope(
-            tx,
-            input.scope,
-            rows.map((row) => row.id),
-          )
-        ).size
-      )
-        return "out_of_scope";
-    }
-    let matched = 0;
-    await transitionSuggestionStates(
-      tx,
-      sql`${pendingSuggestion(STATE)}
-      AND ${suggestionField("source", STATE)} = ${input.charge.source}
-      AND ${suggestionField("chargeKey", STATE)} = ${input.charge.chargeKey}
-      AND ${suggestionField("evidenceFingerprint", STATE)} = ${input.evidenceFingerprint}`,
-      (row) => {
-        matched += 1;
-        const data = stateData.parse(row.data ?? {});
-        const previous = statementLabelCheckpoint.safeParse(
-          data.labelCheckpoint,
-        );
-        const merged = structuredClone(checkpoint);
-        const retained =
-          previous.success &&
-          previous.data.revision === checkpoint.revision &&
-          canonicalJson(statementLabelSubject(previous.data.judgment)) ===
-            canonicalJson(statementLabelSubject(checkpoint.judgment))
-            ? previous.data
-            : null;
-        if (retained) {
-          // First committed answers win; a stale preparation cannot erase them
-          // and later replay them as supposedly new recovery progress.
-          for (const candidate of merged.judgment.candidates)
-            candidate.label =
-              retained.judgment.candidates.find(
-                (saved) =>
-                  saved.transactionId === candidate.transactionId &&
-                  canonicalJson(statementCandidateSubject(saved)) ===
-                    canonicalJson(statementCandidateSubject(candidate)),
-              )?.label ?? candidate.label;
-          const create = merged.judgment.create;
-          if (create && retained.judgment.create) {
-            if (retained.kind)
-              create.votes.label = retained.judgment.create.votes.label;
-            if (retained.counterparty)
-              create.counterparty.label =
-                retained.judgment.create.counterparty.label;
-            Object.assign(
-              create,
-              decideStatementKind({
-                amount: create.amount,
-                votes: create.votes,
-                counterparty: create.counterparty,
-                transfer: merged.judgment.transfer,
-                descriptor: create,
-              }),
-            );
-          }
-          if (retained.spending)
-            merged.judgment.spending = retained.judgment.spending;
-          merged.kind ||= retained.kind;
-          merged.counterparty ||= retained.counterparty;
-          merged.spending ||= retained.spending;
-          merged.models = [...new Set([...retained.models, ...merged.models])];
-          merged.model = merged.models.length === 1 ? merged.models[0]! : null;
-        }
-        return {
-          data: {
-            ...data,
-            labelCheckpoint: z.json().parse(jsonSnapshot.parse(merged)),
-          },
-        };
-      },
+    await advisoryXactLockSequence(getDb(tx), [
+      input.entries.map(
+        ({ charge }) => `statement-suggestion:${chargeId(charge)}`,
+      ),
+    ]);
+    const requested = requestedRows(
+      input.entries.map(({ charge }) => ({ ...charge })),
+      { source: "text", chargeKey: "text" },
+      "answer_charge",
     );
-    if (matched) {
-      return "saved";
-    }
-    const settled = await unwrapDb(tx).execute(
+    const rows = await getDb(tx).execute<{
+      id: string;
+      source: string;
+      chargeKey: string;
+      judgment: unknown;
+      answers: unknown;
+    }>(
       sql`
-    SELECT 1 FROM ${chargeStateOf(sql`r.source = ${input.charge.source} AND ${chargeKeyOf("r")} = ${input.charge.chargeKey}`)} cs
-    WHERE ${checkpoint.judgment.recommended !== statementTransactionAction.enum.void}
-      AND (cs.ignored OR cs.superseded OR (cs.shortcode IS NOT NULL AND ${checkpoint.judgment.recommended !== "book"}))
-    LIMIT 1
-  `,
+      SELECT s.id, ${suggestionField("source")} AS source, ${suggestionField("chargeKey")} AS "chargeKey", s.judgment, s.data->'answers' AS answers
+      FROM "Suggestion" s
+      WHERE s.family=${suggestionFamily.enum.statement_transaction} AND s.active AND s.status=${suggestionStatus.enum.pending}
+        AND (${suggestionField("source")}, ${suggestionField("chargeKey")}) IN (SELECT ${requested.col("source")}, ${requested.col("chargeKey")} FROM ${requested.from})
+      ORDER BY s."createdAt" DESC, s.id DESC FOR UPDATE`,
       "objects",
     );
-    return settled.length ? "settled" : "moved";
-  };
-  return input.scope
-    ? withSnapshotWriteDatabase(db, save, { isolationLevel: "serializable" })
-    : withTransactionDatabase(db, save);
+    const active = new Map<string, (typeof rows)[number]>();
+    for (const row of rows)
+      if (!active.has(chargeId(row))) active.set(chargeId(row), row);
+    const scoped = input.scope
+      ? await statementLabelTargetsInScope(
+          tx,
+          input.scope,
+          rows.map((row) => row.id),
+        )
+      : null;
+    const needsLoan =
+      input.entries.some((entry) => entry.answers.escrow) ||
+      rows.some((row) => statementAnswers.safeParse(row.answers).data?.escrow);
+    const preparation = needsLoan
+      ? await prepareFinancialStatementPreview(tx)
+      : null;
+    const changed = new Map<string, StatementAnswers>();
+    for (const entry of input.entries) {
+      const key = chargeId(entry.charge);
+      const row = active.get(key);
+      if (!row) {
+        outcomes.set(key, "moved");
+        continue;
+      }
+      if (scoped && !scoped.has(row.id)) {
+        outcomes.set(key, "out_of_scope");
+        continue;
+      }
+      const judgment = statementTransactionJudgment.parse(row.judgment);
+      const isLoan = liveHouseholdLoan(
+        preparation?.accounts.find(
+          (account) => account.id === judgment.accountId,
+        ),
+      );
+      let answers = mergeStatementAnswers(
+        judgment,
+        [row.answers, entry.answers],
+        isLoan,
+      );
+      applyStatementAnswers(judgment, answers);
+      answers = mergeStatementAnswers(
+        judgment,
+        [row.answers, entry.answers],
+        isLoan,
+      );
+      if (
+        canonicalJson(jsonSnapshot.parse(row.answers ?? {})) !==
+        canonicalJson(answers)
+      )
+        changed.set(row.id, answers);
+      outcomes.set(key, "saved");
+    }
+    if (changed.size)
+      await transitionSuggestionStates(
+        tx,
+        inArray(suggestionTable.id, [...changed.keys()]),
+        (row) => ({
+          data: {
+            ...stateData.parse(row.data),
+            answers: z.json().parse(jsonSnapshot.parse(changed.get(row.id)!)),
+          },
+        }),
+      );
+    return outcomes;
+  });
 }
 
 /**
@@ -4682,13 +4286,22 @@ async function statementLabelCandidates(
     SELECT * FROM ((${selectPositions("native")}) UNION ALL (${selectPositions("retained")})) candidates
     ORDER BY "positionAt","positionId" LIMIT ${limit}
   )
-  SELECT selected.id,to_char(selected."positionAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt",selected."positionId" AS "cursorId"
-  FROM selected
+  SELECT selected.id,to_char(selected."positionAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt",selected."positionId" AS "cursorId",
+    s.subject,s.judgment,s.data->'amount' AS amount,
+    ${suggestionField("evidenceFingerprint")} AS "evidenceFingerprint",s.data->'answers' AS answers,
+    coalesce((s.data->>'applicationPending')::boolean,false) AS "applicationPending"
+  FROM selected JOIN "Suggestion" s ON s.id=selected.id
   ORDER BY selected."positionAt",selected."positionId"`;
   const rows = await unwrapDb(db).execute<{
     id: string;
     createdAt: string;
     cursorId: string;
+    subject: unknown;
+    judgment: unknown;
+    amount: unknown;
+    evidenceFingerprint: string;
+    answers: unknown;
+    applicationPending: boolean;
   }>(query, "objects");
   return rows;
 }
@@ -4730,43 +4343,11 @@ export async function suggestionsNeedingLabels(
     if (!last || candidates.length < scanLimit) break;
     cursor = { createdAt: last.createdAt, id: last.cursorId };
   }
-  if (!selected.length) return [];
-  // Account preparation is bounded by cursor candidates; only the filled page
-  // hydrates judgments/checkpoints. Exclusions never end a partial scan early.
-  const page = requestedRows(
-    selected.map((row) => ({
-      id: row.id,
-      positionAt: row.createdAt,
-      positionId: row.cursorId,
-    })),
-    { id: "uuid", positionAt: "timestamp", positionId: "uuid" },
-    "page",
-  );
-  const query = sql`WITH selected AS (SELECT id,"positionAt","positionId" FROM ${page.from})
-  SELECT s.id,to_char(selected."positionAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt",selected."positionId" AS "cursorId",
-    s.subject,s.judgment,s.data->'amount' AS amount,
-    ${suggestionField("evidenceFingerprint")} AS "evidenceFingerprint",s.data->'labelCheckpoint' AS checkpoint,
-    coalesce((s.data->>'applicationPending')::boolean,false) AS "applicationPending"
-  FROM selected JOIN "Suggestion" s ON s.id=selected.id
-  ORDER BY selected."positionAt",selected."positionId"`;
-  const read = (client: Database) =>
-    unwrapDb(client).execute<{
-      id: string;
-      createdAt: string;
-      subject: unknown;
-      judgment: unknown;
-      amount: unknown;
-      evidenceFingerprint: string;
-      checkpoint: unknown;
-      applicationPending: boolean;
-      cursorId: string;
-    }>(query);
-  const { rows } = await read(db);
-  return rows.map((row) => ({
+  return selected.map((row) => ({
     ...row,
     judgment: suggestionJudgments.statement_transaction.parse(row.judgment),
     amount: z.number().finite().parse(row.amount),
-    checkpoint: statementLabelCheckpoint.nullable().parse(row.checkpoint),
+    answers: statementAnswers.parse(row.answers ?? {}),
   }));
 }
 

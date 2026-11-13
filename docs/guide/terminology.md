@@ -803,7 +803,7 @@ recorded hold with its posted row, or void a hold a later export no longer
 contains, or book spending on an already matched transaction. It uses the
 `statement_transaction` Suggestion family and the shared review path. Posted
 spending also books or links Expenses; a transaction alone adds no spend.
-Import-clean booking and uncertainty follow
+Clean booking and uncertainty follow
 [evidence convergence](../import-evidence-convergence.md). A clean one is
 bulk-acceptable: a create is clean only when at least two of the category
 rule, the decision label and merchant history agree on its kind, none

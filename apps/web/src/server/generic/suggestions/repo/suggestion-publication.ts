@@ -144,6 +144,20 @@ export type SuggestionFamily<
   obsolete?(row: Row, producer: SuggestionProducer, loaded?: Loaded): boolean;
   /** `reconfirm` moves unchanged rows to the producer's Run under its cause. */
   onUnchanged: "none" | { reconfirm: string };
+  refreshUnchanged?(
+    tx: Database,
+    rows: Row[],
+    candidate: Candidate,
+    context: SuggestionContext<Loaded>,
+  ): Promise<Row[]>;
+  projectLoaded?(
+    tx: Database,
+    candidate: Candidate,
+    rows: readonly Row[],
+    producer: SuggestionProducer,
+    context: SuggestionContext<Loaded>,
+  ): Promise<{ candidate: Candidate; producer: SuggestionProducer }>;
+  sameEvidenceUnchanged?: boolean;
   /**
    * What a publication does to the slot's other rows: `retire` deactivates
    * active rows and deletes superseded ones no decision or authority retains,
@@ -209,7 +223,7 @@ export const revisionSuppresses = (row: SuggestionRow, f: Fingerprints) =>
  * Take every slot's advisory lock in key order, then lock and read each
  * slot's history. Stable order keeps overlapping batches deadlock-free.
  */
-export async function lockSuggestionSlots<
+async function lockSuggestionSlots<
   Candidate,
   Row extends SuggestionRow,
   Reason extends string,
@@ -279,7 +293,7 @@ export async function lockSuggestionSlots<
 }
 
 /** Active rows equal to the candidate; a rule producer also matches equal evidence. */
-export async function unchangedSuggestions<
+async function unchangedSuggestions<
   Candidate,
   Row extends SuggestionRow,
   Reason extends string,
@@ -298,7 +312,8 @@ export async function unchangedSuggestions<
       row.active &&
       !family.obsolete?.(row, producer, loaded) &&
       (row.fingerprint === fingerprint ||
-        (producer.kind === "rule" &&
+        (family.sameEvidenceUnchanged !== false &&
+          producer.kind === "rule" &&
           row.evidenceFingerprint === evidenceFingerprint)),
   );
 }
@@ -449,7 +464,7 @@ async function pruneReplacedSuggestions(tx: Database, ids: readonly string[]) {
  * settles each slot's earlier rows, except the row a publication replays by
  * key, which keeps its place.
  */
-export async function publishReplacements(
+async function publishReplacements(
   tx: Database,
   family: { replaced?: "retire" | "deactivate" | "keep" },
   replacements: readonly {
@@ -516,8 +531,17 @@ async function publishLocked<
     producer: SuggestionProducer;
     rows: readonly Row[];
   }[] = [];
-  for (const [index, candidate] of candidates.entries()) {
+  for (const [index, original] of candidates.entries()) {
     const rows = history[index]!;
+    const projected = await family.projectLoaded?.(
+      tx,
+      original,
+      rows,
+      producer,
+      context,
+    );
+    const candidate = projected?.candidate ?? original;
+    const candidateProducer = projected?.producer ?? producer;
     const fingerprints = {
       fingerprint: await family.fingerprint(candidate),
       evidenceFingerprint: await family.evidenceFingerprint(candidate),
@@ -560,7 +584,7 @@ async function publishLocked<
       family,
       rows,
       candidate,
-      producer,
+      candidateProducer,
       context.loaded,
     );
     if (unchanged.length) {
@@ -575,12 +599,21 @@ async function publishLocked<
           ),
           { runId: producer.runId },
         );
-      outcomes[index] = { outcome: "unchanged", rows: unchanged };
+      outcomes[index] = {
+        outcome: "unchanged",
+        rows:
+          (await family.refreshUnchanged?.(
+            tx,
+            unchanged,
+            candidate,
+            context,
+          )) ?? unchanged,
+      };
       continue;
     }
     const prepared = family.prepare
-      ? await family.prepare(tx, candidate, rows, producer, context)
-      : { candidate, producer };
+      ? await family.prepare(tx, candidate, rows, candidateProducer, context)
+      : { candidate, producer: candidateProducer };
     if (prepared === "defer") {
       outcomes[index] = { outcome: "deferred" };
       continue;
@@ -749,7 +782,7 @@ export async function publishExactSuggestion(
  * each item it left without an outcome runs through `one`, isolating only
  * the genuinely failed item.
  */
-export async function inSuggestionBatches<Item, Outcome>(
+async function inSuggestionBatches<Item, Outcome>(
   items: readonly Item[],
   input: {
     concurrency: number;

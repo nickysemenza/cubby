@@ -9,6 +9,8 @@ import type {
   StatementTransactionJudgment,
 } from "@cubby/schemas/statement-suggestion";
 
+import { statementEffectiveMovement } from "~/server/domains/transaction-import/repo/statement-effective-movement";
+
 type KindRule = {
   kind: FinancialTransactionKind;
   /** The category only implies this kind for money moving in this direction. */
@@ -120,8 +122,16 @@ export function isLoanPayment(
   account: { kind: string },
   descriptor: StatementDescriptor,
 ): boolean {
-  const text = descriptor.rawDescription ?? descriptor.merchant;
-  return account.kind === "loan" && text?.trim().toUpperCase() === "PAYMENT";
+  return (
+    account.kind === "loan" &&
+    statementEffectiveMovement({
+      providerAmount: 1,
+      description: descriptor.rawDescription,
+      merchant: descriptor.merchant,
+      sourceCategory: null,
+      loan: { providerVendorNames: [], proven: true },
+    }).movementClass === "loan_payment"
+  );
 }
 
 /** Rails a person can pay or be paid through: payment apps and checks. */
@@ -135,7 +145,7 @@ const P2P_RAIL =
  * name is a seller, such as a Square or Shopify shop, or a bill naming the
  * member.
  */
-function statementP2PRail(
+export function statementP2PRail(
   descriptor: StatementDescriptor,
   counterparty: Pick<StatementCounterparty, "storedValue">,
 ) {
@@ -144,23 +154,6 @@ function statementP2PRail(
     P2P_RAIL.test(
       words(`${descriptor.rawDescription ?? ""} ${descriptor.merchant ?? ""}`),
     )
-  );
-}
-
-/**
- * A published create whose person label or history the current rail rule
- * reads as a business, so a republish re-decides it from the votes it holds.
- */
-export function offRailPerson(
-  create: Pick<
-    NonNullable<StatementTransactionJudgment["create"]>,
-    "rawDescription" | "merchant" | "counterparty"
-  >,
-) {
-  return (
-    (create.counterparty.label === "person" ||
-      create.counterparty.history === "person") &&
-    !statementP2PRail(create, create.counterparty)
   );
 }
 

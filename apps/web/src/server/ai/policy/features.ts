@@ -54,7 +54,7 @@ import {
   runSummaryAnalysis,
   type RunSummaryAnalysis,
 } from "@cubby/schemas/run-fields";
-import { STATEMENT_LABEL_REVISION } from "@cubby/schemas/statement-suggestion";
+import { STATEMENT_ANSWER_VERSIONS } from "@cubby/schemas/statement-answers";
 import { z } from "zod";
 
 import {
@@ -201,7 +201,7 @@ export const MAILBOX_TRIAGE_FEATURE = defineFeature({
 export const MERCHANT_IDENTITY_FEATURE = defineFeature({
   request: merchantIdentityRequest,
   feature: "merchant-identity",
-  promptVersion: "2026-10-20.1",
+  promptVersion: STATEMENT_ANSWER_VERSIONS.merchantIdentity,
   cache: true,
   tier: "fast",
   effort: "low",
@@ -212,7 +212,7 @@ export const MERCHANT_IDENTITY_FEATURE = defineFeature({
 
 export const MERCHANT_IDENTITY_SUPPORT_FEATURE = defineFeature({
   feature: "merchant-identity-support",
-  promptVersion: "2026-10-20.1",
+  promptVersion: STATEMENT_ANSWER_VERSIONS.merchantSupport,
   cache: true,
   tier: "decision",
   choices: ["supported_business", "insufficient_evidence"] as const,
@@ -250,7 +250,7 @@ export const STATEMENT_CHARGE_IDENTITY_FEATURE = defineFeature({
   prompt: statementChargeIdentityPrompt,
   choices: statementChargeIdentityChoices,
   feature: "statement-charge-identity",
-  promptVersion: STATEMENT_LABEL_REVISION,
+  promptVersion: "2026-11-12.1",
   tier: "decision",
   cache: true,
   collectPayload: false,
@@ -261,7 +261,7 @@ export const STATEMENT_TRANSACTION_KIND_FEATURE = defineFeature({
   prompt: statementTransactionKindPrompt,
   choices: statementTransactionKindChoices,
   feature: "statement-transaction-kind",
-  promptVersion: STATEMENT_LABEL_REVISION,
+  promptVersion: "2026-11-12.1",
   tier: "decision",
   cache: true,
   collectPayload: false,
@@ -269,7 +269,7 @@ export const STATEMENT_TRANSACTION_KIND_FEATURE = defineFeature({
 
 export const LOAN_ESCROW_DISBURSEMENT_FEATURE = defineFeature({
   feature: "loan-escrow-disbursement",
-  promptVersion: "2026-11-12.1",
+  promptVersion: STATEMENT_ANSWER_VERSIONS.escrow,
   tier: "decision",
   cache: true,
   collectPayload: false,

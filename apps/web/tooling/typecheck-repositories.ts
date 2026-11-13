@@ -42,6 +42,7 @@ export const repositoryOwners = [
   "src/server/generic/suggestions/repo/pending-admission.ts",
   "src/server/domains/transaction-import/repo/statement-charge.ts",
   "src/server/domains/transaction-import/repo/statement-transaction-kind.ts",
+  "src/server/domains/transaction-import/repo/statement-effective-movement.ts",
   "src/server/domains/transaction-import/repo/source-observation-state.ts",
   "src/server/domains/financial-transaction/repo/financial-source-evidence.ts",
   "src/server/domains/financial-transaction/repo/transaction-money.ts",

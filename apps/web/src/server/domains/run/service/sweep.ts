@@ -202,9 +202,7 @@ const statementGenerate: StepDriversFor<"sweep">["statement_generate"] = {
   page: async (context) => {
     const { db, run, step, work } = context;
     const scope = scopeOf(run, "statement_transaction");
-    const limit = scope.importId
-      ? JOB_PAGE_LIMITS.statementApplicationsPerPage
-      : JOB_PAGE_LIMITS.statementGenerationPerPage;
+    const limit = JOB_PAGE_LIMITS.statementApplicationsPerPage;
     const retried = await pageRetryRefs(context, limit, async (refs) => {
       const outcome = await retryStatementGenerationRefs(db, {
         servicesFor: buildCrudServices,

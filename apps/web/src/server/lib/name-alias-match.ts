@@ -6,7 +6,13 @@ import {
   sql,
 } from "drizzle-orm";
 
-/** Normalize lookup input without rewriting retained names or their indexes. */
+/**
+ * Normalize lookup input without rewriting retained names or their indexes.
+ * Unlike `statementMerchantKey` this keeps inner whitespace: SQL compares the
+ * key with `lower(column)` (and `name_match_keys`) so declared exact-name
+ * indexes stay usable, and stored names are not whitespace-collapsed. Each
+ * raw merchant spelling is therefore resolved against Vendors on its own.
+ */
 const nameMatchKey = (value: string): string => value.trim().toLowerCase();
 
 export const matchesNameOrAlias = (input: {

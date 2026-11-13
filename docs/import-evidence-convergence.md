@@ -31,8 +31,7 @@ Pending or unknown provider status does not prevent an otherwise supported
 booking, and spending advice is generated for pending and observed spending
 under the same eligibility as posted spending. Unknown status is kept as null
 on evidence and observed on the FinancialTransaction, never fabricated as
-posted. Label-policy revisions invalidate checkpoints when advice eligibility
-changes. Transaction booking and evidence coverage use those same observed,
+posted. Transaction booking and evidence coverage use those same observed,
 pending and posted states: supported unbooked spending remains a booking gap
 before posting, while expected or void transactions, transfers and ordinary
 income stay outside that requirement. Stored quality flags adopt policy changes
@@ -52,14 +51,54 @@ with an unknown individual purchaser, including shared access or missing
 primary-cardholder evidence. A household is never stored as a member purchaser
 override. Missing/deleted owners, guest owners, deleted accounts and household
 other accounts remain guarded. A household loan books only a supported escrow
-disbursement for property tax or homeowners insurance, with an unknown purchaser;
-loan payments are transfers, and a checking entry matching a loan payment waits
-for its transfer pair. Escrow interest is interest. An escrow refund uses the
+disbursement for property tax or homeowners insurance, with an unknown purchaser.
+Loan payments and their matching checking entries are transfers that wait
+for their transfer pair. Escrow interest is interest. An escrow refund uses the
 original disbursement's category when identified; without a possible original,
 it is income. Explicit
 member choices and an existing Purchase's overrides and inherited
 receipt/order/member evidence remain authoritative. Funding attribution remains
 its own dated contract.
+
+### Loan effective movement
+
+`statementEffectiveMovement` is the one projection from a row's provider
+amount, descriptor, source and resolved account to `{effectiveAmount,
+movementClass, reviewReason}` in integer minor units. The financial statement
+preview computes it once per row from the resolved live account and every
+amount consumer reads that result: candidate discovery and direction, proposed
+amount, candidate eligibility, merchant history, copies and pending matching,
+kind votes, spending inputs, source-correction comparison, possible originals,
+loan-payment evidence, transfer pairing and locked rebuilds. Observations keep
+the provider amount, source identity and text unmodified, and fingerprints
+record provider cents.
+
+Outside a household loan the effective amount is the negated provider amount.
+A household loan requires a unique source/account binding to that live loan;
+a lender-looking merchant alone never makes a loan. For a recognized loan
+class the sign follows the movement, independent of the provider's sign, using
+the absolute amount. Classes are evaluated in this order on the trimmed,
+case-folded descriptor with collapsed whitespace and anchored words:
+
+- Escrow interest (`INTEREST ON ESC`, `ESCROW INTEREST`): −|amount|, interest.
+- Escrow refund (`ESCROW REFUND`): −|amount|, a refund with a possible original,
+  otherwise income.
+- Payment (`PAYMENT`, `LOAN PAYMENT`, `MORTGAGE PAYMENT`, `PAYMENT RECEIVED`,
+  `AUTOMATIC PAYMENT`, or exactly the account provider Vendor's name or alias
+  with no refund, interest or disbursement terms): −|amount|, account transfer.
+- Escrow disbursement (`PROPERTY TAX`, `COUNTY TAX`, `TAX DISBURSEMENT`,
+  `HOMEOWNERS INSURANCE`, `HOMEOWNERS INSURANCE DISBURSEMENT`): +|amount|,
+  purchase.
+- Unknown (no class, contradictory classes, generic lender prose, generic
+  refund, fees, unexplained withdrawals): the source-projected amount and a
+  loan-movement review reason.
+
+An escrow disbursement still needs an affirmative escrow answer and the
+supported business guards. Unknown or contradictory loan movement stays in
+review whatever the model kind or counterparty says; the sign is never booked
+alone. A same-page refund waits for a tax original that appears later in input
+order. Replaying a booked row compares against the effective amount, so a
+provider-sign convention produces no correction; a changed magnitude does.
 
 Ready-plan `purchaserId` is nullable. Approval snapshots include account
 authority, dated access and holder evidence. Ready plans and direct booking
@@ -135,18 +174,31 @@ invoke the shared commands directly; statement discovery uses retained rows.
 Clean new spending keeps the transaction-kind agreement, identity, ownership and
 money checks. Missing, uncertain or conflicting category advice does not block
 otherwise-supported booking: the aggregate Expense stays Uncategorized and its
-missing effective category enters the shared Work queue. Apply a proposed
-category only when it is live, high confidence and consistent with merchant
-history, or the member reviewed that history. Explicit reviewed category
-choices still refuse deleted categories or unacknowledged conflicts. Category
-history is optional and there is no amount cap.
+missing effective category enters the shared Work queue. A booking's category
+comes from a member's reviewed choice, a refund's identified original Purchase,
+or the resolved Vendor's default category; otherwise the Expense is
+Uncategorized. The model proposes no category per charge. Explicit reviewed
+category choices still refuse deleted categories or unacknowledged conflicts.
+Category history is optional and there is no amount cap.
 
 The provider category stays verbatim evidence. Vendor name/alias resolution
 runs first; an unresolved merchant may propose a supported cleaned business
 name and keep the literal merchant alias. Person, processor-only, unsupported
 and competing identities need review. Both names resolve again before a Vendor
 and its booking are created atomically; one charge never establishes a
-Vendor-wide spending default. A member may explicitly choose an existing Vendor
+Vendor-wide spending default.
+
+A merchant answer is keyed by the merchant key (`nameMatchKey` of the
+merchant, else the raw description), the same function Vendor name and alias
+matching use; descriptions sharing a key share one identity and support
+answer. A supported high-confidence business identity whose proposed name
+resolves to exactly one live Vendor, whose raw merchant string resolves to
+none and whose allocation history is none or that same Vendor adds the raw
+string as an alias through the Vendor entity update, appending to member
+aliases. This is the bar that creates a new Vendor, and the same vetoes apply:
+person, P2P and processor judgments, competing names, historical Vendors,
+ambiguity and a merchant-history contradiction for that raw string. A new
+Vendor is created only at its first booking. A member may explicitly choose an existing Vendor
 and acknowledge conflicting category history while correcting a held booking.
 Reviewed category and new business-name choices are kept separately from model
 advice. Booking corrections use the server's retained advice and explicit
@@ -221,7 +273,7 @@ seven days of each affected date, plus explicit copies. Disjoint date windows
 stay disjoint. Refreshes coalesce within a page and use the shared Suggestion
 batch publisher, preserving unchanged advice, paid labels and member decisions.
 
-The clean import booking rule (clean spending creates, books and supersedes,
+The clean booking rule (clean spending creates, books and supersedes,
 clean non-spending creates, and supported non-spending or paired copy attaches) is fixed code and always on; there is no member
 switch or audit sample. Each application still uses `suggestions.review` and records automatic authority and its policy
 revision in Changes by Cubby. Booking writes are import evidence: they are not
@@ -1093,78 +1145,101 @@ cleared is never superseded automatically. Any other group keeps its
 Recording rows starts a routine statement Sweep; `run.sweep` reruns it. Default
 background labeling is unscoped.
 
-**Label reuse.** A repeated Sweep keeps labels for the same source and charge
-key when the statement model inputs and the candidate identities/model inputs
-match, and the recorded label prompt revision is current. Bump
-`STATEMENT_LABEL_REVISION` with any statement label prompt or model-policy
-change; it keeps the deployed revision so compatible labels survive.
-Observation occurrences, memos, rule/history votes and clean-policy changes can
-move the broader evidence fingerprint without requiring fresh model decisions.
-Replacement suggestions keep the original model provenance, copy only the model
-votes and candidate labels, and recompute kind and clean status from current
-rules, history and transfer evidence. Changed model inputs or candidates retire
-the old labels atomically with the replacement; suppressed or settled charges
-remain excluded. Paid labels may be reused across aliases only when their exact
-model inputs and policy still agree. A rule re-run republishes a published
-person label that is off a payment rail, re-deciding its kind from the votes it
-already holds, without asking the model again. Acceptance always validates the current
-broader evidence fingerprint.
+**Stored answers.** Each model question is asked once per distinct input. A
+statement Suggestion stores `data.answers` per question (kind, counterparty,
+each candidate, escrow, merchant) as `{value, input, versions, models}`, where
+`input` is that question's exact projected input and `versions` the feature
+prompt versions that produced it. A later pass reuses an answer when its input
+and versions equal the current ones, reading the charge's slot rows and prior
+publications through observation identity and aliases, newest first, per
+question. A completed abstention is an answer; a failed or unavailable call is
+not and stays a retained item failure. Reuse is per question, so a changed
+candidate re-asks only its own label. Answers never enter either hash. The AI
+response cache holds every completed answer, so a missing stored answer usually
+refills from it without a provider call. An unchanged repeat pass makes no
+model call, publication insert or answer write.
+
+A statement amount reaching a question is the effective movement. Escrow and
+merchant answers come from spending advice: merchant identity and support
+inputs use the merchant key, and the escrow input carries the merchant,
+description, source category and effective amount. A stored answer saves under
+the charge's advisory lock to the active slot row; if the charge moved, the
+write is dropped.
+
+**Fingerprints and dismissals.** Two hashes keep their meanings: the rule
+evidence hash and the labelled output hash. The rule evidence payload carries
+the frozen hash-scheme tag `{revision, cleanPolicy}`, which changes only with
+the serialized payload shape. The labelled hash excludes the spending judgment,
+so a Vendor or alias edit neither reopens a dismissal nor republishes. A revision-scoped dismissal holds
+while both hashes are equal, so a policy-only change keeps it; changed rule
+evidence or changed labelled output reopens the charge. A permanent "Never
+suggest" holds separately. The automatic policy revision is separate from the
+hash scheme: an unchanged row whose matched rules differ under the current
+policy is restamped in place under its lock and never republished, and an
+active pending row's stamp must match the live policy to apply.
 
 **Pages.** Generation and labeling commit bounded pages of independent charges;
 [statement pages](jobs.md#statement-pages) owns the page sizes and the
-cooperative page budget. Identity questions stay batched; merchant/spending
-preparation runs in waves of `STATEMENT_SPENDING_CONCURRENCY`, with field
-questions batched within each wave, and a single page allowance admits fresh
-context-fitting questions in identity/kind/counterparty/spending order,
-reserving spending before the next charge. Compatible checkpoint answers stay
-eligible after the allowance is exhausted. Untouched charges keep their
-complete candidate population and inclusive cursor; they receive no empty
-checkpoint, skipped outcome or completion. When the page budget ends, a page
-settles started work and saves partial answers before yielding; it does not
-interrupt an in-flight provider request. Cache contention and
-lookup deferrals remain typed waits, neither retained item failures nor
-triggers for uncached model calls. Failed items remain unresolved even after
-scanning ends: a completed scan with retained failures is not completed
-reconciliation. Page caches are discarded after their page: label work,
-publication and financial application rebuild current facts, and a commit
-never uses a page cache as validation. These bounds limit repeated work after
-interruption; they are no wall-time guarantee.
+cooperative page budget. Generation is a scan: charges that need a label,
+member review, no action, a hold or are out of scope do not bar a later ready
+charge. Labeling asks only unanswered applicable questions, saves each paid
+answer before publication, and hands the charges to the shared
+publish-and-settle path that generation and retries use. Identity questions
+stay batched; merchant/spending preparation runs in waves of
+`STATEMENT_SPENDING_CONCURRENCY`, with field questions batched within each
+wave, and a single page allowance admits fresh context-fitting questions in
+identity/kind/counterparty/spending order, reserving spending before the next
+charge. Stored answers stay usable after the allowance is exhausted. Untouched
+charges keep their complete candidate population and inclusive cursor; they
+receive no skipped outcome or completion. When the page budget ends, a page
+settles started work and saves answered questions before yielding; it does not
+interrupt an in-flight provider request. Cache contention and lookup deferrals
+remain typed waits, neither retained item failures nor triggers for uncached
+model calls. Failed items remain unresolved even after scanning ends: a
+completed scan with retained failures is not completed reconciliation. Page
+caches are discarded after their page: label work, publication and financial
+application rebuild current facts, and a commit never uses a page cache as
+validation. These bounds limit repeated work after interruption; they are no
+wall-time guarantee.
 
-**Publication and application.** Complete labels publish in batches of at most
-32 charges with at most four publication transactions in flight; partial
-checkpoints remain per charge. Each completed label keeps its own producer,
-checkpoint, Suggestion receipt and original application order. A failed batch
-reconciles each charge through the same locked admission path: committed
-publications recover their pending application receipts before testing the
-obsolete input fence, and finish retirement before acknowledgement; recovery
-does not recreate or restamp labels. Resumed application receipts repeat that
-exact retirement check before application, including recovery from a crash
-before the after-commit callback started. Automatic financial application
-admits only the original ready prefix. Import generation and label pages apply
-compatible creates through the same guarded transactions of at most 32, one
-dependency layer each ([statement pages](jobs.md#statement-pages)). Each
-rebuilds current evidence under its locks and preserves per-charge receipts;
-declined items use single admission.
-A booked primary's copies come from other sources, so no import scope admits
-them; the neighbour refresh republishes their paired attach for the pass that
-owns them. Before any application on a generation page, its own rule
-selection decides which charges need admission. An
-as-is attach uses its proven paired Transaction even beside other candidates;
-an unpaired ambiguous attach requires an explicit target. Preview, stale-term
-comparison, spending preparation and application use that same target. Charges already skipped by
+**Publication and settlement.** Every Sweep, scoped or not, settles every
+eligible statement row: an active pending row whose current stamp matches the
+live automatic policy, whose source is eligible, whose kind and clean status
+agree and whose scope admits it. Import scope narrows what a pass admits; it is
+not what makes a row eligible. A Sweep that completes leaves no eligible row
+unapplied; commit refusals, member-review rows and Uncategorized bookings are
+counted, never hidden. Publication carries each charge's Suggestion receipt and
+original application order. A failed batch reconciles each charge through the
+same locked admission path: committed publications recover their pending
+application receipts before testing the obsolete input fence, and finish
+retirement before acknowledgement; recovery does not recreate or restamp
+labels. Resumed application receipts repeat that exact retirement check before
+application, including recovery from a crash before the after-commit callback
+started. Automatic financial application admits only the original ready prefix.
+Generation and label pages apply compatible creates through the same guarded
+transactions of at most 32, one dependency layer each
+([statement pages](jobs.md#statement-pages)). Each rebuilds current evidence
+under its locks and preserves per-charge receipts; declined items use single
+admission, and a row whose Suggestion moved is re-found by charge before it is
+applied. A booked primary's copies come from other sources, so no import scope
+admits them; the neighbour refresh republishes their paired attach for the pass
+that owns them. Before any application on a generation page, its own rule
+selection decides which charges need admission. An as-is attach uses its proven
+paired Transaction even beside other candidates; an unpaired ambiguous attach
+requires an explicit target. Preview, stale-term comparison, spending
+preparation and application use that same target. Charges already skipped by
 the current label page do not split that prefix; failed, unfinished and
 applicable-rule charges stop it. Unscoped passes may complete consecutive
 no-action receipts in bounded transactions: lock the exact receipts, verify
 their charge/evidence, active pending state and absent rule descriptors, then
 clear only the proven prefix through the projection writer. A missing, replaced
-or rule-bearing receipt stops the batch (current
-import-only rules cannot execute outside import admission, so their stamps do
-not). Single-item import admissions regenerate first once the page has written,
-since regeneration can introduce actionable rules, and the page's charges a
-write affects are republished together before their admission. A failed
-proposal build bisects so failures retain their own references. Statement application and booking request only
-identity output from their mutation writers when they consume only IDs; the
-writers keep validation, locks, audits, allocations and receipts.
+or rule-bearing receipt stops the batch. Single-item admissions regenerate
+first once the page has written, since regeneration can introduce actionable
+rules, and the page's charges a write affects are republished together before
+their admission. A failed proposal build bisects so failures retain their own
+references. Statement application and booking request only identity output from
+their mutation writers when they consume only IDs; the writers keep validation,
+locks, audits, allocations and receipts.
 
 **Retries.** Retrying failed statement labels consumes only the retained charge
 references, one charge at a time, without moving the original population
@@ -1188,10 +1263,10 @@ observations, including withdrawal imports; the date is the source
 generation-preview resolution, including stored and accepted-settlement hints;
 void targets use their live transaction's account. Scope follows regeneration
 and is checked again inside automatic review's serializable write admission,
-and scoped checkpoints, label publications and receipt completions recheck the
+and scoped answer saves, label publications and receipt completions recheck the
 live resolver inside their write transactions, so valid fresh evidence for
 another account cannot authorize an effect. An out-of-scope result keeps
-evidence and paid checkpoints without publishing or acknowledging that target;
+evidence and stored answers without publishing or acknowledging that target;
 excluded receipts keep `applicationPending` and their original
 `applicationOrder`, and completion counts include only IDs the writer admitted.
 
@@ -1202,11 +1277,11 @@ references refuse. Account and date filters intersect its retained charge
 membership. Selected charges still use current observations from other
 collections sharing their identity; unrelated charge identities stay excluded.
 This reprocesses retained evidence under the automatic policies, including
-clean spending booking. Account/date scope alone does not grant import-clean
-authority, and attachments wait for review. Incomplete collections allow supported positive
-processing but prove no absence, withdrawal, reconciliation or completion. A
-Sweep changes neither collection coverage nor `completedAt` and records no
-withdrawals.
+clean spending booking. An empty or unscoped Sweep does not admit held or
+ambiguous sources, and attachments wait for review. Incomplete collections
+allow supported positive processing but prove no absence, withdrawal,
+reconciliation or completion. A Sweep changes neither collection coverage nor
+`completedAt` and records no withdrawals.
 
 **Logs.** RunStep page samples keep selection, discovery, label preparation,
 decision, spending-fact, spending, publication and ordered-application wall

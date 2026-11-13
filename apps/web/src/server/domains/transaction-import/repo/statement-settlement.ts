@@ -30,12 +30,12 @@ import {
   statementNeighbours,
 } from "~/server/domains/transaction-import/repo/statement-suggestion-apply";
 import {
-  buildChargeProposals,
   completeStatementReceipts,
   regenerateCharges,
 } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import type { KernelServicesFor } from "~/server/entity-kernel/adapter";
 import type { AutomaticSelection } from "~/server/generic/suggestions/repo/automatic-application";
+import { canonicalJson } from "~/server/lib/canonical-json";
 
 const log = createLogger("statement-settlement");
 
@@ -60,8 +60,7 @@ export async function recoverSettlementObligations(
     scope?: StatementSuggestionScope;
     /**
      * Where the stopped attempt's applications can be: a generation page's
-     * charge-key range, the import a label page settles (statement rules
-     * apply only under an import), or retried charges.
+     * charge-key range, the import a label page settles, or retried charges.
      */
     within:
       | { kind: "range"; after: ChargeRef | null; through: ChargeRef | null }
@@ -196,6 +195,16 @@ type Item = {
   solo: boolean;
 };
 
+type CurrentSettlementEntry = SettlementEntry & {
+  judgment: StatementTransactionJudgment | null;
+};
+
+// Spending can refresh in place without changing either publication hash.
+const publicationChanged = (fresh: CurrentSettlementEntry, item: Item) =>
+  fresh.suggestionId !== item.entry.suggestionId ||
+  fresh.evidenceFingerprint !== item.entry.evidenceFingerprint ||
+  canonicalJson(fresh.judgment) !== canonicalJson(item.judgment);
+
 const barrierOf = (judgment: StatementTransactionJudgment): Barrier => ({
   accountId: judgment.accountId,
   footprint: judgment.create ? statementFootprint(judgment) : null,
@@ -253,7 +262,7 @@ export async function settleStatementPage(
     await import("~/server/generic/suggestions/repo/automatic-application");
   const { selectAutomaticRule } = automatic;
   const time = input.time ?? (<T>(_: string, work: () => Promise<T>) => work());
-  const importClean = Boolean(input.scope?.importId);
+  const settlement = true;
   const outcomes = new Map<string, SettlementOutcome>();
   const settle = (item: Item, outcome: SettlementOutcome): null => {
     outcomes.set(chargeId(item.entry.charge), outcome);
@@ -268,7 +277,7 @@ export async function settleStatementPage(
     if (!entries.length) return [];
     const ids = entries.map((entry) => entry.suggestionId);
     const selections = await automatic.selectAutomaticRules(db, ids, {
-      importClean,
+      settlement,
     });
     const judgments = new Map(
       (
@@ -302,7 +311,7 @@ export async function settleStatementPage(
 
   /** Each charge's current live publication, after a rebuild replaced it. */
   const current = async (charges: readonly ChargeRef[]) => {
-    if (!charges.length) return new Map<string, SettlementEntry>();
+    if (!charges.length) return new Map<string, CurrentSettlementEntry>();
     const requested = requestedRows(
       charges.map((charge) => ({ ...charge })),
       { source: "text", chargeKey: "text" },
@@ -313,9 +322,10 @@ export async function settleStatementPage(
       source: string;
       chargeKey: string;
       evidenceFingerprint: string;
+      judgment: unknown;
     }>(
       sql`SELECT s.id, ${suggestionField("source")} AS source, ${suggestionField("chargeKey")} AS "chargeKey",
-        ${suggestionField("evidenceFingerprint")} AS "evidenceFingerprint"
+        ${suggestionField("evidenceFingerprint")} AS "evidenceFingerprint", s.judgment
       FROM "Suggestion" s
       WHERE s.family = ${sqlEnumConstant(suggestionFamily, suggestionFamily.enum.statement_transaction)} AND s.active
         AND s.status = ${sqlEnumConstant(suggestionStatus, suggestionStatus.enum.pending)}
@@ -330,13 +340,20 @@ export async function settleStatementPage(
           charge: { source: row.source, chargeKey: row.chargeKey },
           suggestionId: row.id,
           evidenceFingerprint: row.evidenceFingerprint,
+          judgment:
+            statementTransactionJudgment.safeParse(row.judgment).data ?? null,
         },
       ]),
     );
   };
 
+  const initial = await current(input.entries.map((entry) => entry.charge));
   let items = await time("statement_settlement_selection", () =>
-    read(input.entries),
+    read(
+      input.entries.map(
+        (entry) => initial.get(chargeId(entry.charge)) ?? entry,
+      ),
+    ),
   );
 
   /**
@@ -383,7 +400,7 @@ export async function settleStatementPage(
     const replaced: SettlementEntry[] = [];
     for (const item of affected) {
       const fresh = now.get(chargeId(item.entry.charge));
-      if (fresh?.suggestionId === item.entry.suggestionId) continue;
+      if (fresh && !publicationChanged(fresh, item)) continue;
       // A charge left without a publication has nothing to admit.
       if (fresh) replaced.push(fresh);
       else settle(item, { kind: "none" });
@@ -427,7 +444,7 @@ export async function settleStatementPage(
     // A create's terms ignore candidates, so a candidate that appeared since
     // publication (a member's Transaction) must reach the publication first.
     let target = item;
-    if (importClean && written) {
+    if (written) {
       await regenerateCharges(db, [item.entry.charge], input.scope);
       const fresh = (await current([item.entry.charge])).get(
         chargeId(item.entry.charge),
@@ -436,7 +453,7 @@ export async function settleStatementPage(
         return settle(item, {
           kind: input.mode === "label" ? "moved" : "none",
         });
-      if (fresh.suggestionId !== item.entry.suggestionId) {
+      if (publicationChanged(fresh, item)) {
         const [reread] = await read([fresh]);
         // A label receipt replaced by rule output waits for its next page.
         if (!reread?.selection)
@@ -451,7 +468,7 @@ export async function settleStatementPage(
       const outcome = await time("statement_application_alone", () =>
         automatic.applyAutomaticRules(db, [target.entry.suggestionId], {
           context: input.servicesFor,
-          importClean,
+          settlement,
           statementScope: input.scope,
         }),
       );
@@ -460,13 +477,28 @@ export async function settleStatementPage(
         settle(item, { kind: "applied" });
         return target;
       }
-      if (!outcome.refused.length) return settle(item, { kind: "none" });
-      // Moved evidence relabels in the label page's next round, fenced by
-      // this receipt, so it is not republished here.
-      if (input.mode === "label" && target.entry.evidenceFingerprint !== null) {
-        const [rebuilt] = await buildChargeProposals(db, [item.entry.charge]);
-        if (rebuilt?.evidenceFingerprint !== target.entry.evidenceFingerprint)
-          return settle(item, { kind: "moved" });
+      if (!outcome.refused.length) {
+        const fresh = (await current([item.entry.charge])).get(
+          chargeId(item.entry.charge),
+        );
+        if (
+          fresh &&
+          publicationChanged(fresh, target) &&
+          replaced < ALONE_REPLACEMENTS
+        ) {
+          const [reread] = await read([fresh]);
+          if (reread) {
+            target = reread;
+            continue;
+          }
+        }
+        if (!fresh) return settle(item, { kind: "none" });
+        return settle(item, {
+          kind: "failed",
+          error: new Error(
+            "Automatic statement application refused: current selection disappeared.",
+          ),
+        });
       }
       // A booking that drifted since publication republishes its current
       // terms; an unchanged refusal fails.
@@ -474,7 +506,7 @@ export async function settleStatementPage(
       const fresh = (await current([item.entry.charge])).get(
         chargeId(item.entry.charge),
       );
-      if (fresh?.suggestionId === target.entry.suggestionId)
+      if (fresh && !publicationChanged(fresh, target))
         return settle(item, {
           kind: "failed",
           error: new Error(
@@ -482,10 +514,8 @@ export async function settleStatementPage(
           ),
         });
       if (!fresh) return settle(item, { kind: "none" });
-      // A label receipt's replacement waits for its next page. A generation
-      // page admits it here, and a charge whose terms keep moving keeps its
-      // place for the next page, never counted as processed.
-      if (input.mode === "label" || replaced === ALONE_REPLACEMENTS)
+      // Re-admit one replacement in the original position; later movement waits.
+      if (replaced === ALONE_REPLACEMENTS)
         return settle(item, { kind: "unfinished" });
       const [reread] = await read([fresh]);
       if (!reread) return settle(item, { kind: "unfinished" });
@@ -580,7 +610,7 @@ export async function settleStatementPage(
                 receipts.map(({ entry }) => entry),
                 rows,
                 outside,
-                (row) => !selectAutomaticRule(row, { importClean }),
+                (row) => !selectAutomaticRule(row, { settlement }),
               ),
             ),
           }),

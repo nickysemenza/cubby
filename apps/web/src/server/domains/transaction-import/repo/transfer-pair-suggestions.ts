@@ -507,7 +507,7 @@ async function loadStatementLegs(
         "PAYMENT";
     if (filter.seedOnly && !seed) return [];
     const charge = { source: canonical.source, chargeKey: canonical.chargeKey };
-    return [{ charge, canonical, observations, signals, seed, amount }];
+    return [{ charge, canonical, observations, seed }];
   });
 
   const legs: LegFacts[] = [];
@@ -544,6 +544,8 @@ async function loadStatementLegs(
       const account = accounts.byCode.get(row.accountId);
       if (!account) continue;
       const { canonical, observations, charge } = entry;
+      // Legs use the effective movement, so a loan payment opposes its bank leg.
+      const amount = row.proposed.amount;
       const loanPayment = isLoanPayment(account, canonical);
       legs.push({
         key: `stmt:${chargeId(charge)}`,
@@ -552,14 +554,14 @@ async function loadStatementLegs(
         transactionCode: null,
         charge,
         imports: new Set(observations.flatMap((obs) => obs.importIds)),
-        amount: entry.amount,
+        amount,
         date: canonical.statementDate,
         merchant: canonical.merchant,
         description: canonical.rawDescription,
         notes: canonical.providerNotes,
         recordedKind: null,
         providerCategory: canonical.sourceCategory,
-        ...entry.signals,
+        ...categorySignals(canonical.sourceCategory, amount),
         ...(loanPayment
           ? { ruleKind: financialTransactionKind.enum.account_transfer }
           : {}),

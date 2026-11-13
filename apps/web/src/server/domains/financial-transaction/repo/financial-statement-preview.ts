@@ -9,7 +9,7 @@ import {
 } from "@cubby/schemas/financial-transaction";
 import { sourceOccurrenceIdentityKind } from "@cubby/schemas/source-occurrence-fields";
 import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, eq, getTableColumns, inArray, or, sql } from "drizzle-orm";
 import { uniq, uniqBy } from "es-toolkit";
 
 import { shiftPlainDate } from "~/lib/household-date";
@@ -20,6 +20,7 @@ import { requestedRows } from "~/server/db/helpers/requested";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import {
   financialAccount,
+  ledgerParty,
   financialTransaction,
   sourceTransactionRecord,
   transactionImport,
@@ -36,6 +37,10 @@ import {
   sourceTransactionRecordExternalId,
   sourceTransactionRecordOccurrenceId,
 } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
+import {
+  statementEffectiveMovement,
+  statementLoanInput,
+} from "~/server/domains/transaction-import/repo/statement-effective-movement";
 import { merchantVendorInferences } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 
 import {
@@ -72,17 +77,13 @@ export type FinancialStatementPreviewOptions = {
 export async function prepareFinancialStatementPreview(db: Database) {
   const accounts = await unwrapDb(db)
     .select({
-      id: financialAccount.id,
-      shortcode: financialAccount.shortcode,
-      name: financialAccount.name,
-      identity: financialAccount.identity,
-      sourceAliases: financialAccount.sourceAliases,
-      cardNumbers: financialAccount.cardNumbers,
-      ledgerPartyId: financialAccount.ledgerPartyId,
+      ...getTableColumns(financialAccount),
+      ledgerParty,
       vendorName: vendor.name,
       vendorAliases: vendor.aliases,
     })
     .from(financialAccount)
+    .leftJoin(ledgerParty, eq(ledgerParty.id, financialAccount.ledgerPartyId))
     .leftJoin(
       vendor,
       and(eq(vendor.id, financialAccount.providerVendorId), notDeleted(vendor)),
@@ -104,7 +105,7 @@ export async function prepareFinancialStatementPreview(db: Database) {
     ),
   };
 }
-type FinancialStatementPreviewPreparation = Awaited<
+export type FinancialStatementPreviewPreparation = Awaited<
   ReturnType<typeof prepareFinancialStatementPreview>
 >;
 
@@ -360,14 +361,34 @@ async function loadFinancialPreview(
     options.preparation ?? (await prepareFinancialStatementPreview(db));
   // A date-window candidate must share its row's resolved account, so the
   // date arm reads only those accounts' (account, date) index ranges.
-  const { accountFor } = financialRowAccounts(
+  const { accountFor, providerObservations } = financialRowAccounts(
     options,
     preparation.accounts,
     observations,
   );
+  const accountsByRow = new Map(
+    input.rows.map((row) => [row.key, accountFor(row)]),
+  );
+  const movements = new Map(
+    input.rows.map((row) => [
+      row.key,
+      statementEffectiveMovement({
+        providerAmount: row.amount,
+        description: row.originalStatement,
+        merchant: row.merchant,
+        sourceCategory: row.category,
+        loan: statementLoanInput(
+          row,
+          accountsByRow.get(row.key),
+          preparation.accounts,
+          providerObservations(row),
+        ),
+      }),
+    ]),
+  );
   const rowAccounts = uniq(
     input.rows.flatMap((row) => {
-      const account = accountFor(row);
+      const account = accountsByRow.get(row.key);
       return account ? [account.id] : [];
     }),
   );
@@ -415,6 +436,9 @@ async function loadFinancialPreview(
   return {
     sourceRefIds,
     legacyIds,
+    accountsByRow,
+    movements,
+    providerObservations,
     observations,
     preparation,
     transactions,

@@ -206,12 +206,9 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
   const { db, actor } = await createEvidenceHarnessContext(page);
   const alias = uniqueName(testInfo, "Statement card");
   const owner = await ensureMemberParty(page, alias);
-  const { category, account, recorded } = await createFixtureGraph(
+  const { account, recorded } = await createFixtureGraph(
     page,
     async (create) => {
-      const category = await create("spendingCategory", {
-        name: `${alias} spending`,
-      });
       const account = await create("financialAccount", {
         name: alias,
         ledgerPartyId: owner.shortcode,
@@ -227,7 +224,7 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
         status: "pending",
         transactionDate: "2026-05-11",
       });
-      return { category, account, recorded };
+      return { account, recorded };
     },
   );
   const labelSpending = () =>
@@ -235,8 +232,6 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
       port: answering({ kind: "purchase", counterparty: "business" }),
       spendingAdvice: async ({ judgment }) =>
         financialSpendingAdvice.parse({
-          spendingCategoryId: category.id,
-          categoryConfidence: "high",
           vendorName: judgment.create?.rawDescription,
           vendorConfidence: "high",
           counterparty: "business",
@@ -263,7 +258,7 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
       sourceCategory: "Shopping",
     },
     {
-      // Category evidence makes pending spending bookable after labeling.
+      // Source category supports the purchase kind; booking uses Uncategorized.
       statementDate: "2026-05-04",
       providerAmount: -42.5,
       rawDescription: hold,
@@ -318,6 +313,7 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
   await expect(result).toContainText("Create vendor");
   await expect(result).toContainText("Unassigned");
   await expect(result).toContainText("Recorded spending");
+  await expect(result).toContainText("Uncategorized");
   await result
     .getByRole("button", { name: "Correct booking", exact: true })
     .click();
@@ -369,9 +365,7 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
   await attach;
   await expect(rowFor(hardware)).toHaveCount(0);
 
-  await rowFor(hold)
-    .getByRole("button", { name: "Accept", exact: true })
-    .click();
+  // The clean pending purchase already booked during label settlement.
   await expect(rowFor(hold)).toHaveCount(0);
   expect(await spendingTotal()).toBe(103.57);
 
@@ -379,8 +373,6 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
   // Settle that work before this serializable fixture import updates the same
   // refresh Job; the offline pump can otherwise change it under our snapshot.
   await drainDerivedRefreshFrontier(db);
-  // Publish manual review work without scheduling import-clean execution,
-  // which would legitimately finish the same booking before the bulk click.
   const posted = await recordSourceTransactionRecords(
     db,
     recordSourceTransactionRecordsInput.parse({
@@ -404,7 +396,7 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
     }),
     actor,
   );
-  // Reviewed supersession must preserve the already-booked pending spending.
+  // Already-booked spending stays available for reviewed supersession.
   if (!posted.batchId)
     throw new Error("Synthetic posted statement import was not saved");
   await generateStatementSuggestions(db, posted.batchId);

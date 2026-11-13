@@ -50,6 +50,7 @@ import { updateSourceTransactionRecords } from "./source-transaction-record";
 import { recordSourceTransactionRecords } from "./source-transaction-record";
 import { listSourceTransactionRecords } from "./source-transaction-record.fixtures";
 import { answering } from "./statement-decision-port.fixtures";
+import * as statementSettlement from "./statement-settlement";
 import * as statementApplication from "./statement-suggestion-application";
 import { previewStatementSuggestion } from "./statement-suggestion-preview";
 import { readStatementSuggestions } from "./statement-suggestion-read";
@@ -162,6 +163,19 @@ describe("statement spending review and re-import", () => {
     expect(result.failed).toEqual([]);
     await drainStoredDerived(ctx.db);
   };
+  const labelForReview = async (
+    advice: ReturnType<typeof financialSpendingAdvice.parse>,
+  ) => {
+    // Manual-review journeys stop after paid answers and publication, before settlement.
+    const deferred = vi
+      .spyOn(statementSettlement, "settleStatementPage")
+      .mockResolvedValue(new Map());
+    try {
+      await labelAndRefreshReads(advice);
+    } finally {
+      deferred.mockRestore();
+    }
+  };
   const pendingPreview = async () => {
     await generateStatementSuggestionPage(ctx.db, {
       servicesFor: buildCrudServices,
@@ -179,7 +193,7 @@ describe("statement spending review and re-import", () => {
     "preserves shared-card application and replay after %s contention",
     async (mode) => {
       const { advice, account } = await fixture(null, "household");
-      await labelAndRefreshReads(advice);
+      await labelForReview(advice);
       const page = await listSuggestionPage(ctx.db, {
         family: "statement_transaction",
         limit: 20,
@@ -380,7 +394,7 @@ describe("statement spending review and re-import", () => {
   );
   it("replays the exact committed booking receipt before a later occurrence hold", async () => {
     const { advice } = await fixture();
-    await labelAndRefreshReads(advice);
+    await labelForReview(advice);
     const [suggestion] = await readStatementSuggestions(
       ctx.db,
       (await getDb(ctx.db).query.suggestionTable.findMany()).map(
@@ -805,7 +819,7 @@ describe("statement spending review and re-import", () => {
   });
   it("refuses a clean spending suggestion when older partly paid spending appears", async () => {
     const { account, advice } = await fixture();
-    await labelAndRefreshReads(advice);
+    await labelForReview(advice);
     const page = await listSuggestionPage(ctx.db, {
       family: "statement_transaction",
       limit: 20,
@@ -890,7 +904,7 @@ describe("statement spending review and re-import", () => {
         }),
         ctx.actor,
       );
-      await labelAndRefreshReads(advice);
+      await labelForReview(advice);
       const published = async () => {
         const [state] = await getDb(ctx.db)
           .select({
@@ -920,7 +934,7 @@ describe("statement spending review and re-import", () => {
       const scenarios = {
         // The member moves the card to another cardholder after the pass
         // published: its page declines the charge and its own review refuses
-        // the published terms, so the pass admits the republished terms.
+        // the published terms, so the pass admits the refreshed terms.
         after: async () => {
           const cardholder = await createRepoIdentity(ctx, "ledgerParty", {
             name: "Synthetic second cardholder",
@@ -953,13 +967,22 @@ describe("statement spending review and re-import", () => {
           }
           expect(moved).toBe(true);
           expect(await total()).toBe(17.25);
-          // The money comes from the republished terms, not the refused ones.
+          // The booking uses the refreshed purchaser on the same publication.
           expect(
             await getDb(ctx.db)
               .select({ id: suggestionTable.id })
               .from(suggestionTable)
               .where(eq(suggestionTable.status, suggestionStatus.enum.applied)),
-          ).toEqual([{ id: expect.not.stringMatching(before.id) }]);
+          ).toEqual([{ id: before.id }]);
+          expect(await getDb(ctx.db).query.purchase.findMany()).toMatchObject([
+            {
+              purchaserOverrideId: await resolveOrThrow(
+                ctx.db,
+                "ledgerParty",
+                cardholder.output.id,
+              ),
+            },
+          ]);
         },
         before: async () => {
           // Another writer leaves an open Purchase for the same Vendor afterwards.
@@ -995,19 +1018,26 @@ describe("statement spending review and re-import", () => {
             "currentStatementApplication",
           );
           try {
-            expect(await pass()).toMatchObject({ published: 1, failed: [] });
-            // Converged: the next pass leaves the republished booking unchanged.
             expect(await pass()).toMatchObject({ published: 0, failed: [] });
-            // The drifted booking is republished with current terms, keeping the
-            // paid advice and model provenance; it is never admitted as published.
+            // Converged: the next pass leaves the refreshed booking unchanged.
+            expect(await pass()).toMatchObject({ published: 0, failed: [] });
+            // Current spending terms refresh in place while retaining the paid answers
+            // and model provenance; the earlier ready booking is not applied.
             const after = await published();
-            expect(after.id).not.toBe(before.id);
+            expect(after.id).toBe(before.id);
             expect(after.producer).toMatchObject({ kind: "model" });
             expect(after.judgment).not.toMatchObject({
               spending: { status: "ready", effect: "create_aggregate" },
             });
             expect(after.judgment).toMatchObject({
-              spending: { request: { advice } },
+              spending: {
+                request: {
+                  advice: {
+                    vendorName: "Synthetic Grove Holdings",
+                    spendingCategoryId: null,
+                  },
+                },
+              },
             });
             expect(refusals).not.toHaveBeenCalled();
             expect(await total()).toBe(40);
@@ -1099,9 +1129,9 @@ describe("statement spending review and re-import", () => {
     ).toEqual([]);
     expect(await total()).toBe(42.5);
   });
-  it("retains published category advice when a non-web correction only chooses a Vendor", async () => {
+  it("books an Uncategorized aggregate when a non-web correction only chooses a Vendor", async () => {
     const { advice } = await fixture();
-    await labelAndRefreshReads(advice);
+    await labelForReview(advice);
     const suggestion = (
       await listSuggestionPage(ctx.db, {
         family: "statement_transaction",
@@ -1129,6 +1159,9 @@ describe("statement spending review and re-import", () => {
       application,
     });
     expect(await total()).toBe(42.5);
+    expect(await getDb(ctx.db).query.expense.findMany()).toMatchObject([
+      { spendingCategoryId: null },
+    ]);
   });
   it("retires a pending matched booking when another shared finance path books it", async () => {
     const { advice, account } = await fixture();
@@ -1150,7 +1183,7 @@ describe("statement spending review and re-import", () => {
       merchant: "Synthetic Orchard",
       sourceRefs: [{ source: "monarch", externalId: row.chargeKey }],
     });
-    await labelAndRefreshReads(advice);
+    await labelForReview(advice);
     expect(
       (
         await listSuggestionPage(ctx.db, {

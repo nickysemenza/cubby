@@ -1,4 +1,3 @@
-import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { fromPartial } from "@total-typescript/shoehorn";
@@ -14,7 +13,6 @@ import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import * as cfEnv from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
-import * as spendingAdvice from "~/server/domains/financial-transaction/service/spending-advice";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
@@ -57,13 +55,17 @@ it("resumes a refused statement Sweep and publishes every batched suggestion", a
       },
     ],
   });
-  const category = await createEntity(
+  await createEntity(
     buildKernelContext(ctx.db, ctx.actor.userId),
     "spendingCategory",
     {
       name: "Synthetic workflow spending",
     },
   );
+  for (let index = 0; index < total; index++)
+    await createRepoEntity(ctx, "vendor", {
+      name: `Synthetic Merchant ${index}`,
+    });
   await recordSourceTransactionRecords(
     ctx.db,
     recordSourceTransactionRecordsInput.parse({
@@ -97,17 +99,6 @@ it("resumes a refused statement Sweep and publishes every batched suggestion", a
   let now = Date.now();
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(now);
-  const advice = vi
-    .spyOn(spendingAdvice, "adviseSpending")
-    .mockImplementation(async (_db, { judgment }) =>
-      financialSpendingAdvice.parse({
-        spendingCategoryId: category.id,
-        categoryConfidence: "high",
-        vendorName: judgment.create?.merchant,
-        vendorConfidence: "high",
-        counterparty: "business",
-      }),
-    );
   let refused = false;
   const admitted: string[] = [];
   let batched = false;
@@ -199,7 +190,6 @@ it("resumes a refused statement Sweep and publishes every batched suggestion", a
     expect(admitted).toHaveLength(total * 2);
   } finally {
     egress.mockRestore();
-    advice.mockRestore();
     vi.useRealTimers();
   }
 }, 30_000);

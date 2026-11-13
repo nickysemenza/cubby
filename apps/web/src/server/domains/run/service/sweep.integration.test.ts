@@ -28,6 +28,7 @@ import {
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
+import { answering } from "~/server/domains/transaction-import/repo/statement-decision-port.fixtures";
 import {
   buildHoldVoidProposals,
   generateStatementSuggestionPage,
@@ -633,6 +634,7 @@ describe("Sweeps", () => {
       state: "paused",
       meta: { retryRefs: [`charge:${charge.source}:${charge.chargeKey}`] },
     });
+    await createRepoEntity(ctx, "vendor", { name: "Example Grocer" });
     await labelStatementSuggestions(ctx.db, {
       runId,
       port: firstChoice,
@@ -672,9 +674,9 @@ describe("Sweeps", () => {
     });
   });
 
-  // Failure mode (prod label lag): a page of only stale suggestions ended the
-  // label chain, so later suggestions were never labelled.
-  it("pages labels past stale suggestions instead of stopping", async () => {
+  // A completed page must advance, and retrying one failed charge must not
+  // expand to healthy work or later arrivals.
+  it("pages labels past completed suggestions and retains failed retry populations", async () => {
     await account("Synthetic Card", "Synthetic Card (...4242)");
     // Inflows with no provider category take their kind from the sign, so
     // each asks the decision model for a kind label.
@@ -695,19 +697,15 @@ describe("Sweeps", () => {
       "objects",
     );
     expect(waiting).toHaveLength(2);
-    // The oldest suggestion's evidence moved after publication.
-    await getDb(ctx.db).execute(
-      sql`UPDATE "Suggestion" SET data = jsonb_set(data, '{evidenceFingerprint}', '"moved"') WHERE id = ${waiting[0]!.id}::uuid`,
-    );
     const labelRun = await ensureRun(ctx.db, ctx.actor, {
       purpose: "background",
     });
     const first = await labelStatementSuggestions(ctx.db, {
-      port: firstChoice,
+      port: answering({ kind: "income", counterparty: "business" }),
       runId: labelRun,
       limit: 1,
     });
-    expect(first).toMatchObject({ labelled: 0, stale: 1 });
+    expect(first).toMatchObject({ labelled: 1, completed: 1, stale: 0 });
     expect(first.next).not.toBeNull();
     // Failure mode: a charge's failure kept only the driver's "Failed query"
     // text, dropping the Postgres cause and its SQLSTATE.
@@ -746,7 +744,7 @@ describe("Sweeps", () => {
     });
     expect(
       await labelStatementSuggestions(ctx.db, {
-        port: firstChoice,
+        port: answering({ kind: "income", counterparty: "business" }),
         runId: labelRun,
         retryCharges: [],
       }),
@@ -758,7 +756,7 @@ describe("Sweeps", () => {
       failed: [],
     });
     const second = await labelStatementSuggestions(ctx.db, {
-      port: firstChoice,
+      port: answering({ kind: "income", counterparty: "business" }),
       runId: labelRun,
       retryCharges: retained.map((row) =>
         suggestionSubjects.statement_transaction.parse(row.subject),
@@ -770,7 +768,7 @@ describe("Sweeps", () => {
       sql`SELECT count(*)::int AS count FROM "Suggestion" WHERE active AND (data->>'needsLabel')::boolean`,
       "objects",
     );
-    expect(remaining[0]?.count).toBe(2);
+    expect(remaining[0]?.count).toBe(1);
   });
 
   const evaluationsOf = async (runId: string) => {

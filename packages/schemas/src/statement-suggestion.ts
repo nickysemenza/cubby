@@ -1,3 +1,9 @@
+import {
+  statementAnswer,
+  statementSpendingAnswers,
+  statementQuestionSubject,
+  statementCandidateQuestionInput,
+} from "./statement-answers";
 import { z } from "zod";
 
 import {
@@ -17,9 +23,6 @@ import {
   financialSpendingPlan,
   financialSpendingRequest,
 } from "./financial-booking";
-
-/** Bump with prompt, model-policy or advice eligibility changes; retained votes carry this revision. */
-export const STATEMENT_LABEL_REVISION = "2026-11-12.1";
 
 export const statementTransactionAction = z.enum([
   "create",
@@ -184,18 +187,23 @@ export type StatementTransactionJudgment = z.infer<
   typeof statementTransactionJudgment
 >;
 
-/** Unpublished model work owned by one pending suggestion, fenced by its inputs. */
-export const statementLabelCheckpoint = z.object({
-  revision: z.string(),
-  /** One producer only when all retained decision answers used that model. */
-  model: z.string().nullable(),
-  models: z.array(z.string()),
-  judgment: statementTransactionJudgment,
-  kind: z.boolean(),
-  counterparty: z.boolean(),
-  spending: z.boolean().default(false),
+export const statementAnswers = statementSpendingAnswers.extend({
+  kind: statementAnswer(kind)
+    .extend({ input: statementQuestionSubject.nullable() })
+    .optional(),
+  counterparty: statementAnswer(counterpartyKind)
+    .extend({ input: statementQuestionSubject.nullable() })
+    .optional(),
+  candidates: z
+    .record(
+      z.string(),
+      statementAnswer(statementCandidateLabel).extend({
+        input: statementCandidateQuestionInput,
+      }),
+    )
+    .default({}),
 });
-export type StatementLabelCheckpoint = z.infer<typeof statementLabelCheckpoint>;
+export type StatementAnswers = z.infer<typeof statementAnswers>;
 
 /** Publication retains its input position until ordered automatic application settles. */
 export const statementApplicationOrder = z.object({
