@@ -58,4 +58,3 @@ export const workDiagnostics = z.object({
     }),
   ),
 });
-export type WorkDiagnostics = z.infer<typeof workDiagnostics>;

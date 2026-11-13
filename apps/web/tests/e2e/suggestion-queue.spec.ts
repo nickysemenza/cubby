@@ -1,6 +1,7 @@
 import { applyFieldAnswerFixture } from "~/server/ai/fields/fields.fixtures";
 import { eq, inArray } from "drizzle-orm";
 import { getDb } from "~/server/db/helpers";
+import { decision } from "~/server/db/kernel-schema";
 import { product as productTable } from "~/server/db/schema";
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -53,6 +54,28 @@ test("Changes by Cubby lists a reconciled field and its provenance", async ({
     .click();
   await expect(feed).toContainText("fields");
   await expect(feed).toContainText("version");
+  await expect(
+    page.getByRole("combobox", { name: "Change family" }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("changes-by-cubby.png"),
+    fullPage: true,
+  });
+  await feed.getByRole("button", { name: "Keep", exact: true }).first().click();
+  await expect(feed).toContainText("Decision recorded.");
+  const kept = await getDb(db)
+    .select()
+    .from(decision)
+    .where(eq(decision.subject, `product:${itemId}`));
+  expect(kept).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        channel: "assignment",
+        kind: "set",
+        field: "categoryId",
+      }),
+    ]),
+  );
 });
 
 // Identity conflicts cannot merge; matching pairs still require survivor and impact confirmation.
