@@ -1,7 +1,7 @@
 import { auditEntitySchema } from "@cubby/schemas/audit";
+import { entityRoster } from "@cubby/schemas/entity-roster";
 import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
-import { workRecordTypeOptions } from "@cubby/schemas/work-queue";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
@@ -47,9 +47,7 @@ export function AutomaticChanges({
         clearable
         options={auditEntitySchema.options.map((value) => ({
           value,
-          label:
-            workRecordTypeOptions.find((option) => option.value === value)
-              ?.label ?? value,
+          label: entityRoster[value].singular,
         }))}
         value={entity}
         onValueChange={setEntity}

@@ -202,7 +202,7 @@ const MACHINERY_ROW_STATUS_LABEL = {
   used: "Used",
   skipped: "Skipped",
   gap: "Gap",
-  blocked: "Stuck",
+  blocked: "Blocked",
   failed: "Failed",
 } as const satisfies Record<MachineryRowStatus, string>;
 
@@ -419,7 +419,7 @@ const MACHINERY_LIST_COLUMN_LABEL = {
   actor: "Actor",
   gap: "Gap",
   attempts: "Attempts",
-  cost: "Automation cost",
+  cost: "Cost",
   eta: "ETA",
 } as const;
 
