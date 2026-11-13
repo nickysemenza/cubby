@@ -81,7 +81,7 @@ async function targetSnapshot(db: Database, args: PurchaseAgentArguments) {
 
 /**
  * Run one delegated write in a single transaction under the same principal.
- * Kernel units inside it nest as savepoints. Job intents commit with the
+ * Kernel units inside it nest as savepoints. Pass intents commit with the
  * writes; queue wakes and storage deletes wait for this commit
  * (`runAfterCommit`). Recipe costing is rebound to the transaction: a
  * pool-bound stale mark on a Recipe row this transaction locked would wait on

@@ -33,7 +33,7 @@ import type { ActorContext } from "@cubby/schemas/context";
  *    `syncChangedEffectivePrices`. Those run in the caller's own transaction,
  *    which `withTransactionOn` guarantees this call joins.
  *  - **Refresh intent.** Audit writes and the entity kernel register source
- *    changes in the caller's transaction; broad Jobs own derived cleanup.
+ *    changes in the caller's transaction; the snapshot Pass owns derived cleanup.
  */
 import {
   type EntityId,

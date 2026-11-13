@@ -97,7 +97,7 @@ const relationshipQueryDefinitions = [
   ),
 ];
 
-/** Endpoints derive from the executable query roster, including the Job subject family. */
+/** Endpoints derive from the executable query roster. */
 type QueryDefinition = (typeof relationshipQueryDefinitions)[number];
 export type RelationshipQueryKey = QueryDefinition["key"];
 export type RelationshipQuerySource<K extends RelationshipQueryKey> = Extract<

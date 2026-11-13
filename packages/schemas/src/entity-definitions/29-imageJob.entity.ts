@@ -450,7 +450,7 @@ export const { definition, readSchemas } = defineEntityModel({
         },
         provenance: {
           kind: "derived",
-          sources: [{ label: "The job's execution Job" }],
+          sources: [{ label: "The operation's Ask claim" }],
         },
         explanation: {
           ruleId: "image-job.waiting-on",
@@ -483,7 +483,7 @@ export const { definition, readSchemas } = defineEntityModel({
         },
         provenance: {
           kind: "derived",
-          sources: [{ label: "The job's execution Job" }],
+          sources: [{ label: "The operation's Ask claim" }],
         },
         explanation: {
           ruleId: "image-job.lease-expires-at",

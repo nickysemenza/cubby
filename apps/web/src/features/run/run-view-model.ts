@@ -29,7 +29,7 @@ import { formatInstant } from "~/lib/date-format";
 import { declaredRunSteps } from "~/lib/run-plan";
 
 /**
- * The Run detail page's one reading of stored RunSteps and Job facts. Every
+ * The Run detail page's one reading of stored RunSteps and kernel waits. Every
  * component renders these shapes; only `stepView` reads the stored step meta
  * and the step's manifest declaration.
  */
@@ -71,7 +71,7 @@ const PHASE_OF = {
   failed: "failed",
 } as const satisfies Record<RunDetailStep["state"], StepPhase>;
 
-/** Why a step or Job is not moving, with the raw detail it was stored with. */
+/** Why a step or claim is not moving, with the raw detail it was stored with. */
 export type StepWait = {
   reason: ExecutionWaitReason | "retry" | "paused";
   label: string;

@@ -1,7 +1,7 @@
-// Pure domain checkpoint types shared by the Job runner and its callers.
+// Pure domain checkpoint types shared by the Pass runner and its callers.
 import { z } from "zod";
 
-/** Domain checkpoint context. Universal Job token/generation owns writes. */
+/** Domain checkpoint context. Universal Pass token/generation owns writes. */
 const workflowRunParams = z.object({
   runId: z.uuid(),
   /** Historical progress label; never an execution capability. */

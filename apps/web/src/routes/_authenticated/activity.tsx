@@ -32,7 +32,7 @@ export const Route = createFileRoute("/_authenticated/activity")({
   validateSearch: retiredSearch,
   beforeLoad: ({ search }) => {
     // An exact Work locator named one value: its record's page explains it.
-    // An old filter on one Run: its page shows that Run's Jobs.
+    // An old filter on one Run: its page shows that Run's kernel work.
     if (search.runId)
       throw redirect({
         to: "/runs/$shortcode",

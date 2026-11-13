@@ -280,7 +280,7 @@ it.each(["paused", "failed"] as const)(
       within(progress).getByText("Records checked: 80 of 100"),
     ).toBeVisible();
     expect(
-      within(progress).getByText("Evaluations settled: 63 of 85"),
+      within(progress).getByText(/^Evaluations settled: 63 of 85/),
     ).toBeVisible();
     expect(progress).not.toHaveTextContent("/min");
     expect(progress).not.toHaveTextContent("left for what is queued");

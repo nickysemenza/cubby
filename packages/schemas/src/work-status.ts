@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** One thing that stopped, in member language; `key` is its Job kind or subject. */
+/** One thing that stopped, in member language; `key` is its record shortcode. */
 const workStuckItem = z.object({
   key: z.string(),
   title: z.string(),

@@ -427,7 +427,7 @@ export async function yieldClaimedMailDiscovery(
     );
 }
 
-/** A recovered universal Job restores only its own reconciled failure, under its fence. */
+/** A recovered universal Pass restores only its own reconciled failure, under its fence. */
 export async function resumeClaimedWorkflowRun(
   db: Database,
   params: WorkflowRunParams,
@@ -495,7 +495,7 @@ export async function resumeClaimedWorkflowRun(
             dispatchError:
               "Mail discovery is queued for shared search capacity",
             // The attempt names the generation that waits: admission counts
-            // a waiter only while its Job is live at that generation, and one
+            // a waiter only while its Pass is live at that generation, and one
             // it cannot see has no place in line.
             progress: sql`coalesce(${runTable.progress}, '{}'::jsonb) || ${JSON.stringify(
               {
@@ -554,7 +554,7 @@ export async function resumeClaimedWorkflowRun(
           ),
         )
         .returning({ id: runTable.id });
-      // Run-before-Job ordering matches launch/control. A member stop or stale
+      // Run-before-Pass ordering matches launch/control. A member stop or stale
       // generation rolls the restoration back before any domain work can run.
       if (resumed) await assertWorkflowEffect(tx);
       return false;

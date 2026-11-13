@@ -63,7 +63,7 @@ export type RunKindDeclaration = {
    */
   historical?: true;
   /**
-   * What the universal `run.execute` Job runs: the RunStep ledger, the Run's
+   * What the universal `run.execute` Pass runs: the RunStep ledger, the Run's
    * AI evaluations, or mailbox discovery. Absent: another owner executes it
    * (an agent, an import, an inline call).
    */
@@ -222,7 +222,7 @@ export const RUN_KINDS = {
         "Current inputs, evaluation policy and configured AI models.",
       cost: "Uses AI funding and pauses or waits under the existing funding policy.",
       recovery:
-        "Inspect failed evaluations and Job diagnostics; use the supported Run recovery action.",
+        "Inspect failed Asks and kernel machinery; use the supported Run recovery action.",
     },
     label: "AI refresh",
     description: "AI evaluations whose inputs or policy changed.",

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** Telemetry keeps its version-1 transport; background messages only wake durable Jobs. */
+/** Telemetry keeps its version-1 transport; background messages only wake kernel work. */
 export const queueMessageEnvelope = {
   version: z.literal(1),
 };
