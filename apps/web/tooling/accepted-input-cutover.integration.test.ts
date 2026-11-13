@@ -33,11 +33,6 @@ it("carries held values, paid results, redirects and every accepted money row", 
     });
     await seedCutoverPredecessor(client);
     await client.query(
-      `INSERT INTO "Suggestion" ("publicationKey",family,subject,judgment,entity,"recordId",field,"suggestedValue",model,data)
-      VALUES ('synthetic:null-answer','statement_transaction','{}','{}','sourceTransactionRecord',$1,'','null','synthetic-model','{"answers":{"kind":{"input":{},"versions":{"statement-transaction-kind":"2026-11-12.1"},"value":null}}}')`,
-      [cutoverId(19)],
-    );
-    await client.query(
       `INSERT INTO "AuditLog" ("entityKind","entityId",action,changes,"userId",authority)
       SELECT 'financialTransaction',$1,'update',jsonb_build_object('allocations',jsonb_build_object('to',jsonb_agg(p.shortcode||':'||round(a."amountMinor"::numeric/100,2)::text ORDER BY p.shortcode))),'synthetic-cutover',NULL
       FROM "FinancialTransactionAllocation" a JOIN "Purchase" p ON p.id=a."purchaseId" WHERE a."transactionId"=$1`,
@@ -49,12 +44,6 @@ it("carries held values, paid results, redirects and every accepted money row", 
       [cutoverId(95)],
     );
     await client.query(
-      `INSERT INTO "Suggestion" ("publicationKey",family,subject,judgment,entity,"recordId",field,"suggestedValue",model,data,"updatedAt")
-      VALUES ('synthetic:duplicate-captured-old','statement_transaction','{}','{}','sourceTransactionRecord',$1,'','"old"','synthetic-model','{"answers":{"kind":{"input":{"synthetic":"duplicate"},"versions":{"statement-transaction-kind":"2026-11-12.1"},"value":"old"}}}','2026-01-01'),
-      ('synthetic:duplicate-captured-new','statement_transaction','{}','{}','sourceTransactionRecord',$1,'','"new"','synthetic-model','{"answers":{"kind":{"input":{"synthetic":"duplicate"},"versions":{"statement-transaction-kind":"2026-11-12.1"},"value":"new"}}}','2026-01-08')`,
-      [cutoverId(19)],
-    );
-    await client.query(
       `INSERT INTO "AiEvaluation" (id,"workKey",feature,target,provenance,snapshot,state) VALUES ($1,'synthetic:terminal-history','synthetic-finished','{}','{}','{}','completed')`,
       [cutoverId(96)],
     );
@@ -63,40 +52,8 @@ it("carries held values, paid results, redirects and every accepted money row", 
       [cutoverId(97), cutoverId(96), cutoverId(14)],
     );
     await client.query(
-      `INSERT INTO "AiEvaluationRequest" (id,"evaluationId","runId",receipt,sequence) VALUES ($1,$2,$5,'{"retained":"older-coalesced"}',8),($3,$4,$5,'{"retained":"newer-coalesced"}',9)`,
-      [
-        cutoverId(98),
-        cutoverId(69),
-        cutoverId(99),
-        cutoverId(79),
-        cutoverId(14),
-      ],
-    );
-    await client.query(
-      `UPDATE "AiEvaluation" SET "runAt"='2026-01-01' WHERE id=$1`,
-      [cutoverId(79)],
-    );
-    await client.query(
       `INSERT INTO "AiEvaluationRequest" (id,"evaluationId","runId") VALUES ($1,$2,$3)`,
       [cutoverId(101), cutoverId(41), cutoverId(14)],
-    );
-    const { FIELD_SUGGESTION_FEATURE } =
-      await import("../src/server/ai/policy/features");
-    const answeredInput = {
-      kind: "choice",
-      model: FIELD_SUGGESTION_FEATURE.model,
-      subject: "Synthetic answered subject",
-      rules: "Synthetic rules",
-      choices: ["A", "B"],
-      allowNone: true,
-    };
-    await client.query(
-      `INSERT INTO "AiEvaluation" (id,"workKey",feature,target,provenance,snapshot,state,result) VALUES ($1,'synthetic:answered-canonical','field_suggest','{}',$2,$3,'completed','{"value":"B"}')`,
-      [
-        cutoverId(105),
-        { promptVersion: FIELD_SUGGESTION_FEATURE.promptVersion },
-        { modelInput: answeredInput },
-      ],
     );
     // A member's Keep after an automatic acceptance makes the value theirs.
     await client.query(
@@ -174,20 +131,6 @@ it("carries held values, paid results, redirects and every accepted money row", 
     expect(
       (
         await client.query(
-          `SELECT count(*)::int n FROM "Answer" WHERE feature='statement-transaction-kind' AND output='null'::jsonb`,
-        )
-      ).rows,
-    ).toEqual([{ n: 1 }]);
-    expect(
-      (
-        await client.query(
-          `SELECT output FROM "Answer" WHERE feature='statement-transaction-kind' AND output IN ('"old"'::jsonb,'"new"'::jsonb)`,
-        )
-      ).rows,
-    ).toEqual([{ output: "new" }]);
-    expect(
-      (
-        await client.query(
           `SELECT count(*)::int n FROM "Decision" WHERE subject LIKE 'FinancialTransactionAllocation:%' AND "actorKind"='member'`,
         )
       ).rows,
@@ -237,34 +180,8 @@ it("carries held values, paid results, redirects and every accepted money row", 
         )
       ).rows.map((r) => r.state),
     ).toEqual(["answered", "unknown", "queued"]);
-    const { modelAsks } = await import("../src/server/ai/model-asks");
     const { askEnvelope, inputHashOf } =
       await import("../src/server/kernel/envelope");
-    const ready = (
-      await client.query(`SELECT * FROM "Ask" WHERE id=$1`, [cutoverId(69)])
-    ).rows[0];
-    const kind = modelAsks.find(
-      (k) => k.feature === "field-suggestion.choice",
-    )!;
-    expect(ready).toMatchObject({
-      feature: kind.feature,
-      executor: null,
-      cancelledAt: null,
-      state: "queued",
-    });
-    expect(ready.input).toEqual(askEnvelope(kind, ready.input.input));
-    // A retained result already shaped as the model Answer is reused at its envelope.
-    expect(
-      (
-        await client.query(
-          `SELECT feature,output->'value' value FROM "Answer" WHERE "inputHash"=$1`,
-          [await inputHashOf(askEnvelope(kind, answeredInput))],
-        )
-      ).rows,
-    ).toEqual([{ feature: kind.feature, value: "B" }]);
-    expect(ready.inputHash).toBe(
-      await inputHashOf(askEnvelope(kind, ready.input.input)),
-    );
     expect(
       (
         await client.query(
@@ -274,7 +191,7 @@ it("carries held values, paid results, redirects and every accepted money row", 
       ).rows[0],
     ).toMatchObject({
       cancelled: true,
-      lastError: expect.stringContaining("incomplete canonical input"),
+      lastError: expect.stringContaining("its scope asks again"),
     });
     expect(
       (
@@ -292,30 +209,6 @@ it("carries held values, paid results, redirects and every accepted money row", 
         )
       ).rows,
     ).toEqual([{ receipt: null, sequence: 0 }]);
-    expect(
-      (
-        await client.query(
-          `SELECT receipt,sequence FROM "AskScope" WHERE "askId"=$1 AND "scopeKind"='run'`,
-          [cutoverId(69)],
-        )
-      ).rows,
-    ).toEqual([{ receipt: { retained: "newer-coalesced" }, sequence: 9 }]);
-    expect(
-      (
-        await client.query(
-          `SELECT "availableAt"::date::text available_date FROM "Ask" WHERE id=$1`,
-          [cutoverId(69)],
-        )
-      ).rows,
-    ).toEqual([{ available_date: "2026-01-01" }]);
-    expect(
-      (
-        await client.query(
-          `SELECT count(*)::int n FROM archive."AiEvaluationRequest_preimage" WHERE id=ANY($1::uuid[])`,
-          [[cutoverId(98), cutoverId(99)]],
-        )
-      ).rows,
-    ).toEqual([{ n: 2 }]);
     expect(
       (
         await client.query(
@@ -474,7 +367,7 @@ it("carries held values, paid results, redirects and every accepted money row", 
           `SELECT count(*)::int n FROM archive."AiEvaluation_preimage"`,
         )
       ).rows[0].n,
-    ).toBe(8);
+    ).toBe(5);
     expect(
       (
         await client.query(
@@ -559,7 +452,7 @@ it("aborts atomically for every preservation verification", async () => {
         expect(
           (await client.query(`SELECT count(*)::int n FROM "AiEvaluation"`))
             .rows[0].n,
-        ).toBe(5);
+        ).toBe(3);
         checked++;
       }
     }
@@ -613,12 +506,8 @@ it("runs the registered scopes without changing accepted money and proposes the 
       const { claimAsks } = await import("../src/server/kernel/claim");
       const runnable = kernel.registry.asks.get("field-suggestion.choice")!;
       const claimed = await claimAsks(database, [runnable], 10);
-      expect(claimed.map((a) => a.id)).toContain(cutoverId(69));
+      // Cancelled legacy work is never claimed; scopes ask again from current inputs.
       expect(claimed.map((a) => a.id)).not.toContain(cutoverId(42));
-      await client.query(
-        `UPDATE "Ask" SET "claimToken"=NULL,"claimDeadline"=NULL WHERE id=$1`,
-        [cutoverId(69)],
-      );
 
       const money = `SELECT jsonb_agg(payload ORDER BY name,id) value FROM (
       SELECT 'transaction' name,id,to_jsonb(t) payload FROM "FinancialTransaction" t
@@ -993,20 +882,9 @@ it("lets current stored authority defeat a synthesized review in both directions
   });
 });
 
-it("matches the registered model feature envelope catalog", async () => {
-  const { modelAsks } = await import("../src/server/ai/model-asks");
+it("records every asked field and reconciler write column", async () => {
   const { acceptedInputCutoverSql } =
     await import("./accepted-input-cutover-select");
-  const { z } = await import("zod");
-  const catalog = z
-    .array(
-      z.object({
-        feature: z.string(),
-        promptVersion: z.string(),
-        policy: z.json(),
-      }),
-    )
-    .parse(JSON.parse(acceptedInputCutoverSql().split("$features$")[1]!));
   const { KERNEL_MODULES } = await import("../src/server/kernel/modules");
   const { buildRegistry } = await import("../src/server/kernel/registry");
   const projection = acceptedInputCutoverSql().split("), record_ids AS (")[0]!;
@@ -1035,13 +913,6 @@ it("matches the registered model feature envelope catalog", async () => {
       for (const column of target.columns)
         expect(recordLine).toContain(`'${column}'`);
     }
-  expect(catalog).toEqual(
-    modelAsks.map((a) => ({
-      feature: a.feature,
-      promptVersion: a.promptVersion,
-      policy: a.policy,
-    })),
-  );
 });
 
 it("retires a historical merge even when its deletion timestamp is absent", async () => {
