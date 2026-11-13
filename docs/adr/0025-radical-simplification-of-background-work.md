@@ -1,6 +1,6 @@
 # ADR 0025: Shrink Cubby's machinery in place on Workers and Neon
 
-Status: Accepted by the owner 2026-11-04. Supersedes
+Status: Superseded in part by [ADR 0029](0029-evidence-facts-and-reconcilers.md). Accepted by the owner 2026-11-04. Supersedes
 [ADR 0015](0015-unified-durable-work-coordination.md) and
 [ADR 0021](0021-derived-values.md), and amends
 [ADR 0016](0016-shared-assessments-and-feedback.md) and
