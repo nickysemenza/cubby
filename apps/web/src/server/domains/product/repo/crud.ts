@@ -2442,7 +2442,7 @@ export const quickCreateProductRecord = async (
  * `./edge-roles`). `Record` over that type requires an entry for every
  * acquisition/history edge, so adding one to `PRODUCT_EDGE_ROLES` is a
  * compile error here until it's wired up — the same completeness guarantee
- * `IMAGE_HARD_DELETE` gives `deleteImages` in `repo/image.ts`, extended to a
+ * `DECLARED_EDGE_DELETE_POLICIES.image` gives `deleteImages` in `repo/image.ts`, extended to a
  * shape (a `.query.<table>.findMany` call) a flat disposition string can't
  * express, since each acquisition edge lives on a different table.
  */

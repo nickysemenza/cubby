@@ -25,11 +25,9 @@ import {
   emailFinancialAssociation,
   expenseAttribution,
   financialTransactionAllocation,
-  imageDerivative,
   imageProcessingAttempt,
   imageProcessingEvent,
   imageProcessingSubmissionJob,
-  photoRunImage,
   runStep,
   purchasePaymentEvidence,
   transactionImportRecord,
@@ -96,10 +94,9 @@ export const ENTITY_EDGE_OWNERS = {
     excluded: "Retained financial provenance, never current ownership.",
   },
   // A run's target list is how a run relates to what it imported.
-  PhotoRunImage: { owner: photoRunImage.runId },
+
   RunStep: { owner: runStep.runId },
 
-  ImageDerivative: { owner: imageDerivative.imageId },
   // An Image job's attempts, events and submission memberships belong to the job.
   ImageProcessingAttempt: { owner: imageProcessingAttempt.jobId },
   ImageProcessingEvent: { owner: imageProcessingEvent.jobId },
@@ -115,8 +112,7 @@ export const ENTITY_EDGE_OWNERS = {
   },
   Suggestion: { excluded: WORKFLOW },
   RunFinding: { excluded: WORKFLOW },
-  ImportPreparedOrder: { excluded: WORKFLOW },
-  SourceOrderObservation: { excluded: "Immutable source extraction history." },
+
   EmailCandidateObservation: { excluded: "Immutable Email candidate history." },
   EmailClassificationObservation: {
     excluded: "Immutable Email classification history.",
@@ -133,5 +129,4 @@ export const ENTITY_EDGE_OWNERS = {
   LedgerSourceClaim: { excluded: WORKFLOW },
   MailboxCursor: { excluded: WORKFLOW },
   OrderMail: { excluded: WORKFLOW },
-  OrderMailAttachment: { excluded: WORKFLOW },
 } satisfies Record<NonEntityEdgeTable, EntityEdgeOwner>;

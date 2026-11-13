@@ -1,20 +1,16 @@
 import { imageSchemaBindings } from "~/entity/generated/entity-schema-bindings.image.gen";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import { defineRepository } from "~/server/entity-kernel/repo/repository";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-import {
-  deleteImages,
-  IMAGE_HARD_DELETE,
-  imageScaffold,
-  updateImage,
-} from "./image";
+import { deleteImages, imageScaffold, updateImage } from "./image";
 
 const imageShortcodes = bindShortcodeResolver("image");
 
 /** Images are created by the upload workflow, never as a row CRUD action. */
 export const imageRepository = defineRepository("image", {
   schemas: imageSchemaBindings,
-  lifecycle: { delete: IMAGE_HARD_DELETE },
+  lifecycle: { delete: DECLARED_EDGE_DELETE_POLICIES.image },
   scaffold: imageScaffold,
   update: async (ctx, shortcode, data) => {
     const entityId = await imageShortcodes.one(ctx.db, shortcode);

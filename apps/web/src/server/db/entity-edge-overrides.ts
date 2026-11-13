@@ -43,7 +43,6 @@ import {
   financialTransaction,
   financialTransactionAllocation,
   image,
-  imageDerivative,
   imageProcessingJob,
   imageSighting,
   importPreparedOrder,
@@ -67,7 +66,6 @@ import {
   mailboxCursor,
   email as emailTable,
   orderMail,
-  orderMailAttachment,
   photoGroupProposal,
   photoRunImage,
   runPushRegistration,
@@ -546,89 +544,6 @@ export const ENTITY_EDGE_OVERRIDES = {
         reason:
           "Immutable observation history retains its original subject UUID through deletion and merge.",
       },
-    },
-  }),
-
-  image: edges({
-    "SourceOrderObservation.primaryDocumentImageId": {
-      column: sourceOrderObservation.primaryDocumentImageId,
-      role: "media",
-      label: "observed primary documents",
-      description:
-        "Optional source media for an immutable extraction; explicit Image deletion clears only this pointer.",
-      liveness: { kind: "must-target-live" },
-    },
-    "SourceOrderObservation.screenshotImageId": {
-      column: sourceOrderObservation.screenshotImageId,
-      role: "media",
-      label: "observed screenshots",
-      description:
-        "Optional source media for an immutable extraction; explicit Image deletion clears only this pointer.",
-      liveness: { kind: "must-target-live" },
-    },
-
-    "EntityAttachment.imageId": {
-      column: entityAttachment.imageId,
-      role: "media",
-      label: "attachments",
-      description:
-        "A file attached to an entity: a gallery photo, a document, a cookbook cover, or a vendor logo. Says nothing about ownership.",
-      liveness: { kind: "must-target-live" },
-    },
-    "PhotoRunImage.imageId": {
-      column: photoRunImage.imageId,
-      role: "history",
-      label: "photo import runs",
-      description:
-        "A Run-owned image work item preserves picker and processing state.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ImageDerivative.imageId": {
-      column: imageDerivative.imageId,
-      role: "media",
-      label: "image derivatives",
-      description:
-        "A transparent representation derived from this original image; it is never a gallery attachment of its own.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ImageProcessingJob.imageId": {
-      column: imageProcessingJob.imageId,
-      role: "metadata",
-      label: "image processing jobs",
-      description:
-        "Durable processing state for this original image; queue delivery is only a wakeup for this record.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ImportPreparedOrder.primaryDocumentImageId": {
-      column: importPreparedOrder.primaryDocumentImageId,
-      role: "media",
-      label: "prepared primary documents",
-      description:
-        "The primary source document retained by an immutable prepared import order.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ImportPreparedOrder.screenshotImageId": {
-      column: importPreparedOrder.screenshotImageId,
-      role: "media",
-      label: "prepared screenshots",
-      description:
-        "The browser screenshot retained by an immutable prepared import order.",
-      liveness: { kind: "must-target-live" },
-    },
-    "OrderMailAttachment.imageId": {
-      column: orderMailAttachment.imageId,
-      role: "media",
-      label: "mail attachments",
-      description: "A normalized document captured from an order email.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ImageSighting.imageId": {
-      column: imageSighting.imageId,
-      role: "owned-child",
-      label: "sightings",
-      description:
-        "A report of this image appearing in a member's photo library or cloud asset; meaningless without the original image.",
-      liveness: { kind: "must-target-live" },
     },
   }),
 

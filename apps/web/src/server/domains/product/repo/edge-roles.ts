@@ -67,7 +67,7 @@
  * call sites until they're updated to match — the guarantee the old prose
  * comment could only ask a reviewer to enforce by hand.
  *
- * **Residual weakness** (the same one `image.ts`'s `IMAGE_HARD_DELETE`
+ * **Residual weakness** (the same one `image.ts`'s `DECLARED_EDGE_DELETE_POLICIES.image`
  * carries): declaring a retaining edge only forces each consumer to have *an
  * entry* for it — nothing stops that entry from being wired to the wrong
  * column, or otherwise written incorrectly. Completeness of the *edge set* is
