@@ -14,19 +14,19 @@ producer request and its retained Answer. A Pass owns resumable work whose
 checkpoint does not belong to one record's reconciler. All three use a claim
 token and deadline, renewal, attempts, backoff, wait cause and cancellation.
 Publication requires the current live claim. A Pass claim lasts 90 seconds;
-Run execution renews every 30 seconds and arranges a recovery wake at the claim
-deadline. Expired claims admit another worker. A funding or provider wait
+Run execution renews every 30 seconds; the kernel arranges a recovery wake at
+each claim deadline. Expired claims admit another worker. A funding or provider wait
 keeps its deadline and cause without spending a failure attempt.
 
 `workflows/kernel-passes.ts` registers the platform passes:
 
-| Pass | Key | Checkpoint and outcome owner |
-| --- | --- | --- |
-| `run.execute` | Run id | Step-ledger and AI-work Runs; the cursor names the execution generation, `RunStep` and Run progress keep the checkpoint |
-| `runs.reconcile` | `default` | Projects exhausted Run Passes and stopped dispatch execution onto Run status; checks active Runs every 15 minutes and idle work hourly |
-| `purchase.discovery` | `default` | Sender-attribution learning, retained-Email admission and mailbox-discovery admission; `senderAfter` stays in the cursor |
-| `retention` | `default` | Bounded pruning of execution rows, hourly or immediately while a full page remains |
-| `calendar.invalidate` | origin | Retries an idempotent dirty mark after the post-commit fast path failed |
+| Pass                  | Key       | Checkpoint and outcome owner                                                                                                           |
+| --------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `run.execute`         | Run id    | Step-ledger and AI-work Runs; the cursor names the execution generation, `RunStep` and Run progress keep the checkpoint                |
+| `runs.reconcile`      | `default` | Projects exhausted Run Passes and stopped dispatch execution onto Run status; checks active Runs every 15 minutes and idle work hourly |
+| `purchase.discovery`  | `default` | Sender-attribution learning, retained-Email admission and mailbox-discovery admission; `senderAfter` stays in the cursor               |
+| `retention`           | `default` | Bounded pruning of execution rows, hourly or immediately while a full page remains                                                     |
+| `calendar.invalidate` | origin    | Retries an idempotent dirty mark after the post-commit fast path failed                                                                |
 
 The Run module also registers `run.summary` for the summary's model Ask.
 `startPass` coalesces an existing pending instance without replacing its
@@ -99,12 +99,12 @@ Run execution attempt number. Outcomes live on domain owners; Jobs retain no
 result JSON. `availableAt` is the only stored wait deadline. Completed Jobs
 remain until retention prunes them.
 
-| Job kind                                                     | Why a row                                      | Owner of the result           |
-| ------------------------------------------------------------ | ---------------------------------------------- | ----------------------------- |
-| `run.execute`                                                | Mailbox-discovery pages                        | The Run                       |
-| `purchase.dispatch`                                          | Durable handoff to the agent, deduped by event | The Run and its agent session |
-| `run.funding-resume`                                         | Waits for a funding window to end              | The paused Runs               |
-| `image-metadata.extract`, `location-ai.*`                    | One per record, replaced on re-admission       | The Image or Location         |
+| Job kind                                  | Why a row                                      | Owner of the result           |
+| ----------------------------------------- | ---------------------------------------------- | ----------------------------- |
+| `run.execute`                             | Mailbox-discovery pages                        | The Run                       |
+| `purchase.dispatch`                       | Durable handoff to the agent, deduped by event | The Run and its agent session |
+| `run.funding-resume`                      | Waits for a funding window to end              | The paused Runs               |
+| `image-metadata.extract`, `location-ai.*` | One per record, replaced on re-admission       | The Image or Location         |
 
 Everything else is a drain over its owner's rows and has no row here. There is
 no stored queue health or alert engine: [Work status](#member-facing-work-explanations)
@@ -231,7 +231,7 @@ leases, paused or other counts, else expired leases.
 
 Run Passes add their live claim, wait cause, attempt count, next time and raw
 error to the same rollup. Due Pass positions follow the kernel's `availableAt`
-order. Completion pace and a queue ETA are null without Pass duration history;
+order, with member-started work first. Completion pace and a queue ETA are null without Pass duration history;
 explicit wait deadlines remain visible. Step throughput and ETA use the
 retained `RunStep` progress observations independently.
 

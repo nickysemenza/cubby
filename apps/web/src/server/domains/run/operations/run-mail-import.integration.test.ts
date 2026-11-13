@@ -210,8 +210,11 @@ describe("automatic Mail import switch", () => {
 
     await invoke("setMailImport", { mailboxId, enabled: true });
     expect(
-      await getDb(ctx.db).execute(sql`SELECT name FROM "Pass" WHERE name = 'purchase.discovery'`, "objects"),
-    ).toMatchObject([{name: "purchase.discovery"}]);
+      await getDb(ctx.db).execute(
+        sql`SELECT name FROM "Pass" WHERE name = 'purchase.discovery'`,
+        "objects",
+      ),
+    ).toMatchObject([{ name: "purchase.discovery" }]);
     expect(
       await invoke("discoverMail", { mailboxId: "synthetic-foreign-mailbox" }),
     ).toMatchObject({ ok: false });

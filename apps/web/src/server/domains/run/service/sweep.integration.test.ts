@@ -461,8 +461,8 @@ describe("Sweeps", () => {
       .object({ attempt: z.number() })
       .parse(owner?.progress).attempt;
     for (let page = 0; page < 50; page++) {
-      const advance = await withRunPassFixture(ctx.db, runId,
-        () => advanceStepRun(ctx.db, { runId, attempt }),
+      const advance = await withRunPassFixture(ctx.db, runId, () =>
+        advanceStepRun(ctx.db, { runId, attempt }),
       );
       if (advance.kind !== "continue") return advance.kind;
       // An evaluate step waits on its evaluations.

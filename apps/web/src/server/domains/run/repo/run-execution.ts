@@ -207,7 +207,7 @@ export function runPassRollup(
   };
 }
 
-// TODO(kernel Pass completion history and priority): use its queue order and duration samples for ETA.
+// TODO(Pass completion history): use retained duration samples for queued Run ETA.
 /** Each due Pass's place in the claim order (every pass name, by `availableAt`). */
 export async function readDuePassPositions(
   db: RepositoryQueryInput,
@@ -220,7 +220,7 @@ export async function readDuePassPositions(
     total: number;
   }>(sql`
     SELECT ranked.key, ranked.position, ranked.total FROM (
-      SELECT name, key, row_number() OVER (ORDER BY "availableAt")::int AS position,
+      SELECT name, key, row_number() OVER (ORDER BY EXISTS (SELECT 1 FROM "Run" r WHERE r.id = "Pass"."runId" AND (r.cause = 'member_request' OR r.trigger IN ('manual', 'foreground'))) DESC, "availableAt", "createdAt", name, key)::int AS position,
         count(*) OVER ()::int AS total
       FROM "Pass"
       WHERE "doneAt" IS NULL AND "cancelledAt" IS NULL AND "availableAt" <= now()
@@ -236,8 +236,11 @@ export async function readDuePassPositions(
 }
 
 /** Scoped statement Sweeps yield while another page works on the same import source. */
-export async function sweepPassSourceHeld(db: RepositoryQueryInput, runId: string): Promise<boolean> {
-  const result = await repositoryQueries(db).execute<{held: boolean}>(sql`
+export async function sweepPassSourceHeld(
+  db: RepositoryQueryInput,
+  runId: string,
+): Promise<boolean> {
+  const result = await repositoryQueries(db).execute<{ held: boolean }>(sql`
     WITH sweep_sources AS (
       SELECT r.id, ti.source FROM "Run" r
       JOIN "TransactionImport" ti ON ti.id = (jsonb_path_query_first(r.input,

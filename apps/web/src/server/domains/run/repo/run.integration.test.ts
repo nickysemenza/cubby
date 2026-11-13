@@ -2,7 +2,6 @@ import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { createRepoIdentity } from "tooling/factories/repo";
-import { advanceRunPass } from "~/server/workflows/runs/pass.fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -26,6 +25,7 @@ import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import type { ShortcodeGeneratorPort } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
+import { advanceRunPass } from "~/server/workflows/runs/pass.fixtures";
 
 import { readRun, runScaffold } from "./run";
 import { readRunPass } from "./run-execution";
@@ -661,13 +661,15 @@ describe("Run attention entity view", () => {
       )[0]?.status,
     ).toBe("running");
 
-    const retainedExecution = await readJob(ctx.db, { key: `run:${runId}` });
-    if (!retainedExecution) throw new Error("Missing synthetic retained Job");
+    const retainedExecution = await readRunPass(ctx.db, runId);
+    if (!retainedExecution) throw new Error("Missing synthetic retained Pass");
     await getDb(ctx.db)
       .update(runTable)
       .set({ status: "paused" })
       .where(eq(runTable.id, runId));
-    await updateJobs(ctx.db, { id: retainedExecution.id }, { state: "paused" });
+    await (
+      await import("~/server/kernel/api")
+    ).cancelWork(ctx.db, { table: "Pass", name: "run.execute", key: runId });
     await expect(
       controlWorkflowRun(
         ctx.db,
@@ -676,9 +678,9 @@ describe("Run attention entity view", () => {
         "ai_refresh",
       ),
     ).resolves.toBeUndefined();
-    expect(await readJob(ctx.db, { key: `run:${runId}` })).toMatchObject({
-      id: retainedExecution.id,
-      state: "queued",
+    expect(await readRunPass(ctx.db, runId)).toMatchObject({
+      runId,
+      state: "due",
     });
     expect(
       (

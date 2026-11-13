@@ -1,3 +1,4 @@
+import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
 /**
  * Run execution as a kernel Pass (ADR 0029 section 7): one `run.execute`
  * Pass per step-ledger or AI-work Run, keyed by the Run's id. The cursor
@@ -8,7 +9,7 @@
  * waits with their cause; an AI-work Run waits for the evaluations or asks
  * that carry its id, which wake it as they settle.
  */
-import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
+import type { JobWaitReason } from "@cubby/schemas/job";
 import { mailboxDiscoveryProgress } from "@cubby/schemas/mailbox-research";
 import { RUN_KINDS } from "@cubby/schemas/run-fields";
 import { and, eq, sql, type SQL } from "drizzle-orm";
@@ -31,28 +32,19 @@ import {
   type RunPassCursor,
 } from "~/server/domains/run/repo/run-execution";
 import { listRunSteps } from "~/server/domains/run/repo/run-step";
-import {
-  JobDeferredError,
-  JobSupersededError,
-} from "~/server/generic/jobs/errors";
+import { JobSupersededError } from "~/server/generic/jobs/errors";
 import { classifyJobFailure } from "~/server/generic/jobs/failure";
 import {
   cancelWork,
   definePass,
   startPass,
   type Claim,
-  type Pass,
+  type PassResult,
 } from "~/server/kernel/api";
-import { fenceClaim } from "~/server/kernel/claim";
 
 import { withWorkflowExecution } from "./execution";
 import { resumeClaimedWorkflowRun } from "./lifecycle";
 
-// TODO(kernel PassResult.waitCause): return typed waits instead of JobDeferredError.
-type PassResult = Awaited<ReturnType<Pass["run"]>>;
-
-/** Pass claims last 90 s; a page renews well inside that. */
-const CLAIM_MS = 90_000;
 const HEARTBEAT_MS = 30_000;
 /**
  * An AI-work Run is woken when its evaluations or asks settle; this only
@@ -71,13 +63,22 @@ const passTarget = (runId: string) => ({
 });
 
 /** The claim as workflow code sees it: a fence for open transactions and a pre-provider check. */
-// TODO(kernel Claim.fence): replace the internal fenceClaim import with claim.fence(tx).
-const passFence = (claim: Claim, runId: string) => ({
-  fence: (tx: Database) =>
-    fenceClaim(repositoryQueries(tx), passTarget(runId), claim.token),
+const passFence = (claim: Claim) => ({
+  fence: (tx: Database) => claim.fence(tx),
   async check() {
     if (!(await claim.renew())) throw new JobSupersededError();
   },
+});
+
+const waitResult = (
+  cursor: RunPassCursor,
+  until: Date,
+  reason: JobWaitReason,
+): PassResult => ({
+  cursor,
+  done: false,
+  availableAt: until,
+  waitCause: reason === "ai_funding_window" ? "funding" : reason,
 });
 
 /** SQL true while this claim still holds the Run's Pass, for guarded Run writes. */
@@ -133,17 +134,17 @@ async function advance(
       pending &&
       !fundingRelease.safeParse(before.progress).data?.fundingReleasedAt
     )
-      throw new JobDeferredError(
-        before.dispatchError ?? "Run awaits its funding window",
-        pending,
-        "ai_funding_window",
-      );
+      return waitResult(cursor, pending, "ai_funding_window");
     await resumeClaimedWorkflowRun(db, params, "funding_ready");
   }
   // SAFETY: the cursor was written by `startRunPass` for a Pass-executed kind.
   const purpose = cursor.purpose as PassRunPurpose;
-  if (purpose === "sweep" && await sweepPassSourceHeld(db, runId))
-    throw new JobDeferredError("Waiting for another Sweep on this statement source", new Date(Date.now() + 1_000 + Math.random() * 2_000), "provider_capacity");
+  if (purpose === "sweep" && (await sweepPassSourceHeld(db, runId)))
+    return waitResult(
+      cursor,
+      new Date(Date.now() + 1_000 + Math.random() * 2_000),
+      "provider_capacity",
+    );
   if (RUN_KINDS[purpose].execution === "steps") {
     const next = await (
       await import("~/server/domains/run/service/step-run")
@@ -155,8 +156,8 @@ async function advance(
         (step) => step.state === "paused",
       );
       if (paused?.pausedUntil)
-        throw new JobDeferredError(
-          paused.pausedReason ?? "Step capacity wait",
+        return waitResult(
+          cursor,
           paused.pausedUntil,
           next.waitReason ?? "provider_capacity",
         );
@@ -165,8 +166,8 @@ async function advance(
     }
     const seconds = next.waitSeconds ?? 0;
     if (seconds > 0)
-      throw new JobDeferredError(
-        "Waiting for step capacity",
+      return waitResult(
+        cursor,
         new Date(Date.now() + seconds * 1000),
         "provider_capacity",
       );
@@ -199,20 +200,13 @@ async function reconcileIfLastAttempt(
   }
 }
 
-// TODO(kernel claim-deadline wake): remove this per-pass recovery wake and its heartbeat wake.
-async function recoveryWake(deadline: Date) {
-  const { wakeAt } = await import("../background-tasks/publish");
-  await wakeAt(new Date(deadline.getTime() + 5_000), {
-    source: "run.execute.recovery",
-  });
-}
-
 /** A funding or provider stop is a wait with its cause, never a spent attempt. */
 async function asWait(
   claim: Claim,
   runId: RunId,
   error: unknown,
-): Promise<JobDeferredError | null> {
+  cursor: RunPassCursor,
+): Promise<PassResult | null> {
   const funding = findFundingWait(error);
   const provider = findErrorCause(
     error,
@@ -221,22 +215,17 @@ async function asWait(
   );
   const wait = funding ?? provider;
   if (!wait) return null;
-  const deferred = new JobDeferredError(
-    error instanceof Error ? error.message : wait.message,
-    wait.until,
-    wait.reason,
-  );
   // A provider stop names itself on the Run; a budget stop already paused it.
   if (provider && wait === provider)
     await claim.fenced(async (tx) => {
       await getDb(tx)
         .update(run)
-        .set({ dispatchError: deferred.message })
+        .set({
+          dispatchError: error instanceof Error ? error.message : wait.message,
+        })
         .where(and(eq(run.id, runId), eq(run.status, "running")));
     });
-  // Keep the typed provider cause and raw gateway diagnostic at this seam.
-  deferred.cause = error;
-  return deferred;
+  return waitResult(cursor, wait.until, wait.reason);
 }
 
 export const runExecutePass = definePass({
@@ -244,19 +233,10 @@ export const runExecutePass = definePass({
   async run(db, raw, claim) {
     const cursor = runPassCursor.parse(raw);
     const runId = runEntityId.parse(cursor.runId);
-    // A worker killed mid-page (a deploy, a crash) leaves its claim to lapse;
-    // a wake at the deadline hands the page to the next worker promptly.
-    const recover = () => recoveryWake(claim.deadline);
-    await recover();
     const heartbeat = setInterval(() => {
-      void claim
-        .renew()
-        .then((held) =>
-          held ? recoveryWake(new Date(Date.now() + CLAIM_MS)) : undefined,
-        )
-        .catch(() => {
-          // SILENT: a failed renewal surfaces at the page's next fence or check.
-        });
+      void claim.renew().catch(() => {
+        // SILENT: the next fence or pre-provider check reports lost ownership.
+      });
     }, HEARTBEAT_MS);
     try {
       return await withWorkflowExecution(
@@ -264,14 +244,17 @@ export const runExecutePass = definePass({
           runId,
           attempt: cursor.generation,
           database: db,
-          job: passFence(claim, runId),
+          job: passFence(claim),
           live: passLive(runId, claim.token),
         },
         () => advance(db, claim, cursor),
       );
     } catch (error) {
-      const wait = await asWait(claim, runId, error);
-      if (wait) throw wait;
+      const wait = await asWait(claim, runId, error, cursor);
+      if (wait) return wait;
+      const failure = classifyJobFailure(error);
+      if (failure.kind === "deferred")
+        return waitResult(cursor, failure.until, failure.reason);
       await reconcileIfLastAttempt(db, runId, error);
       throw error;
     } finally {
@@ -295,7 +278,6 @@ export async function startRunPass(
   },
 ) {
   const target = passTarget(input.runId);
-  // TODO(kernel Pass priority): carry member-started priority into startPass. Reference: launchPassRun.
   // An exhausted Pass is still pending to `startPass`; cancelling first makes it restart fresh.
   if (input.restart) await cancelWork(db, target);
   await startPass(db, runExecutePass, {
@@ -307,11 +289,6 @@ export async function startRunPass(
       generation: input.generation,
     },
   });
-  if (input.restart) {
-    // TODO(kernel startPass): restarted cancelled Passes must clear their prior claim token.
-    await repositoryQueries(db).execute(sql`UPDATE "Pass" SET "claimToken" = NULL, "claimDeadline" = NULL,
-      "waitCause" = NULL, "lastError" = NULL WHERE name = ${RUN_EXECUTE_PASS} AND key = ${input.runId}`);
-  }
 }
 
 /** Stop a Run's Pass; a live page stops at its next renewal or fence. */

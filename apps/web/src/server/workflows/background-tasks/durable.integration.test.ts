@@ -1,9 +1,10 @@
+import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { sql } from "drizzle-orm";
 import { withTransactionDatabase } from "~/server/db/helpers";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
+
 import { publishInBackground, publishBackgroundTasks } from "./publish";
 
 // Intent must not depend on queue acceptance or an after-commit buffer. A
@@ -17,17 +18,28 @@ describe("durable task intent", () => {
 
   it("persists intent when no queue producer is installed", async () => {
     await publishInBackground(ctx.db, [task], { source: "synthetic-test" });
-    const rows = (await repositoryQueries(ctx.db).execute(sql`SELECT cursor, "doneAt", "runId" FROM "Pass" WHERE name = 'purchase.discovery'`)).rows;
+    const rows = (
+      await repositoryQueries(ctx.db).execute(
+        sql`SELECT cursor, "doneAt", "runId" FROM "Pass" WHERE name = 'purchase.discovery'`,
+      )
+    ).rows;
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({cursor: {senderAfter: null}, doneAt: null});
+    expect(rows[0]).toMatchObject({
+      cursor: { senderAfter: null },
+      doneAt: null,
+    });
   });
 
   it("omits explicitly undefined optional fields from durable input", async () => {
     await publishBackgroundTasks(ctx.db, [{ ...task, runId: undefined }], {
       source: "synthetic-optional",
     });
-    const [saved] = (await repositoryQueries(ctx.db).execute(sql`SELECT cursor, "runId" FROM "Pass" WHERE name = 'purchase.discovery'`)).rows;
-    expect(saved?.cursor).toEqual({senderAfter: null});
+    const [saved] = (
+      await repositoryQueries(ctx.db).execute(
+        sql`SELECT cursor, "runId" FROM "Pass" WHERE name = 'purchase.discovery'`,
+      )
+    ).rows;
+    expect(saved?.cursor).toEqual({ senderAfter: null });
     expect(saved?.runId).toBeNull();
   });
 
@@ -35,10 +47,22 @@ describe("durable task intent", () => {
     await expect(
       withTransactionDatabase(ctx.db, async (tx) => {
         await publishBackgroundTasks(tx, [task], { source: "synthetic-test" });
-        expect((await repositoryQueries(tx).execute(sql`SELECT * FROM "Pass" WHERE name = 'purchase.discovery'`)).rows).toHaveLength(1);
+        expect(
+          (
+            await repositoryQueries(tx).execute(
+              sql`SELECT * FROM "Pass" WHERE name = 'purchase.discovery'`,
+            )
+          ).rows,
+        ).toHaveLength(1);
         throw new Error("Synthetic rejected mutation");
       }),
     ).rejects.toThrow("Synthetic rejected mutation");
-    expect((await repositoryQueries(ctx.db).execute(sql`SELECT * FROM "Pass" WHERE name = 'purchase.discovery'`)).rows).toEqual([]);
+    expect(
+      (
+        await repositoryQueries(ctx.db).execute(
+          sql`SELECT * FROM "Pass" WHERE name = 'purchase.discovery'`,
+        )
+      ).rows,
+    ).toEqual([]);
   });
 });

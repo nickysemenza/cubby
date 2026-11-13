@@ -4,7 +4,7 @@
  * discovery and the calendar invalidation fallback. The Run domain module
  * registers them until the kernel's module list names a module of its own.
  */
-import type { Pass } from "~/server/kernel/api";
+import { defineModule, type Pass } from "~/server/kernel/api";
 
 import { calendarInvalidatePass } from "./calendar-invalidate-pass";
 import { purchaseDiscoveryPass } from "./purchase-discovery-pass";
@@ -12,7 +12,6 @@ import { retentionPass } from "./retention-pass";
 import { runsReconcilePass } from "./runs/reconcile-pass";
 import { runExecutePass } from "./runs/run-pass";
 
-// TODO(kernel passes-only module): register these without the Run summary module.
 export const WORKFLOW_PASSES: readonly Pass[] = [
   retentionPass,
   purchaseDiscoveryPass,
@@ -20,3 +19,8 @@ export const WORKFLOW_PASSES: readonly Pass[] = [
   runExecutePass,
   runsReconcilePass,
 ];
+
+export const workflowKernelModule = defineModule({
+  name: "workflows",
+  passes: WORKFLOW_PASSES,
+});

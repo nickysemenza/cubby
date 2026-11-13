@@ -5,7 +5,6 @@ import { eq, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { createRepoEntity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
-import { advanceRunPass } from "~/server/workflows/runs/pass.fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -16,6 +15,7 @@ import { getDb } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
 import { readRunPass } from "~/server/domains/run/repo/run-execution";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
+import { advanceRunPass } from "~/server/workflows/runs/pass.fixtures";
 
 import { readRunSteps } from "../repo/run-step";
 import { startSweep } from "./sweep";
@@ -160,6 +160,9 @@ it("resumes a refused statement Sweep and publishes every batched suggestion", a
         throw new Error(execution.lastError ?? execution.state);
       if (execution.availableAt.getTime() > now)
         await wait(execution.availableAt.getTime() - now);
+      await getDb(ctx.db).execute(
+        sql`UPDATE "Pass" SET "availableAt" = now() WHERE name = 'run.execute' AND key = ${runId}`,
+      );
       await advanceRunPass(ctx.db);
     }
     const [saved] = await getDb(ctx.db)
