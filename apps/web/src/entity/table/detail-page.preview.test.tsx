@@ -51,7 +51,7 @@ for (const width of [560, 900, 1100, 1400]) {
     const facts = document.getElementById("facts")!.getBoundingClientRect();
     const support = document.getElementById("support")!.getBoundingClientRect();
     const body = document
-      .querySelector("[data-detail-panel]:not([hidden])")!
+      .getElementById("detail-group-overview")!
       .getBoundingClientRect();
     expect(support.top).toBeGreaterThan(facts.top);
     for (const rect of [facts, support]) {
@@ -65,8 +65,8 @@ for (const width of [560, 900, 1100, 1400]) {
   });
 }
 
-// Tabs must never cost a draft or hide content from a link or find-in-page.
-it("keeps every panel mounted, drafts included, and follows section links", async () => {
+// Every group is on the page: a jump must never cost a draft or hide content.
+it("shows every group, keeps drafts, and follows section links", async () => {
   await page.viewport(1280, 900);
   render(
     <DetailSections
@@ -94,17 +94,10 @@ it("keeps every panel mounted, drafts included, and follows section links", asyn
   fireEvent.change(screen.getByRole("textbox", { name: "Review draft" }), {
     target: { value: "Unsaved review" },
   });
-  const evidence = document.getElementById("detail-group-evidence")!;
-  expect(evidence.getAttribute("hidden")).toBe("until-found");
-  fireEvent.click(screen.getByRole("tab", { name: "Evidence" }));
   expect(screen.getByText("Source evidence body")).toBeVisible();
-  await harness.router.navigate({ to: "/", hash: "facts" });
+  await harness.router.navigate({ to: "/", hash: "source" });
   await waitFor(() =>
-    expect(document.activeElement).toBe(document.getElementById("facts")),
-  );
-  expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute(
-    "aria-selected",
-    "true",
+    expect(document.activeElement).toBe(document.getElementById("source")),
   );
   expect(screen.getByRole("textbox", { name: "Review draft" })).toHaveValue(
     "Unsaved review",

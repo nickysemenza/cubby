@@ -204,7 +204,7 @@ function headerStatus<E extends GenericDetailEntity>(
   );
 }
 
-/** A section's tab when the entity declares none: from its kind. */
+/** A section's group when the entity declares none: from its kind. */
 function defaultGroup(section: DeclaredSection) {
   switch (section.kind) {
     case "fields":
@@ -614,7 +614,6 @@ function FullEntityDetail<E extends GenericDetailEntity>({
   const title =
     readRecordField(record, titleField, z.string().catch("")) || bag.id;
   const status = headerStatus(queryClient, entity, record);
-  const kind = recordKindOf(queryClient, entity, record);
   const summary = aiSummaryOf(queryClient, entity, record);
   // A hosted native workspace confines navigation to this record; list links
   // in the trail would be dead there.
@@ -937,7 +936,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
               sections={placed.map(withQualityChecks)}
               rawData={record}
               groups={detail.groups ?? undefined}
-              side={<DetailSide entity={entity} record={record} kind={kind} />}
+              side={<DetailSide entity={entity} record={record} />}
             />
           </RecordQualityProvider>
         </FactsAddProvider>

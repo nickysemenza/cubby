@@ -620,9 +620,8 @@ Three optional roles name the fields a record's state, progress and kind come fr
   (`packages/schemas/src/progress.ts`: done, failed, active, stalled, queued, a nullable total, a
   unit and optional parts) and an optional note field drawn beside the meter.
 - `presentation.kind: { field }` names the roster that says what kind of record this is. Its label
-  is a tag in the title cell and detail header, and its option `explanation` (targets, exclusions,
-  effects, dependencies, cost, recovery) is the "What a {label} does" block in the detail side
-  column.
+  is a tag in the title cell and detail header. Its option `explanation` (targets, exclusions,
+  effects, dependencies, cost, recovery) folds behind the native kind tag; web does not draw it.
 
 `display.priority` (`essential`, `default`, `optional`) decides which columns leave a table instead
 of every column truncating: below 1100px of table width optional columns drop, and at any width
@@ -651,16 +650,17 @@ under readable ids:
 - `slot`: the one per-platform hand-written fill, rendered only where a registry provides it
   (`DetailSlotId<E>` / `ListSlotId<E>` in `entity-manifest.ts` type those registries).
 
-Sections are authored for reading; nothing derives from edit groups. Web detail is a two-pane
-workspace: tabs on the left, the side column on the right. `detail.groups: [{ id, title }]` declares
-the tabs in order, and each section's `group` names its tab. An entity without `groups` gets
+Sections are authored for reading; nothing derives from edit groups. Web detail is one scrolling page:
+the side content (Needs you, key facts) above the section groups, with a
+sticky contents index beside them. `detail.groups: [{ id, title }]` declares the groups in order,
+and each section's `group` names its group. An entity without `groups` gets
 `DEFAULT_DETAIL_GROUPS` (Overview, Work, Evidence, Relations, Activity), and a section without
 `group` joins one from its kind and position: relations join Work, timelines and sections that set
 `overview: false` Evidence, and other sections Overview, while Relations and Activity hold the
 capability-derived Connected records, Relationships and history. The generator refuses a
-`group` that names no tab. Tabs show counts and are deep-linked as `#<group>`; every panel stays
-mounted, inactive panels are `hidden="until-found"`, and a section anchor or a find-in-page match
-selects its tab. Sections render full width in declaration order within their tab.
+`group` that names no declared group. Index entries show counts and every group is deep-linked as
+`#<group>`; a section anchor scrolls to and focuses its section. Sections render full width in
+declaration order within their group.
 `detail.overviewSections` still emits independent `overview` metadata for web and Swift. Native
 keeps its own Contents order and reads no groups, and a board list view marked `webOnly` is omitted
 from Swift. A section's `placement` is `primary` (shares a ruled plane) or `full` (its own plane);
@@ -760,7 +760,7 @@ field placed once, so it leaves later field sections:
 - `detail.aiSummary` names a stored AI-written summary drawn under the lines, absent until written.
 - `detail.side: { needs? }` fills the side column. `needs` is a `displayItems` field listing what
   waits on a member and shows only when non-empty, followed by the `fields` summary cells as key
-  facts and the kind explanation.
+  facts.
 
 Do not maintain per-entity header maps, a second chart registry or client arithmetic. Empty optional
 relationships may disappear; meaningful unknown values, pending reads and failed reads stay
@@ -884,7 +884,7 @@ refuses a detail-slot handoff to an undeclared section; the schema page lists ea
 To move a surface to web, classify it `handoff` in review; to bring it native, build the view and
 flip the status. The `presentation.state` badge and `presentation.progress` meter are the shared
 list cells `state` and `progress` (`SHARED_LIST_RENDERERS`), classified whether or not a
-declaration names them. Native draws neither the detail tabs, header lines, AI summary nor side
+declaration names them. Native draws neither the detail groups, header lines, AI summary nor side
 column. Named renderers are classified by this owner during compilation; whole-row
 renderers declare their minimum consumed inputs beside that disposition. Compiler schema checks do
 not prove executable web or native registration.

@@ -180,7 +180,7 @@ describe("GenericEntityDetail", () => {
       { wrapper: harness.wrapper },
     );
     const titles = screen
-      .getAllByRole("heading", { level: 2 })
+      .getAllByRole("heading", { level: 3 })
       .map((heading) => heading.textContent);
     expect(titles).toEqual(expect.arrayContaining(["AI usage", "Changes"]));
     expect(titles).not.toContain("Import");

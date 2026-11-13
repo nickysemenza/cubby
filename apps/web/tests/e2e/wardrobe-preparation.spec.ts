@@ -84,12 +84,10 @@ test("taxonomy edits keep product classification paths and labels separate from 
       exact: true,
     }),
   ).toBeVisible();
-  // The Evidence tab holds Images; its panel stays mounted while streamed
-  // loading elements are replaced.
-  await page.getByRole("tab", { name: /^Evidence/u }).click();
-  await expect(page).toHaveURL(/#evidence$/u);
+  // Images stay mounted while streamed loading elements are replaced.
+  const images = await showDetailSection(page, "images");
   await expect(
-    page.locator("#images").getByRole("img", { name: `${itemImageName}.png` }),
+    images.getByRole("img", { name: `${itemImageName}.png` }),
   ).toBeVisible();
   await expect
     .poll(() =>
