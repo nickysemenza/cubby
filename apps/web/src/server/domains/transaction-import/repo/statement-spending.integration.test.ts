@@ -692,18 +692,21 @@ describe("statement spending review and re-import", () => {
         purchases: number;
         expenses: number;
         allocations: number;
+        bindings: number;
         cost: string;
         allocated: string;
       }>(sql`SELECT
       (SELECT count(*)::int FROM "Purchase" WHERE "deletedAt" IS NULL) purchases,
       (SELECT count(*)::int FROM "Expense" WHERE "deletedAt" IS NULL) expenses,
       (SELECT count(*)::int FROM "FinancialTransactionAllocation" WHERE "deletedAt" IS NULL) allocations,
+      (SELECT count(*)::int FROM "EvidenceBinding" WHERE "factKind"=${"sourceOccurrence"}) bindings,
       (SELECT sum("costMinor")::text FROM "Expense" WHERE "deletedAt" IS NULL) cost,
       (SELECT sum("amountMinor")::text FROM "FinancialTransactionAllocation" WHERE "deletedAt" IS NULL) allocated`);
       expect(totals.rows[0]).toEqual({
         purchases: count + seededScopes.length,
         expenses: count,
         allocations: count,
+        bindings: count,
         cost: String(count * 1000),
         allocated: String(count * 1000),
       });

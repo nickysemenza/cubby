@@ -67,6 +67,7 @@ import {
   selectedListProjection,
 } from "~/server/generic/list/repo/list-projection";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { decide, recordSubject } from "~/server/kernel/api";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createIngredientFixture,
@@ -314,6 +315,17 @@ describe("entity display image resolver", () => {
         data: { accountId: account.output.id },
       },
       ctx.actor,
+    );
+    const history = await getDb(ctx.db).select().from(financialTransaction);
+    await decide(
+      ctx.db,
+      ctx.actor,
+      history.map((transaction) => ({
+        channel: "identity",
+        kind: "distinct",
+        subject: `bank:${record.occurrenceId}`,
+        field: recordSubject("financialTransaction", transaction.id),
+      })),
     );
     const confirmed = await createRepoEntity(ctx, "financialTransaction", {
       accountId: account.output.id,

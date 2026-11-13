@@ -302,6 +302,7 @@ function plannedKeys(
     for (const column of [...target.columns, ...(target.createOnly ?? [])])
       keys.add(columnKey(target.name, column));
     keys.add(rowKey(target.name, String(row.id)));
+    keys.add(`record:${recordEntity(target)}:${String(row.id)}`);
     for (const key of target.keys?.(row) ?? []) keys.add(key);
     for (const index of registry.indexes.get(target.name) ?? [])
       for (const value of index.values(row))
@@ -309,6 +310,8 @@ function plannedKeys(
   };
   for (const item of computed) {
     if (!item.desired || item.error) continue;
+    for (const attachment of item.desired.attachments ?? [])
+      keys.add(`record:${recordEntity(attachment.target)}:${attachment.id}`);
     const diff = difference(item, options);
     for (const entry of diff.inserts)
       touch(entry.target, { ...entry.values, id: entry.id });
@@ -606,7 +609,14 @@ async function applyBatch(
       if (!provenance.has(`${recordEntity(target.target)}:${target.id}`))
         provenance.set(`${recordEntity(target.target)}:${target.id}`, source);
   }
-  const changed = new Set<Key>();
+  const changed = new Set<Key>(
+    plans.flatMap((plan) =>
+      (plan.computed.desired!.attachments ?? []).map(
+        (attachment) =>
+          `record:${recordEntity(attachment.target)}:${attachment.id}`,
+      ),
+    ),
+  );
   const discovered: ScopeRef[] = plans.flatMap((plan) => [
     ...plan.computed.desired!.emits,
   ]);
@@ -616,6 +626,7 @@ async function applyBatch(
     for (const column of [...target.columns, ...(target.createOnly ?? [])])
       changed.add(columnKey(target.name, column));
     changed.add(rowKey(target.name, String(row.id)));
+    changed.add(`record:${recordEntity(target)}:${String(row.id)}`);
     for (const key of target.keys?.(row) ?? []) changed.add(key);
     for (const index of registry.indexes.get(target.name) ?? [])
       for (const value of index.values(row))

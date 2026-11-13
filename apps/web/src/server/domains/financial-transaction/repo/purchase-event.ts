@@ -14,7 +14,12 @@ import { sql } from "drizzle-orm";
 import { householdLocalDate } from "~/lib/household-date";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { textArrayParam } from "~/server/db/helpers/array-param";
-import { manualEntry, decision, answer } from "~/server/db/kernel-schema";
+import {
+  manualEntry,
+  decision,
+  answer,
+  recordKey,
+} from "~/server/db/kernel-schema";
 import {
   expense,
   expenseAttribution,
@@ -182,6 +187,7 @@ const tableReads = [
     ["acceptedTransactionId", "currentObservationId", "deletedAt"],
     [acceptedOccurrences],
   ),
+  source.table(recordKey, ["scopeKind", "scopeKey", "entity", "entityId"]),
   source.table(entityIdentity, [
     "kind",
     "shortcode",
@@ -294,7 +300,7 @@ export const purchaseEvent = defineReconciler<Input>({
       ...(await reads.rows(financialTransaction, keys)).values(),
     ];
     const subjects = keys.map((key) => `purchaseEvent:${key}`);
-    const [manuals, choices, initialVendors] = await Promise.all([
+    const [manuals, choices, initialVendors, bankOwners] = await Promise.all([
       reads.facts(
         manualTransactionEvidence,
         keys.map((key) => `purchaseEvent:${key}`),
@@ -312,6 +318,11 @@ export const purchaseEvent = defineReconciler<Input>({
             .filter((name): name is string => !!name)
             .map((name) => name.trim().toLowerCase()),
         ),
+      ),
+      reads.select(
+        recordKey,
+        keys.map((key) => `record:financialTransaction:${key}`),
+        sql`${recordKey.scopeKind}='bankEvent' AND ${recordKey.entity}=${"financialTransaction"} AND ${recordKey.entityId}=ANY(${textArrayParam(keys)}::uuid[])`,
       ),
     ]);
     const strings = (value: unknown): string[] =>
@@ -449,6 +460,15 @@ export const purchaseEvent = defineReconciler<Input>({
             transaction ? [transaction.accountId] : [],
           ),
         ]);
+        const bankOccurrences = await scoped.rows(
+          sourceOccurrence,
+          bankOwners
+            .filter(
+              (owner) =>
+                owner.entityId === key && !owner.scopeKey.startsWith("manual:"),
+            )
+            .map((owner) => owner.scopeKey),
+        );
         const purchaseIds = [
           ...new Set([
             ...candidatePurchases.map((row) => row.id),
@@ -541,7 +561,7 @@ export const purchaseEvent = defineReconciler<Input>({
             vendors: allVendors,
             categories: [...categories.values()],
             payments,
-            occurrences,
+            occurrences: unique([...occurrences, ...bankOccurrences.values()]),
             bindings: bindings.filter(
               (binding) =>
                 binding.scope.kind === "purchaseEvent" &&
