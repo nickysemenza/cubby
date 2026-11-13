@@ -7,13 +7,14 @@ import {
 import { entitySchema, type Entity } from "@cubby/schemas/entity";
 import { fieldDecisionOf, fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { ReadableFieldEnvelope } from "@cubby/schemas/field-envelope";
+import { explanationFactLabel } from "@cubby/schemas/field-envelope-presentation";
 import {
   fieldExplanationSource,
   fieldExplanationInput,
   type FieldExplanationOutput,
 } from "@cubby/schemas/field-explanation";
 import { resolvedListSchema } from "@cubby/schemas/field-resolution";
-import { humanize, parseShortcode } from "@cubby/shared";
+import { parseShortcode } from "@cubby/shared";
 import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
@@ -109,9 +110,7 @@ export function ReadableExplanationValue({
       ? boolean.data
         ? "Yes"
         : "No"
-      : textValue.success && /^[a-z]+(?:_[a-z]+)+$/.test(textValue.data)
-        ? humanize(textValue.data)
-        : scalar.data;
+      : scalar.data;
     return <span className="break-words">{display}</span>;
   }
   if (Array.isArray(value)) {
@@ -208,7 +207,7 @@ function ReadableExplanationRecord({
         {Object.entries(record.data).map(([key, item]) => (
           <div key={key} className="contents">
             <dt className="break-words text-muted-foreground">
-              {humanize(key)}
+              {explanationFactLabel(key) ?? <code>{key}</code>}
             </dt>
             <dd className="min-w-0">
               <ReadableExplanationValue

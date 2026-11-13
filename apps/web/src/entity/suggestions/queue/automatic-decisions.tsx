@@ -1,7 +1,6 @@
 import { automaticDecisionFamily } from "@cubby/schemas/automatic-decision";
 import type { AutomaticDecisionRow } from "@cubby/schemas/automatic-decision";
 import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
-import { humanize } from "@cubby/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useState } from "react";
 
@@ -344,7 +343,12 @@ function AutomaticDecision({ row }: { row: AutomaticDecisionRow }) {
             {row.verdict === "wrong"
               ? "Feedback recorded"
               : row.verdict
-                ? humanize(row.verdict)
+                ? {
+                    correct: "Correct",
+                    dismissed: "Dismissed",
+                    uncertain: "Unsure",
+                    ungraded: "Not reviewed",
+                  }[row.verdict]
                 : "Not reviewed"}
           </span>
           <Button

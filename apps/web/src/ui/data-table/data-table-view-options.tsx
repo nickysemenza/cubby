@@ -1,4 +1,3 @@
-import { humanize } from "@cubby/shared";
 import { GearSixIcon } from "@phosphor-icons/react/dist/csr/GearSix";
 import type { RowData } from "@tanstack/react-table";
 import { useState } from "react";
@@ -40,7 +39,11 @@ export function columnLabel<TData extends RowData>(
   column: Column<TData, unknown>,
 ): string {
   const header = column.columnDef.header;
-  return isStringHeader(header) ? header : humanize(column.id);
+  return isStringHeader(header)
+    ? header
+    : (column.columnDef.meta?.presentation?.label ??
+        column.columnDef.meta?.filterConfig?.label ??
+        "Details");
 }
 
 export function DataTableViewOptions<TData extends RowData>({

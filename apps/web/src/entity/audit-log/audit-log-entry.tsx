@@ -106,7 +106,7 @@ function isChangeFieldLabel(
   return field in CHANGE_FIELD_LABELS;
 }
 
-function humanizeChangeField(field: string): string {
+export function auditChangeFieldLabel(field: string): string {
   return (
     (isChangeFieldLabel(field) ? CHANGE_FIELD_LABELS[field] : undefined) ??
     field
@@ -253,7 +253,7 @@ function LedgerChangeSummary({
       {shown.map(({ field, from, to }) => (
         <Row key={field} align="baseline" gap="tight" className="min-w-0">
           <span className="shrink-0 text-muted-foreground">
-            {humanizeChangeField(field)}
+            {auditChangeFieldLabel(field)}
           </span>
           {from && (
             <LedgerValueText

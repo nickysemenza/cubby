@@ -8,7 +8,6 @@ import {
 } from "@cubby/schemas/field-resolution";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { itemizationExpectation } from "@cubby/schemas/purchase-evidence-policy";
-import { humanize } from "@cubby/shared";
 import { and, eq, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
@@ -390,7 +389,7 @@ async function fieldSteps(
       ...(resolution.sourceEntity || resolution.fallbackValue !== null
         ? [
             {
-              title: humanize(resolution.source),
+              title: "Inherited value",
               ref: resolution.sourceEntity,
               value: resolution.fallbackValue,
               assigned: resolution.fallbackValue !== null,

@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./select-control-options": "./src/entity-definitions/select-control-options.ts",
     "./entity-contracts/*": "./src/generated/entity-contracts.*.gen.ts",
     "./entities/*": "./src/generated/entities/*.gen.ts",
     "./compiler/activity-fields": "./src/activity-fields.ts",

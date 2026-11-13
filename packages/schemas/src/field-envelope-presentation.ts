@@ -404,3 +404,31 @@ export function machineryColumnLabel(
 ): string {
   return MACHINERY_LIST_COLUMN_LABEL[column];
 }
+
+/** Labels for the structured facts a field explanation may carry. Unknown keys stay diagnostic code. */
+export function explanationFactLabel(key: string): string | null {
+  const labels = {
+    value: "Value",
+    unit: "Unit",
+    amount: "Amount",
+    total: "Total",
+    count: "Count",
+    start: "Start",
+    end: "End",
+    kind: "Kind",
+    source: "Source",
+    reason: "Reason",
+    confidence: "Confidence",
+    status: "Status",
+    score: "Score",
+    name: "Name",
+    quantity: "Quantity",
+    currency: "Currency",
+    date: "Date",
+    cost: "Cost",
+    inherited: "Inherited",
+    allocated: "Allocated",
+    shares: "Shares",
+  };
+  return Object.entries(labels).find(([value]) => value === key)?.[1] ?? null;
+}

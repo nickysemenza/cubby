@@ -286,3 +286,46 @@ export const suggestionDeclaredFilters =
     },
     z.core.$strict
   >;
+
+/** The same option label in the filter, row and evidence detail. */
+export function suggestionValueLabel(column: string, value: string): string {
+  const declared = Object.values(suggestionRelationLists)
+    .flatMap((list) =>
+      list.filters.flatMap((filter) =>
+        filter.columnId === column && "options" in filter
+          ? (filter.options ?? [])
+          : [],
+      ),
+    )
+    .find((option) => option.value === value);
+  if (declared) return declared.label;
+  const evidenceLabels = {
+    high: "High",
+    medium: "Medium",
+    low: "Low",
+    yes: "Same",
+    no: "Different",
+    uncertain: "Unsure",
+    account_move: "Account move",
+    payment: "Payment",
+    insufficient_evidence: "Insufficient evidence",
+    explicit: "Explicit",
+    weak: "Weak",
+    none: "None",
+    transaction: "Transaction",
+    statement: "Statement",
+    cash: "Cash",
+    monarch: "Monarch",
+    mint: "Mint",
+    copilot: "Copilot",
+    apple_card: "Apple Card",
+    manual: "Manual",
+    completed: "Done",
+    pending: "Waiting",
+    posted: "Done",
+    voided: "Ended",
+  };
+  return (
+    Object.entries(evidenceLabels).find(([key]) => key === value)?.[1] ?? value
+  );
+}

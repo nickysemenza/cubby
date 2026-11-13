@@ -1,5 +1,4 @@
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
-import { humanize } from "@cubby/shared";
 import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
 import {
@@ -84,7 +83,11 @@ function sortableHeaderLabel<TData extends RowData>(
   header: Header<typeof cubbyTableFeatures, TData, unknown>,
 ) {
   const definition = header.column.columnDef.header;
-  return isStringHeader(definition) ? definition : humanize(header.column.id);
+  return isStringHeader(definition)
+    ? definition
+    : (header.column.columnDef.meta?.presentation?.label ??
+        header.column.columnDef.meta?.filterConfig?.label ??
+        "Details");
 }
 
 /**

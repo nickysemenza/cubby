@@ -76,6 +76,7 @@ export type RunDecisionsOut = z.infer<typeof runDecisionsOut>;
 
 /** One record kind's AI evaluations within a Run. */
 const runEvaluationKind = z.object({
+  featureLabel: z.string(),
   entity: z.string().nullable(),
   feature: z.string(),
   waiting: z.number().int().nonnegative(),

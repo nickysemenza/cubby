@@ -2,7 +2,7 @@ import type { Entity, EntityRef } from "@cubby/schemas/entity";
 import type { ColumnPriority } from "@cubby/schemas/entity-definitions/definition";
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
 import type { GeneratedListFieldPresentation } from "@cubby/schemas/entity-projection-types";
-import { humanize, type NumberRange } from "@cubby/shared";
+import { type NumberRange } from "@cubby/shared";
 import type { CellData, RowData } from "@tanstack/react-table";
 import { type ReactNode, useEffect } from "react";
 
@@ -260,7 +260,11 @@ export function mobileColumnLabel<TItem extends RowData>(
   const header = column.columnDef.header;
   if (meta?.mobile?.label) return meta.mobile.label;
   if (isNonEmptyHeaderLabel(header)) return header;
-  return humanize(column.id);
+  return (
+    column.columnDef.meta?.presentation?.label ??
+    column.columnDef.meta?.filterConfig?.label ??
+    "Details"
+  );
 }
 
 function isNonEmptyHeaderLabel<TItem extends RowData>(

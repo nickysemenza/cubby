@@ -21,7 +21,7 @@ import type {
   SuggestionListRow,
   DeclaredSuggestionEvidence,
 } from "@cubby/schemas/suggestion-list";
-import { humanize } from "@cubby/shared";
+import { suggestionValueLabel } from "@cubby/schemas/suggestion-list-declarations";
 import { countLabel } from "@cubby/shared/pluralize";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useMemo, type ReactNode } from "react";
@@ -646,7 +646,13 @@ function TransactionPreviewFacts({
           ),
         ],
         ["Amount", formatCurrency(preview?.amount ?? fallback?.amount ?? 0)],
-        ["Status", humanize(preview?.status ?? fallback?.create?.status ?? "")],
+        [
+          "Status",
+          suggestionValueLabel(
+            "status",
+            preview?.status ?? fallback?.create?.status ?? "",
+          ),
+        ],
         [
           "Date",
           <DateDisplay
@@ -723,7 +729,7 @@ function StatementEvidence({ row }: { row: SourceTransactionRecord }) {
             [
               "Status",
               charge.providerStatus
-                ? humanize(charge.providerStatus)
+                ? suggestionValueLabel("providerStatus", charge.providerStatus)
                 : "Unknown",
             ],
             ["Account", <RecordLink key="account" record={row.record} />],
@@ -744,7 +750,7 @@ function StatementEvidence({ row }: { row: SourceTransactionRecord }) {
                     {item.sourceCategory ?? "Unassigned"}
                     <span className="text-muted-foreground">
                       {" "}
-                      · {humanize(item.source)}
+                      · {suggestionValueLabel("source", item.source)}
                     </span>
                   </span>
                 ))}
@@ -755,7 +761,8 @@ function StatementEvidence({ row }: { row: SourceTransactionRecord }) {
       </EvidenceBox>
       <EvidenceBox title={settled ? "Applied result" : "Proposed result"}>
         <p className="mb-2 text-sm font-medium">
-          {humanize(choice?.action ?? charge.recommended)} transaction
+          {suggestionValueLabel("action", choice?.action ?? charge.recommended)}{" "}
+          transaction
           {choice?.action === "attach"
             ? " · preserve existing spending unless shown below"
             : ""}
@@ -814,7 +821,7 @@ function StatementEvidence({ row }: { row: SourceTransactionRecord }) {
                       {candidate.amount === charge.amount ? " =" : ""}
                     </span>
                     <span className="text-muted-foreground">
-                      {humanize(candidate.status)}
+                      {suggestionValueLabel("status", candidate.status)}
                       {(candidate.postedDate ?? candidate.transactionDate)
                         ? ` · ${candidate.postedDate ?? candidate.transactionDate}`
                         : ""}
@@ -950,7 +957,8 @@ function StatementEvidence({ row }: { row: SourceTransactionRecord }) {
               <KindVotes create={charge.create} />
               {rowDraft.kind && rowDraft.kind !== charge.create.kind ? (
                 <p className="text-muted-foreground">
-                  You changed the kind to {humanize(rowDraft.kind)}.
+                  You changed the kind to{" "}
+                  {suggestionValueLabel("kind", rowDraft.kind)}.
                 </p>
               ) : null}
               <CounterpartyLine counterparty={charge.create.counterparty} />
@@ -1163,17 +1171,23 @@ function TransferPairEvidence({
                     "Create from statement"
                   ),
                 ],
-                ["Movement evidence", humanize(leg.movement)],
+                [
+                  "Movement evidence",
+                  suggestionValueLabel("movement", leg.movement),
+                ],
                 [
                   "Decision",
                   leg.movementLabel
-                    ? humanize(leg.movementLabel.choice)
+                    ? suggestionValueLabel("movement", leg.movementLabel.choice)
                     : "Not labeled",
                 ],
                 [
                   "Confidence",
                   leg.movementLabel
-                    ? humanize(leg.movementLabel.confidence)
+                    ? suggestionValueLabel(
+                        "confidence",
+                        leg.movementLabel.confidence,
+                      )
                     : null,
                 ],
                 ["Decision model", leg.movementLabel?.model ?? null],

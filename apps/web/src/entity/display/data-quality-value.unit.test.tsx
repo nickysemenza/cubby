@@ -16,7 +16,7 @@ afterEach(cleanup);
 describe("quality cell", () => {
   it("states a complete record without a number", () => {
     render(<DataQualityValue quality={{ status: "complete", missing: 0 }} />);
-    expect(screen.getByText("Complete")).toBeVisible();
+    expect(screen.getByText("Done")).toBeVisible();
   });
 
   it.each([
@@ -63,7 +63,7 @@ describe("compact quality reads", () => {
         }),
         { wrapper: harness.wrapper },
       );
-      expect(screen.getByText("Complete")).toBeVisible();
+      expect(screen.getByText("Done")).toBeVisible();
       expect(
         screen.queryByLabelText("Quality unavailable"),
       ).not.toBeInTheDocument();

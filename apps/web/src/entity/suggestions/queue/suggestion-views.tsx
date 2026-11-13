@@ -8,7 +8,7 @@ import {
   suggestionFilterDeclaration,
   suggestionRelationLists,
 } from "@cubby/schemas/suggestion-list-declarations";
-import { humanize } from "@cubby/shared";
+import { suggestionValueLabel } from "@cubby/schemas/suggestion-list-declarations";
 import type { QueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
@@ -593,7 +593,8 @@ function fieldColumns() {
           mobile: { slot: "meta", priority: 2, label: "Kind" },
           filterConfig: multiFilter("Filter kind", FIELD_KIND_OPTIONS),
         }),
-        cell: ({ row }) => humanize(columnText(row.original, "kind") ?? ""),
+        cell: ({ row }) =>
+          suggestionValueLabel("kind", columnText(row.original, "kind") ?? ""),
       }),
     );
     add(
@@ -830,7 +831,10 @@ function statementColumns(
               primary={
                 columnText(row.original, "providerCategory") ?? "Unassigned"
               }
-              secondary={humanize(row.original.evidence.source)}
+              secondary={suggestionValueLabel(
+                "source",
+                row.original.evidence.source,
+              )}
             />
           ) : (
             <NoneValue />
@@ -847,7 +851,10 @@ function statementColumns(
           filterConfig: multiFilter("Filter status", PROVIDER_STATUS_OPTIONS),
         }),
         cell: ({ row }) =>
-          humanize(columnText(row.original, "providerStatus") ?? ""),
+          suggestionValueLabel(
+            "providerStatus",
+            columnText(row.original, "providerStatus") ?? "",
+          ),
       }),
     );
     add(
@@ -879,7 +886,7 @@ function statementColumns(
         cell: ({ row }) => {
           const label = evidence(row.original)?.candidates[0]?.label;
           return label ? (
-            `${humanize(label.same)} · ${label.confidence}`
+            `${suggestionValueLabel("same", label.same)} · ${label.confidence}`
           ) : (
             <NoneValue />
           );

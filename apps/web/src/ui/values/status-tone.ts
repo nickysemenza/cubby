@@ -1,84 +1,29 @@
-import type { Confidence } from "@cubby/schemas/ai";
-import type { FinancialTransactionImportPreviewOut } from "@cubby/schemas/financial-transaction";
-import type { ProjectStatus } from "@cubby/schemas/project-fields";
-import type {
-  SourceTransactionRecordDisposition,
-  SourceTransactionRecordMatchState,
-} from "@cubby/schemas/source-transaction-record";
-import type { TaskStatus } from "@cubby/schemas/task-fields";
-import type { McpToolUsageStatus } from "@cubby/schemas/telemetry";
+import type { KernelStage } from "@cubby/schemas/kernel/stage";
+import { selectControlOptions } from "@cubby/schemas/select-control-options";
 
 import type { BadgeVariant } from "~/ui/reui/badge";
 
-type TransactionImportStatus =
-  FinancialTransactionImportPreviewOut["rows"][number]["status"];
+const STAGE_TONE = {
+  ended: "secondary",
+  stuck: "destructive",
+  working: "secondary",
+  needs_you: "warning",
+  waiting: "secondary",
+  done: "secondary",
+} satisfies Record<KernelStage, BadgeVariant>;
 
-/**
- * One tone per enum value. A status is condition, so it lands on
- * positive/warning/destructive; values with no condition of their own use the
- * untoned variants and their text label carries the meaning. Add a domain here
- * rather than a local value → variant map next to a component.
- */
-const STATUS_TONES = {
-  task: {
-    not_started: "secondary",
-    later: "outline",
-    in_progress: "warning",
-    blocked: "destructive",
-    done: "positive",
-  } satisfies Record<TaskStatus, BadgeVariant>,
-  project: {
-    planning: "plum",
-    not_started: "secondary",
-    in_progress: "warning",
-    done: "positive",
-  } satisfies Record<ProjectStatus, BadgeVariant>,
-  audit: {
-    create: "secondary",
-    update: "slate",
-    delete: "destructive",
-  },
-  statementMatch: {
-    held: "warning",
-    matched: "positive",
-    unmatched: "warning",
-    superseded: "slate",
-    ignored: "secondary",
-  } satisfies Record<SourceTransactionRecordMatchState, BadgeVariant>,
-  statementDisposition: {
-    open: "outline",
-    ignored: "secondary",
-  } satisfies Record<SourceTransactionRecordDisposition, BadgeVariant>,
-  transactionImport: {
-    ready_to_create: "default",
-    already_recorded: "secondary",
-    possible_existing: "warning",
-    unresolved_account: "warning",
-    indistinguishable_duplicate: "warning",
-  } satisfies Record<TransactionImportStatus, BadgeVariant>,
-  mcpUsage: {
-    active: "default",
-    inactive: "secondary",
-    never: "outline",
-    retired: "outline",
-  } satisfies Record<McpToolUsageStatus, BadgeVariant>,
-  confidence: {
-    high: "positive",
-    medium: "warning",
-    low: "destructive",
-  } satisfies Record<Confidence, BadgeVariant>,
-} as const;
-
-export type StatusDomain = keyof typeof STATUS_TONES;
-
-/** The `<Badge variant>` for a status value; an unknown value reads as a neutral chip. */
+/** Routine states stay quiet; only a member gap or a failure calls for attention. */
 export function statusTone(
-  domain: StatusDomain,
+  domain: "task" | "project" | "audit" | "confidence",
   value: string | null | undefined,
 ): BadgeVariant {
-  if (value == null) return "slate";
-  const tones: Readonly<Record<string, BadgeVariant>> = STATUS_TONES[domain];
-  return tones[value] ?? "slate";
+  if (domain === "audit" || domain === "confidence") return "secondary";
+  const options =
+    domain === "task"
+      ? selectControlOptions.taskStatus
+      : selectControlOptions.projectStatus;
+  const option = options.find((option) => option.value === value);
+  return option?.stage ? STAGE_TONE[option.stage] : "slate";
 }
 
 /** Text-colour class for a tone, for status shown as plain text rather than a chip. */

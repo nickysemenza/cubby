@@ -1,4 +1,5 @@
 import { askState } from "@cubby/schemas/kernel/machinery";
+import { humanize } from "@cubby/shared/text-case";
 import { sql } from "drizzle-orm";
 
 import type { RunEvaluationsOut } from "~/contracts/run-detail.contract";
@@ -43,6 +44,7 @@ export async function readRunEvaluationsByCode(
       row.state === askState.enum.unknown || row.attempts >= row.maxAttempts;
     const key = `${row.entity}:${row.feature}`;
     const group = byKind.get(key) ?? {
+      featureLabel: humanize(row.feature.replace(/[._:-]+/g, " ")),
       entity: row.entity,
       feature: row.feature,
       waiting: 0,
