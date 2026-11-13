@@ -6,18 +6,14 @@ import { financialTransactionKind } from "@cubby/schemas/financial-transaction";
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { RunStepError } from "@cubby/schemas/run-step";
 import {
-  statementTransactionJudgment,
   statementCounterparty,
   type StatementTransactionJudgment,
-  type StatementLabelCheckpoint,
-  STATEMENT_LABEL_REVISION,
+  type StatementAnswers,
 } from "@cubby/schemas/statement-suggestion";
 import { suggestionSubjects } from "@cubby/schemas/suggestion";
 import { JOB_PAGE_LIMITS } from "@cubby/shared/job-page-limits";
 import { createLogger } from "@cubby/worker-tracing";
 
-import { forEachConcurrently } from "~/lib/concurrency-limiter";
-import { findFundingWait } from "~/server/ai/budget";
 import {
   AiWorkDeferredError,
   aiWorkDeferral,
@@ -56,6 +52,8 @@ import { statementRecommendation } from "~/server/domains/transaction-import/rep
 import {
   statementLabelSubject,
   statementCandidateSubject,
+  mergeStatementAnswers,
+  statementAnswerVersions,
 } from "~/server/domains/transaction-import/repo/statement-label-input";
 import {
   prepareStatementSpendingFacts,
@@ -63,30 +61,21 @@ import {
 } from "~/server/domains/transaction-import/repo/statement-spending";
 import { isClean } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
 import {
-  buildChargeProposalsIsolated,
-  buildChargeProposals,
   chargeId,
-  coalesceChargeRefreshes,
   type ChargeRef,
-  labelledProposal,
-  publishCompleteStatementLabels,
-  type CompleteStatementLabelPublication,
-  type StatementLabelPublicationResult,
-  regenerateCharges,
-  STATEMENT_PUBLISH_CONCURRENCY,
+  publishAndSettleStatementCharges,
   suggestionsNeedingLabels,
+  repairStatementApplicationReceipts,
   statementLabelTargetsInScope,
   type StatementSuggestionScope,
   type LabelCursor,
-  recordStatementLabelCheckpoint,
-  repairStatementApplicationReceipts,
+  recordStatementAnswers,
 } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { decideStatementKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { withJobPhase } from "~/server/generic/jobs/context";
 import type { JobDeferredError } from "~/server/generic/jobs/errors";
 import type { PageWork } from "~/server/generic/jobs/page-work";
 import { buildCrudServices } from "~/server/http/request-context";
-import { canonicalJson } from "~/server/lib/canonical-json";
 import { isWorkflowInterrupted } from "~/server/workflows/runs/execution";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
@@ -96,8 +85,6 @@ const STATEMENT_LABEL_BATCH = 128;
 // Admit one default page together so a slow merchant does not serialize four waves.
 // Larger explicit pages still retain a bounded wave and the cooperative budget.
 export const STATEMENT_SPENDING_CONCURRENCY = 128;
-/** Page rebuilds after automatic rules move the ledger mid-page. */
-const MAX_LABEL_ROUNDS = 3;
 const log = createLogger("statement-suggestion-labels");
 
 const identityLabel = {
@@ -106,31 +93,14 @@ const identityLabel = {
   insufficient_evidence: "insufficient",
 } as const;
 
-type ChargeProposal = Awaited<ReturnType<typeof buildChargeProposals>>[number];
-type LabelPreparation = Pick<
-  ChargeProposal,
-  "charge" | "judgment" | "evidenceFingerprint"
-> & { amount: number };
+type LabelPreparation = {
+  charge: ChargeRef;
+  judgment: StatementTransactionJudgment;
+  evidenceFingerprint: string;
+  amount: number;
+};
 
-/** A page's proposals in one build; a failing build isolates only its bad charges. */
-async function buildPage(
-  db: Database,
-  charges: readonly ChargeRef[],
-  onFailure: (charge: ChargeRef, error: unknown) => void,
-  preparation: Awaited<ReturnType<typeof prepareFinancialStatementPreview>>,
-) {
-  const { proposals } = await buildChargeProposalsIsolated(
-    db,
-    charges,
-    onFailure,
-    preparation,
-  );
-  return new Map(
-    proposals.map((proposal) => [chargeId(proposal.charge), proposal]),
-  );
-}
-
-/** Partial model answers are checkpointed independently of advisory publication. */
+/** Model work supplies answers; generation owns judgments and publication. */
 function prepareLabelledJudgment(
   db: Database,
   current: LabelPreparation,
@@ -138,72 +108,28 @@ function prepareLabelledJudgment(
     port?: DecisionPort;
     spendingAdvice?: SpendingAdvicePort;
     usage: DecisionChoiceArgs["usage"];
-    checkpoint: StatementLabelCheckpoint | null;
+    answers: StatementAnswers;
     admission: {
       available(): boolean;
       reserve(): boolean;
     };
   },
 ) {
-  const previous =
-    input.checkpoint?.revision === STATEMENT_LABEL_REVISION &&
-    canonicalJson(statementLabelSubject(input.checkpoint.judgment)) ===
-      canonicalJson(statementLabelSubject(current.judgment))
-      ? input.checkpoint
-      : null;
-  // Keep an untouched suffix for the next page without cloning its judgments
-  // or rendering fresh prompts. Compatible checkpoints can still finish here.
-  if (!previous && !input.admission.available()) return null;
-  const judgment: StatementTransactionJudgment = structuredClone(
-    current.judgment,
-  );
-  if (previous) {
-    for (const candidate of judgment.candidates)
-      candidate.label =
-        previous.judgment.candidates.find(
-          (saved) =>
-            saved.transactionId === candidate.transactionId &&
-            canonicalJson(statementCandidateSubject(saved)) ===
-              canonicalJson(statementCandidateSubject(candidate)),
-        )?.label ?? null;
-    if (judgment.create && previous.judgment.create)
-      Object.assign(
-        judgment.create,
-        decideStatementKind({
-          amount: judgment.create.amount,
-          votes: {
-            ...judgment.create.votes,
-            label: previous.judgment.create.votes.label,
-          },
-          counterparty: {
-            ...judgment.create.counterparty,
-            label: previous.judgment.create.counterparty.label,
-          },
-          transfer: judgment.transfer,
-          descriptor: judgment.create,
-        }),
-      );
+  const answers = mergeStatementAnswers(current.judgment, [input.answers]);
+  const judgment = structuredClone(current.judgment);
+  for (const candidate of judgment.candidates)
+    candidate.label =
+      answers.candidates[candidate.transactionId]?.value ?? null;
+  if (judgment.create) {
+    judgment.create.votes.label = answers.kind?.value ?? null;
+    judgment.create.counterparty.label = answers.counterparty?.value ?? null;
   }
-  const checkpoint: StatementLabelCheckpoint = {
-    revision: STATEMENT_LABEL_REVISION,
-    model: previous?.model ?? null,
-    models: previous?.models ?? [],
-    judgment,
-    kind: previous?.kind ?? false,
-    counterparty: previous?.counterparty ?? false,
-    spending: previous?.spending ?? false,
-  };
-  const recordModel = (model: string) => {
-    checkpoint.models = [...new Set([...checkpoint.models, model])];
-    checkpoint.model =
-      checkpoint.models.length === 1 ? checkpoint.models[0]! : null;
-  };
   const countLabels = () =>
-    judgment.candidates.filter((entry) => entry.label !== null).length +
-    Number(checkpoint.kind) +
-    Number(checkpoint.counterparty) +
-    Number(checkpoint.spending);
-
+    Object.keys(answers.candidates).length +
+    Number(!!answers.kind) +
+    Number(!!answers.counterparty) +
+    Number(!!answers.escrow) +
+    Number(!!answers.merchant);
   const reused = countLabels();
   const errors: unknown[] = [];
   let waitingUntil: number | null = null;
@@ -220,7 +146,7 @@ function prepareLabelledJudgment(
   }[] = [];
   const statement = statementLabelSubject(judgment);
   for (const candidate of judgment.candidates) {
-    if (candidate.label !== null) continue;
+    if (answers.candidates[candidate.transactionId]) continue;
     if (!input.admission.available()) break;
     const prompt = STATEMENT_CHARGE_IDENTITY_FEATURE.prompt(
       JSON.stringify({
@@ -247,7 +173,6 @@ function prepareLabelledJudgment(
     decisions.push({
       args,
       apply(result) {
-        recordModel(model);
         const choice =
           STATEMENT_CHARGE_IDENTITY_FEATURE.choices[result.selectedIndex ?? -1];
         candidate.label = {
@@ -255,24 +180,29 @@ function prepareLabelledJudgment(
           confidence: result.confidence,
           model,
         };
+        answers.candidates[candidate.transactionId] = {
+          value: candidate.label,
+          input: {
+            statement,
+            transaction: statementCandidateSubject(candidate),
+          },
+          versions: { ...statementAnswerVersions.candidates },
+          models: [model],
+        };
       },
     });
   }
   // Both votes use the original statement evidence, independently of identity
   // answers and of each other. Enqueue them with the whole page's questions.
-  if (judgment.transfer) {
-    checkpoint.kind = true;
-    checkpoint.counterparty = true;
-  }
   for (const part of ["kind", "counterparty"] as const) {
-    if (!judgment.create || checkpoint[part]) continue;
+    if (!judgment.create || judgment.transfer || answers[part]) continue;
     if (!input.admission.available()) break;
     const feature =
       part === "kind"
         ? STATEMENT_TRANSACTION_KIND_FEATURE
         : STATEMENT_COUNTERPARTY_FEATURE;
     const prompt = feature.prompt(JSON.stringify(statement));
-    const apply = (choice: string | null) => {
+    const apply = (choice: string | null, models: string[]) => {
       if (!judgment.create) return;
       if (part === "kind")
         judgment.create.votes.label = financialTransactionKind
@@ -283,10 +213,19 @@ function prepareLabelledJudgment(
         judgment.create.counterparty.label = statementCounterparty.shape.label
           .catch(null)
           .parse(choice);
-      checkpoint[part] = true;
+      Object.assign(answers, {
+        [part]: {
+          value:
+            part === "kind"
+              ? judgment.create.votes.label
+              : judgment.create.counterparty.label,
+          input: statement,
+          versions: { ...statementAnswerVersions[part] },
+          models,
+        },
+      });
     };
     if (!decisionChoiceFitsContext(prompt)) {
-      apply(null);
       continue;
     }
     const args: DecisionChoiceArgs = {
@@ -299,16 +238,16 @@ function prepareLabelledJudgment(
     decisions.push({
       args,
       apply(result) {
-        recordModel(decisionModelFor(args));
         const choice = feature.choices[result.selectedIndex ?? -1];
-        apply(choice && result.confidence === "high" ? choice : null);
+        apply(choice && result.confidence === "high" ? choice : null, [
+          decisionModelFor(args),
+        ]);
       },
     });
   }
   // Reserve spending before preparing the next charge, preserving the original
   // identity/kind/counterparty/spending order. Context defaults reserve nothing.
-  const spendingReserved =
-    !checkpoint.spending && needsSpendingAdvice(judgment);
+  const spendingReserved = needsSpendingAdvice(judgment);
   const spendingAdmitted = spendingReserved && input.admission.reserve();
   return {
     decisions,
@@ -338,14 +277,8 @@ function prepareLabelledJudgment(
       // Plan spending for the action that publishes, so apply replans the
       // same target it compares against.
       judgment.recommended = statementRecommendation(judgment);
-      if (checkpoint.spending && previous)
-        return { advice: previous.judgment.spending?.request.advice ?? null };
-      if (!checkpoint.spending && !needsSpendingAdvice(judgment)) {
-        checkpoint.spending = true;
-        return { advice: null };
-      }
+      if (!needsSpendingAdvice(judgment)) return { advice: null };
       if (
-        !checkpoint.spending &&
         !errors.length &&
         waitingUntil === null &&
         (spendingReserved ? spendingAdmitted : input.admission.reserve())
@@ -354,6 +287,7 @@ function prepareLabelledJudgment(
           const spending = await withAiInputs(false, () =>
             adviseSpending(db, {
               judgment,
+              answers,
               owner: aiRunOwner(input.usage!.runId),
               port: input.port,
               spendingAdvice: input.spendingAdvice,
@@ -361,9 +295,11 @@ function prepareLabelledJudgment(
               usageFor,
             }),
           );
-          for (const call of spending.inputs) recordModel(call.model);
-          checkpoint.spending = true;
-          return { advice: spending.result };
+          if (spending.result) {
+            Object.assign(answers, spending.result.answers);
+            return { advice: spending.result.advice };
+          }
+          return { advice: null };
         } catch (error) {
           retainError(error);
         }
@@ -373,58 +309,23 @@ function prepareLabelledJudgment(
     complete(plan?: { spending: FinancialSpendingPlan | null }) {
       if (plan) judgment.spending = plan.spending;
       judgment.clean = isClean(judgment, current.amount);
-      checkpoint.judgment = statementTransactionJudgment.parse(judgment);
+
       return {
-        checkpoint,
+        answers,
         labels: { reused, generated: Math.max(0, countLabels() - reused) },
-        model: checkpoint.model,
+
         errors,
         waitingUntil,
         complete:
-          judgment.candidates.every((candidate) => candidate.label !== null) &&
-          (!judgment.create || (checkpoint.kind && checkpoint.counterparty)) &&
-          checkpoint.spending,
+          judgment.candidates.every(
+            (candidate) => !!answers.candidates[candidate.transactionId],
+          ) &&
+          (!judgment.create ||
+            !!judgment.transfer ||
+            (!!answers.kind && !!answers.counterparty)),
       };
     },
   };
-}
-
-/** A genuine publication failure retains newly computed answers without hiding either failure. */
-async function retainFailedStatementPublication(
-  publicationError: unknown,
-  retainProgress: () => Promise<boolean>,
-) {
-  if (isWorkflowInterrupted(publicationError)) throw publicationError;
-  try {
-    if (!(await retainProgress())) return;
-  } catch (checkpointError) {
-    if (isWorkflowInterrupted(checkpointError)) throw checkpointError;
-    throw new AggregateError(
-      [publicationError, checkpointError],
-      [publicationError, checkpointError]
-        .map((error) =>
-          runFailureText(error instanceof Error ? error : String(error)),
-        )
-        .join("\n"),
-      { cause: checkpointError },
-    );
-  }
-  throw publicationError;
-}
-
-async function completeStatementPublicationResult(
-  result: StatementLabelPublicationResult | undefined,
-  retainProgress: () => Promise<boolean>,
-) {
-  if (!result || result.kind === "failed") {
-    await retainFailedStatementPublication(
-      result?.error ??
-        new Error("Complete statement publication returned no outcome"),
-      retainProgress,
-    );
-    return null;
-  }
-  return result.kind === "ready" ? result : null;
 }
 
 function statementLabelCursors(
@@ -455,142 +356,6 @@ function statementLabelCursors(
   };
 }
 
-type LabelTarget = {
-  charge: ChargeRef;
-  row: Awaited<ReturnType<typeof suggestionsNeedingLabels>>[number];
-};
-
-/**
- * Apply a round's published receipts in page order. Consecutive receipts
- * that no rule applies to, or whose rule a label page can apply together,
- * settle in one page transaction; any other receipt, and any the page falls
- * back on, applies alone in its page position.
- */
-async function applyPublishedStatementLabels(
-  db: Database,
-  input: {
-    targets: readonly LabelTarget[];
-    receipts: ReadonlyMap<string, string>;
-    published: ReadonlyMap<string, string>;
-    skipped: ReadonlySet<string>;
-    failedCharges: ReadonlySet<string>;
-    completed: Set<string>;
-    unfinished: Set<string>;
-    scope: StatementSuggestionScope | undefined;
-    reconsidered: ReadonlySet<string>;
-    fail: (charge: ChargeRef, error: unknown) => void;
-    budgetSpent: () => boolean;
-    time: <T>(phase: string, work: () => Promise<T>) => Promise<T>;
-  },
-) {
-  const {
-    targets,
-    receipts,
-    published,
-    skipped,
-    failedCharges,
-    completed,
-    unfinished,
-    scope,
-    reconsidered,
-    fail,
-    budgetSpent,
-    time,
-  } = input;
-  const applied = new Set<string>();
-  const rebuild = new Set<string>();
-  const excluded = new Set<string>();
-  // A prior-round completion is resolved unless changed evidence required publication again.
-  const awaitsPublication = (key: string) =>
-    !completed.has(key) || reconsidered.has(key);
-  // Model work may finish out of order; effects admit only the original
-  // ready prefix. Later publications keep their receipts for durable resume.
-  const queue: LabelTarget[] = [];
-  let blocked = false;
-  for (const target of targets) {
-    const key = chargeId(target.charge);
-    if (skipped.has(key)) {
-      unfinished.delete(target.row.cursorId);
-      continue;
-    }
-    if (failedCharges.has(key)) {
-      // Root retries the original input while attempts remain. After
-      // exhaustion next must advance past this failure, not reset its budget.
-      unfinished.delete(target.row.cursorId);
-      blocked = true;
-      continue;
-    }
-    if (!published.has(key)) {
-      if (awaitsPublication(key)) blocked = true;
-      continue;
-    }
-    if (blocked) unfinished.add(target.row.cursorId);
-    else queue.push(target);
-  }
-  const { settleStatementPage } =
-    await import("~/server/domains/transaction-import/repo/statement-settlement");
-  const outcomes = await settleStatementPage(db, {
-    mode: "label",
-    scope,
-    servicesFor: buildCrudServices,
-    entries: queue.map((target) => ({
-      charge: target.charge,
-      suggestionId: receipts.get(chargeId(target.charge))!,
-      evidenceFingerprint: published.get(chargeId(target.charge))!,
-    })),
-    budgetSpent,
-    settledBefore: completed.size > 0,
-    time,
-  });
-  for (const target of queue) {
-    const key = chargeId(target.charge);
-    const outcome = outcomes.get(key) ?? { kind: "unfinished" };
-    switch (outcome.kind) {
-      case "applied":
-        applied.add(key);
-        completed.add(key);
-        target.row.applicationPending = false;
-        unfinished.delete(target.row.cursorId);
-        break;
-      case "completed":
-        completed.add(key);
-        target.row.applicationPending = false;
-        unfinished.delete(target.row.cursorId);
-        break;
-      case "moved":
-        // An earlier write or moved evidence: the next round relabels it on
-        // current evidence, and the cursor stays until it settles.
-        target.row.applicationPending = false;
-        rebuild.add(key);
-        unfinished.add(target.row.cursorId);
-        break;
-      case "out_of_scope":
-        excluded.add(key);
-        break;
-      case "failed":
-        fail(target.charge, outcome.error);
-        unfinished.delete(target.row.cursorId);
-        break;
-      default:
-        // Budget, conflict bound or a rule that no longer selects: the
-        // receipt stays for the next page with an inclusive cursor.
-        unfinished.add(target.row.cursorId);
-    }
-  }
-  return { applied, rebuild, excluded };
-}
-
-/**
- * Label pending rule suggestions with the decision model: whether each attach
- * candidate is the same charge, and every create's kind and counterparty.
- * Labels are advisory; they only decide whether a suggestion is
- * bulk-acceptable. Respects the automatic-work switch that gates AI refresh.
- *
- * A page builds once, fans model decisions out to egress admission, then applies
- * automatic rules one charge at a time. A rule that applied can take a
- * transaction another charge on the page proposed, so the page's remaining
- * charges are rebuilt and any whose evidence moved are labelled again.
- */
 async function runStatementLabelBatch(
   db: Database,
   input: {
@@ -667,18 +432,6 @@ async function runStatementLabelBatch(
     ? Date.now() + JOB_PAGE_LIMITS.cooperativePageBudgetMs
     : null;
   const budgetSpent = () => budgetEnds !== null && Date.now() >= budgetEnds;
-  // Applied receipts leave the label backlog, even on an empty last page;
-  // statement rules apply only under an import, whose charges still name
-  // what a stopped page applied.
-  if (input.scope?.importId) {
-    const { recoverSettlementObligations } =
-      await import("~/server/domains/transaction-import/repo/statement-settlement");
-    await recoverSettlementObligations(db, {
-      since: input.recoverSince ?? null,
-      scope: input.scope,
-      within: { kind: "import", importId: input.scope.importId },
-    });
-  }
   const rows = await time("statement_selection", () =>
     suggestionsNeedingLabels(
       db,
@@ -695,13 +448,6 @@ async function runStatementLabelBatch(
     runId: runId ?? undefined,
     operation: "statement-suggestion-label",
   };
-  const producer = (model: string | null) => ({
-    kind: "model" as const,
-    model,
-    revision: STATEMENT_CHARGE_IDENTITY_FEATURE.promptVersion,
-    runId,
-    evaluationId: null,
-  });
   const failed: RunStepError[] = [];
   const failedCharges = new Set<string>();
   const fail = (charge: ChargeRef | null, error: unknown) => {
@@ -800,61 +546,27 @@ async function runStatementLabelBatch(
   type ReadyLabels = {
     target: (typeof targets)[number];
     moved: boolean;
-    current: ChargeProposal & { amount: number };
+    current: LabelPreparation;
   };
-  for (let round = 0; round < MAX_LABEL_ROUNDS && targets.length; round++) {
+  for (let round = 0; round < 1 && targets.length; round++) {
     const preparation = await prepareFinancialStatementPreview(db);
     await admitTargets(preparation);
-    const proposals = await time("statement_discovery", () =>
-      buildPage(
-        db,
-        targets
-          .filter(
-            (target) =>
-              !target.row.applicationPending &&
-              !skipped.has(chargeId(target.charge)) &&
-              !failedCharges.has(chargeId(target.charge)),
-          )
-          .map((target) => target.charge),
-        fail,
-        preparation,
-      ),
-    );
-    const ready = targets.flatMap<ReadyLabels>((target) => {
-      if (target.row.applicationPending) return [];
-      const key = chargeId(target.charge);
-      if (skipped.has(key)) return [];
-      if (failedCharges.has(key)) return [];
-      const current = proposals?.get(key);
-      const moved = !current || current.evidenceFingerprint !== target.expected;
-      // Stale evidence waits for the next generation pass to republish it.
-      if (round === 0 && moved) {
-        stale++;
-        skippedIds.push(target.row.id);
-        skipped.add(key);
-        return [];
-      }
-      // After a rule, only a charge whose evidence moved is labelled again.
-      return current && (round === 0 || moved)
-        ? [
-            {
-              target,
-              current: { ...current, amount: current.canonical.amount },
-              moved,
-            },
-          ]
-        : [];
-    });
-    const published = new Map(
-      targets
-        .filter((target) => target.row.applicationPending)
-        .map((target) => [chargeId(target.charge), target.expected]),
-    );
-    const receipts = new Map(
-      targets
-        .filter((target) => target.row.applicationPending)
-        .map((target) => [chargeId(target.charge), target.row.id]),
-    );
+    const ready: ReadyLabels[] = targets
+      .filter(
+        (target) =>
+          !target.row.applicationPending &&
+          !skipped.has(chargeId(target.charge)),
+      )
+      .map((target) => ({
+        target,
+        moved: false,
+        current: {
+          charge: target.charge,
+          judgment: target.row.judgment,
+          evidenceFingerprint: target.expected,
+          amount: target.row.amount,
+        },
+      }));
     log.info("Statement label round", {
       round: round + 1,
       charges: ready.length,
@@ -882,7 +594,7 @@ async function runStatementLabelBatch(
               port: input.port,
               spendingAdvice: input.spendingAdvice,
               usage,
-              checkpoint: entry.target.row.checkpoint,
+              answers: entry.target.row.answers,
               admission,
             });
             if (!value) {
@@ -1053,232 +765,89 @@ async function runStatementLabelBatch(
     const computed = await time("statement_spending", () =>
       input.cooperative ? withCooperativeAiWork(finish) : finish(),
     );
-    const publications = new Map<
-      string,
-      {
-        entry: ReadyLabels;
-        input: CompleteStatementLabelPublication;
-        retainProgress: () => Promise<boolean>;
-      }
-    >();
-    // Account mappings can change while provider work runs. Recheck the same
-    // scope before retaining checkpoints or publishing/application receipts.
     await admitTargets();
-    await forEachConcurrently(
-      preparedReady.map((entry, index) => ({
-        ...entry,
-        computed: computed[index]!,
-      })),
-      // Scoped checkpoint writes share this Job's progress row. Serializing
-      // these DB-only writes avoids exhausting snapshot retries on our own page.
-      input.scope ? 1 : STATEMENT_PUBLISH_CONCURRENCY,
-      async (entry) => {
-        const { current, target, computed } = entry;
-        if (skipped.has(chargeId(current.charge))) return;
-        try {
-          if (computed.status === "rejected") throw computed.reason;
-          const result = computed.value;
-          labels.reused += result.labels.reused;
-          labels.generated += result.labels.generated;
-          target.row.checkpoint = result.checkpoint;
-          const checkpointInput = {
-            charge: current.charge,
-            evidenceFingerprint: target.expected,
-            checkpoint: result.checkpoint,
-            scope: input.scope,
-          };
-          const retainProgress = async () => {
-            // A deferred/zero-budget charge has no new answers to persist.
-            // Reused answers are already durable on the selected checkpoint.
-            if (!result.labels.generated) return true;
-            const saved = await recordStatementLabelCheckpoint(
-              db,
-              checkpointInput,
-            );
-            if (saved === "settled" || saved === "out_of_scope") {
-              skipped.add(chargeId(current.charge));
-              if (saved === "out_of_scope") {
-                skippedIds.push(target.row.id);
-                unfinished.delete(target.row.cursorId);
-                stale++;
-              }
-              return false;
-            }
-            if (saved === "moved")
-              throw new Error(
-                "Statement label checkpoint lost its active evidence fence",
-              );
-            return true;
-          };
-          if (!result.complete || result.errors.length) {
-            if (!(await retainProgress())) return;
-          }
-          if (!result.complete || result.errors.length) {
-            if (result.errors.length) {
-              const pause = result.errors
-                .map(findFundingWait)
-                .find((wait) => wait !== undefined);
-              if (pause) {
-                pauses.push(pause);
-                retainUnfinished(target.row);
-              } else
-                fail(
-                  current.charge,
-                  new Error(
-                    result.errors
-                      .map((error) =>
-                        runFailureText(
-                          error instanceof Error ? error : String(error),
-                        ),
-                      )
-                      .join("\n"),
-                  ),
-                );
-              return;
-            }
-            retainUnfinished(target.row);
-            if (result.waitingUntil !== null)
-              waitingUntil = Math.min(
-                waitingUntil ?? Infinity,
-                result.waitingUntil,
-              );
-            return;
-          }
-          try {
-            publications.set(chargeId(current.charge), {
-              entry,
-              input: {
-                proposal: await labelledProposal(
-                  current,
-                  result.checkpoint.judgment,
-                ),
-                evidenceFingerprint: target.expected,
-                checkpoint: result.checkpoint,
-                producer: producer(result.model),
-              },
-              retainProgress,
-            });
-          } catch (error) {
-            await retainFailedStatementPublication(error, retainProgress);
-          }
-        } catch (error) {
-          if (isWorkflowInterrupted(error)) throw error;
-          // The budget pauses the whole pass; any other failure is this charge's.
-          const pause = findFundingWait(error);
-          if (pause) {
-            pauses.push(pause);
-            retainUnfinished(target.row);
-          } else fail(current.charge, error);
-        }
-      },
-    );
-    const complete = preparedReady.flatMap(({ current }) => {
-      const item = publications.get(chargeId(current.charge));
-      return item ? [item] : [];
-    });
-    const outcomes = await time("statement_publication", () =>
-      publishCompleteStatementLabels(
-        db,
-        complete.map((item) => item.input),
-        input.scope,
-      ),
-    );
-    for (const item of complete) {
-      const { current, target } = item.entry;
-      const key = chargeId(current.charge);
+    const readyCharges: ChargeRef[] = targets
+      .filter((t) => t.row.applicationPending)
+      .map((t) => t.charge);
+    for (const [index, entry] of preparedReady.entries()) {
+      const result = computed[index]!;
+      if (skipped.has(chargeId(entry.current.charge))) continue;
+      if (result.status === "rejected") {
+        fail(entry.current.charge, result.reason);
+        continue;
+      }
+      labels.reused += result.value.labels.reused;
+      labels.generated += result.value.labels.generated;
       try {
-        const outcome = await completeStatementPublicationResult(
-          outcomes.get(key),
-          item.retainProgress,
-        );
-        if (!outcome) {
-          skipped.add(key);
-          unfinished.delete(target.row.cursorId);
-          const result = outcomes.get(key);
-          if (result?.kind === "resolved" && result.reason === "out_of_scope") {
-            skippedIds.push(target.row.id);
+        if (result.value.labels.generated) {
+          const saved = await recordStatementAnswers(db, {
+            charge: entry.current.charge,
+            evidenceFingerprint: entry.target.expected,
+            answers: result.value.answers,
+            scope: input.scope,
+          });
+          if (saved !== "saved") {
+            skipped.add(chargeId(entry.current.charge));
+            skippedIds.push(entry.target.row.id);
             stale++;
+            continue;
           }
+        }
+        if (result.value.errors.length) {
+          fail(entry.current.charge, new AggregateError(result.value.errors));
           continue;
         }
-        if (outcome.origin === "published") labelled.add(key);
-        published.set(key, outcome.receipt.evidenceFingerprint);
-        receipts.set(key, outcome.receipt.suggestionId);
-        target.row.id = outcome.receipt.suggestionId;
-        target.row.judgment = item.input.proposal.judgment;
-        target.row.applicationPending = true;
+        if (!result.value.complete || result.value.waitingUntil !== null) {
+          retainUnfinished(entry.target.row);
+          waitingUntil = result.value.waitingUntil;
+          continue;
+        }
+        readyCharges.push(entry.current.charge);
+        labelled.add(chargeId(entry.current.charge));
       } catch (error) {
-        fail(current.charge, error);
+        fail(entry.current.charge, error);
       }
     }
-    const { applied, rebuild, excluded } = await time(
-      "statement_application",
-      // Each write's neighbour refresh joins one refresh after the round.
-      () =>
-        coalesceChargeRefreshes(
-          () =>
-            applyPublishedStatementLabels(db, {
-              targets,
-              receipts,
-              published,
-              skipped,
-              failedCharges,
-              completed,
-              unfinished,
-              scope: input.scope,
-              reconsidered: new Set(
-                ready.map(({ current }) => chargeId(current.charge)),
-              ),
-              fail,
-              budgetSpent,
-              time,
-            }),
-          (flush) => time("statement_application_refresh", flush),
-        ),
-    );
+    // Settlement admits only the ready prefix; later paid answers are already durable.
+    const readyKeys = new Set(readyCharges.map(chargeId));
+    const prefix: ChargeRef[] = [];
+    let stopped = false;
     for (const target of targets) {
       const key = chargeId(target.charge);
-      if (!excluded.has(key)) continue;
-      skipped.add(key);
-      skippedIds.push(target.row.id);
-      unfinished.delete(target.row.cursorId);
-      stale++;
+      if (skipped.has(key)) continue;
+      if (failedCharges.has(key) || !readyKeys.has(key)) stopped = true;
+      if (stopped) {
+        if (!failedCharges.has(key)) retainUnfinished(target.row);
+      } else prefix.push(target.charge);
     }
-    if (rebuild.size && round === MAX_LABEL_ROUNDS - 1) {
-      const remaining = targets.filter((target) =>
-        rebuild.has(chargeId(target.charge)),
-      );
-      await regenerateCharges(
-        db,
-        remaining.map((target) => target.charge),
-        input.scope,
-      );
-      for (const target of remaining) retainUnfinished(target.row);
-    }
-    targets = targets.flatMap((target) => {
-      const key = chargeId(target.charge);
-      if (applied.has(key) || skipped.has(key)) return [];
-      return [{ ...target, expected: published.get(key) ?? target.expected }];
-    });
-    if (pauses[0] || (unfinished.size && !rebuild.size)) {
-      // Without labels, a rule's moved evidence still republishes as rule
-      // output, so the resumed pass labels it instead of skipping it as stale.
-      if (
-        applied.size ||
-        ready.some(
-          ({ current, moved }) =>
-            moved && !published.has(chargeId(current.charge)),
+    if (prefix.length) {
+      const result = await publishAndSettleStatementCharges(db, {
+        charges: prefix,
+        scope: input.scope,
+        runId,
+        servicesFor: buildCrudServices,
+        mode: "label",
+        budgetSpent,
+        time,
+      });
+      for (const charge of prefix) {
+        const key = chargeId(charge);
+        const target = targets.find((t) => chargeId(t.charge) === key)!;
+        const outcome = result.settlement.get(key);
+        if (outcome?.kind === "failed") fail(charge, outcome.error);
+        else if (
+          !outcome ||
+          outcome.kind === "unfinished" ||
+          outcome.kind === "moved"
         )
-      )
-        await regenerateCharges(
-          db,
-          targets.map((target) => target.charge),
-          input.scope,
-        );
-      if (pauses[0] && !input.cooperative) throw pauses[0];
-      break;
+          retainUnfinished(target.row);
+        else {
+          completed.add(key);
+          unfinished.delete(target.row.cursorId);
+        }
+      }
+      for (const error of result.failed) failed.push(error);
     }
-    if (!applied.size && !rebuild.size) break;
   }
   return {
     labelled: labelled.size,

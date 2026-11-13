@@ -103,7 +103,7 @@ export const statementInputCharges = (
           WHERE changed.shortcode=cs.shortcode AND ${notDeleted("changed")}
             AND head.current AND ${notDeleted("head")}
             AND ((head."withdrawnAt" IS NOT NULL AND changed.status <> ${financialTransactionStatus.enum.void}) OR
-              (head."withdrawnAt" IS NULL AND (changed.status = ${financialTransactionStatus.enum.void} OR round((${minorToDollarsSql(sql`changed."amountMinor"`, "numeric")})::numeric,2) <> round(head.amount::numeric,2)
+              (head."withdrawnAt" IS NULL AND (changed.status = ${financialTransactionStatus.enum.void} OR true
                 OR (head."providerStatus" = ${sourceTransactionRecordProviderStatus.enum.posted} AND (changed.status <> ${financialTransactionStatus.enum.posted} OR changed."postedDate" IS DISTINCT FROM head."statementDate"))
                 OR (head."providerStatus" = ${sourceTransactionRecordProviderStatus.enum.pending} AND changed.status <> ${financialTransactionStatus.enum.posted} AND (changed.status <> ${financialTransactionStatus.enum.pending} OR changed."transactionDate" IS DISTINCT FROM head."statementDate"))))))
         OR EXISTS (SELECT 1 FROM "FinancialTransaction" ft
