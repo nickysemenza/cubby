@@ -122,7 +122,7 @@ export async function markDirty(
         seq = "ScopeDirty".seq + 1,
         reason = excluded.reason,
         attempts = 0,
-        "availableAt" = now(),
+        "availableAt" = LEAST("ScopeDirty"."availableAt", now()),
         "waitCause" = NULL,
         "updatedAt" = now()
       RETURNING 1

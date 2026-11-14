@@ -316,6 +316,12 @@ output never dirties its own scope, including writes a delete policy, repoint
 or merge makes inside the apply; a scope dirtied again by another writer
 during its run is released still dirty.
 
+Dirtying keeps an already-due scope's earlier `availableAt`, so repeated input
+changes cannot move it to the back of the queue. A new input makes a delayed
+scope due now, as before; failure settlement still owns backoff. Coalescing
+raises `seq` without changing an active claim, so its publication fence still
+rejects work computed before the input changed.
+
 Correctness comes from dirtying, not from order. `after` is a scheduling
 preference that avoids rework: the runner does not claim a scope of a kind
 while a claimable dirty scope of an upstream kind exists in the same lane. The

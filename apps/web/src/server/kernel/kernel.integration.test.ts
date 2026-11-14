@@ -1093,24 +1093,36 @@ describe("evidence-facts kernel", () => {
   it("writes nothing when an input changes during the load, and reruns the scope", async () => {
     let loads = 0;
     let storedDuringRerun: number | null = null;
+    let keptQueueAge = false;
     const { kernel } = kernelWith({
       onLoad: async (scope) => {
         if (scope !== PURCHASE_SCOPE) return;
         loads += 1;
-        if (loads === 1)
+        if (loads === 1) {
           await kernel.append(ctx.db, [
             charge("ORD-C", 900, "stmt-ORD-C-late"),
           ]);
-        else storedDuringRerun = (await purchases(ctx.db)).length;
+          keptQueueAge = (
+            await repositoryQueries(ctx.db).execute<{ kept: boolean }>(
+              sql`SELECT "availableAt" = timestamp '2000-01-01' AS kept
+                  FROM "ScopeDirty" WHERE "scopeKind" = ${PURCHASE_SCOPE} AND "scopeKey" = 'ORD-C'`,
+            )
+          ).rows[0]!.kept;
+        } else storedDuringRerun = (await purchases(ctx.db)).length;
       },
     });
     await kernel.append(ctx.db, [charge("ORD-C", 400, "stmt-ORD-C-early")]);
+    await repositoryQueries(ctx.db).execute(
+      sql`UPDATE "ScopeDirty" SET "availableAt" = timestamp '2000-01-01'
+          WHERE "scopeKind" = ${PURCHASE_SCOPE} AND "scopeKey" = 'ORD-C'`,
+    );
 
     const outcomes = await kernel.reconcileNow(ctx.db, [
       { kind: PURCHASE_SCOPE, key: "ORD-C" },
     ]);
 
     expect(outcomes.map((outcome) => outcome.status)).toEqual(["waiting"]);
+    expect(keptQueueAge).toBe(true);
     expect(storedDuringRerun).toBe(0);
     const [stored] = await purchases(ctx.db);
     expect(stored?.amountMinor).toBe(900);
