@@ -267,9 +267,11 @@ export async function claimScopes(
       WHERE d.lane = ${lane} AND d."availableAt" <= now()
         AND d.attempts < ${MAX_SCOPE_ATTEMPTS}
         AND (d."claimToken" IS NULL OR d."claimDeadline" <= now()) ${restrict}
+    ), claimable_kinds AS MATERIALIZED (
+      SELECT DISTINCT "scopeKind" FROM claimable
     ), eligible AS (
       SELECT c.* FROM claimable c
-      WHERE NOT EXISTS (SELECT 1 FROM claimable u WHERE u."scopeKind" = ANY(c.upstream))
+      WHERE NOT EXISTS (SELECT 1 FROM claimable_kinds u WHERE u."scopeKind" = ANY(c.upstream))
     ), chosen AS (
       SELECT "scopeKind" FROM eligible ORDER BY rank, "availableAt", seq LIMIT 1
     ), picked AS (

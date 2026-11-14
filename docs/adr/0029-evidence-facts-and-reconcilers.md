@@ -407,6 +407,10 @@ key-share locks on the records it references.
 ### 7. Three work forms, one claim
 
 Background work is a dirty scope, an Ask or a Pass. One module owns claiming
+and checks upstream eligibility against the distinct claimable scope kinds,
+materialized once per claim statement. Record count does not multiply that
+upstream scan by the whole queue; claim order and the upstream barrier stay
+unchanged. The claim module also owns the shared lease protocol
 for all three: a claim token, a deadline with renewal, an attempt count,
 `availableAt` backoff, a wait cause, cancellation, and the single failure
 classifier. A claim that outlives its deadline cannot publish. Queue permits
