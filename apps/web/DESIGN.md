@@ -645,8 +645,10 @@ Progress is drawn by `ProgressMeter` from a `ProgressValue`; see Custom-built si
 One way to see what is happening to any record: each level answers one
 question, and a fact appears only at the highest level whose question it
 answers. A list row says the stage, who acts next and the first gap in six
-words or fewer. The detail header says why and what to do in three lines. The
-panel (`MachineryPanel`, one disclosure away from the count line) holds
+words or fewer. The detail header says why and what to do in three lines.
+Pending work without a computed gap shows its stage and counts; the no-gap
+completion sentence appears only when the stage is Done.
+The panel (`MachineryPanel`, one disclosure away from the count line) holds
 everything: every gap with its actions, queue position and ETA (or ETA
 unknown), attempts and next try; then every input in the order the reconciler
 used it, evidence linked by shortcode, answers with model, tier, cost, input
