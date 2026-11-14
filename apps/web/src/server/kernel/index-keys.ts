@@ -53,7 +53,7 @@ export function indexFacts(
 }
 
 /** The stored index keys of rows, before a writer changes them. */
-export async function indexedKeys(
+async function indexedKeys(
   q: Q,
   registry: KernelRegistry,
   table: string,
