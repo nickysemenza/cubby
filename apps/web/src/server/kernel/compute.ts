@@ -18,6 +18,7 @@ import {
 import { answer, evidenceBinding, recordKey } from "~/server/db/kernel-schema";
 import type { RepositoryQueryClient } from "~/server/db/repository-access.boundary";
 import { isShortcodeEntity } from "~/server/entity-kernel/repo/entity-identity";
+import { classifyWorkFailure } from "~/server/kernel/failure";
 
 import type {
   AskKind,
@@ -224,9 +225,15 @@ async function computeBatchInPhase(
       loadStoredBindings(q, reconciler, scopes),
     ]);
   } catch (error) {
+    const failure = classifyWorkFailure(error);
     // A keyed loader can reject one scope's malformed evidence. Retry smaller
-    // batches before attributing that failure to otherwise healthy scopes.
-    if (scopes.length > 1 && !mode.locked) {
+    // batches for target faults; shared capacity and control failures retain
+    // the batch instead of repeating its reads on an unusable connection.
+    if (
+      scopes.length > 1 &&
+      !mode.locked &&
+      (failure.kind === "isolated" || failure.kind === "failed")
+    ) {
       const middle = Math.ceil(scopes.length / 2);
       const results: Computed[] = [];
       for (const group of [scopes.slice(0, middle), scopes.slice(middle)])

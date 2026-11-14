@@ -1192,10 +1192,11 @@ describe("evidence-facts kernel", () => {
     ).toEqual([{ attempts: 0, conflicts: 4, claimToken: null }]);
   });
 
-  it.each(["load", "apply"])(
-    "isolates a poisoned %s scope without charging healthy siblings",
+  it.each(["load", "apply", "connection"])(
+    "isolates target faults and preserves shared %s failures without charging healthy siblings",
     async (phase) => {
       const target = writes(fixturePurchase, ["orderRef", "amountMinor"]);
+      let loads = 0;
       const reconciler = defineReconciler({
         scope: "fixture.poison",
         lane: "money",
@@ -1203,6 +1204,9 @@ describe("evidence-facts kernel", () => {
         reads: [],
         writes: [target],
         async load(_reads, keys) {
+          loads++;
+          if (phase === "connection")
+            throw new Error("Connection terminated unexpectedly");
           if (phase === "load" && keys.includes("poison"))
             throw new Error("Synthetic malformed evidence");
           return new Map(keys.map((key) => [key, key]));
@@ -1226,24 +1230,35 @@ describe("evidence-facts kernel", () => {
           key,
         })),
       );
+      expect(loads).toBeLessThanOrEqual(phase === "connection" ? 1 : 5);
       expect(outcomes.filter((item) => item.status === "applied")).toHaveLength(
-        2,
+        phase === "connection" ? 0 : 2,
       );
-      expect(await purchases(ctx.db)).toHaveLength(2);
+      expect(await purchases(ctx.db)).toHaveLength(
+        phase === "connection" ? 0 : 2,
+      );
       const dirty = await repositoryQueries(ctx.db).execute<{
         key: string;
         attempts: number;
         errorClass: string;
       }>(
-        sql`SELECT d."scopeKey" AS key, d.attempts, s."errorClass" FROM "ScopeDirty" d JOIN "ScopeState" s USING ("scopeKind", "scopeKey") WHERE d."scopeKind"=${reconciler.scope}`,
+        sql`SELECT d."scopeKey" AS key, d.attempts, s."errorClass" FROM "ScopeDirty" d JOIN "ScopeState" s USING ("scopeKind", "scopeKey") WHERE d."scopeKind"=${reconciler.scope} ORDER BY d."scopeKey"`,
       );
-      expect(dirty.rows).toEqual([
-        {
-          key: "poison",
-          attempts: 1,
-          errorClass: phase === "load" ? "failed" : "isolated",
-        },
-      ]);
+      expect(dirty.rows).toEqual(
+        phase === "connection"
+          ? ["healthy-a", "healthy-b", "poison"].map((key) => ({
+              key,
+              attempts: 0,
+              errorClass: "transient",
+            }))
+          : [
+              {
+                key: "poison",
+                attempts: 1,
+                errorClass: phase === "load" ? "failed" : "isolated",
+              },
+            ],
+      );
     },
   );
 
