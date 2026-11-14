@@ -1026,6 +1026,7 @@ async function applyBatch(
         }
       }),
     provenance,
+    plans.map((plan) => plan.computed.scope),
   );
 
   const membershipsAfter = await relatedMemberships(
@@ -1125,9 +1126,20 @@ async function applyBatch(
       await q.execute(sql`
       DELETE FROM "Drift" d USING unnest(${orderedTextArrayParam(advanced.map((plan) => plan.computed.scope.kind))}, ${orderedTextArrayParam(advanced.map((plan) => plan.computed.scope.key))}) AS wanted(kind, key)
       WHERE d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key`);
+    // A scope dirtied again during its run stays dirty and is released for
+    // the next claim; holding its claim would stall it for the whole lease.
     await q.execute(sql`
-      DELETE FROM "ScopeDirty" d USING jsonb_to_recordset(${JSON.stringify(plans.map((plan) => ({ kind: plan.computed.scope.kind, key: plan.computed.scope.key, seq: plan.claim.seq, token: plan.claim.token })))}::jsonb) AS wanted(kind text, key text, seq bigint, token uuid)
-      WHERE d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key AND d.seq = wanted.seq AND d."claimToken" = wanted.token::uuid`);
+      WITH wanted AS (
+        SELECT * FROM jsonb_to_recordset(${JSON.stringify(plans.map((plan) => ({ kind: plan.computed.scope.kind, key: plan.computed.scope.key, seq: plan.claim.seq, token: plan.claim.token })))}::jsonb) AS w(kind text, key text, seq bigint, token uuid)
+      ), done AS (
+        DELETE FROM "ScopeDirty" d USING wanted
+        WHERE d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key AND d.seq = wanted.seq AND d."claimToken" = wanted.token
+        RETURNING d."scopeKind", d."scopeKey"
+      )
+      UPDATE "ScopeDirty" d SET "claimToken" = NULL, "claimDeadline" = NULL
+      FROM wanted
+      WHERE d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key AND d."claimToken" = wanted.token
+        AND NOT EXISTS (SELECT 1 FROM done WHERE done."scopeKind" = d."scopeKind" AND done."scopeKey" = d."scopeKey")`);
     if (entities.size)
       await recordChange(tx, { kind: "source", categories: [...entities] });
   });

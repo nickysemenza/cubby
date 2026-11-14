@@ -241,7 +241,14 @@ export function createReads(
   const observe = (keys: readonly Key[], revs: ReadonlyMap<Key, number>) => {
     for (const [key, rev] of revs)
       if (!observedRevisions.has(key)) observedRevisions.set(key, rev);
-    return new Map(keys.map((key) => [key, observedRevisions.get(key)!]));
+    return new Map(
+      keys.map((key) => {
+        const rev = observedRevisions.get(key);
+        if (rev === undefined)
+          throw new KernelContractError(`Read ${key} without its revision`);
+        return [key, rev];
+      }),
+    );
   };
   const lockedRevisionsOf = (keys: readonly Key[]) => {
     if (keys.some((key) => !mode.lockedRevisions!.has(key)))
@@ -311,8 +318,8 @@ export function createReads(
 
   /**
    * One reader per table: the row reads and index lookups of one tick share a
-   * statement, and a row read once serves the rest of the batch at the
-   * revision it was read at.
+   * statement, and a row read once by its key serves the rest of the batch at
+   * the revision it was read at.
    */
   const tableReaders = new Map<
     string,
@@ -357,8 +364,12 @@ export function createReads(
             ),
           ])
         : { rows: [], revs: new Map<Key, number>() };
+      // Only a row read by its own key is cached: an index lookup observes the
+      // index key, not the row's revision.
+      const direct = new Set(ids);
       for (const id of ids) byId.set(id, null);
-      for (const row of read.rows) byId.set(String(row.id), row);
+      for (const row of read.rows)
+        if (direct.has(String(row.id))) byId.set(String(row.id), row);
       return {
         revs: mode.lockedRevisions
           ? lockedRevisionsOf(keys)

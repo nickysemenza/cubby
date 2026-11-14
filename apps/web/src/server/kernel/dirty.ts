@@ -14,6 +14,7 @@
 import { sql } from "drizzle-orm";
 
 import { textArrayParam } from "~/server/db/helpers/array-param";
+import { kernelApplyScopes } from "~/server/db/kernel-apply-context";
 import type { RepositoryQueryClient } from "~/server/db/repository-access.boundary";
 
 import type { Key, ScopeRef } from "./define";
@@ -113,7 +114,7 @@ export async function markDirty(
       SELECT targets.kind, targets.key, lanes.lane, 1, ${input.reason}, now()
       FROM targets JOIN lanes ON lanes.kind = targets.kind CROSS JOIN gate
       WHERE NOT EXISTS (
-        SELECT 1 FROM jsonb_to_recordset(${JSON.stringify([...(input.excludes ?? []), ...(input.exclude ? [input.exclude] : [])])}::jsonb) AS excluded(kind text, key text)
+        SELECT 1 FROM jsonb_to_recordset(${JSON.stringify([...(input.excludes ?? []), ...(input.exclude ? [input.exclude] : []), ...kernelApplyScopes()])}::jsonb) AS excluded(kind text, key text)
         WHERE excluded.kind = targets.kind AND excluded.key = targets.key
       )
       ORDER BY targets.kind, targets.key

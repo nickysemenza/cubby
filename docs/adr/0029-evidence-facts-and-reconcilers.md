@@ -295,7 +295,9 @@ mutation and leaves the scope dirty, or the mutation sees the committed
 `ScopeDep` row and raises `ScopeDirty.seq`.
 
 `ScopeDirty` can never hold more rows than there are scopes. A reconciler's
-output never dirties its own scope.
+output never dirties its own scope, including writes a delete policy, repoint
+or merge makes inside the apply; a scope dirtied again by another writer
+during its run is released still dirty.
 
 Correctness comes from dirtying, not from order. `after` is a scheduling
 preference that avoids rework: the runner does not claim a scope of a kind

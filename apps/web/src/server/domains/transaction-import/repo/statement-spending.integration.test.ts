@@ -30,6 +30,7 @@ import {
   ask,
   answer,
   recordKey,
+  scopeDirty,
 } from "~/server/db/kernel-schema";
 import {
   expense,
@@ -192,6 +193,7 @@ describe("statement spending review and re-import", () => {
         .select({ amount: purchaseWorkFacts().amount })
         .from(purchaseTable),
     ).toEqual([{ amount: 19.99 }]);
+    await expectFixedPoint();
   });
 
   it("books a statement charge with stable linked records through the kernel", async () => {
@@ -245,6 +247,7 @@ describe("statement spending review and re-import", () => {
       sql`SELECT p.id, e.id AS expense, a.id AS allocation, e."costMinor", a."amountMinor" FROM "Purchase" p JOIN "Expense" e ON e."purchaseId"=p.id JOIN "FinancialTransactionAllocation" a ON a."purchaseId"=p.id`,
     );
     expect(after.rows).toEqual(before.rows);
+    await expectFixedPoint();
   });
   it("files statement and merchant Asks and keeps abstentions and peer transfers unbooked", async () => {
     const setup = await fixture("synthetic-producer", "member", 42.5, false);
@@ -372,6 +375,7 @@ describe("statement spending review and re-import", () => {
     ).toContain("merchant-identity");
     await runQueuedAsks(ctx.db, registry, 4);
     expect(called).toContain("merchant-identity");
+    await expectFixedPoint();
   });
   it("lets a newer finance apply kind override supersede a member edit", async () => {
     const setup = await fixture("synthetic-kind-override");
@@ -399,6 +403,7 @@ describe("statement spending review and re-import", () => {
     expect((await ledgerRows()).transactions[0]?.kind).toBe("adjustment");
     await applyKernelCharge(setup);
     expect((await ledgerRows()).transactions[0]?.kind).toBe("purchase");
+    await expectFixedPoint();
   });
   const applyKernelCharge = async (
     setup: Awaited<ReturnType<typeof fixture>>,
@@ -447,6 +452,7 @@ describe("statement spending review and re-import", () => {
       allocations: [],
     });
     expect(setup.recorded).toBeDefined();
+    await expectFixedPoint();
   });
   it("attaches statement evidence to the older reviewed bank event", async () => {
     const setup = await fixture("kernel-attach");
@@ -526,6 +532,7 @@ describe("statement spending review and re-import", () => {
       (await getDb(ctx.db).select().from(sourceOccurrence))[0]
         ?.acceptedTransactionId,
     ).toBe(live[0]?.id);
+    await expectFixedPoint();
   });
   it("leaves a possible manual transaction duplicate unbooked until identity is decided", async () => {
     const setup = await fixture("manual-duplicate");
@@ -593,6 +600,7 @@ describe("statement spending review and re-import", () => {
     expect((await ledgerRows()).transactions).toHaveLength(1);
     expect((await ledgerRows()).purchases).toHaveLength(1);
     expect((await ledgerRows()).expenses).toHaveLength(1);
+    await expectFixedPoint();
   });
 
   it("retains old partly paid candidates and invalidates them when their capacity closes", async () => {
@@ -651,6 +659,7 @@ describe("statement spending review and re-import", () => {
     ]);
     expect(outcomes.flatMap((outcome) => outcome.gaps)).toEqual([]);
     expect((await ledgerRows()).purchases).toHaveLength(2);
+    await expectFixedPoint();
   });
 
   it("keeps an ambiguous kernel charge unbooked until a same decision", async () => {
@@ -705,6 +714,7 @@ describe("statement spending review and re-import", () => {
     expect(rows.expenses).toHaveLength(1);
     expect(rows.allocations).toHaveLength(1);
     expect(rows.allocations[0]?.amountMinor).toBe(4250n);
+    await expectFixedPoint();
   });
   it("honours a recorded split when its kernel charge is rerun", async () => {
     const setup = await fixture("kernel-split");
@@ -751,6 +761,7 @@ describe("statement spending review and re-import", () => {
       1750n,
       2500n,
     ]);
+    await expectFixedPoint();
   });
   it("preserves a member Expense category decision through kernel recomputation", async () => {
     const setup = await fixture("kernel-category");
@@ -768,6 +779,7 @@ describe("statement spending review and re-import", () => {
       { kind: "purchaseEvent", key: before.transactions[0]!.id },
     ]);
     expect((await ledgerRows()).expenses[0]).toEqual(saved);
+    await expectFixedPoint();
   });
   it("conserves a baseline Purchase across two charges and applies field decisions during disagreement", async () => {
     const setup = await fixture("kernel-split-baseline", "member", 100);
@@ -866,6 +878,7 @@ describe("statement spending review and re-import", () => {
     expect(
       (await ledgerRows()).transactions.map((row) => row.amount).sort(),
     ).toEqual([4000n, 6000n]);
+    await expectFixedPoint();
   });
   it("writes no ledger rows when a kernel baseline disagrees with a revised statement", async () => {
     const setup = await fixture("kernel-baseline");
@@ -931,6 +944,7 @@ describe("statement spending review and re-import", () => {
           row.scopeKind === "bankEvent" && row.scopeKey === occurrence!.id,
       ),
     ).toBe(true);
+    await expectFixedPoint();
   });
   const decideObservation = (
     setup: Awaited<ReturnType<typeof fixture>>,
@@ -993,6 +1007,19 @@ describe("statement spending review and re-import", () => {
         ]),
       );
     expect(gaps(rerun)).toEqual(gaps(settled));
+    // A scope that is waiting with no gap could not be claimed, and a scope
+    // left dirty after its own run dirtied itself.
+    expect(
+      [...settled, ...rerun].filter(
+        (outcome) => outcome.status === "waiting" && !outcome.gaps.length,
+      ),
+    ).toEqual([]);
+    const ran = new Set(scopes.map((scope) => `${scope.kind}:${scope.key}`));
+    expect(
+      (await getDb(ctx.db).select().from(scopeDirty)).filter((row) =>
+        ran.has(`${row.scopeKind}:${row.scopeKey}`),
+      ),
+    ).toEqual([]);
   };
   const recordRow = async (
     providerTransactionId: string,
@@ -1115,6 +1142,7 @@ describe("statement spending review and re-import", () => {
       cost: 4350n,
       allocated: 4350n,
     });
+    await expectFixedPoint();
   });
   it("keeps the lump it booked on an empty Purchase a member names", async () => {
     const setup = await fixture("lump-fixed-point", "member", 12.34);
@@ -1329,6 +1357,7 @@ describe("statement spending review and re-import", () => {
     expect(await resolveForRead(ctx.db, shared.transactionId!)).toMatchObject({
       shortcode: shared.transactionId,
     });
+    await expectFixedPoint();
   });
   it("books a weekly same-vendor charge past last week's provably settled Purchase", async () => {
     const setup = await fixture("weekly-one");
@@ -1354,6 +1383,7 @@ describe("statement spending review and re-import", () => {
       cost: 8500n,
       allocated: 8500n,
     });
+    await expectFixedPoint();
   });
   it("moves a booked charge to the Purchase a member names and retires its own lump, also under a held baseline", async () => {
     const setup = await fixture("kernel-move");
@@ -1422,6 +1452,7 @@ describe("statement spending review and re-import", () => {
         .from(evidenceBinding)
         .where(eq(evidenceBinding.scopeKey, transaction!.id)),
     ).toContainEqual({ basis: "baseline" });
+    await expectFixedPoint();
   });
   it("removes a superseded charge and its booking when the source re-posts it", async () => {
     const setup = await fixture("pending-charge", "member", 40);
@@ -1452,6 +1483,7 @@ describe("statement spending review and re-import", () => {
       cost: 4800n,
       allocated: 4800n,
     });
+    await expectFixedPoint();
   });
   it("removes the generated booking when a member reclassifies the charge as a transfer", async () => {
     const setup = await fixture("reclassified");
@@ -1478,6 +1510,13 @@ describe("statement spending review and re-import", () => {
       allocated: 0n,
     });
     expect(await resolveForRead(ctx.db, booked!.shortcode)).toBeNull();
+    // The removal's delete policy is the scope's own output and leaves no work.
+    expect(
+      (await getDb(ctx.db).select().from(scopeDirty)).filter(
+        (row) => row.scopeKind === "purchaseEvent",
+      ),
+    ).toEqual([]);
+    await expectFixedPoint();
   });
   it("holds a revised amount against a statement Purchase a member added lines to", async () => {
     const setup = await fixture("added-line", "member", 40);
@@ -1534,6 +1573,7 @@ describe("statement spending review and re-import", () => {
         }),
       }),
     ]);
+    await expectFixedPoint();
   });
   it.each([1, 8, 32])(
     "settles %i new statement charges through the kernel within its statement budget",
