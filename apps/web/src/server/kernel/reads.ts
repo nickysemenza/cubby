@@ -72,7 +72,7 @@ export const parseRevisions = (
  * statement: a write between a separate revision read and the data read would
  * otherwise pair old rows with a revision that already covers the write.
  */
-export async function selectWithRevisions(
+async function selectWithRevisions(
   q: Q,
   table: PgTable,
   where: SQL,
@@ -172,7 +172,7 @@ export interface ScopeReads {
   answers(asks: readonly AnswerRequest[]): Promise<(Json | null)[]>;
 }
 
-export type AnswerRequest = { kind: AskKind; input: unknown };
+type AnswerRequest = { kind: AskKind; input: unknown };
 /** The computation's answer loader; it records each answer for `scopes`. */
 export type AnswerLoader = (
   scopes: readonly string[],
