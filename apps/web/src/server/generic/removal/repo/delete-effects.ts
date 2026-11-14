@@ -10,9 +10,10 @@ import {
   INCOMING_EDGES,
   type IncomingEdge,
 } from "~/server/db/entity-incoming-edges";
-import { getDb, withSnapshotWriteDatabase } from "~/server/db/helpers";
+import { getDb } from "~/server/db/helpers";
 import { countByTarget } from "~/server/entity-kernel/repo/impact";
 import { resolveAllOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { householdWrite } from "~/server/kernel/gate";
 
 /** Effects that leave a successful delete with no changed incoming rows. */
 const UNCHANGED_ON_SUCCESS = new Set<OperationDisposition["effect"]>([
@@ -93,18 +94,14 @@ export async function executeDeleteWithEffects<
       ),
     );
 
-  return withSnapshotWriteDatabase(
-    db,
-    async (transactionDb) => {
-      const ids = await resolveAllOrThrow(transactionDb, entity, shortcodes);
-      const before = await snapshot(transactionDb, ids);
-      const result = await execute(transactionDb);
-      const after = await snapshot(transactionDb, ids);
-      return {
-        result,
-        affectedEdges: calculateAffectedDeleteEdges(policy, before, after),
-      };
-    },
-    { isolationLevel: "repeatable read" },
-  );
+  return householdWrite(db, async (transactionDb) => {
+    const ids = await resolveAllOrThrow(transactionDb, entity, shortcodes);
+    const before = await snapshot(transactionDb, ids);
+    const result = await execute(transactionDb);
+    const after = await snapshot(transactionDb, ids);
+    return {
+      result,
+      affectedEdges: calculateAffectedDeleteEdges(policy, before, after),
+    };
+  });
 }

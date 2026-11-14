@@ -37,7 +37,7 @@ import {
   databaseForTransaction,
   getDb,
   notDeleted,
-  withSnapshotWrite,
+  withHouseholdWrite,
 } from "~/server/db/helpers";
 import {
   columnArrayParam,
@@ -2283,48 +2283,44 @@ export async function commitFinancialSpendings(
   }
   const results: (FinancialSpendingResult | null)[] = entries.map(() => null);
   if (!committed.length) return results;
-  await withSnapshotWrite(
-    db,
-    async (tx) => {
-      const txDb = databaseForTransaction(tx);
-      const targets = await lockFinancialTransactionSources(
-        tx,
-        committed.map((entry) => entry.transactionId),
-      );
-      // One page read under the locks serves every recheck; nothing is
-      // written until every plan has been rechecked against it.
-      const page = await prepareFinancialSpendingPage(txDb, {
-        accountIds: [],
-        transactionIds: targets.map((target) => target.id),
-        sources: [],
-      });
-      await prepareFinancialSpendingCandidates(
-        txDb,
-        page,
-        committed.flatMap(({ plan }) => {
-          const name = reviewedSpendingAdvice(plan.request)?.vendorName;
-          return name ? [name] : [];
-        }),
-      );
-      const previews = await previewFinancialSpendings(
-        txDb,
-        committed.map(({ plan, transactionId }) => ({
-          request: { ...plan.request, source: undefined, transactionId },
-        })),
-        page,
-      );
-      const written = await writeRecheckedSpendings(
-        tx,
-        committed,
-        previews,
-        page,
-        actor,
-      );
-      for (const [position, { index }] of committed.entries())
-        results[index] = written[position]!;
-    },
-    { isolationLevel: "serializable" },
-  );
+  await withHouseholdWrite(db, async (tx) => {
+    const txDb = databaseForTransaction(tx);
+    const targets = await lockFinancialTransactionSources(
+      tx,
+      committed.map((entry) => entry.transactionId),
+    );
+    // One page read under the locks serves every recheck; nothing is
+    // written until every plan has been rechecked against it.
+    const page = await prepareFinancialSpendingPage(txDb, {
+      accountIds: [],
+      transactionIds: targets.map((target) => target.id),
+      sources: [],
+    });
+    await prepareFinancialSpendingCandidates(
+      txDb,
+      page,
+      committed.flatMap(({ plan }) => {
+        const name = reviewedSpendingAdvice(plan.request)?.vendorName;
+        return name ? [name] : [];
+      }),
+    );
+    const previews = await previewFinancialSpendings(
+      txDb,
+      committed.map(({ plan, transactionId }) => ({
+        request: { ...plan.request, source: undefined, transactionId },
+      })),
+      page,
+    );
+    const written = await writeRecheckedSpendings(
+      tx,
+      committed,
+      previews,
+      page,
+      actor,
+    );
+    for (const [position, { index }] of committed.entries())
+      results[index] = written[position]!;
+  });
   return results;
 }
 

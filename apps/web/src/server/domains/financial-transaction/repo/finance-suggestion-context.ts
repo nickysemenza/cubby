@@ -15,7 +15,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { minorToDollarsSql } from "~/server/db/computed/money";
-import { unwrapDb, withSnapshotWriteDatabase } from "~/server/db/helpers";
+import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import {
   expenseSpendingCategoryResolutionSql,
@@ -33,6 +33,7 @@ import { createAppError } from "~/server/errors/app-error";
 import { generatedEntityUpdateCommandSchema } from "~/server/generated/entity-bindings.gen";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { householdWrite } from "~/server/kernel/gate";
 
 const evidenceRow = z.record(z.string(), z.json());
 const rowsSchema = z.array(evidenceRow);
@@ -276,48 +277,44 @@ export async function applyFinanceCategorySuggestion(
     .unwrap()
     .options.filter((key) => input[key] !== undefined);
   if (isFinanceReviewEntity(review.entity, "vendor")) {
-    return withSnapshotWriteDatabase(
-      context.db,
-      async (db) => {
-        const current = await loadVendorSuggestionContext(db, review.entityId);
-        if (current.truncated || current.fingerprint !== review.fingerprint)
-          throw createAppError(
-            "CONSTRAINT_VIOLATION",
-            "Vendor purchase evidence or saved defaults changed; request a fresh suggestion before applying.",
-          );
-        const vendorFields: readonly string[] = financeReviewFields("vendor");
-        const patch = {
-          ...(input.spendingProfile === undefined
-            ? {}
-            : { spendingProfile: input.spendingProfile }),
-          ...(input.defaultSpendingCategoryId === undefined
-            ? {}
-            : { defaultSpendingCategoryId: input.defaultSpendingCategoryId }),
-        };
-        if (
-          Object.keys(patch).length === 0 ||
-          suppliedFields.some((key) => !vendorFields.includes(key))
-        )
-          throw createAppError(
-            "CONSTRAINT_VIOLATION",
-            "Review a vendor default category or spending profile.",
-          );
-        await withReviewedSpendingClassification(db, () =>
-          updateVendor(
-            db,
-            parseShortcodeFor("vendor", review.entityId),
-            patch,
-            context.actorContext,
-          ),
+    return householdWrite(context.db, async (db) => {
+      const current = await loadVendorSuggestionContext(db, review.entityId);
+      if (current.truncated || current.fingerprint !== review.fingerprint)
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "Vendor purchase evidence or saved defaults changed; request a fresh suggestion before applying.",
         );
-        await recordChange(db, { kind: "source", categories: ["vendor"] });
-        return {
-          ...input,
-          sideEffects: mutationSideEffectsWithWarnings(undefined),
-        };
-      },
-      { isolationLevel: "repeatable read" },
-    );
+      const vendorFields: readonly string[] = financeReviewFields("vendor");
+      const patch = {
+        ...(input.spendingProfile === undefined
+          ? {}
+          : { spendingProfile: input.spendingProfile }),
+        ...(input.defaultSpendingCategoryId === undefined
+          ? {}
+          : { defaultSpendingCategoryId: input.defaultSpendingCategoryId }),
+      };
+      if (
+        Object.keys(patch).length === 0 ||
+        suppliedFields.some((key) => !vendorFields.includes(key))
+      )
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "Review a vendor default category or spending profile.",
+        );
+      await withReviewedSpendingClassification(db, () =>
+        updateVendor(
+          db,
+          parseShortcodeFor("vendor", review.entityId),
+          patch,
+          context.actorContext,
+        ),
+      );
+      await recordChange(db, { kind: "source", categories: ["vendor"] });
+      return {
+        ...input,
+        sideEffects: mutationSideEffectsWithWarnings(undefined),
+      };
+    });
   }
   const financeFields: readonly string[] = financeReviewFields("finance");
   if (
@@ -336,42 +333,38 @@ export async function applyFinanceCategorySuggestion(
     );
   const financeEntity = review.entity;
   const spendingCategoryId = input.spendingCategoryId;
-  return withSnapshotWriteDatabase(
-    context.db,
-    async (db) => {
-      const current = await loadFinanceSuggestionContext(
-        db,
-        financeEntity,
-        review.entityId,
+  return householdWrite(context.db, async (db) => {
+    const current = await loadFinanceSuggestionContext(
+      db,
+      financeEntity,
+      review.entityId,
+    );
+    if (current.truncated)
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "Linked evidence exceeds the review limit; review the record and choose a category manually.",
       );
-      if (current.truncated)
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          "Linked evidence exceeds the review limit; review the record and choose a category manually.",
-        );
-      if (current.fingerprint !== review.fingerprint)
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          "The saved finance record or linked evidence changed; review again before applying the category.",
-        );
-      await resolveOrThrow(db, "spendingCategory", spendingCategoryId);
-      const result = await executeEntityAs(
-        { ...context, db },
-        "update",
-        generatedEntityUpdateCommandSchema.parse({
-          action: "update",
-          entity: financeEntity,
-          id: parseShortcodeFor(financeEntity, review.entityId),
-          data: { spendingCategoryId: spendingCategoryId },
-        }),
+    if (current.fingerprint !== review.fingerprint)
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "The saved finance record or linked evidence changed; review again before applying the category.",
       );
-      return {
+    await resolveOrThrow(db, "spendingCategory", spendingCategoryId);
+    const result = await executeEntityAs(
+      { ...context, db },
+      "update",
+      generatedEntityUpdateCommandSchema.parse({
+        action: "update",
         entity: financeEntity,
-        entityId: review.entityId,
-        spendingCategoryId: spendingCategoryId,
-        sideEffects: result.sideEffects,
-      };
-    },
-    { isolationLevel: "repeatable read" },
-  );
+        id: parseShortcodeFor(financeEntity, review.entityId),
+        data: { spendingCategoryId: spendingCategoryId },
+      }),
+    );
+    return {
+      entity: financeEntity,
+      entityId: review.entityId,
+      spendingCategoryId: spendingCategoryId,
+      sideEffects: result.sideEffects,
+    };
+  });
 }

@@ -27,7 +27,7 @@ import {
   getDb,
   notDeleted,
   withTransaction,
-  withSnapshotWrite,
+  withHouseholdWrite,
 } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
@@ -380,19 +380,17 @@ async function runFinancialConvergence(
   evidence?: PreparedMailFinancialEvent,
   dryRun = false,
 ): Promise<Result | Ready> {
-  return (dryRun ? withTransaction : withSnapshotWrite)(
-    db,
-    async (tx) => {
-      const txDb = databaseForTransaction(tx);
-      const id = await resolveOrThrow(
-        txDb,
-        "financialTransaction",
-        input.transactionId,
-      );
-      await lockFinancialTransactionSources(tx, [input.transactionId]);
-      // Match the settlement writer's global lock order: accepted Purchases
-      // precede the transaction, including a target proved by the current Email.
-      await tx.execute(sql`
+  return (dryRun ? withTransaction : withHouseholdWrite)(db, async (tx) => {
+    const txDb = databaseForTransaction(tx);
+    const id = await resolveOrThrow(
+      txDb,
+      "financialTransaction",
+      input.transactionId,
+    );
+    await lockFinancialTransactionSources(tx, [input.transactionId]);
+    // Match the settlement writer's global lock order: accepted Purchases
+    // precede the transaction, including a target proved by the current Email.
+    await tx.execute(sql`
         SELECT p.id FROM "Purchase" p WHERE ${notDeleted("p")} AND (
           EXISTS (SELECT 1 FROM "FinancialTransactionAllocation" a
             WHERE a."purchaseId" = p.id AND a."transactionId" = ${id} AND ${notDeleted("a")})
@@ -401,246 +399,240 @@ async function runFinancialConvergence(
             WHERE "Email".id = ${evidence?.emailId ?? null}::uuid AND NOT association.changed
               AND association.kind IN (${emailLinkEvidenceKind.enum.accepted}, ${emailLinkEvidenceKind.enum.linked}))
         ) ORDER BY p.id FOR UPDATE`);
-      const [row] = await tx
-        .select()
-        .from(financialTransaction)
-        .where(
-          and(
-            eq(financialTransaction.id, id),
-            notDeleted(financialTransaction),
-          ),
-        )
-        .for("update")
-        .then((rows) => rows.map(transactionDollars));
-      const paymentRefusal = financialConvergenceRefusal({
-        kind: "payment",
-        transaction: row
-          ? { ...row, amountMinor: moneyToMinor(row.amount) }
-          : null,
-      });
-      if (paymentRefusal) return review(paymentRefusal);
-      if (!row) return review(paymentRefusal!);
-      // The funder on the charge date (a lag-safe posting date when only that
-      // is known) is the household or the member, and the member owns the
-      // account or holds the card: a household-funded card owned by another
-      // member's party is still its cardholder's to settle.
-      const window = paymentDateWindowSql(sql`payment`);
-      const accountAuthority = await tx.execute<{
-        funderId: string | null;
-        funderKind: string | null;
-        ownerId: string | null;
-        ownerKind: string | null;
-        memberId: string | null;
-        memberCode: string | null;
-        primaryHolderId: string | null;
-        from: string | null;
-        to: string | null;
-        authorizedUsers: {
-          ledgerPartyId: string;
-          validFrom: string | null;
-          validTo: string | null;
-        }[];
-      }>(sql`SELECT funder.id AS "funderId",funder.kind AS "funderKind",owner.id AS "ownerId",owner.kind AS "ownerKind",member.id AS "memberId",member.shortcode AS "memberCode",${effectiveFieldSql("financialAccount", "primaryCardholderId", "a")} AS "primaryHolderId",${window.from}::text AS "from",${window.to}::text AS "to",a."authorizedUsers" AS "authorizedUsers"
+    const [row] = await tx
+      .select()
+      .from(financialTransaction)
+      .where(
+        and(eq(financialTransaction.id, id), notDeleted(financialTransaction)),
+      )
+      .for("update")
+      .then((rows) => rows.map(transactionDollars));
+    const paymentRefusal = financialConvergenceRefusal({
+      kind: "payment",
+      transaction: row
+        ? { ...row, amountMinor: moneyToMinor(row.amount) }
+        : null,
+    });
+    if (paymentRefusal) return review(paymentRefusal);
+    if (!row) return review(paymentRefusal!);
+    // The funder on the charge date (a lag-safe posting date when only that
+    // is known) is the household or the member, and the member owns the
+    // account or holds the card: a household-funded card owned by another
+    // member's party is still its cardholder's to settle.
+    const window = paymentDateWindowSql(sql`payment`);
+    const accountAuthority = await tx.execute<{
+      funderId: string | null;
+      funderKind: string | null;
+      ownerId: string | null;
+      ownerKind: string | null;
+      memberId: string | null;
+      memberCode: string | null;
+      primaryHolderId: string | null;
+      from: string | null;
+      to: string | null;
+      authorizedUsers: {
+        ledgerPartyId: string;
+        validFrom: string | null;
+        validTo: string | null;
+      }[];
+    }>(sql`SELECT funder.id AS "funderId",funder.kind AS "funderKind",owner.id AS "ownerId",owner.kind AS "ownerKind",member.id AS "memberId",member.shortcode AS "memberCode",${effectiveFieldSql("financialAccount", "primaryCardholderId", "a")} AS "primaryHolderId",${window.from}::text AS "from",${window.to}::text AS "to",a."authorizedUsers" AS "authorizedUsers"
         FROM "FinancialAccount" a JOIN "FinancialTransaction" payment ON payment.id=${row.id} AND ${notDeleted("payment")}
         JOIN "LedgerParty" funder ON funder.id=${paymentFundingPartySql(sql`a`, sql`payment`)} AND ${notDeleted("funder")}
         LEFT JOIN "LedgerParty" owner ON owner.id=a."ledgerPartyId" AND ${notDeleted("owner")}
         LEFT JOIN "LedgerParty" member ON member."userId"=${actor.userId} AND member.kind=${ledgerPartyKind.enum.member} AND ${notDeleted("member")}
         WHERE a.id=${row.accountId} AND ${notDeleted("a")}`);
-      const authorityRefusal = financialConvergenceRefusal({
-        kind: "authority",
-        authorized: accountAuthority.rows.some(convergenceAccountAvailable),
-      });
-      if (authorityRefusal) return review(authorityRefusal);
-      const refs =
-        (await financialSourceRefsFor(tx, [row.id])).get(row.id) ?? [];
-      const sourceRefusal = financialConvergenceRefusal({
-        kind: "source",
-        referenceCount: refs.length,
-      });
-      if (sourceRefusal) return review(sourceRefusal);
-      const allocations = await tx
-        .select()
-        .from(financialTransactionAllocation)
-        .where(
-          and(
-            eq(financialTransactionAllocation.transactionId, row.id),
-            notDeleted(financialTransactionAllocation),
-          ),
-        )
-        .orderBy(financialTransactionAllocation.purchaseId)
-        .for("update")
-        .then((rows) => rows.map(allocationDollars));
-      const allocationRefusal = financialConvergenceRefusal({
-        kind: "allocations",
-        amountMinor: moneyToMinor(row.amount),
-        allocations: allocations.map((allocation) => ({
-          amountMinor: moneyToMinor(allocation.amount),
-        })),
-      });
-      if (allocationRefusal) return review(allocationRefusal);
-      let purchaseId = allocations[0]?.purchaseId ?? null;
-      let vendorId: typeof vendor.$inferSelect | undefined;
-      let eventRef: { source: string; externalId: string } | undefined;
-      let mailEvent:
-        | Awaited<ReturnType<typeof assertMailFinancialEvidenceCurrent>>
-        | undefined;
-      const verified = evidence
-        ? await verifyMailPayment(tx, row, purchaseId, evidence, actor)
-        : null;
-      if (verified?.status === "review_required") return verified;
-      if (verified) {
-        purchaseId = verified.purchaseId;
-        vendorId = verified.vendorId;
-        eventRef = verified.eventRef;
-        mailEvent = verified.mailEvent;
-      }
-      const identityRefusal = financialConvergenceRefusal({
-        kind: "identity",
-        purchaseId,
-        vendorId: vendorId?.id ?? null,
-      });
-      if (identityRefusal) return review(identityRefusal);
-      const target = purchaseId
-        ? await tx.query.purchase.findFirst({
-            where: {
-              RAW: (table: PgTable) =>
-                relationalSql(
-                  table,
-                  and(eq(purchase.id, purchaseId), notDeleted(purchase)),
-                ),
-            },
-          })
-        : undefined;
-      const acceptedVendor = target?.vendorId
-        ? await tx.query.vendor.findFirst({
-            where: {
-              RAW: (table: PgTable) =>
-                relationalSql(
-                  table,
-                  and(eq(vendor.id, target.vendorId), notDeleted(vendor)),
-                ),
-            },
-          })
-        : undefined;
-      const targetRefusal = financialConvergenceRefusal({
-        kind: "target",
-        purchaseId,
-        targetVendorId: target?.vendorId ?? null,
-        verifiedVendorId: vendorId?.id ?? null,
-        hasTarget: Boolean(target),
-        hasAcceptedVendor: Boolean(acceptedVendor),
-      });
-      if (targetRefusal) return review(targetRefusal);
-      if (target) {
-        const conflicts = await findSettlementConflicts(tx, {
-          accountId: row.accountId,
-          kind: financialTransactionKind.parse(row.kind),
-          transactionDate: row.transactionDate,
-          purchaseIds: [target.id],
-        });
-        const conflictRefusal = financialConvergenceRefusal({
-          kind: "settlement",
-          conflicting: conflicts.has(target.id),
-        });
-        if (conflictRefusal) return review(conflictRefusal);
-      }
-      const verifiedTransactionId = row.id;
-      const verifiedAccountId = row.accountId;
-      async function retainFinancialEmail() {
-        if (!evidence || !mailEvent || !eventRef || dryRun) return;
-        if (
-          !refs.some(
-            (ref) =>
-              ref.source === eventRef.source &&
-              ref.externalId === eventRef.externalId,
-          )
-        ) {
-          await updateFinancialTransaction(
-            txDb,
-            input.transactionId,
-            { sourceRefs: [...refs, eventRef] },
-            actor,
-          );
-        }
-        await tx
-          .insert(emailFinancialAssociation)
-          .values({
-            emailId: evidence.emailId,
-            evidenceChecksum: evidence.checksum,
-            transactionId: verifiedTransactionId,
-            reviewedAccountId: verifiedAccountId,
-            sourceAccountLabel: mailEvent.sourceAccountLabel!,
-            reviewReason:
-              "Server-verified provider payment identity, exact money, account and Vendor",
-            decidedByUserId: actor.userId,
-          })
-          .onConflictDoNothing();
-      }
-      if (row.bookingDecisionFingerprint) {
-        const bookingRefusal = financialConvergenceRefusal({
-          kind: "booking",
-          hasTarget: Boolean(target),
-          allocationCount: allocations.length,
-          storedDecision: row.bookingDecisionFingerprint,
-          currentDecision: await acceptedAutomaticFacts(
-            txDb,
-            input.transactionId,
-          ),
-          storedLineage: row.bookingExpenseFingerprint,
-          currentLineage: await digestValue(
-            await loadFinancialBookingLineage(txDb, input.transactionId),
-          ),
-        });
-        if (bookingRefusal) return review(bookingRefusal);
-        if (!target)
-          return review(
-            "Accepted booking facts changed; reconcile the existing Expenses before another automatic write.",
-          );
-        await retainFinancialEmail();
-        if (verified && !dryRun)
-          await refreshAutomaticBookingFingerprint(txDb, input.transactionId);
-        return {
-          status: "already_recorded",
-          purchaseId: parseShortcodeFor("purchase", target.shortcode),
-          expenseId: null,
-        };
-      }
-      const checked = await automaticBookingPreview(
-        txDb,
-        row,
-        input,
-        target,
-        vendorId,
-      );
-      if (checked.status === "review_required") return checked;
-      const { preview } = checked;
-      if (dryRun)
-        return {
-          status: "ready",
-          purchaseId: preview.purchaseId,
-          vendorId: vendorId
-            ? parseShortcodeFor("vendor", vendorId.shortcode)
-            : acceptedVendor
-              ? parseShortcodeFor("vendor", acceptedVendor.shortcode)
-              : null,
-          action: preview.action,
-        };
-      const saved = await commitFinancialBooking(txDb, preview, actor);
-      await retainFinancialEmail();
-      await tx
-        .update(financialTransaction)
-        .set({
-          bookingDecisionFingerprint: `automatic:${await acceptedAutomaticFacts(txDb, input.transactionId)}`,
+    const authorityRefusal = financialConvergenceRefusal({
+      kind: "authority",
+      authorized: accountAuthority.rows.some(convergenceAccountAvailable),
+    });
+    if (authorityRefusal) return review(authorityRefusal);
+    const refs = (await financialSourceRefsFor(tx, [row.id])).get(row.id) ?? [];
+    const sourceRefusal = financialConvergenceRefusal({
+      kind: "source",
+      referenceCount: refs.length,
+    });
+    if (sourceRefusal) return review(sourceRefusal);
+    const allocations = await tx
+      .select()
+      .from(financialTransactionAllocation)
+      .where(
+        and(
+          eq(financialTransactionAllocation.transactionId, row.id),
+          notDeleted(financialTransactionAllocation),
+        ),
+      )
+      .orderBy(financialTransactionAllocation.purchaseId)
+      .for("update")
+      .then((rows) => rows.map(allocationDollars));
+    const allocationRefusal = financialConvergenceRefusal({
+      kind: "allocations",
+      amountMinor: moneyToMinor(row.amount),
+      allocations: allocations.map((allocation) => ({
+        amountMinor: moneyToMinor(allocation.amount),
+      })),
+    });
+    if (allocationRefusal) return review(allocationRefusal);
+    let purchaseId = allocations[0]?.purchaseId ?? null;
+    let vendorId: typeof vendor.$inferSelect | undefined;
+    let eventRef: { source: string; externalId: string } | undefined;
+    let mailEvent:
+      | Awaited<ReturnType<typeof assertMailFinancialEvidenceCurrent>>
+      | undefined;
+    const verified = evidence
+      ? await verifyMailPayment(tx, row, purchaseId, evidence, actor)
+      : null;
+    if (verified?.status === "review_required") return verified;
+    if (verified) {
+      purchaseId = verified.purchaseId;
+      vendorId = verified.vendorId;
+      eventRef = verified.eventRef;
+      mailEvent = verified.mailEvent;
+    }
+    const identityRefusal = financialConvergenceRefusal({
+      kind: "identity",
+      purchaseId,
+      vendorId: vendorId?.id ?? null,
+    });
+    if (identityRefusal) return review(identityRefusal);
+    const target = purchaseId
+      ? await tx.query.purchase.findFirst({
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(eq(purchase.id, purchaseId), notDeleted(purchase)),
+              ),
+          },
         })
-        .where(eq(financialTransaction.id, row.id));
+      : undefined;
+    const acceptedVendor = target?.vendorId
+      ? await tx.query.vendor.findFirst({
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(eq(vendor.id, target.vendorId), notDeleted(vendor)),
+              ),
+          },
+        })
+      : undefined;
+    const targetRefusal = financialConvergenceRefusal({
+      kind: "target",
+      purchaseId,
+      targetVendorId: target?.vendorId ?? null,
+      verifiedVendorId: vendorId?.id ?? null,
+      hasTarget: Boolean(target),
+      hasAcceptedVendor: Boolean(acceptedVendor),
+    });
+    if (targetRefusal) return review(targetRefusal);
+    if (target) {
+      const conflicts = await findSettlementConflicts(tx, {
+        accountId: row.accountId,
+        kind: financialTransactionKind.parse(row.kind),
+        transactionDate: row.transactionDate,
+        purchaseIds: [target.id],
+      });
+      const conflictRefusal = financialConvergenceRefusal({
+        kind: "settlement",
+        conflicting: conflicts.has(target.id),
+      });
+      if (conflictRefusal) return review(conflictRefusal);
+    }
+    const verifiedTransactionId = row.id;
+    const verifiedAccountId = row.accountId;
+    async function retainFinancialEmail() {
+      if (!evidence || !mailEvent || !eventRef || dryRun) return;
+      if (
+        !refs.some(
+          (ref) =>
+            ref.source === eventRef.source &&
+            ref.externalId === eventRef.externalId,
+        )
+      ) {
+        await updateFinancialTransaction(
+          txDb,
+          input.transactionId,
+          { sourceRefs: [...refs, eventRef] },
+          actor,
+        );
+      }
+      await tx
+        .insert(emailFinancialAssociation)
+        .values({
+          emailId: evidence.emailId,
+          evidenceChecksum: evidence.checksum,
+          transactionId: verifiedTransactionId,
+          reviewedAccountId: verifiedAccountId,
+          sourceAccountLabel: mailEvent.sourceAccountLabel!,
+          reviewReason:
+            "Server-verified provider payment identity, exact money, account and Vendor",
+          decidedByUserId: actor.userId,
+        })
+        .onConflictDoNothing();
+    }
+    if (row.bookingDecisionFingerprint) {
+      const bookingRefusal = financialConvergenceRefusal({
+        kind: "booking",
+        hasTarget: Boolean(target),
+        allocationCount: allocations.length,
+        storedDecision: row.bookingDecisionFingerprint,
+        currentDecision: await acceptedAutomaticFacts(
+          txDb,
+          input.transactionId,
+        ),
+        storedLineage: row.bookingExpenseFingerprint,
+        currentLineage: await digestValue(
+          await loadFinancialBookingLineage(txDb, input.transactionId),
+        ),
+      });
+      if (bookingRefusal) return review(bookingRefusal);
+      if (!target)
+        return review(
+          "Accepted booking facts changed; reconcile the existing Expenses before another automatic write.",
+        );
+      await retainFinancialEmail();
+      if (verified && !dryRun)
+        await refreshAutomaticBookingFingerprint(txDb, input.transactionId);
       return {
-        status: "applied",
-        purchaseId: saved.purchaseId,
-        expenseId: saved.expenseId,
+        status: "already_recorded",
+        purchaseId: parseShortcodeFor("purchase", target.shortcode),
+        expenseId: null,
       };
-    },
-    { isolationLevel: "serializable" },
-  );
+    }
+    const checked = await automaticBookingPreview(
+      txDb,
+      row,
+      input,
+      target,
+      vendorId,
+    );
+    if (checked.status === "review_required") return checked;
+    const { preview } = checked;
+    if (dryRun)
+      return {
+        status: "ready",
+        purchaseId: preview.purchaseId,
+        vendorId: vendorId
+          ? parseShortcodeFor("vendor", vendorId.shortcode)
+          : acceptedVendor
+            ? parseShortcodeFor("vendor", acceptedVendor.shortcode)
+            : null,
+        action: preview.action,
+      };
+    const saved = await commitFinancialBooking(txDb, preview, actor);
+    await retainFinancialEmail();
+    await tx
+      .update(financialTransaction)
+      .set({
+        bookingDecisionFingerprint: `automatic:${await acceptedAutomaticFacts(txDb, input.transactionId)}`,
+      })
+      .where(eq(financialTransaction.id, row.id));
+    return {
+      status: "applied",
+      purchaseId: saved.purchaseId,
+      expenseId: saved.expenseId,
+    };
+  });
 }
 
 export async function convergeFinancialTransaction(
@@ -650,28 +642,24 @@ export async function convergeFinancialTransaction(
   evidence?: PreparedMailFinancialEvent,
 ): Promise<Result> {
   if (input.advice && !input.emailId && !evidence) {
-    return withSnapshotWrite(
-      db,
-      async (tx) => {
-        const txDb = databaseForTransaction(tx);
-        const plan = await previewFinancialSpending(txDb, {
-          transactionId: input.transactionId,
-          advice: input.advice,
-        });
-        if (plan.status === "review_required" || plan.status === "deferred")
-          return review(plan.reason);
-        const result = await commitFinancialSpending(txDb, plan, actor);
-        const purchaseId = result?.purchaseIds[0];
-        if (!result || !purchaseId)
-          return review("The spending plan established no Purchase.");
-        return financialConvergenceResult.parse({
-          status: result.replayed ? "already_recorded" : "applied",
-          purchaseId,
-          expenseId: null,
-        });
-      },
-      { isolationLevel: "serializable" },
-    );
+    return withHouseholdWrite(db, async (tx) => {
+      const txDb = databaseForTransaction(tx);
+      const plan = await previewFinancialSpending(txDb, {
+        transactionId: input.transactionId,
+        advice: input.advice,
+      });
+      if (plan.status === "review_required" || plan.status === "deferred")
+        return review(plan.reason);
+      const result = await commitFinancialSpending(txDb, plan, actor);
+      const purchaseId = result?.purchaseIds[0];
+      if (!result || !purchaseId)
+        return review("The spending plan established no Purchase.");
+      return financialConvergenceResult.parse({
+        status: result.replayed ? "already_recorded" : "applied",
+        purchaseId,
+        expenseId: null,
+      });
+    });
   }
   return financialConvergenceResult.parse(
     await runFinancialConvergence(db, input, actor, evidence),

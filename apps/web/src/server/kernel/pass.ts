@@ -18,8 +18,10 @@ import {
   renewClaim,
   settleFailure,
   type ClaimedPass,
+  type ClaimTarget,
 } from "./claim";
 import type { Claim, Json, Pass } from "./define";
+import { enterHouseholdGate } from "./gate";
 import type { KernelRegistry } from "./registry";
 import { wakeAfterCommit } from "./wake";
 
@@ -65,6 +67,24 @@ export async function startPass(
   await wakeAfterCommit(db);
 }
 
+/**
+ * A pass page's publication: the gate, then the Pass row, then the work. A
+ * publication that locks records or appends evidence must not hold a row
+ * while it waits for the gate.
+ */
+export function fencedPublication<T>(
+  db: Database,
+  target: Extract<ClaimTarget, { table: "Pass" }>,
+  token: string,
+  work: (tx: Database) => Promise<T>,
+): Promise<T> {
+  return repositoryTransactionDatabase(db, async (tx) => {
+    await enterHouseholdGate(tx);
+    await fenceClaim(repositoryQueries(tx), target, token);
+    return work(tx);
+  });
+}
+
 function passClaim(db: Database, claimed: ClaimedPass): Claim {
   const target = {
     table: "Pass" as const,
@@ -86,11 +106,7 @@ function passClaim(db: Database, claimed: ClaimedPass): Claim {
       return held;
     },
     fence: (tx) => fenceClaim(repositoryQueries(tx), target, claimed.token),
-    fenced: (work) =>
-      repositoryTransactionDatabase(db, async (tx) => {
-        await fenceClaim(repositoryQueries(tx), target, claimed.token);
-        return work(tx);
-      }),
+    fenced: (work) => fencedPublication(db, target, claimed.token, work),
   };
 }
 

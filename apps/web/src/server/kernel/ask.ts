@@ -497,13 +497,12 @@ async function executeClaimed(
           .release(ask.inputHash, cacheToken)
           // SILENT: an unreleased cache claim lapses on its own lease.
           .catch(() => undefined);
-        // A hosted turn's transport is outside the ledger; it cannot prove unsent.
         await settleSent(
           db,
           registry,
           ask,
           error,
-          outcome.status === "failed" && !kind.hosted ? outcome.unsent : null,
+          outcome.status === "failed" ? outcome.unsent : null,
         );
         results[index] = { status: "failed", error };
         return;
@@ -862,6 +861,9 @@ export async function settleExternalAsk<I, O>(
   { status: "settled" | "replayed"; output: O } | { status: "refused" }
 > {
   return repositoryTransactionDatabase(db, async (tx) => {
+    // The gate precedes the Ask row: commitAnswer and batch filing take the
+    // gate before they touch Ask rows.
+    await enterHouseholdGate(tx);
     const q = repositoryQueries(tx);
     const result = await q.execute<{
       inputHash: string;

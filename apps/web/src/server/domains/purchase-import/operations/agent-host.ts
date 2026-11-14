@@ -25,7 +25,11 @@ import { DurableObject } from "cloudflare:workers";
 
 import { connectedChatGptInference } from "~/server/ai/chatgpt/client";
 import { gatewayEnvironment } from "~/server/ai/gateway";
-import { coordinatedGatewayRequest } from "~/server/ai/gateway-egress-client";
+import {
+  coordinatedGatewayRequest,
+  failedGatewaySend,
+  receivedGatewayResponse,
+} from "~/server/ai/gateway-egress-client";
 import type {
   DispatchInput,
   PurchaseAgentEnvironment,
@@ -36,6 +40,7 @@ import {
   isMaintenanceMode,
   maintenanceResponse,
 } from "~/server/http/maintenance";
+import { markTransmitted } from "~/server/kernel/produce-ledger";
 import { withInvocationTrace } from "~/server/observability/tracing";
 import { workerSentryOptions } from "~/server/observability/worker-sentry";
 import { testDurationOverrideMs } from "~/server/testing/test-duration-override";
@@ -75,12 +80,16 @@ function purchaseAgentEnvironment(
   return {
     modelTurn: (request, send) =>
       agentModelTurn(env, ctx, runId, request, send, fence),
+    // Every transport the coordinator sends through records itself in the
+    // model turn's produce ledger, so a refusal proves the turn unsent.
     chatGptInference: (body, options) =>
-      connectedChatGptInference(
-        env.CHATGPT_PLAN.getByName("household"),
-        body,
-        options,
-      ),
+      connectedChatGptInference(env.CHATGPT_PLAN.getByName("household"), body, {
+        ...options,
+        onSelected: () => {
+          markTransmitted();
+          options?.onSelected?.();
+        },
+      }),
     gateway: () => {
       const gateway = env.AI.gateway(aiGatewayId(gatewayEnvironment()));
       return {
@@ -91,7 +100,7 @@ function purchaseAgentEnvironment(
             provider,
             request,
             controls,
-          ),
+          ).then(receivedGatewayResponse, failedGatewaySend),
         environment: gatewayEnvironment(),
         run: (data, options) => gateway.run(data, options),
       };
@@ -99,7 +108,14 @@ function purchaseAgentEnvironment(
     // pi's database work runs only under a live coordinator turn.
     services: runServicesFor(env, ctx, runId, { fence }),
     mcpTools: purchaseAgentMcpTools,
-    ...(testModel && { testModel }),
+    ...(testModel && {
+      testModel: {
+        fetch: (request: Request) =>
+          testModel
+            .fetch(request)
+            .then(receivedGatewayResponse, failedGatewaySend),
+      },
+    }),
     ...(testModel &&
       fixedModel === "openai-responses" && {
         fixedModel,

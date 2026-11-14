@@ -31,6 +31,7 @@ import type {
   RunServices,
 } from "~/server/domains/purchase-agent/service/environment";
 import { assertNotInMaintenance } from "~/server/http/maintenance";
+import { refusedBeforeSending } from "~/server/kernel/produce-ledger";
 import {
   WorkDeferredError,
   WorkSupersededError,
@@ -163,6 +164,28 @@ export function fenceDispatch(
   });
 }
 
+/** The error types Cubby's agent transport answers with before sending. */
+const CUBBY_LOCAL_REFUSAL =
+  /"(?:type|code)"\s*:\s*"(?:cubby_admission_refused|cubby_plan_budget_reached|cubby_credit_refused|cubby_transport_failed|subscription_unavailable)"/u;
+
+/**
+ * A failed model response reaches Pi as it arrived and is never an Answer:
+ * the transport's produce ledger settles the Ask queued when it proves nothing
+ * was sent, and `unknown` otherwise.
+ */
+class ModelTurnResponseError extends Error {
+  override name = "ModelTurnResponseError";
+  constructor(
+    readonly response: {
+      status: number;
+      headers: Record<string, string>;
+      body: string;
+    },
+  ) {
+    super(`The model answered HTTP ${response.status}: ${response.body}`);
+  }
+}
+
 /** The committed Answer precedes replaying a complete model response to Pi. */
 export function agentModelTurn(
   env: Env,
@@ -186,6 +209,19 @@ export function agentModelTurn(
       produce: async () => {
         await fence();
         const response = await send();
+        const output = {
+          status: response.status,
+          headers: Object.fromEntries(
+            [...response.headers].filter(([key]) => key !== "set-cookie"),
+          ),
+          body: await response.text(),
+        };
+        if (response.ok) return { output };
+        const failure = new ModelTurnResponseError(output);
+        // Cubby's own refusals answer before any transport; the transports
+        // record what they sent, so the ledger proves which ones were unsent.
+        if (CUBBY_LOCAL_REFUSAL.test(output.body))
+          refusedBeforeSending(failure);
         if (response.status === 403 || response.status === 429) {
           const { pendingFundingResumeAt } =
             await import("~/server/domains/run/repo/execution-context");
@@ -204,15 +240,7 @@ export function agentModelTurn(
               "ai_funding_window",
             );
         }
-        return {
-          output: {
-            status: response.status,
-            headers: Object.fromEntries(
-              [...response.headers].filter(([key]) => key !== "set-cookie"),
-            ),
-            body: await response.text(),
-          },
-        };
+        throw failure;
       },
     };
     try {
@@ -231,6 +259,11 @@ export function agentModelTurn(
         headers: answer.headers,
       });
     } catch (error) {
+      if (error instanceof ModelTurnResponseError)
+        return new Response(error.response.body, {
+          status: error.response.status,
+          headers: error.response.headers,
+        });
       if (error instanceof WorkDeferredError)
         return Response.json(
           {

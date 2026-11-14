@@ -46,21 +46,33 @@ export class HouseholdWriteBusyError extends WorkRetryableError {
   }
 }
 
-/**
- * Take the household write gate; re-entrant within a transaction. Every
- * statement that locks a `KeyRev` or `ScopeDirty` row for a mutation carries
- * it, so a transaction holds the gate before its first kernel lock.
- */
-export const takeHouseholdGate = sql`pg_advisory_xact_lock(hashtextextended('cubby:household-write', 0))`;
+const LIMITS_MARK = "cubby.write_limits";
 
 /**
- * Take the gate at the start of a writer that locks records ahead of its
- * kernel writes; a writer that held a record while waiting for the gate could
- * deadlock a gated apply.
+ * Set this transaction's limits with `SET LOCAL` semantics, unless an earlier
+ * write entry already set them: a nested writer keeps the outer transaction's
+ * limits and never resets its budget.
  */
-export async function enterHouseholdGate(db: Database): Promise<void> {
-  await repositoryQueries(db).execute(sql`SELECT ${takeHouseholdGate}`);
-}
+const writeLimits = (mode: WriteMode) => {
+  const limits = TIMEOUTS[mode];
+  return sql`CASE WHEN coalesce(current_setting(${LIMITS_MARK}, true), '') = '' THEN
+    set_config('lock_timeout', ${String(limits.lock)}, true)
+    || set_config('statement_timeout', ${String(limits.statement)}, true)
+    || set_config('idle_in_transaction_session_timeout', ${String(limits.idle)}, true)
+    || set_config('transaction_timeout', ${String(limits.transaction)}, true)
+    || set_config(${LIMITS_MARK}, ${mode}, true) ELSE '' END`;
+};
+
+const GATE_LOCK = sql`pg_advisory_xact_lock(hashtextextended('cubby:household-write', 0))`;
+
+/**
+ * Take the household write gate as select-list items; re-entrant within a
+ * transaction. Every statement that locks a `KeyRev` or `ScopeDirty` row for
+ * a mutation carries it, so a transaction holds the gate before its first
+ * kernel lock. It applies a member write's limits first when the transaction
+ * has none, so the lock wait is bounded and a dead Worker releases the gate.
+ */
+export const takeHouseholdGate = sql`${writeLimits("member")} AS limits, ${GATE_LOCK} AS gate`;
 
 /** Whether this transaction holds the household write gate. */
 export const holdsHouseholdGate = sql`EXISTS (
@@ -70,33 +82,44 @@ export const holdsHouseholdGate = sql`EXISTS (
     AND objsubid = 1 AND granted
 )`;
 
+/**
+ * One statement: refuse unless the gate is held or the transaction has taken
+ * no lock yet, then apply the limits and take the gate. A writer that held a
+ * row while waiting for the gate could deadlock a gated apply, so every path
+ * that takes the gate ahead of its row locks enters here.
+ */
+async function enterGate(q: Q, mode: WriteMode): Promise<void> {
+  const state = await q.execute<{ ordered: boolean }>(sql`
+    WITH state AS MATERIALIZED (SELECT ${holdsHouseholdGate} OR (
+      pg_current_xact_id_if_assigned() IS NULL AND NOT EXISTS (
+        SELECT 1 FROM pg_locks WHERE pid = pg_backend_pid() AND locktype = 'advisory'
+      )) AS ordered)
+    SELECT ordered, CASE WHEN ordered THEN ${writeLimits(mode)} || ${GATE_LOCK}::text END
+    FROM state`);
+  if (!state.rows[0]?.ordered)
+    throw new Error(
+      "The household write gate must be the transaction's first lock; open householdWrite at the mutation boundary",
+    );
+}
+
+/**
+ * Take the gate at the start of a writer that locks records ahead of its
+ * kernel writes, before any of its row locks.
+ */
+export async function enterHouseholdGate(
+  db: Database,
+  mode: WriteMode = "member",
+): Promise<void> {
+  await enterGate(repositoryQueries(db), mode);
+}
+
 /** Session limits for this transaction only, then the gate when the lane is money. */
 export async function enterWriteTransaction(
   q: Q,
   options: { lane: KernelLane | null; mode: WriteMode },
 ): Promise<void> {
-  const limits = TIMEOUTS[options.mode];
-  const state = await q.execute<{
-    ordered: boolean;
-  }>(sql`WITH gate AS MATERIALIZED (
-    SELECT ${holdsHouseholdGate} AS held
-  ) SELECT
-    (${options.lane !== "money"} OR (
-      pg_current_xact_id_if_assigned() IS NULL AND NOT EXISTS (
-        SELECT 1 FROM pg_locks WHERE pid = pg_backend_pid() AND locktype = 'advisory'
-      )
-    ) OR gate.held) AS ordered,
-    CASE WHEN gate.held THEN current_setting('lock_timeout') ELSE set_config('lock_timeout', ${String(limits.lock)}, true) END,
-    CASE WHEN gate.held THEN current_setting('statement_timeout') ELSE set_config('statement_timeout', ${String(limits.statement)}, true) END,
-    CASE WHEN gate.held THEN current_setting('idle_in_transaction_session_timeout') ELSE set_config('idle_in_transaction_session_timeout', ${String(limits.idle)}, true) END,
-    CASE WHEN gate.held THEN current_setting('transaction_timeout') ELSE set_config('transaction_timeout', ${String(limits.transaction)}, true) END
-    FROM gate`);
-  if (!state.rows[0]?.ordered)
-    throw new Error(
-      "The household write gate must be the transaction's first lock; open householdWrite at the mutation boundary",
-    );
-  if (options.lane === "money")
-    await q.execute(sql`SELECT ${takeHouseholdGate}`);
+  if (options.lane === "money") return enterGate(q, options.mode);
+  await q.execute(sql`SELECT ${writeLimits(options.mode)}`);
 }
 
 /**

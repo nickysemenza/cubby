@@ -22,7 +22,7 @@ import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sq
 import {
   getDb,
   databaseForTransaction,
-  withSnapshotWrite,
+  withHouseholdWrite,
   withTransaction,
 } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
@@ -2084,18 +2084,14 @@ describe("shared spending booking", () => {
     });
     expect(plan.status).toBe("ready");
     await expect(
-      withSnapshotWrite(
-        ctx.db,
-        async (tx) => {
-          await commitFinancialSpending(
-            databaseForTransaction(tx),
-            plan,
-            ctx.actor,
-          );
-          throw new Error("Synthetic outer transaction refused");
-        },
-        { isolationLevel: "serializable" },
-      ),
+      withHouseholdWrite(ctx.db, async (tx) => {
+        await commitFinancialSpending(
+          databaseForTransaction(tx),
+          plan,
+          ctx.actor,
+        );
+        throw new Error("Synthetic outer transaction refused");
+      }),
     ).rejects.toThrow("Synthetic outer transaction refused");
     expect(
       await getDb(ctx.db).query.vendor.findFirst({

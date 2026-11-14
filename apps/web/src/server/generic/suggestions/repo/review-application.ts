@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { advisoryLockKey, advisoryXactLock } from "~/server/db/advisory-lock";
-import { getDb, withSnapshotWriteDatabase } from "~/server/db/helpers";
+import { getDb } from "~/server/db/helpers";
 import { suggestionTable } from "~/server/db/schema";
 import type { EmailEvidenceWriteScope } from "~/server/domains/purchase-import/repo/email-evidence-write-scope";
 import { withEmailReviewBoundary } from "~/server/domains/purchase-import/repo/email-review-intent";
@@ -204,12 +204,7 @@ export function executeReviewApplication(
     return withEmailReviewBoundary(
       db,
       prediction,
-      (scopedDb) =>
-        "isolationLevel" in family && family.isolationLevel === "serializable"
-          ? withSnapshotWriteDatabase(scopedDb, apply, {
-              isolationLevel: "serializable",
-            })
-          : householdWrite(scopedDb, apply),
+      (scopedDb) => householdWrite(scopedDb, apply),
       emailScope,
     );
   };

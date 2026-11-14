@@ -2,7 +2,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type { RecordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 
 import type { Database } from "~/server/db";
-import { withSnapshotWrite } from "~/server/db/helpers";
+import { withHouseholdWrite } from "~/server/db/helpers";
 import { planSourceIntake } from "~/server/domains/transaction-import/policy/source-intake-plan";
 
 import {
@@ -17,16 +17,12 @@ export async function recordSourceTransactionRecords(
   actor: ActorContext,
 ) {
   const prepared = await prepareRows(input);
-  const result = await withSnapshotWrite(
-    db,
-    async (tx) => {
-      const loaded = await lockAndLoadSourceIntake(tx, input, prepared);
-      const plan = planSourceIntake(input, prepared, loaded);
-      if (input.dryRun) return plan.receipt;
-      return applySourceIntake(tx, actor, plan);
-    },
-    { isolationLevel: "serializable" },
-  );
+  const result = await withHouseholdWrite(db, async (tx) => {
+    const loaded = await lockAndLoadSourceIntake(tx, input, prepared);
+    const plan = planSourceIntake(input, prepared, loaded);
+    if (input.dryRun) return plan.receipt;
+    return applySourceIntake(tx, actor, plan);
+  });
   const { occurrenceCodes: _occurrenceCodes, ...receipt } = result;
   return receipt;
 }

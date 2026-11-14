@@ -37,8 +37,6 @@ export type Handler = {
   target?: z.ZodType;
   actions?: readonly Review["verdict"][];
   transactionBound?: boolean;
-  /** Snapshot-dependent domain planning owns the outer retry boundary. */
-  isolationLevel?: "serializable";
   /** Domain parent locks must precede the suggestion's projection row lock. */
   lockForApply?: (
     db: Database,

@@ -32,7 +32,7 @@ import {
   getDb,
   notDeleted,
   unwrapDb,
-  withSnapshotWrite,
+  withHouseholdWrite,
   databaseForTransaction,
 } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
@@ -1036,10 +1036,8 @@ export async function commitFinancialBooking(
   review: FinancialBookingPreview,
   actor: ActorContext,
 ) {
-  const [saved] = await withSnapshotWrite(
-    db,
-    (tx) => commitFinancialBookings(tx, [review], actor),
-    { isolationLevel: "serializable" },
+  const [saved] = await withHouseholdWrite(db, (tx) =>
+    commitFinancialBookings(tx, [review], actor),
   );
   return saved!;
 }
@@ -1401,17 +1399,13 @@ async function bookFinancialTransactions(
     return constraintViolation(
       "One booking batch names the same Purchase twice; book them separately.",
     );
-  return withSnapshotWrite(
-    db,
-    async (tx) => {
-      await lockFinancialTransactionSources(
-        tx,
-        raws.map((raw) => raw.transactionId),
-      );
-      return bookLockedFinancialTransactions(tx, raws, actor, loanEscrowIds);
-    },
-    { isolationLevel: "serializable" },
-  );
+  return withHouseholdWrite(db, async (tx) => {
+    await lockFinancialTransactionSources(
+      tx,
+      raws.map((raw) => raw.transactionId),
+    );
+    return bookLockedFinancialTransactions(tx, raws, actor, loanEscrowIds);
+  });
 }
 
 /**

@@ -11,7 +11,7 @@ import {
   parentTransactionDatabase,
   withTransaction,
   withTransactionDatabase,
-  withSnapshotWriteDatabase,
+  withHouseholdWriteDatabase,
   runAfterCommit,
   runBeforeCommit,
 } from "~/server/db/helpers/core";
@@ -108,10 +108,10 @@ export function repositoryTransactionDatabase<T>(
   return withTransactionDatabase(db, run, config);
 }
 
-/** DB-only Job publications that must revalidate one serializable snapshot. */
-export function repositorySnapshotWriteDatabase<T>(
+/** A member write under the household gate, taken before any row lock. */
+export function repositoryHouseholdWriteDatabase<T>(
   db: Database,
   run: (transactionDb: Database) => Promise<T>,
 ): Promise<T> {
-  return withSnapshotWriteDatabase(db, run, { isolationLevel: "serializable" });
+  return withHouseholdWriteDatabase(db, run);
 }

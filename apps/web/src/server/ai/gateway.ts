@@ -23,13 +23,11 @@ import {
   markTransmitted,
   refusedBeforeSending,
 } from "~/server/kernel/produce-ledger";
-import { WorkDeferredError } from "~/server/kernel/work-errors";
 
-import { AiWorkDeferredError } from "./cooperative-work";
 import {
   coordinatedGatewayRequest,
-  GatewayAdmissionWaitError,
-  gatewayProviderStop,
+  failedGatewaySend,
+  receivedGatewayResponse,
 } from "./gateway-egress-client";
 
 /**
@@ -133,43 +131,6 @@ async function admission<T>(admit: () => Promise<T>): Promise<T> {
 }
 
 /**
- * A classified funding or configuration stop is the provider refusing the
- * request without paid work; every other response may have been billed.
- */
-async function received(response: Response): Promise<Response> {
-  if (!response.ok) {
-    const body = await response
-      .clone()
-      .text()
-      .catch(() => "");
-    const stop = gatewayProviderStop(response.status, body);
-    if (stop) {
-      refusedBeforeSending(stop);
-      return response;
-    }
-  }
-  markTransmitted();
-  return response;
-}
-
-/** The egress object's shared-capacity wait refuses before the provider sees the request. */
-function egressAdmissionWait(error: unknown): WorkDeferredError | null {
-  const until =
-    error instanceof GatewayAdmissionWaitError
-      ? error.retryAt
-      : error instanceof AiWorkDeferredError
-        ? error.until
-        : null;
-  return until === null
-    ? null
-    : new WorkDeferredError(
-        "AI Gateway admission is waiting for shared capacity",
-        new Date(until),
-        "provider_capacity",
-      );
-}
-
-/**
  * The one AI Gateway transport: a `fetch` any provider SDK can be handed.
  *
  * Every request goes through the coordinated egress Durable Object, which
@@ -251,10 +212,7 @@ export function gatewayFetch(
             headers: request.headers,
             body: request.init?.body,
           })
-          .then(received, (error: unknown) => {
-            markTransmitted();
-            throw error;
-          });
+          .then(receivedGatewayResponse, failedGatewaySend);
       };
     },
     // Every runtime binds the egress object; it owns admission and holds.
@@ -264,21 +222,12 @@ export function gatewayFetch(
       );
       if (!egress)
         throw new Error("AI Gateway requires the AI_GATEWAY_EGRESS binding");
-      let response: Response;
-      try {
-        response = await coordinatedGatewayRequest(
-          egress,
-          provider,
-          request,
-          controls,
-        );
-      } catch (error) {
-        const wait = egressAdmissionWait(error);
-        if (wait) throw refusedBeforeSending(error, wait);
-        markTransmitted();
-        throw error;
-      }
-      return received(response);
+      return coordinatedGatewayRequest(
+        egress,
+        provider,
+        request,
+        controls,
+      ).then(receivedGatewayResponse, failedGatewaySend);
     },
   });
 }

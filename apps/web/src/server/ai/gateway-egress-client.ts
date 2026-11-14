@@ -12,10 +12,17 @@ import { sleep } from "@cubby/shared/retry";
 
 import { findErrorCause } from "~/lib/error-diagnostics";
 import type { UnparsedError } from "~/lib/error-utils";
+import {
+  markTransmitted,
+  refusedBeforeSending,
+} from "~/server/kernel/produce-ledger";
 import { WorkDeferredError } from "~/server/kernel/work-errors";
 
 import { fundingResumeAt } from "./budget-window";
-import { deferCooperativeAiWork } from "./cooperative-work";
+import {
+  AiWorkDeferredError,
+  deferCooperativeAiWork,
+} from "./cooperative-work";
 import type { AiGatewayEgressRpc } from "./gateway-egress-contract";
 
 export class GatewayAdmissionWaitError extends Error {
@@ -107,4 +114,53 @@ export async function coordinatedGatewayRequest(
     if (retryAt >= deadline) throw new GatewayAdmissionWaitError(retryAt);
     await sleep(delay, request.signal);
   }
+}
+
+/**
+ * Record a provider response in the produce ledger (ADR 0029 section 8). A
+ * classified funding or configuration stop is the provider refusing the
+ * request without paid work; every other response may have been billed.
+ */
+export async function receivedGatewayResponse(
+  response: Response,
+): Promise<Response> {
+  if (!response.ok) {
+    const body = await response
+      .clone()
+      .text()
+      .catch(() => "");
+    const stop = gatewayProviderStop(response.status, body);
+    if (stop) {
+      refusedBeforeSending(stop);
+      return response;
+    }
+  }
+  markTransmitted();
+  return response;
+}
+
+/**
+ * Record a failed send in the produce ledger and rethrow it. The egress
+ * object's shared-capacity wait refuses before the provider sees the request;
+ * any other failure may have left.
+ */
+export function failedGatewaySend(error: UnparsedError): never {
+  const until =
+    error instanceof GatewayAdmissionWaitError
+      ? error.retryAt
+      : error instanceof AiWorkDeferredError
+        ? error.until
+        : null;
+  if (until === null) {
+    markTransmitted();
+    throw error;
+  }
+  throw refusedBeforeSending(
+    error,
+    new WorkDeferredError(
+      "AI Gateway admission is waiting for shared capacity",
+      new Date(until),
+      "provider_capacity",
+    ),
+  );
 }

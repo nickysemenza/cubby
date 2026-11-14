@@ -105,8 +105,8 @@ export async function writeRunningAttemptProgress(
     return written.length > 0;
   };
   return withTransactionDatabase(db, async (tx) => {
-    await assertWorkflowEffect(tx);
-    // Revisions before the Run row, the order a kernel apply takes.
+    // The gate, then the Run row, then the Pass row: the order a Run cancel
+    // and a lifecycle transition take them.
     await (await import("~/server/kernel/api")).lockWrites(tx, checkpoint);
     // Under READ COMMITTED an UPDATE that waits on the Run row rechecks only that
     // row, not its NOT EXISTS subquery. Taking the lock first gives the guarded
@@ -116,6 +116,7 @@ export async function writeRunningAttemptProgress(
       .from(run)
       .where(eq(run.id, runId))
       .for("no key update");
+    await assertWorkflowEffect(tx);
     return write(tx);
   });
 }

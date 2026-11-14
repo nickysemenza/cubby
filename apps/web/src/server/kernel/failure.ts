@@ -4,7 +4,6 @@ import type { UnparsedError } from "~/lib/error-utils";
 import {
   findPgError,
   isTransientConnectionError,
-  SnapshotWriteConflictError,
 } from "~/server/errors/db-errors";
 
 import {
@@ -64,14 +63,12 @@ export function classifyWorkFailure(
     (publication && isTargetDataError(error))
   )
     return { kind: "isolated" };
-  // A fresh durable attempt can recover after bounded whole-transaction replay.
   // Classification never replays a committed transaction or its effects here.
   // A Hyperdrive pool-slot timeout (58000), a lock wait (55P03), or a dropped
   // connection (with or without a SQLSTATE) is capacity, not the work's fault:
   // it backs off without spending attempts. Mail discovery also defers 55P03.
   if (
     chain.some((cause) => cause instanceof WorkRetryableError) ||
-    chain.some((cause) => cause instanceof SnapshotWriteConflictError) ||
     chain.some((cause) => findPgError(cause)?.code === "55P03") ||
     isTransientConnectionError(error)
   )

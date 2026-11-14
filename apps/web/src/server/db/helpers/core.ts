@@ -1,6 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import { sleep } from "@cubby/shared/retry";
 import { createLogger } from "@cubby/worker-tracing";
 import type { PgTransactionConfig } from "drizzle-orm/pg-core";
 
@@ -11,28 +10,12 @@ import {
   createDatabase,
   resolveDatabaseRuntime,
 } from "~/server/db/database-runtime";
-import { databaseRequestId } from "~/server/db/db-observability";
 import { notifyDatabaseChanges } from "~/server/db/freshness/client";
 import type { RepositoryQueryTransaction } from "~/server/db/repository-access.boundary";
-import {
-  isSerializationFailure,
-  SnapshotWriteConflictError,
-} from "~/server/errors/db-errors";
-import {
-  databaseTraceCaller,
-  TraceNames,
-  withTrace,
-} from "~/server/observability/tracing";
+import { findPgError } from "~/server/errors/db-errors";
+import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 const transactionLog = createLogger("db-transaction");
-type TransactionAttempt = {
-  boundaryId: string;
-  rootBoundaryId: string | undefined;
-  rootAttempt: number | undefined;
-  isolationLevel: PgTransactionConfig["isolationLevel"] | "default" | "unknown";
-  caller: string | undefined;
-};
-const transactionAttempts = new WeakMap<object, TransactionAttempt>();
 
 /** Work that must not happen unless the enclosing transaction commits. */
 export type AfterCommitEffect = (committedDb: Database) => Promise<void>;
@@ -327,158 +310,80 @@ export const parentTransactionDatabase = (
  * Transaction wrapper for interactive transactions (sequential operations).
  * Use this in repo functions when you need multiple operations to be atomic.
  */
-const withTransactionAttempts = async <T>(
-  db: Database,
-  fn: (tx: DrizzleTransaction) => Promise<T>,
-  config: PgTransactionConfig | undefined,
-  attempts: number,
-): Promise<T> => {
-  const parentBefore = beforeCommitQueues.get(db);
-  const callerOwned = isTransaction(getDb(db));
-  const parentAttempt = transactionAttempts.get(getDb(db));
-  const limit = callerOwned ? 1 : attempts;
-  const boundaryId = crypto.randomUUID();
-  const boundaryStarted = performance.now();
-  for (let attempt = 1; ; attempt++) {
-    const diagnostic: TransactionAttempt = {
-      boundaryId,
-      rootBoundaryId:
-        parentAttempt?.rootBoundaryId ?? (callerOwned ? undefined : boundaryId),
-      rootAttempt:
-        parentAttempt?.rootAttempt ?? (callerOwned ? undefined : attempt),
-      isolationLevel:
-        parentAttempt?.isolationLevel ??
-        (callerOwned ? "unknown" : (config?.isolationLevel ?? "default")),
-      caller: parentAttempt?.caller ?? databaseTraceCaller(),
-    };
-    const started = performance.now();
-    const startedAt = Date.now();
-    let phase = "body";
-    let beforeCommitKey: string | undefined;
-    const fields = () => ({
-      ...diagnostic,
-      parentBoundaryId: parentAttempt?.boundaryId,
-      requestId: databaseRequestId(),
-      callerOwned,
-      attempt,
-      limit,
-      phase,
-      beforeCommitKey,
-      startedAt,
-      durationMs: Math.round(performance.now() - started),
-      boundaryDurationMs: Math.round(performance.now() - boundaryStarted),
-    });
-    const pending: AfterCommitEntry[] = [];
-    const changes: DatabaseChanges = {};
-    const before: BeforeCommitEntry[] = [];
-    let result: T;
-    try {
-      result = await withTrace(TraceNames.db("transaction"), async () => {
-        return await getDb(db).transaction(async (tx) => {
-          transactionAttempts.set(tx, diagnostic);
-          afterCommitQueues.set(tx, pending);
-          committedChanges.set(tx, changes);
-          beforeCommitQueues.set(tx, before);
-          transactionParents.set(tx, db);
-          try {
-            const value = await fn(tx);
-            if (!parentBefore) {
-              // Capture may wait for another writer. Recheck live ownership
-              // after that work, then complete Jobs in the same transaction.
-              for (const commitPhase of [
-                "validation",
-                "fence",
-                "capture",
-                "publication",
-              ] as const) {
-                phase = `before-commit:${commitPhase}`;
-                for (const entry of before.filter(
-                  (entry) => entry.phase === commitPhase,
-                )) {
-                  beforeCommitKey = entry.key;
-                  await entry.effect(tx);
-                }
-              }
-            }
-            phase = callerOwned ? "savepoint-release" : "commit";
-            beforeCommitKey = undefined;
-            return value;
-          } finally {
-            transactionParents.delete(tx);
-            transactionAttempts.delete(tx);
-          }
-        }, config);
-      });
-    } catch (error) {
-      if (!isSerializationFailure(error)) throw error;
-      const retry = attempt < limit;
-      transactionLog.warn("serialization attempt aborted", {
-        ...fields(),
-        sqlState: "40001",
-        retry,
-        retryDelayMs: retry ? 200 * attempt : 0,
-      });
-      if (!retry) {
-        if (!callerOwned && attempts > 1)
-          throw new SnapshotWriteConflictError(error);
-        throw error;
-      }
-      // Immediate retries can collide with the same background publication page.
-      await sleep(200 * attempt);
-      continue;
-    }
-    if (attempt > 1)
-      transactionLog.info("serialization recovery committed", fields());
-    // Commit succeeded: effect failures must never enter the replay catch.
-    if (parentBefore)
-      for (const entry of before) enrollBeforeCommit(parentBefore, entry);
-    const parent = afterCommitQueues.get(db);
-    const parentChanges = committedChanges.get(db);
-    if (parentChanges) {
-      mergeDatabaseChanges(parentChanges, changes);
-    } else if (Object.keys(changes).length) {
-      await notifyDatabaseChanges(changes);
-    }
-    if (parent) for (const entry of pending) enrollAfterCommit(parent, entry);
-    else await flushAfterCommit(db, pending);
-    return result;
-  }
-};
-
-export const withTransaction = <T>(
+export const withTransaction = async <T>(
   db: Database,
   fn: (tx: DrizzleTransaction) => Promise<T>,
   config?: PgTransactionConfig,
-): Promise<T> => withTransactionAttempts(db, fn, config, 1);
-
-type SnapshotWriteConfig = PgTransactionConfig & {
-  isolationLevel: "serializable" | "repeatable read";
-  accessMode?: "read write";
+): Promise<T> => {
+  const parentBefore = beforeCommitQueues.get(db);
+  const pending: AfterCommitEntry[] = [];
+  const changes: DatabaseChanges = {};
+  const before: BeforeCommitEntry[] = [];
+  const result = await withTrace(TraceNames.db("transaction"), async () => {
+    return await getDb(db).transaction(async (tx) => {
+      afterCommitQueues.set(tx, pending);
+      committedChanges.set(tx, changes);
+      beforeCommitQueues.set(tx, before);
+      transactionParents.set(tx, db);
+      try {
+        const value = await fn(tx);
+        if (!parentBefore) {
+          // Capture may wait for another writer. Recheck live ownership
+          // after that work, then complete Jobs in the same transaction.
+          for (const commitPhase of [
+            "validation",
+            "fence",
+            "capture",
+            "publication",
+          ] as const)
+            for (const entry of before.filter(
+              (entry) => entry.phase === commitPhase,
+            ))
+              await entry.effect(tx);
+        }
+        return value;
+      } finally {
+        transactionParents.delete(tx);
+      }
+    }, config);
+  });
+  // Commit succeeded: effect failures must never roll the business result back.
+  if (parentBefore)
+    for (const entry of before) enrollBeforeCommit(parentBefore, entry);
+  const parent = afterCommitQueues.get(db);
+  const parentChanges = committedChanges.get(db);
+  if (parentChanges) {
+    mergeDatabaseChanges(parentChanges, changes);
+  } else if (Object.keys(changes).length) {
+    await notifyDatabaseChanges(changes);
+  }
+  if (parent) for (const entry of pending) enrollAfterCommit(parent, entry);
+  else await flushAfterCommit(db, pending);
+  return result;
 };
 
 /**
- * Opt-in recovery for DB-only snapshot writes. Rebuild all callback-local
- * state and revalidate the original review on each attempt; effects and
- * publication buffers belong to that attempt's transaction. Caller-owned
- * boundaries execute once, and committed consumer failures never replay.
+ * `householdWrite` for a callback that takes the native transaction: read
+ * committed, with the household write gate as its first statement, so every
+ * read after it sees the writers the gate serialized before it.
  */
-export const withSnapshotWrite = <T>(
+export const withHouseholdWrite = async <T>(
   db: Database,
   fn: (tx: DrizzleTransaction) => Promise<T>,
-  config: SnapshotWriteConfig,
-): Promise<T> =>
-  withTransactionAttempts(
-    db,
-    async (tx) => {
-      // Snapshot mutations can merge or remove references into money-owned rows.
-      // Take the household gate before the callback can acquire any row lock.
-      const { enterWriteTransaction } = await import("~/server/kernel/gate");
+): Promise<T> => {
+  const { enterWriteTransaction, HouseholdWriteBusyError } =
+    await import("~/server/kernel/gate");
+  try {
+    return await withTransaction(db, async (tx) => {
       await enterWriteTransaction(tx, { lane: "money", mode: "member" });
       return fn(tx);
-    },
-    config,
-    3,
-  );
+    });
+  } catch (error) {
+    if (findPgError(error)?.code === "55P03")
+      throw new HouseholdWriteBusyError(error);
+    throw error;
+  }
+};
 
 /**
  * Composable transaction: **join** the caller's transaction when one is already
@@ -527,6 +432,12 @@ export const databaseForTransaction = (tx: DrizzleTransaction): Database => {
   return database;
 };
 
+/** {@link withHouseholdWrite} whose callback receives a transaction-backed `Database`. */
+export const withHouseholdWriteDatabase = <T>(
+  db: Database,
+  fn: (transactionDb: Database) => Promise<T>,
+): Promise<T> => withHouseholdWrite(db, (tx) => fn(databaseForTransaction(tx)));
+
 /** {@link withTransaction} whose callback receives a transaction-backed `Database`. */
 export const withTransactionDatabase = async <T>(
   db: Database,
@@ -534,10 +445,3 @@ export const withTransactionDatabase = async <T>(
   config?: PgTransactionConfig,
 ): Promise<T> =>
   withTransaction(db, (tx) => fn(databaseForTransaction(tx)), config);
-
-export const withSnapshotWriteDatabase = <T>(
-  db: Database,
-  fn: (transactionDb: Database) => Promise<T>,
-  config: SnapshotWriteConfig,
-): Promise<T> =>
-  withSnapshotWrite(db, (tx) => fn(databaseForTransaction(tx)), config);

@@ -4,12 +4,12 @@ import type { Database } from "~/server/db";
 import { kernelPass } from "~/server/db/kernel-schema";
 import {
   repositoryQueries,
-  repositoryTransactionDatabase,
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
 
 import { fenceClaim, renewClaim, releaseClaim } from "./claim";
 import { withWorkContext } from "./context";
+import { fencedPublication } from "./pass";
 
 /** Synthetic Pass rows exercise real execution-tuple contention and fences. */
 export async function seedPass(
@@ -74,10 +74,7 @@ export async function claimPassFixture(
     release: () => releaseClaim(repositoryQueries(db), target, token),
     fence: (tx: Database) => fenceClaim(repositoryQueries(tx), target, token),
     fenced: <T>(work: (tx: Database) => Promise<T>) =>
-      repositoryTransactionDatabase(db, async (tx) => {
-        await fenceClaim(repositoryQueries(tx), target, token);
-        return work(tx);
-      }),
+      fencedPublication(db, target, token, work),
     owned: <T>(work: () => Promise<T>) => withWorkContext(work),
     cancel: () =>
       repositoryQueries(db)

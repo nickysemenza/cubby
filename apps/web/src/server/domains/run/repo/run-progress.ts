@@ -111,13 +111,14 @@ export async function recordRunProgress(
   const id = runEntityId.parse(input.runId);
   return withTransactionDatabase(db, async (database) => {
     const owner = currentRunExecution();
-    await assertWorkflowEffect(database);
     const tx = getDb(database);
+    // The Run row before the Pass row, the order a Run cancel takes them.
     const [current] = await tx
       .select()
       .from(run)
       .where(eq(run.id, id))
       .for("no key update");
+    await assertWorkflowEffect(database);
     if (!current) throw new Error("Progress Run does not exist");
     const eventIds = current.progressEventIds ?? [];
     if (eventIds.includes(input.eventId)) return { recorded: false };
