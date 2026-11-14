@@ -19,6 +19,7 @@ import {
   resolveOrThrow,
   resolveShortcodes,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { householdWrite } from "~/server/kernel/gate";
 import { WorkEvidenceObsoleteError } from "~/server/kernel/work-errors";
 import {
   canonicalJson,
@@ -107,7 +108,8 @@ export async function publishPreparedEntityConnections(
   db: Database,
   prepared: readonly PreparedEntityConnection[],
 ): Promise<ConnectionProposal[]> {
-  return withTransactionDatabase(db, async (tx) => {
+  // The gate before the rows the basis capture locks; each append takes it.
+  return householdWrite(db, async (tx) => {
     const { append, evidenceRow, reconcileNow } =
       await import("~/server/kernel/api");
     const scopes = [];

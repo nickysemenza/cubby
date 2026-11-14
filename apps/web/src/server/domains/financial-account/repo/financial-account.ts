@@ -37,6 +37,7 @@ import {
   buildPartialUpdateValues,
   notDeleted,
   unwrapDb,
+  withHouseholdWrite,
   withTransaction,
 } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
@@ -534,7 +535,8 @@ export const updateFinancialAccount = defineMutationWriter({
     actor: ActorContext,
   ) => {
     const accountId = await resolveOrThrow(db, "financialAccount", id);
-    const output = await withTransaction(db, async (tx) => {
+    // The gate before the account row: the entity writers below take it.
+    const output = await withHouseholdWrite(db, async (tx) => {
       const [before] = await tx
         .select()
         .from(financialAccount)
