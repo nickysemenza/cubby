@@ -813,6 +813,15 @@ describe("evidence-facts kernel", () => {
       columns: ["name"],
       discovers: [{ kind: consumer.scope, key: seller.id }],
     });
+    expect(
+      await kernel.machinery(ctx.db, ctx.actor, {
+        entity: "vendor",
+        id: seller.id,
+      }),
+    ).toMatchObject({ stage: "waiting" });
+    expect(
+      (await kernel.listRows(ctx.db, capability, [seller.id])).get(seller.id),
+    ).toMatchObject({ stage: "waiting" });
     await settle(kernel);
     const read = await kernel.machinery(ctx.db, ctx.actor, {
       entity: "vendor",
