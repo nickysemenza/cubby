@@ -447,6 +447,7 @@ export interface Pure {
     absorbed: string,
     basis: "proof" | "decision",
   ): void;
+  /** An own-scope follow-up is honored only after a nonempty difference is published. */
   emit(scope: ScopeRef): void;
   /** Accepted inputs disagree without a safe automatic replacement. Applies no records. */
   disagree(input: string): void;

@@ -430,6 +430,7 @@ describe("evidence-facts kernel", () => {
     let disagreement: string | null = null;
     const { kernel } = kernelWith({
       linkedDecision: true,
+      emitSelf: true,
       disagreement: () => disagreement,
     });
     const [fact] = await kernel.append(ctx.db, [charge("ORD-BASELINE", 1250)]);
@@ -1054,7 +1055,7 @@ describe("evidence-facts kernel", () => {
   });
 
   it("converges two pieces of evidence to one record in either arrival order", async () => {
-    const { kernel } = kernelWith();
+    const { kernel } = kernelWith({ emitSelf: true });
     await kernel.append(ctx.db, [charge("ORD-A", 1250)]);
     await settle(kernel);
     await kernel.append(ctx.db, [receipt("ORD-A", "Synthetic Grocer")]);

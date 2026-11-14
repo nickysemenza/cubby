@@ -311,10 +311,19 @@ saw. Because both sides lock the same row, either the apply sees the committed
 mutation and leaves the scope dirty, or the mutation sees the committed
 `ScopeDep` row and raises `ScopeDirty.seq`.
 
-`ScopeDirty` can never hold more rows than there are scopes. A reconciler's
-output never dirties its own scope, including writes a delete policy, repoint
-or merge makes inside the apply; a scope dirtied again by another writer
-during its run is released still dirty.
+`ScopeDirty` can never hold more rows than there are scopes. Implicit output
+invalidations never dirty their applying scopes, including writes a delete
+policy, repoint or merge makes inside the apply. An explicit `emit` may request
+an own-scope follow-up after a nonempty difference is published; a no-op or
+fully held proposal cannot enqueue itself. This advances `seq` before claim
+settlement, retaining its queue age and releasing it for another fenced turn.
+A scope dirtied again by another writer during its run is also released still
+dirty.
+
+The fields reconciler requests that follow-up when a written column is a
+declared basis of another field. The next turn prepares questions from the
+newly stored basis, so applying a category can admit its dependent ingredient
+question without an unrelated write or a manual refresh.
 
 Dirtying keeps an already-due scope's earlier `availableAt`, so repeated input
 changes cannot move it to the back of the queue. A new input makes a delayed

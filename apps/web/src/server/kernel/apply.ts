@@ -67,7 +67,7 @@ import type {
   Reconciler,
   ScopeRef,
 } from "./define";
-import { difference, type Difference } from "./diff";
+import { difference, isEmptyDifference, type Difference } from "./diff";
 import { insertFactKeys, lockKeyRevs, markDirty } from "./dirty";
 import { recordDrifts } from "./drift";
 import {
@@ -1097,7 +1097,6 @@ async function applyBatch(
       excludes: plans.map((plan) => plan.computed.scope),
       reason: `output:${plans[0]!.computed.scope.kind}`,
     });
-    if (downstream) await wakeAfterCommit(tx);
     const dependencies = plans.map((plan) => ({
       kind: plan.computed.scope.kind,
       key: plan.computed.scope.key,
@@ -1126,6 +1125,31 @@ async function applyBatch(
       await q.execute(sql`
       DELETE FROM "Drift" d USING unnest(${orderedTextArrayParam(advanced.map((plan) => plan.computed.scope.kind))}, ${orderedTextArrayParam(advanced.map((plan) => plan.computed.scope.key))}) AS wanted(kind, key)
       WHERE d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key`);
+    const followups = plans
+      .filter(
+        (plan) =>
+          !isEmptyDifference(plan.diff) &&
+          plan.computed.desired!.emits.some(
+            (scope) => scopeId(scope) === scopeId(plan.computed.scope),
+          ),
+      )
+      .map((plan) => plan.computed.scope);
+    if (followups.length) {
+      // Explicit follow-ups follow a published change, not implicit output
+      // invalidation. A no-op or fully held proposal cannot repeat itself.
+      await withKernelApply(
+        null,
+        () =>
+          markDirty(q, registry, {
+            keys: [],
+            discovers: followups,
+            reason: "follow-up",
+          }),
+        undefined,
+        [],
+      );
+    }
+    if (downstream || followups.length) await wakeAfterCommit(tx);
     // A scope dirtied again during its run stays dirty and is released for
     // the next claim; holding its claim would stall it for the whole lease.
     await q.execute(sql`
