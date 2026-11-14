@@ -1404,7 +1404,11 @@ export async function applyComputed(
       await releaseConflicts(repositoryQueries(db), claimed);
       return computed.map((item) => outcome(item.scope, "conflict"));
     }
-    if (computed.length > 1) {
+    const failure = classifyWorkFailure(error, { publication: true });
+    if (
+      computed.length > 1 &&
+      (failure.kind === "isolated" || failure.kind === "failed")
+    ) {
       const isolated: Outcome[] = [];
       for (let i = 0; i < computed.length; i++)
         isolated.push(
@@ -1419,7 +1423,6 @@ export async function applyComputed(
         );
       return isolated;
     }
-    const failure = classifyWorkFailure(error, { publication: true });
     const surfaced =
       failure.kind === "failed" || failure.kind === "isolated"
         ? new WorkTargetError(rawError(error), { cause: error })
