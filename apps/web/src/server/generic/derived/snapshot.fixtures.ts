@@ -24,6 +24,10 @@ export async function runSnapshotPage(
   const kernel = createKernel([
     defineModule({ name: "snapshot-fixture", passes: [pass] }),
   ]);
-  await runOnePass(db, kernel.registry);
-  return rebuildActive(db);
+  const ran = await runOnePass(db, kernel.registry);
+  const active = await rebuildActive(db);
+  // Another runtime holds the claim: wait for its page instead of spending
+  // the caller's page budget on misses.
+  if (!ran && active) await new Promise((resolve) => setTimeout(resolve, 50));
+  return active;
 }
