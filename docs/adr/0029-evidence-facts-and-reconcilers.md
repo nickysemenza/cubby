@@ -210,7 +210,10 @@ machinery(db: Db, viewer: Actor, ref: EntityRef, o?: { field?: string }): Promis
 ```
 
 `load` takes every key of a batch and issues a fixed number of statements for
-the batch. Apply locks the union of input revisions and dirty claims once,
+the batch. Reads issued in the same tick coalesce into one statement per
+table, and a row read once serves the rest of the batch. `load` may read
+Answers through `reads.answers`, so a scope whose inputs depend on an Answer
+reconciles in its first round. Apply locks the union of input revisions and dirty claims once,
 then writes each table as a set. Identity reservations, RecordKeys, bindings,
 audits, dependencies and cached scope outcomes are batch writes. Audit rows
 retain their individual scope provenance. A batch is one coherent input
@@ -221,6 +224,7 @@ returns no rows, and `Reads` reaches only the sources the reconciler declared.
 `c.answer(kind, input)` returns the Answer or `Missing`, and `Missing` files an
 Ask; `c.decision(channel, subject, field)` returns the decision in force;
 `c.record(entity, naturalKey, values)` declares a desired record;
+`c.stored(target, naturalKey)` returns the stored row of a record the scope owns;
 `c.bind(fact, event)` binds evidence to an event; `c.emit(scopeRef)` starts a
 downstream scope; `c.gap.evidence`, `c.gap.answer`, `c.gap.decision` and
 `c.gap.time` declare what is missing and who supplies it.
@@ -235,12 +239,13 @@ coalescer supplies creation values only; member edits remain authored.
 the retained id; for a new natural key it derives a UUID v8 from the scope
 kind, scope key, table and natural key using SHA-256. Contents never enter
 that identity. Other records declared in the same reconcile use that UUID as
-a foreign key. Apply preserves it, orders inserts by foreign-key dependency,
-and commits the reserved entity shortcode inside its transaction. `c.identity`
+a foreign key. Apply preserves it, orders inserts by foreign-key dependency
+(one statement per table, in waves within a table that links to its own new
+rows, and in row waves when only the tables form a cycle), and commits the reserved entity shortcode inside its transaction. `c.identity`
 returns the same id and public shortcode before a record is declared; shortcode
 collisions re-run the scope with an unreserved code while retaining its id. A conflicted or failed
 apply leaves no identity, shortcode or `RecordKey` reservation. A cycle between
-new rows in different tables is refused before any record is inserted.
+new rows is refused before any record is inserted.
 
 ### 4. Kernel tables
 
@@ -282,7 +287,8 @@ key.
 Registration and mutation serialize per key through `KeyRev(key, rev)`. An
 input mutation raises `rev` for each of its keys with an upsert before it reads
 `ScopeDep`. A load records the `rev` it saw for every key it read, 0 for a key
-with no row. An apply takes the same rows with the same upsert form, which
+with no row, and reads it in the same statement as the rows, so both come from
+one snapshot. An apply takes the same rows with the same upsert form, which
 creates a row for an absent key, and compares each `rev` with the one its load
 saw. Because both sides lock the same row, either the apply sees the committed
 mutation and leaves the scope dirty, or the mutation sees the committed
@@ -471,7 +477,9 @@ and MCP resolve through the same function.
 
 A delete is a `reject` decision. It runs the entity's existing transactional
 delete policy and search cleanup, and marks the `RecordKey` rejected so the
-record is not created again when its evidence returns. A record with decisions
+record is not created again when its evidence returns. Rejecting one row of
+evidence removes its record only when no other evidence, merge or allocation
+holds the record. A record with decisions
 and no remaining evidence stays, with an `unsupported` gap.
 
 Reconcilers resolve retained decision and manual-entry references through
@@ -601,9 +609,9 @@ records gets version 0 and an empty baseline.
 An input-triggered reconcile also protects accepted baselines. An automatic
 difference records a Drift proposal, computed as approval computes it, and
 applies no record changes or new asks. Decision changes still apply above the
-baseline and are not part of the proposal: a field assignment with the current
+baseline, also while the scope has a gap, and are not part of the proposal: a field assignment with the current
 Decision as its provenance, a new record whose supplied values all cite current
-Decisions, and a decision-basis binding with the decision binding it replaces.
+Decisions or a member's explicit accept or book Decision for that record, and a decision-basis binding with the decision binding it replaces.
 They do not authorize other automatic differences. Creation authority applies
 to those immutable decision values; it does not authorize later changes
 derived from new observations.
