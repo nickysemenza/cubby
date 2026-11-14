@@ -21,7 +21,6 @@ import {
   type InventoryRawOwnership,
 } from "~/server/domains/inventory/repo/slot";
 import { createAppError } from "~/server/errors/app-error";
-import { isSerializationFailure } from "~/server/errors/db-errors";
 import {
   type AuditEntryInput,
   computeChanges,
@@ -42,23 +41,11 @@ import {
 const withOwnershipConfirmation = async <Result>(
   db: Database,
   confirm: (tx: DrizzleTransaction) => Promise<Result>,
-): Promise<Result> => {
-  try {
-    return await withTransaction(db, async (tx) => {
-      await enterWriteTransaction(tx, { lane: "money", mode: "member" });
-      return confirm(tx);
-    });
-  } catch (error) {
-    if (isSerializationFailure(error)) {
-      throw createAppError(
-        "INVENTORY_STALE",
-        "Ownership evidence changed during confirmation. Refresh and review it again.",
-        error,
-      );
-    }
-    throw error;
-  }
-};
+): Promise<Result> =>
+  withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
+    return confirm(tx);
+  });
 
 const resolveRawOwnership = async (
   tx: DrizzleTransaction,

@@ -111,6 +111,7 @@ import {
   transitionSuggestionState,
   transitionSuggestionStates,
 } from "~/server/generic/suggestions/repo/suggestion-state";
+import { enterHouseholdGate } from "~/server/kernel/gate";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { assertWorkflowEffect } from "~/server/workflows/runs/execution";
 
@@ -1030,6 +1031,9 @@ async function applyTransferPair(
   const actor = context.actorContext;
   return withTransaction(db, async (tx) => {
     const txDb = databaseForTransaction(tx);
+    // The gate before the Pass row and the legs: this apply writes a
+    // LedgerTransfer through writers that take the gate.
+    await enterHouseholdGate(txDb);
     await assertWorkflowEffect(txDb);
     const legKeys = input.key.split("~");
     // Leg locks serialize every apply naming a leg, so a racing or replayed
@@ -1174,6 +1178,7 @@ async function applyTransferPairSuggestion(
   state: SuggestionStateRow,
 ) {
   return withTransactionDatabase(db, async (tx) => {
+    await enterHouseholdGate(tx);
     await assertWorkflowEffect(tx);
     const [prediction] = await getDb(tx)
       .select({

@@ -46,6 +46,7 @@ import {
   suggestionRecordId,
   transitionSuggestionState,
 } from "~/server/generic/suggestions/repo/suggestion-state";
+import { enterHouseholdGate } from "~/server/kernel/gate";
 import { WorkEvidenceObsoleteError } from "~/server/kernel/work-errors";
 
 import { productIdentityEvidenceFences } from "./product-identity-fence";
@@ -401,6 +402,8 @@ export async function publishProductPair(
   input: ProductPairPublicationInput,
 ): Promise<ProductMatchCandidateRow & { created: boolean }> {
   return withTransactionDatabase(db, async (tx) => {
+    // The gate before the Products this pair locks; publication takes it next.
+    await enterHouseholdGate(tx);
     const pair = await prepareProductIdentityPair(tx, input.productIds);
     if (!pair)
       throw new WorkEvidenceObsoleteError(

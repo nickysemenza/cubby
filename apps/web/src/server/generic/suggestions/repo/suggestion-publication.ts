@@ -19,6 +19,7 @@ import { suggestionTable } from "~/server/db/schema";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import type { SuggestionPublication } from "~/server/generic/suggestions/repo/suggestion";
 import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
+import { enterHouseholdGate } from "~/server/kernel/gate";
 import {
   assertWorkflowEffect,
   isWorkflowInterrupted,
@@ -671,6 +672,10 @@ export async function publishSuggestionSet<
 > {
   if (!candidates.length) return [];
   return withTransactionDatabase(db, async (tx) => {
+    // The gate before the Pass row: publication writes evidence and decisions
+    // that take the gate, and holding the Pass row while waiting deadlocks a
+    // Run cancel or a member review.
+    await enterHouseholdGate(tx);
     await assertWorkflowEffect(tx);
     const outcomes = await publishLocked(
       tx,
@@ -861,6 +866,7 @@ export async function publishSuggestionBatches<
       )[] = [];
       if (!admitted.length) return outcomes;
       const published = await withTransactionDatabase(db, async (tx) => {
+        await enterHouseholdGate(tx);
         await assertWorkflowEffect(tx);
         return publishLocked(
           tx,

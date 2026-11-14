@@ -139,11 +139,6 @@ export function isUniqueViolation(
   return constraint ? pg.constraint === constraint : true;
 }
 
-/** True when Postgres aborted a SERIALIZABLE transaction as a stale snapshot. */
-export function isSerializationFailure(error: UnparsedDatabaseError): boolean {
-  return findPgError(error)?.code === "40001";
-}
-
 /** True when Postgres cancelled the statement (`statement_timeout`). */
 export function isStatementTimeout(error: UnparsedDatabaseError): boolean {
   return findPgError(error)?.code === "57014";
