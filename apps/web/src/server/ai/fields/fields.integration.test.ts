@@ -15,7 +15,7 @@ import { z } from "zod";
 
 import { FIELD_SUGGESTION_FEATURE } from "~/server/ai/policy/features";
 import { getDb } from "~/server/db/helpers";
-import { project } from "~/server/db/schema";
+import { product, project } from "~/server/db/schema";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { executeEntity } from "~/server/entity-kernel";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
@@ -25,10 +25,16 @@ import {
   defineModule,
   startPass,
 } from "~/server/kernel/api";
+import { runQueuedAsks } from "~/server/kernel/ask";
 import { readPasses } from "~/server/kernel/pass.fixtures";
+import {
+  createIngredientFixture,
+  createProductIdentityFixture,
+  makeProductInput,
+} from "~/server/testing/repo.fixtures";
 import { fieldsReconcilePass } from "~/server/workflows/fields-reconcile-pass";
 
-import { fieldAskInput } from "./ask";
+import { fieldAskInput, type FieldAskInput } from "./ask";
 import { insertFieldsFixture } from "./fields.fixtures";
 import { fieldsKernelModule } from "./module";
 import { fieldsCapabilities, fieldsReconciler } from "./reconciler";
@@ -41,7 +47,12 @@ describe("fields scope", () => {
   const ctx = withTestDb();
 
   /** A test kernel whose field Ask answers from `answers` by field. */
-  const kernelAnswering = (answers: Record<string, FieldAnswer>) => {
+  const kernelAnswering = (
+    answers: Record<
+      string,
+      FieldAnswer | ((input: FieldAskInput) => FieldAnswer)
+    >,
+  ) => {
     const ask = defineAsk({
       feature: FIELD_SUGGESTION_FEATURE.feature,
       producer: "model",
@@ -50,8 +61,12 @@ describe("fields scope", () => {
       output: fieldAnswer,
       policy: { tier: FIELD_SUGGESTION_FEATURE.tier },
       async produce(input) {
+        const answer = answers[input.field];
         return {
-          output: answers[input.field] ?? { proposal: null, outcome: "none" },
+          output: (typeof answer === "function" ? answer(input) : answer) ?? {
+            proposal: null,
+            outcome: "none",
+          },
         };
       },
     });
@@ -134,6 +149,50 @@ describe("fields scope", () => {
     });
     await kernel.run(ctx.db, RUN);
     expect((await stored(id)).kind).toBe("garden");
+
+    const category = await createRepoEntity(ctx, "productCategory", {
+      name: "Synthetic produce",
+    });
+    const ingredient = await createIngredientFixture(
+      ctx.db,
+      { name: "Synthetic carrot ingredient" },
+      ctx.actor,
+    );
+    const item = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic loose carrots" }),
+      ctx.actor,
+    );
+    const pick = (value: string): FieldAnswer => ({
+      proposal: { value, label: null, confidence: 0.99, runnerUp: null },
+      outcome: "pick",
+    });
+    const { kernel: dependentKernel } = kernelAnswering({
+      categoryId: pick(category.entityId),
+      ingredientId: (input) =>
+        input.row.categoryId === category.entityId
+          ? pick(ingredient.entityId)
+          : { proposal: null, outcome: "no_candidates" },
+    });
+    await dependentKernel.reconcileNow(ctx.db, [
+      { kind: FIELDS_SCOPE, key: `product:${item.entityId}` },
+    ]);
+    // Every first-round answer is ready before any inferred value is applied.
+    for (;;) {
+      if (!(await runQueuedAsks(ctx.db, dependentKernel.registry, 4))) break;
+    }
+    await dependentKernel.run(ctx.db, RUN);
+    expect(
+      await getDb(ctx.db)
+        .select({
+          categoryId: product.categoryId,
+          ingredientId: product.ingredientId,
+        })
+        .from(product)
+        .where(eq(product.id, item.entityId)),
+    ).toEqual([
+      { categoryId: category.entityId, ingredientId: ingredient.entityId },
+    ]);
   });
   it("prepares a member-held Product tag prune without making a producer call", async () => {
     const record = await insertFieldsFixture(ctx.db, "product", {

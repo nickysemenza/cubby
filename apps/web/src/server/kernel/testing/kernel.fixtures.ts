@@ -142,6 +142,8 @@ export const receiptEvidence = defineEvidence({
 });
 
 export type FixtureHooks = {
+  /** Repeated requests exercise the published-change guard on own-scope follow-ups. */
+  emitSelf?: boolean;
   predicateReceipts?: boolean;
   linked?: boolean;
   linkedDecision?: boolean;
@@ -303,6 +305,7 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
       return new Map(entries);
     },
     reconcile(input, c) {
+      if (hooks.emitSelf) c.emit({ kind: PURCHASE_SCOPE, key: input.orderRef });
       for (const own of input.charges)
         c.bind({ kind: chargeEvidence.kind, id: own.id }, input.orderRef);
       const charge = newestFirst([...input.charges, ...input.bound])[0];

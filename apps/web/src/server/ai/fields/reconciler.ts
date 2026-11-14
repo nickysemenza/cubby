@@ -516,6 +516,7 @@ export function fieldsReconciler(
       if (!row) return c.done();
       if (input.analysis) c.answer(analysisAsk(input.entity), input.analysis);
       const subject = recordSubject(input.entity, input.id);
+      const changedFields = new Set<string>();
       for (const field of plan.fields) {
         if (field.mode === "prune" && blank(row[field.key])) continue;
         const assignment = c.decision("assignment", subject, field.key);
@@ -585,8 +586,10 @@ export function fieldsReconciler(
           const setValue = assignment.value as FieldValue;
           const decided =
             assignment.kind === "set" ? setValue : field.undecided;
-          if (valueKey(decided) !== valueKey(current))
+          if (valueKey(decided) !== valueKey(current)) {
             c.patch(target, input.id, { [field.key]: decided });
+            changedFields.add(field.key);
+          }
           continue;
         }
         const verdict = decideField({
@@ -601,9 +604,10 @@ export function fieldsReconciler(
           ),
           proposal,
         });
-        if (verdict.kind === "write" && target)
+        if (verdict.kind === "write" && target) {
           c.patch(target, input.id, { [field.key]: verdict.value });
-        else if (
+          changedFields.add(field.key);
+        } else if (
           proposal &&
           field.apply !== "offer" &&
           (!assignment || prune) &&
@@ -634,6 +638,14 @@ export function fieldsReconciler(
             },
           );
       }
+      if (
+        plan.fields.some((field) =>
+          field.basis.some(
+            (key) => key !== field.key && changedFields.has(key),
+          ),
+        )
+      )
+        c.emit({ kind: FIELDS_SCOPE, key: `${input.entity}:${input.id}` });
       return c.done();
     },
   });
