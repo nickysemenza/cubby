@@ -62,6 +62,7 @@ import {
   retainedMailJoin,
 } from "~/server/domains/mail/repo/retained-mail";
 import { deletePurchases } from "~/server/domains/purchase/repo/purchase";
+import { HouseholdWriteBusyError } from "~/server/kernel/gate";
 import { activeEmailPurchaseDecision as orderMailCandidateDecision } from "~/server/testing/email-link.fixtures";
 
 import { loadMailAttachmentOriginal } from "../repo/gmail/attachment-original";
@@ -1216,11 +1217,9 @@ describe("public mail tool", () => {
       const contended = vi
         .spyOn(ingestModule, "ingestGmailMessages")
         .mockImplementation(async (db, provider, input) => {
-          // The evidence write's own retries were exhausted for this message.
+          // The evidence write timed out behind the household gate.
           if (input.messageIds.includes("synthetic-trash"))
-            throw Object.assign(new Error("could not serialize access"), {
-              code: "40001",
-            });
+            throw new HouseholdWriteBusyError();
           return ingest(db, provider, input);
         });
       const first = await searchMail(ctx.db, f.input, f.actor);

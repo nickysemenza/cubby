@@ -419,6 +419,10 @@ export async function expireStaleRuns(
             })
           ).reconciled
         : await withTransactionDatabase(db, async (transactionDb) => {
+            // The gate before the Run row lock; failing the Run dirties it.
+            await (
+              await import("~/server/kernel/api")
+            ).enterHouseholdGate(transactionDb);
             const database = getDb(transactionDb);
             const [locked] = await database
               .select({ generation: runTable.dispatchEventId })

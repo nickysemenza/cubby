@@ -80,8 +80,8 @@ import {
 import { learnAcceptedSender } from "~/server/domains/purchase-import/repo/sender-attribution";
 import { recordShipmentEvidence } from "~/server/domains/shipment/repo/evidence";
 import { createAppError } from "~/server/errors/app-error";
-import { isSerializationFailure } from "~/server/errors/db-errors";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { householdWrite, HouseholdWriteBusyError } from "~/server/kernel/gate";
 
 import { loadMailAttachmentOriginal } from "../repo/gmail/attachment-original";
 import {
@@ -1051,7 +1051,8 @@ export async function resolveMail(
       decisionPort,
     );
   }
-  const settled = await withTransactionDatabase(db, async (tdb) => {
+  // The gate before the Purchase rows this locks; shipment intake takes it.
+  const settled = await householdWrite(db, async (tdb) => {
     if (disposition.kind === "unrelated") {
       const disposed = await disposedUnrelatedMail(tdb, input, actor);
       if (disposed) {
@@ -1513,9 +1514,8 @@ export async function searchMail(
     // with each retained original, so a funding stop has durable work to resume.
     if (actor.runId) ingest.runId = actor.runId;
     else ingest.searchActor = actor;
-    // One message at a time: a contention failure that outlasts the write's own
-    // retries (the global Email-evidence lock, refresh Job rows) skips only that
-    // message instead of failing the whole search.
+    // One message at a time: a write that times out behind the household gate
+    // skips only that message instead of failing the whole search.
     const retryableMessageIds: string[] = [];
     for (const messageId of messageIds) {
       try {
@@ -1524,7 +1524,7 @@ export async function searchMail(
           messageIds: [messageId],
         });
       } catch (error) {
-        if (!isSerializationFailure(error)) throw error;
+        if (!(error instanceof HouseholdWriteBusyError)) throw error;
         retryableMessageIds.push(messageId);
       }
     }

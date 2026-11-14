@@ -26,6 +26,7 @@ import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-ed
 import {
   buildPartialUpdateValues,
   notDeleted,
+  withHouseholdWrite,
   withTransaction,
 } from "~/server/db/helpers";
 import { outer, related } from "~/server/db/helpers/related";
@@ -467,7 +468,8 @@ export const updateLedgerTransfer = defineMutationWriter({
     actor: ActorContext,
   ) => {
     const id = await resolveOrThrow(db, "ledgerTransfer", shortcode);
-    await withTransaction(db, async (tx) => {
+    // The gate before the transfer row: the entity writer below takes it.
+    await withHouseholdWrite(db, async (tx) => {
       const [locked] = await tx
         .select({
           id: ledgerTransfer.id,

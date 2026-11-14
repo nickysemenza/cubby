@@ -3,9 +3,10 @@ import type { RunId } from "@cubby/schemas/identifiers";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import { getDb } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { householdWrite } from "~/server/kernel/gate";
 
 /** The statuses `Run_one_active_maintenance` allows only one pass to hold. */
 export const ACTIVE_MAINTENANCE_STATUSES = ["running", "paused_auth"] as const;
@@ -87,7 +88,8 @@ export async function admitMaintenancePass(
   const clientKey = manual
     ? undefined
     : `maintenance:nightly:${admission.householdDate}`;
-  return withTransactionDatabase(db, async (tx) => {
+  // The gate before the admission lock: ensuring the Run takes it.
+  return householdWrite(db, async (tx) => {
     if (clientKey) {
       await getDb(tx).execute(
         sql`SELECT pg_advisory_xact_lock(hashtextextended(${clientKey}, 0))`,

@@ -24,6 +24,7 @@ import {
   buildPartialUpdateValues,
   notDeleted,
   updateLiveAndReturn,
+  withHouseholdWrite,
   withTransaction,
 } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
@@ -282,7 +283,8 @@ export const updateProject = defineMutationWriter({
         ? ((await projectDependencyIds(db, [id])).blockedBy.get(id) ?? [])
         : undefined;
 
-    await withTransaction(db, async (tx) => {
+    // The gate before the project rows the settings and field locks take.
+    await withHouseholdWrite(db, async (tx) => {
       let parentProjectId: ProjectId | null | undefined;
       if (data.parentProjectId !== undefined && data.parentProjectId !== null) {
         parentProjectId = await resolveOrThrow(
