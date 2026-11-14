@@ -8,7 +8,9 @@
  * including a person's assignment, which only this scope may write.
  *
  * Asked: open or Cubby-held `auto` and `review` fields with a usable basis,
- * except a value Cubby held at cutover whose basis and value are unchanged.
+ * except a value Cubby held at cutover whose basis and value are unchanged
+ * and that no person has since ruled out on another record. A blank field's
+ * ask is a fill: a version sweep files it rather than proposing Drift.
  * `offer` fields only read an existing answer for the picker. A person-held
  * field and a `fillOnly` field Cubby already filled are not asked here; declared prune reviews may propose removals from a person-held
  * array and always wait for a decision.

@@ -26,12 +26,10 @@ iOS/macOS, HTTP, MCP connections), so change contracts in place:
   addressed to it are refused and name the survivor. Web, native and MCP
   resolve through `resolveForRead`/`resolveForWrite` in the shared get path
   ([ADR 0029](../adr/0029-evidence-facts-and-reconcilers.md) section 9).
-- Queued work stores frozen snapshots (`AiEvaluation.snapshot`, provenance
-  fingerprints). Changing a fingerprinted snapshot's shape makes every queued
-  row fail its evidence check at execution, one full page each. In the same
-  change, mark those rows `obsolete` in a custom migration so discovery
-  re-admits them under the new shape; otherwise the stale rows drain one page
-  at a time and delay other evaluations.
+- A queued Ask stores its frozen envelope (`Ask.input`), keyed by
+  `inputHash`. A `promptVersion` change re-keys a queued Ask when it is
+  claimed and carries its requesters (`AskScope`); do not rewrite stored
+  envelopes in a migration.
 
 ## Production changes
 

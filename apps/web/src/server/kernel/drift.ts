@@ -1,9 +1,11 @@
 /**
- * Changes that would rewrite history (ADR 0029 section 11). A version or
- * prompt change never dirties a scope. The `version.sweep` pass visits each
- * scope derived under older rules, computes its output from existing
- * answers only and issues no asks: no difference and no missing answer
- * advances the scope's rules; anything else becomes a `Drift` proposal.
+ * Changes that would rewrite history (ADR 0029 section 11). The
+ * `version.sweep` pass visits each scope derived under older rules and
+ * computes its output from existing answers only: no difference and no
+ * missing answer advances the scope's rules; no difference and only asks
+ * that fill values no accepted record holds dirties the scope so its normal
+ * run files them; anything else becomes a `Drift` proposal that waits on
+ * the member.
  * Approval is a decision bound to the proposal hash; it applies the
  * difference, files the asks and releases the scope's baseline bindings.
  */

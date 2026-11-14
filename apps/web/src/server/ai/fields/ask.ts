@@ -45,8 +45,9 @@ export const fieldAsk = defineAsk({
 /**
  * The value Cubby held at cutover and the record it held it on, written only
  * by the cutover migration and never produced. While the field's basis and
- * value still equal that record, the `fields` scope keeps the value without
- * asking (ADR 0029 section 11).
+ * value still equal that record, and until a person rules that value out on
+ * another record, the `fields` scope keeps the value without asking (ADR 0029
+ * section 11).
  */
 export const fieldBaselineAsk = defineAsk({
   feature: "legacy:field",

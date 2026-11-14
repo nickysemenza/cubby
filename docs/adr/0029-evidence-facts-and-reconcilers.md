@@ -541,9 +541,9 @@ stay as cost evidence and as the workspace for Sweeps and photo review.
 
 ### 11. Changes that would rewrite history
 
-A version change never dirties a scope. `ScopeDirty` rows come only from input
-mutations, so a scope runs under the current rules only when one of its own
-inputs changed.
+A version change dirties a scope only when filing asks is its whole change, as
+below. Otherwise `ScopeDirty` rows come only from input mutations, so a scope
+runs under the current rules only when one of its own inputs changed.
 
 After a deploy that changes a reconciler `version` or a `promptVersion`, a
 `version.sweep` Pass visits each scope whose `ScopeState.version` is older. It
@@ -551,8 +551,13 @@ computes the desired output from existing answers only and issues no asks.
 With no record difference and no missing answer it advances the scope's
 version and refreshes its gaps, input provenance and dependencies under the
 input revision fence. This metadata refresh creates no dirty work or asks.
+With no record difference and only missing answers that fill a value no
+accepted record holds (asks the reconciler marks `fill`, such as a blank
+field's), it dirties the scope, and the scope's normal run files them.
 Otherwise it writes a `Drift` proposal: the exact difference, the number of
-asks the change would issue and their estimated cost. Each ask costs the
+asks the change would issue and their estimated cost. The scope then carries
+the member gap a held apply records, so it reads Needs you until an approval
+or a later run replaces its gaps. Each ask costs the
 median of the most recent priced Answers for its feature and requested tier,
 else its ask kind's declared estimate; a source ask is free. The estimate is
 unknown, stored as NULL, when any ask has neither, and it stays outside the
@@ -573,9 +578,13 @@ At cutover every scope gets `ScopeState` at version 0 and its stored records
 enter as inputs: `EvidenceBinding` rows with basis `baseline`, and for each
 reconciled value a `set` decision when a person holds it or a legacy Answer
 when Cubby does. The derivation treats a baseline binding as fixed, below a
-member decision and above automatic matching. The first sweep then proposes
-drift wherever the derivation without the baseline disagrees, and approving
-that drift releases the baseline for that scope. A scope with no stored
+member decision and above automatic matching. A value Cubby held stands
+without an ask while its basis and value are unchanged and no person has
+since ruled that value out on another record of the entity, so a
+correction's recheck asks again. The first sweep then proposes
+drift wherever the derivation without the baseline disagrees, files the asks
+for blank fields, and approving that drift releases the baseline for that
+scope. A scope with no stored
 records gets version 0 and an empty baseline.
 
 An input-triggered reconcile also protects accepted baselines. An automatic
@@ -615,8 +624,11 @@ fresh database and on synthetic predecessor data. It:
 4. writes `Answer` rows from retained paid results, and `AskScope` rows from
    their requester receipts; on requester collisions the highest sequence
    wins, including when a prompt change re-keys a queued Ask;
-5. carries unfinished work: a queued evaluation becomes a queued Ask; one that
-   was sent with no stored result becomes `unknown`, never queued; Run
+5. carries unfinished work: a queued evaluation becomes a cancelled Ask,
+   because its legacy envelope names no current producer, and its record's
+   `fields` scope is dirtied so it asks again from current inputs; one for a
+   record no scope owns stays cancelled; one that was sent with no stored
+   result becomes `unknown`, never queued; Run
    checkpoints become Pass cursors whose `legacyJobs` source receipts survive
    cursor publication and restart; member-started Sweeps and imports in
    progress become Pass rows;

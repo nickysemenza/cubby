@@ -130,9 +130,9 @@ column keeps the provider's status and body (or the error text), scrubbed by
 `scrubErrorMessage` and bounded to 2,000 characters, including a refusal the
 funding ladder recovered from. The plan's Durable Object also logs each non-OK
 response as `plan refused inference` (scope `chatgpt-plan`) in Workers
-observability. `cache` means an application replay with no upstream call (the
-application response cache or a stored `AiAnalysis`); a Gateway response-cache
-hit still went through the gateway and stays `gateway`. Failed attempts record
+observability. `cache` means an application response-cache replay with no upstream call;
+a stored kernel `Answer` is reused without a usage row. A Gateway
+response-cache hit still went through the gateway and stays `gateway`. Failed attempts record
 a failed row on their selected transport, keeping a billed response's usage
 when only its validation failed.
 
