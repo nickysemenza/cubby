@@ -197,7 +197,9 @@ function MachineryHeader({
             when it started and its one action. */}
         <span>
           {!first ? (
-            MACHINERY_NO_GAP_LABEL
+            read.stage === "done" ? (
+              MACHINERY_NO_GAP_LABEL
+            ) : null
           ) : stageNamesGap(read) ? (
             first.since ? (
               <>
