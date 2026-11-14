@@ -57,6 +57,11 @@ describe("isTransientConnectionError", () => {
       ),
       failedQuery(Object.assign(new Error("terminating"), { code: "57P01" })),
       failedQuery(new Error("Connection terminated unexpectedly")),
+      failedQuery(
+        new Error(
+          "Client has encountered a connection error and is not queryable",
+        ),
+      ),
       failedQuery(new Error("timeout exceeded when trying to connect")),
       ...["ECONNRESET", "EPIPE", "ETIMEDOUT"].map((code) =>
         failedQuery(
