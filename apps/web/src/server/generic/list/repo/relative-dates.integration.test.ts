@@ -18,6 +18,7 @@ import {
   shiftPlainDate,
 } from "~/lib/household-date";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, householdDaySql } from "~/server/db/helpers";
 import { expense, location, planting, task } from "~/server/db/schema";
 import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
@@ -29,7 +30,6 @@ import { locationScaffold } from "~/server/domains/location/repo/crud";
 import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
 import { taskScaffold } from "~/server/domains/task/repo/lookup";
 import { resolveRelativeDateFilters } from "~/server/entity-kernel/filter-tokens";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createPlantFixture,
   makeExpenseInput,

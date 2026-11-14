@@ -16,8 +16,13 @@ import { z } from "zod";
 import type { Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { textArrayParam } from "~/server/db/helpers/query";
+import { decision } from "~/server/db/kernel-schema";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
-import { email, emailReview } from "~/server/db/retained-tables";
+import {
+  email,
+  emailReview,
+  connectionCandidateEvidence,
+} from "~/server/db/retained-tables";
 import {
   assertEmailEvidenceScope,
   withEmailEvidenceWrite,
@@ -32,13 +37,7 @@ type ReviewSubject = {
 const relevantReview = (input: ReviewSubject) => {
   if (input.family === "email_relevance" || input.family === "email_link")
     return true;
-  const subject = suggestionSubjects.recommendation.safeParse(input.subject);
-  return (
-    input.family === "recommendation" &&
-    subject.success &&
-    subject.data.entity === "email" &&
-    subject.data.scope === "connection.email-purchase"
-  );
+  return false;
 };
 
 function emailIntentSubjectSql(id: SQL, originalId: SQL) {
@@ -46,7 +45,6 @@ function emailIntentSubjectSql(id: SQL, originalId: SQL) {
     inArray(emailReview.family, [
       suggestionFamily.enum.email_relevance,
       suggestionFamily.enum.email_link,
-      suggestionFamily.enum.recommendation,
     ]),
     or(
       eq(emailReview.emailId, id),
@@ -63,22 +61,14 @@ function emailIntentSubjectSql(id: SQL, originalId: SQL) {
 export function emailHasProtectingIntentSql(id: SQL, originalId: SQL) {
   const subject = emailIntentSubjectSql(id, originalId);
   const kind = sql`${emailReview.metadata}->>${suggestionProducer.keyof().enum.kind}`;
-  return sql`EXISTS (SELECT 1 FROM ${emailReview}
+  return sql`(EXISTS (SELECT 1 FROM ${emailReview}
     WHERE ${subject} AND ((${emailReview.authority} = ${"member"}
       AND (${kind} IS NULL OR NOT (${kind} = ANY(${textArrayParam(correctionAuthorityReceiptKinds.options)}))))
-      OR ${kind} IN (${"email_resolution"}, ${"email_link"})))`;
+      OR ${kind} IN (${"email_resolution"}, ${"email_link"}))) OR EXISTS (
+      SELECT 1 FROM ${decision} d JOIN ${connectionCandidateEvidence} e ON d.subject='connection/' || e."scopeKey"
+      WHERE d.channel=${"assignment"} AND d.field=${"link"} AND d.kind=${"set"} AND d."actorKind"=${"member"}
+        AND ((e."sourceEntity"=${"email"} AND e."sourceId"=${id}) OR (e."targetEntity"=${"email"} AND e."targetId"=${id}))))`;
 }
-
-/** The endpoints a connection review stored from its Suggestion's evidence. */
-const reviewedConnection = z.object({
-  candidate: z
-    .object({
-      relation: z.unknown(),
-      source: z.unknown(),
-      target: z.unknown(),
-    })
-    .nullish(),
-});
 
 /** Retained subjects and all checksums matter; active projections are not an intent history. */
 export async function readEmailProtectingIntent(
@@ -122,40 +112,56 @@ export async function readEmailProtectingIntent(
     const domainDecision =
       row.kind === "email_resolution" || row.kind === "email_link";
     if (!command && !domainDecision) continue;
-    if (row.family === "recommendation") {
-      const candidate = reviewedConnection.safeParse(row.subject).data
-        ?.candidate;
-      const relation = connectionCandidate.shape.relation.safeParse(
-        candidate?.relation,
-      );
-      const source = connectionCandidate.shape.source.safeParse(
-        candidate?.source,
-      );
-      const target = connectionCandidate.shape.target.safeParse(
-        candidate?.target,
-      );
-      if (
-        !relation.success ||
-        relation.data !== "email-purchase" ||
-        !source.success ||
-        source.data.entityKind !== "email" ||
-        !target.success ||
-        target.data.entityKind !== "purchase" ||
-        source.data.entityId !== mail.code
-      )
-        return {
-          status: "held",
-          emailId: id,
-          reason:
-            "Retained Email connection intent has incomplete endpoint proof",
-        };
-    } else if (!suggestionSubjects[row.family].safeParse(row.subject).success) {
+    if (!suggestionSubjects[row.family].safeParse(row.subject).success)
       return {
         status: "held",
         emailId: id,
         reason: "Retained Email intent has an invalid subject",
       };
-    }
+    feedbackIds.push(row.id);
+  }
+  const connections = await getDb(db)
+    .select({
+      id: decision.id,
+      candidate: connectionCandidateEvidence.candidate,
+    })
+    .from(decision)
+    .innerJoin(
+      connectionCandidateEvidence,
+      sql`${decision.subject}='connection/' || ${connectionCandidateEvidence.scopeKey}`,
+    )
+    .where(
+      and(
+        eq(decision.actorKind, "member"),
+        eq(decision.channel, "assignment"),
+        eq(decision.field, "link"),
+        eq(decision.kind, "set"),
+        or(
+          and(
+            eq(connectionCandidateEvidence.sourceEntity, "email"),
+            eq(connectionCandidateEvidence.sourceId, id),
+          ),
+          and(
+            eq(connectionCandidateEvidence.targetEntity, "email"),
+            eq(connectionCandidateEvidence.targetId, id),
+          ),
+        ),
+      ),
+    );
+  for (const row of connections) {
+    const candidate = connectionCandidate.safeParse(row.candidate);
+    if (
+      !candidate.success ||
+      candidate.data.source.entityKind !== "email" ||
+      candidate.data.source.entityId !== mail.code ||
+      candidate.data.target.entityKind !== "purchase"
+    )
+      return {
+        status: "held",
+        emailId: id,
+        reason:
+          "Retained Email connection intent has incomplete endpoint proof",
+      };
     feedbackIds.push(row.id);
   }
   return emailProtectingIntentFrontier.parse({

@@ -5,6 +5,8 @@ import {
 import { rawPurchaseOut } from "@cubby/schemas/purchase-raw-read";
 
 import { purchaseSchemaBindings } from "~/entity/generated/entity-schema-bindings.purchase.gen";
+import { DECLARED_EDGE_MERGE_POLICIES } from "~/server/db/generated/declared-edges.gen";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import {
   asActor,
   defineRepository,
@@ -16,8 +18,6 @@ import {
   createPurchase,
   deletePurchases,
   mergePurchases,
-  PURCHASE_DELETE_EDGE_POLICY,
-  PURCHASE_MERGE_EDGE_POLICY,
   purchaseScaffold,
   updatePurchase,
 } from "./purchase";
@@ -27,8 +27,8 @@ const purchaseShortcodes = bindShortcodeResolver("purchase");
 export const purchaseRepository = defineRepository("purchase", {
   schemas: purchaseSchemaBindings,
   lifecycle: {
-    delete: PURCHASE_DELETE_EDGE_POLICY,
-    merge: PURCHASE_MERGE_EDGE_POLICY,
+    delete: DECLARED_EDGE_DELETE_POLICIES.purchase,
+    merge: DECLARED_EDGE_MERGE_POLICIES.purchase,
   },
   scaffold: purchaseScaffold,
   create: asActor(createPurchase),

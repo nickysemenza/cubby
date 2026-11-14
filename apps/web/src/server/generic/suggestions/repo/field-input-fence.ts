@@ -6,26 +6,19 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
-import {
-  getProductClassificationEvidence,
-  productClassificationEvidenceSql,
-} from "~/server/db/computed/product-classification-evidence";
+import { getProductClassificationEvidence } from "~/server/db/computed/product-classification-evidence";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { uuidArrayParam } from "~/server/db/helpers/query";
 import {
   repositoryQueries as getDb,
-  repositoryBeforeCommit,
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
-import {
-  fieldWriteRevision,
-  fieldWriteRevisions,
-} from "~/server/generic/audit-log/repo/field-write";
+import { fieldWriteRevision } from "~/server/generic/audit-log/repo/field-write";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
 type FieldSubject = { entity: string; recordId: string; field: string };
-type SourceRef = Pick<FieldSubject, "entity" | "recordId">;
+
 const sourceRow = z.record(z.string(), z.json());
 type SourceRow = z.infer<typeof sourceRow>;
 const sourceKey = (entity: string, id: string) =>
@@ -102,156 +95,16 @@ type PreparedInputs = {
   revisions: Map<string, string | null>;
 };
 
-async function readSources(
-  db: RepositoryQueryInput,
-  subjects: readonly SourceRef[],
-) {
-  const groups = new Map<string, Set<string>>();
-  for (const subject of subjects) {
-    const ids = groups.get(subject.entity) ?? new Set<string>();
-    ids.add(subject.recordId.toLowerCase());
-    groups.set(subject.entity, ids);
-  }
-  const rows = new Map<string, SourceRow>();
-  for (const [entity, ids] of groups) {
-    const result = await getDb(db).execute<{ id: string; value: unknown }>(sql`
-      SELECT r.id::text AS id, to_jsonb(r) AS value FROM ${sourceTable(entity)} r
-      WHERE r.id=ANY(${uuidArrayParam([...ids])}) AND ${notDeleted("r")}`);
-    for (const row of result.rows)
-      rows.set(sourceKey(entity, row.id), sourceRow.parse(row.value));
-  }
-  return rows;
-}
+/** The direct reference and backing rows one live source row reads, live or not. */
 
 /** The direct reference and backing rows one live source row reads, live or not. */
-function referenceInputs(spec: ReturnType<typeof fieldInputPolicy>) {
-  return [
-    ...spec.backings.flatMap((backing) =>
-      "entity" in backing
-        ? [
-            {
-              kind: "backing" as const,
-              entity: backing.entity,
-              column: backing.via,
-            },
-          ]
-        : [],
-    ),
-    ...spec.keys.flatMap((key) => {
-      const reference = entityFieldModels[spec.kind].fields.find(
-        (candidate) => candidate.key === key,
-      )?.reference;
-      if (
-        !reference ||
-        !Object.keys(SHORTCODE_TABLE).includes(reference.entity)
-      )
-        return [];
-      return [
-        { kind: "reference" as const, entity: reference.entity, column: key },
-      ];
-    }),
-  ];
-}
-
-/** The direct reference and backing rows one live source row reads, live or not. */
-function directReferences(spec: InputSpec, row: SourceRow) {
-  const references: SourceRef[] = [];
-  for (const input of referenceInputs(spec)) {
-    const raw = row[input.column];
-    if (input.kind === "backing") {
-      if (typeof raw === "string")
-        references.push({ entity: input.entity, recordId: raw });
-      continue;
-    }
-    const ids = z
-      .array(z.uuid())
-      .parse(raw == null ? [] : Array.isArray(raw) ? raw : [raw]);
-    for (const id of ids)
-      references.push({ entity: input.entity, recordId: id });
-  }
-  return references;
-}
 
 /** One subject's fingerprint and the read set a background publication retains. */
-export type FieldInputRead = {
-  fingerprint: string | null;
-};
 
 /**
  * Request-local source preparation; no retained cache or relaxed freshness gate.
  * The dependencies are the canonical read set, not proof that a capture covers it.
  */
-export async function readFieldInputs(
-  db: RepositoryQueryInput,
-  subjects: readonly FieldSubject[],
-): Promise<FieldInputRead[]> {
-  if (!subjects.length) return [];
-  const specs = subjects.map(inputSpec);
-  const sources = await readSources(db, subjects);
-  const liveSources = new Set(sources.keys());
-  const inputs = specs.map((spec) => {
-    const row = sources.get(sourceKey(spec.entity, spec.recordId));
-    return { spec, references: row ? directReferences(spec, row) : [] };
-  });
-  const products = new Set(
-    specs
-      .filter(
-        (spec) =>
-          readsClassification(spec) &&
-          liveSources.has(sourceKey(spec.entity, spec.recordId)),
-      )
-      .map((spec) => spec.recordId.toLowerCase()),
-  );
-  const related = await readSources(
-    db,
-    inputs
-      .flatMap(({ references }) => references)
-      .filter(
-        (subject) => !sources.has(sourceKey(subject.entity, subject.recordId)),
-      ),
-  );
-  for (const [key, row] of related) sources.set(key, row);
-  const classifications = new Map<string, string>();
-  if (products.size) {
-    const result = await getDb(db).execute<{
-      id: string;
-      evidence: string;
-    }>(sql`
-      SELECT requested.id::text AS id, ${productClassificationEvidenceSql(sql`requested.id`)} AS evidence
-      FROM unnest(${uuidArrayParam([...products])}) AS requested(id)`);
-    for (const row of result.rows) classifications.set(row.id, row.evidence);
-  }
-  const live = subjects.filter((subject) =>
-    liveSources.has(sourceKey(subject.entity, subject.recordId)),
-  );
-  const revisions = await fieldWriteRevisions(db, live);
-  const prepared: PreparedInputs = {
-    sources,
-    liveSources,
-    classifications,
-    revisions: new Map(
-      live.map((subject, index) => [
-        subjectKey(subject),
-        revisions[index] ?? null,
-      ]),
-    ),
-  };
-  return Promise.all(
-    inputs.map(async ({ spec }) => ({
-      fingerprint: await fingerprintFromInputs(db, spec, {}, prepared),
-    })),
-  );
-}
-
-/** {@link readFieldInputs} for callers that only compare fingerprints. */
-export async function fieldInputFingerprintsIfLive(
-  db: RepositoryQueryInput,
-  subjects: readonly FieldSubject[],
-): Promise<(string | null)[]> {
-  return (await readFieldInputs(db, subjects)).map(
-    ({ fingerprint }) => fingerprint,
-  );
-}
 
 /** Exact authoritative target/basis snapshot also catches SQL-only writers. */
 export async function fieldInputFingerprint(
@@ -276,7 +129,7 @@ export async function fieldInputFingerprint(
 }
 
 /** Discovery skips deleted subjects; write fences still require a live subject. */
-export async function fieldInputFingerprintIfLive(
+async function fieldInputFingerprintIfLive(
   db: RepositoryQueryInput,
   entity: string,
   recordId: string,
@@ -393,30 +246,4 @@ async function fingerprintFromInputs(
     ? (prepared.revisions.get(subjectKey(spec)) ?? null)
     : await fieldWriteRevision(db, kind, recordId, field);
   return sha256Hex(canonicalJson(basis));
-}
-
-/** Hold actual inputs through commit and refuse later changes in a caller's batch. */
-export async function fenceFieldInputsAtCommit(
-  db: RepositoryQueryInput,
-  entity: string,
-  recordId: string,
-  field: string,
-) {
-  const expected = await fieldInputFingerprint(db, entity, recordId, field, {
-    lock: true,
-  });
-  await repositoryBeforeCommit(
-    db,
-    async (tx) => {
-      if (
-        (await fieldInputFingerprint(tx, entity, recordId, field, {
-          lock: true,
-        })) !== expected
-      )
-        throw new Error(
-          "Suggestion inputs changed later in the same transaction",
-        );
-    },
-    { phase: "validation" },
-  );
 }

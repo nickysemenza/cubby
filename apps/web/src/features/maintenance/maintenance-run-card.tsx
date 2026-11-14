@@ -157,7 +157,7 @@ export function MaintenanceRunCard({
         <Description size="xs">
           {active
             ? `Started ${formatInstant(active.startedAt, "dateShortTime")}${active.trigger === "scheduled" ? " by the daily schedule" : ""}. One pass at a time.`
-            : "Runs daily at 7 a.m. America/Los_Angeles. Each pass runs the declared upkeep steps and keeps their outcomes. Other background work has its own Jobs."}
+            : "Runs daily at 7 a.m. America/Los_Angeles. Each pass runs the declared upkeep steps and keeps their outcomes. Other background work has its own kernel claims."}
         </Description>
         <Button
           size="sm"

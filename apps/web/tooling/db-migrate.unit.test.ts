@@ -79,7 +79,9 @@ function fixture(failure?: { text: string; code: string; times: number }) {
       });
     }
     let rows: object[] = [];
-    if (text.includes("to_regclass")) rows = [{ exists: applied.length > 0 }];
+    if (text.includes("pending_lock_targets")) rows = [];
+    else if (text.includes("to_regclass"))
+      rows = [{ exists: applied.length > 0 }];
     else if (text.includes("FROM pg_class")) rows = [{ count: 0 }];
     else if (text.includes("information_schema.tables")) rows = [{ exists: 1 }];
     else if (text.includes("pg_catalog.pg_attribute"))

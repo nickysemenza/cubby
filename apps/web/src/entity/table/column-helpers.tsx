@@ -1677,6 +1677,7 @@ export function renderOptionCell(
   return (
     <EnumPill
       optionRole={option?.role}
+      stage={option?.stage}
       glyph={option?.glyph}
       value={value}
       icon={option?.icon}

@@ -1,7 +1,5 @@
-import { AsyncLocalStorage } from "node:async_hooks";
-
 import type { RunId } from "@cubby/schemas/identifiers";
-import { jobState, jobWaitReason } from "@cubby/schemas/job";
+import { kernelWaitCause } from "@cubby/schemas/kernel/machinery";
 import {
   runPurpose,
   FUNDING_RECOVERABLE_PURPOSES,
@@ -20,7 +18,6 @@ import {
   sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { z } from "zod";
 
 import type { AiBudgetExhaustedError } from "~/server/ai/budget";
 import type { Database } from "~/server/db";
@@ -30,41 +27,28 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import {
+  fundingWaitUntilSql,
+  RUN_EXECUTE_PASS,
+} from "~/server/domains/run/repo/run-execution";
 
-const boundEvaluation = new AsyncLocalStorage<{
-  runId: RunId;
-  evaluation: { id: string; token: string };
-}>();
-/** One evaluation may execute for its owning Run without that Run being `running`. */
-export const withRunEvaluation = <T>(
-  runId: RunId,
-  evaluation: { id: string; token: string },
-  work: () => Promise<T>,
-) => boundEvaluation.run({ runId, evaluation }, work);
-
-/** The workload boundary receives the same scoped attempt fence as the metered transport. */
-export const currentRunEvaluation = (runId: RunId) => {
-  const bound = boundEvaluation.getStore();
-  return bound?.runId === runId ? bound.evaluation : undefined;
-};
-
-/** Paid work belongs to a live Run that is running or executing a bound evaluation. */
+/** Paid work belongs to a live running Run. */
 export async function assertRunExecutable(db: Database, runId: RunId) {
   const [current] = await unwrapDb(db)
-    .select({ status: run.status, retiredAt: run.retiredAt })
+    .select({
+      status: run.status,
+      retiredAt: run.retiredAt,
+      trigger: run.trigger,
+    })
     .from(run)
     .where(and(eq(run.id, runId), notDeleted(run)))
     .limit(1);
   if (!current || current.retiredAt)
     throw new Error("Run is no longer available for paid work.");
-  const evaluation = currentRunEvaluation(runId);
-  const sharedExecutable =
-    evaluation &&
-    (await (
-      await import("~/server/ai/evaluation/repo/ai-evaluation-requests")
-    ).evaluationIsExecutable(db, evaluation, runId));
-  if (current.status !== "running" && !sharedExecutable)
+  if (
+    current.status !== "running" &&
+    !(current.trigger === "ephemeral" && current.status === "completed")
+  )
     throw new Error("Run is no longer executable.");
   return current;
 }
@@ -78,7 +62,7 @@ export async function pauseExecutionRun(
   generation?: string | null,
 ): Promise<boolean> {
   // Recovery resumes these purposes in a later window: AI work through
-  // Job execution, agent imports and Mail discovery through
+  // Pass execution, agent imports and Mail discovery through
   // `resumeFundingPausedRuns`.
   const recoverable = inArray(run.purpose, FUNDING_RECOVERABLE_PURPOSES);
   const paused = await unwrapDb(db)
@@ -113,10 +97,17 @@ export async function pauseExecutionRun(
   return paused.length > 0;
 }
 
-export const fundingResumeInput = z.object({
-  runId: z.uuid().optional(),
-  until: z.iso.datetime(),
-});
+/** The earliest frozen funding wait; a due wait is ready to resume. */
+export async function pendingFundingResumeAt(
+  db: Database,
+  runId?: string,
+): Promise<Date | null> {
+  const result = await unwrapDb(db).execute<{ epoch: number | null }>(
+    sql`SELECT extract(epoch FROM ${fundingWaitUntilSql(runId ? sql`${runId}::uuid` : undefined)}) * 1000 AS epoch`,
+  );
+  const epoch = result.rows[0]?.epoch;
+  return epoch === null || epoch === undefined ? null : new Date(Number(epoch));
+}
 
 /** Explicit budget raises release discovery without reopening member stops. */
 const fundingPausedDiscovery = (db: Database, now: Date) => {
@@ -147,7 +138,7 @@ export async function countFundingPausedDiscovery(db: Database, now: Date) {
 }
 
 export async function releaseFundingPausedDiscovery(db: Database, now: Date) {
-  const resumed = await unwrapDb(db)
+  const released = unwrapDb(db)
     .update(run)
     .set({
       progress: sql`coalesce(${run.progress}, '{}'::jsonb) || jsonb_build_object('fundingReleasedAt', ${now.toISOString()}::text)`,
@@ -155,7 +146,17 @@ export async function releaseFundingPausedDiscovery(db: Database, now: Date) {
     })
     .where(fundingPausedDiscovery(db, now))
     .returning({ id: run.id });
-  return resumed.length;
+  // The release marker and wake commit together. A page already holding the
+  // claim cannot replace this wake with its older funding deadline.
+  const result = await unwrapDb(db).execute<{ n: number }>(sql`
+    WITH released AS (${released.getSQL()}), woken AS (
+      UPDATE "Pass" p SET "availableAt" = now(), "waitCause" = NULL,
+        "wakeVersion" = p."wakeVersion" + 1, "updatedAt" = now()
+      FROM released r WHERE p.name = ${RUN_EXECUTE_PASS} AND p.key = r.id::text
+        AND p."doneAt" IS NULL AND p."cancelledAt" IS NULL
+        AND (p."waitCause" = ${kernelWaitCause.enum.funding} OR p."claimToken" IS NOT NULL)
+    ) SELECT count(*)::int AS n FROM released`);
+  return result.rows[0]?.n ?? 0;
 }
 
 /**
@@ -177,17 +178,10 @@ export async function pauseForFunding(
     );
     // A fenced caller that lost the race owes no resume.
     if (generation !== undefined && !paused) return;
-    const { until } = error;
-    // One resume per funding window: its handler resumes every paused Run.
-    const key = `funding-resume:${error.status.windowEnd}`;
-    await enqueueJob(tx, {
-      key,
-      kind: "run.funding-resume",
-      input: { until: until.toISOString() },
-      availableAt: until,
-    });
+    // The Pass owns the frozen deadline, including a refusal before its driver catches up.
     await unwrapDb(tx)
-      .execute(sql`UPDATE "Job" SET "waitReason"=${jobWaitReason.enum.ai_funding_window}, "availableAt"=${until.toISOString()}::timestamp
-      WHERE key=${key} AND state=${jobState.enum.queued}`);
+      .execute(sql`UPDATE "Pass" SET "waitCause" = ${kernelWaitCause.enum.funding},
+      "availableAt" = ${error.until.toISOString()}::timestamp, "updatedAt" = now()
+      WHERE "runId" = ${runId}::uuid AND "doneAt" IS NULL AND "cancelledAt" IS NULL`);
   });
 }

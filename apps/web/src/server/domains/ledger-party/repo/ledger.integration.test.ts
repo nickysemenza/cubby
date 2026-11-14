@@ -5,14 +5,13 @@ import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { unwrapDb } from "~/server/db/helpers";
 import {
   auditLog,
-  expense,
   expenseAttribution,
   financialAccount,
   financialTransaction,
-  financialTransactionAllocation,
   ledgerParty,
   ledgerSourceClaim,
   ledgerTransfer,
@@ -26,6 +25,7 @@ import {
   updateFinancialAccount,
 } from "~/server/domains/financial-account/repo/financial-account";
 import { updateFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   createLedgerParty,
   deleteLedgerParties,
@@ -41,7 +41,6 @@ import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import { toPublicErrorPayload } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 import { makeExpenseInput } from "~/server/testing/repo.fixtures";
 
@@ -201,13 +200,11 @@ describe("consolidated household ledger", () => {
         postedDate: "2026-08-20",
       },
     );
-    await unwrapDb(ctx.db)
-      .insert(financialTransactionAllocation)
-      .values({
-        transactionId: allocated.id,
-        purchaseId: allocatedPurchase.id,
-        amountMinor: moneyToMinor(12),
-      });
+    await insertPurchaseEventRows(ctx.db, "FinancialTransactionAllocation", {
+      transactionId: allocated.id,
+      purchaseId: allocatedPurchase.id,
+      amountMinor: moneyToMinor(12),
+    });
     const expectInvalidEvidence = async (
       rows: Array<{ shortcode: string }>,
       message: string,
@@ -404,51 +401,47 @@ describe("consolidated household ledger", () => {
     const expense = await insertWithShortcode(ctx.db, "expense", {
       lineKind: "principal",
       name: "Placeholder expense",
-      cost: 10,
+      cost: 1000n,
       date: "2026-08-20",
       costType: "materials",
       trade: "other",
     });
-    await unwrapDb(ctx.db)
-      .insert(expenseAttribution)
-      .values([
-        {
-          expenseId: expense.id,
-          role: "funder",
-          ledgerPartyId: keep.entityId,
-          weight: 2,
-        },
-        {
-          expenseId: expense.id,
-          role: "funder",
-          ledgerPartyId: lose.entityId,
-          weight: 3,
-        },
-      ]);
+    await insertPurchaseEventRows(ctx.db, "ExpenseAttribution", [
+      {
+        expenseId: expense.id,
+        role: "funder",
+        ledgerPartyId: keep.entityId,
+        weight: 2,
+      },
+      {
+        expenseId: expense.id,
+        role: "funder",
+        ledgerPartyId: lose.entityId,
+        weight: 3,
+      },
+    ]);
     const largeExpense = await insertWithShortcode(ctx.db, "expense", {
       lineKind: "principal",
       name: "Large-weight placeholder expense",
-      cost: 10,
+      cost: 1000n,
       date: "2026-08-20",
       costType: "materials",
       trade: "other",
     });
-    await unwrapDb(ctx.db)
-      .insert(expenseAttribution)
-      .values([
-        {
-          expenseId: largeExpense.id,
-          role: "funder",
-          ledgerPartyId: keep.entityId,
-          weight: 3_000_000_000,
-        },
-        {
-          expenseId: largeExpense.id,
-          role: "funder",
-          ledgerPartyId: lose.entityId,
-          weight: 4_000_000_000,
-        },
-      ]);
+    await insertPurchaseEventRows(ctx.db, "ExpenseAttribution", [
+      {
+        expenseId: largeExpense.id,
+        role: "funder",
+        ledgerPartyId: keep.entityId,
+        weight: 3_000_000_000,
+      },
+      {
+        expenseId: largeExpense.id,
+        role: "funder",
+        ledgerPartyId: lose.entityId,
+        weight: 4_000_000_000,
+      },
+    ]);
     const transfer = await createLedgerTransfer(
       ctx.db,
       {
@@ -703,22 +696,6 @@ describe("consolidated household ledger", () => {
       ctx.actor,
     );
     expect(cleared.output).toMatchObject({ cost: 12, sourceClaims: [] });
-    await unwrapDb(ctx.db)
-      .update(expense)
-      .set({ cost: 10.000000000000002 })
-      .where(eq(expense.id, created.entityId));
-    await expect(
-      updateExpense(
-        ctx.db,
-        created.output.id,
-        { sourceClaims: [claim] },
-        ctx.actor,
-      ),
-    ).rejects.toMatchObject({
-      reason: "CONSTRAINT_VIOLATION",
-      message:
-        "The source claim target amount must be an exact, supported whole-cent amount.",
-    });
   });
 
   it("serializes concurrent claims of new and released source identities", async () => {

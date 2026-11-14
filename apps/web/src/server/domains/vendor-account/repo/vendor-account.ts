@@ -5,7 +5,6 @@ import {
 } from "@cubby/schemas/entities/vendorAccount";
 import { vendorAccountRawOut as rawVendorAccountOut } from "@cubby/schemas/entity-contracts/vendorAccount";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
   VendorAccountId,
   VendorAccountShortcode,
@@ -22,7 +21,8 @@ import {
 } from "~/entity/generated/entity-schema-bindings.vendorAccount.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { vendorAccountLabelSql } from "~/server/db/computed/vendor-account-label";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import { DECLARED_EDGE_MERGE_POLICIES } from "~/server/db/generated/declared-edges.gen";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
 import { ledgerParty, purchase, run, vendorAccount } from "~/server/db/schema";
 import { patchEntityRows } from "~/server/entity-kernel/repo/entity-patch";
@@ -43,48 +43,11 @@ import { applyMergePolicy } from "~/server/generic/removal/repo/dispositions";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-const VENDOR_ACCOUNT_DELETE_EDGE_POLICY = {
-  "Purchase.vendorAccountId": {
-    code: "block-purchases",
-    effect: "block",
-    description:
-      "Fetched purchases retain the vendor account that supplied their evidence.",
-  },
-  "Run.vendorAccountId": {
-    code: "block-runs",
-    effect: "block",
-    description: "Import runs retain their vendor-account scope.",
-  },
-  "ImportSourceClaim.vendorAccountId": {
-    code: "block-source-claims",
-    effect: "block",
-    description: "Replay-safe source claims retain their vendor-account scope.",
-  },
-} as const satisfies IncomingEdgePolicy<"vendorAccount", OperationDisposition>;
-
 /**
  * Folding a duplicate member account into the surviving one. Source claims
  * stay unique by member, kind and key; the account only scopes them, so a
  * repoint cannot collide.
  */
-const VENDOR_ACCOUNT_FOLD_EDGE_POLICY = {
-  "Purchase.vendorAccountId": {
-    code: "repoint-purchases",
-    effect: "repoint",
-    description:
-      "Purchases fetched through the duplicate account name the surviving account.",
-  },
-  "Run.vendorAccountId": {
-    code: "repoint-runs",
-    effect: "repoint",
-    description: "Import runs move their scope to the surviving account.",
-  },
-  "ImportSourceClaim.vendorAccountId": {
-    code: "repoint-source-claims",
-    effect: "repoint",
-    description: "Replay-safe source claims scope to the surviving account.",
-  },
-} as const satisfies IncomingEdgePolicy<"vendorAccount", OperationDisposition>;
 
 const newestOrderAt = (cursor: unknown) =>
   vendorAccountCursor.safeParse(cursor).data?.newestOrderAt ?? "";
@@ -168,7 +131,7 @@ export async function foldVendorAccountsInto(
       );
     await applyMergePolicy(tx, {
       entity: "vendorAccount",
-      policy: VENDOR_ACCOUNT_FOLD_EDGE_POLICY,
+      policy: DECLARED_EDGE_MERGE_POLICIES.vendorAccount,
       keepId: parseEntityId("vendorAccount", survivor.id),
       loserIds: [parseEntityId("vendorAccount", account.id)],
       liveOnly: false,
@@ -437,7 +400,7 @@ const updateVendorAccount = defineMutationWriter({
 
 export const vendorAccountRepository = defineRepository("vendorAccount", {
   schemas: vendorAccountSchemaBindings,
-  lifecycle: { delete: VENDOR_ACCOUNT_DELETE_EDGE_POLICY },
+  lifecycle: { delete: DECLARED_EDGE_DELETE_POLICIES.vendorAccount },
   scaffold: vendorAccountScaffold,
   create: asActor(createVendorAccount),
   update: asActor(updateVendorAccount),

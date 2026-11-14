@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { idField, readOnly, timestampField } from "./field-policy";
 import { defineEntity, defineEntityModel } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
@@ -18,6 +19,141 @@ import { z } from "zod";
 /** @public The shortcode registry generator parses this module's `definition` and `readSchemas`. */
 export const { definition, readSchemas } = defineEntityModel({
   key: "ledgerTransfer",
+  edges: [
+    defineEdge({
+      key: "FinancialTransaction.ledgerTransferId",
+      from: "financialTransaction",
+      to: "ledgerTransfer",
+      cardinality: "one",
+      inverse: {
+        key: "ledgerTransfer.incoming.FinancialTransaction.ledgerTransferId",
+        from: "ledgerTransfer",
+        to: "financialTransaction",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "FinancialTransaction.ledgerTransferId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "financialTransaction",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "reference",
+        label: "evidence transactions",
+        description: "Posted settlement evidence for this transfer.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "clear-evidence-link",
+              effect: "detach",
+              description:
+                "Evidence transactions remain after their transfer is removed.",
+            },
+            handler: null,
+            order: 0,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "LedgerSourceClaim.ledgerTransferId",
+      from: "row:LedgerSourceClaim",
+      to: "ledgerTransfer",
+      cardinality: "one",
+      inverse: {
+        key: "ledgerTransfer.incoming.LedgerSourceClaim.ledgerTransferId",
+        from: "ledgerTransfer",
+        to: "row:LedgerSourceClaim",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "LedgerSourceClaim.ledgerTransferId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason:
+          "Workflow evidence about entities, not a relationship between them.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "metadata",
+        label: "source claims",
+        description: "Canonical external evidence claimed by this transfer.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "soft-delete-source-claims",
+              effect: "soft-delete",
+              description: "Transfer-owned normalized claims are retired.",
+            },
+            handler: null,
+            order: 1,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+  ],
+
   names: { singular: "Ledger Transfer", plural: "Transfers" },
   route: { basePath: "ledger-transfers" },
   table: "LedgerTransfer",
@@ -422,17 +558,28 @@ export const { definition, readSchemas } = defineEntityModel({
 
 export default defineEntity(
   definition,
-  (r) => [
-    r.field("fromPartyId").named("from-party", "From party"),
-    r.field("toPartyId").named("to-party", "To party"),
-    r
-      .path("financialTransaction", "many", [
-        {
-          edge: "FinancialTransaction.ledgerTransferId",
-          direction: "incoming",
-        },
-      ])
-      .named("evidence-transactions", "Evidence transactions"),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r.field("fromPartyId").named("from-party", "From party"),
+        "ledgerParty.outgoing-transfers",
+      ),
+      r.declare(
+        r.field("toPartyId").named("to-party", "To party"),
+        "ledgerParty.incoming-transfers",
+      ),
+      r.declare(
+        r
+          .path("financialTransaction", "many", [
+            {
+              edge: "FinancialTransaction.ledgerTransferId",
+              direction: "incoming",
+            },
+          ])
+          .named("evidence-transactions", "Evidence transactions"),
+        "financialTransaction.ledger-transfer",
+      ),
+    ],
+  }),
   readSchemas,
 );

@@ -3,6 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 
 import { testShortcode } from "@cubby/schemas/testing";
 import { fromPartial } from "@total-typescript/shoehorn";
+import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -21,7 +22,6 @@ import type {
 import { readMealById } from "~/server/domains/meal/repo/crud";
 import { createMealWithEntityId } from "~/server/domains/meal/repo/crud";
 import { updateTask } from "~/server/domains/task/repo/crud";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 
 import { scheduleCalendarFeedDirty } from "../repo/client";
 import {
@@ -128,7 +128,13 @@ describe("CalDAV canonical mutation seam", () => {
       name: "CalDAV task",
       dueDate: "2026-09-07",
     });
-    expect(await getDb(ctx.db).query.auditLog.findMany()).toHaveLength(1);
+    expect(
+      await getDb(ctx.db).query.auditLog.findMany({
+        where: {
+          RAW: (row, { isNull }) => relationalSql(row, isNull(row.provenance)),
+        },
+      }),
+    ).toHaveLength(1);
 
     let committed: CalDavCommitReceipt | undefined;
     await expect(
@@ -357,14 +363,17 @@ describe("durable calendar dirty-mark fallback", () => {
       await Promise.all(tasks);
       expect(consoleError).toHaveBeenCalledWith(
         expect.objectContaining({
-          source: "calendar-feed.mark-dirty-fallback",
+          source: "kernel.dirty",
           error: expect.objectContaining({ message: "queue down" }),
         }),
       );
       expect(
-        (await readJobs(ctx.db, {})).some(
-          (row) => row.kind === "calendar-feed.mark-dirty",
-        ),
+        (
+          await getDb(ctx.db).execute(
+            sql`SELECT name FROM "Pass" WHERE name = 'calendar.invalidate'`,
+            "objects",
+          )
+        ).length > 0,
       ).toBe(true);
       consoleError.mockRestore();
     }));

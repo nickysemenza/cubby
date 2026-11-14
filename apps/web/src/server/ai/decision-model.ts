@@ -42,6 +42,7 @@ import {
   recordApplicationCacheHit,
   recordFeatureUsage,
 } from "~/server/ai/run-feature";
+import { insideProduce } from "~/server/kernel/produce-ledger";
 
 import { aiWorkDeferral, withCooperativeAiWork } from "./cooperative-work";
 import {
@@ -583,6 +584,52 @@ async function runDecisionChoiceInternal(
       probability: 0,
       ranked: [],
     };
+  if (args.usage.db && !insideProduce() && !args.port) {
+    const { modelAskFor } = await import("./model-asks");
+    const { withAsk } = await import("~/server/kernel/api");
+    const kind = modelAskFor(feature);
+    const result = await withAsk(
+      args.usage.db,
+      {
+        ...kind,
+        async produce() {
+          const value = await runDecisionChoiceInternal(
+            {
+              ...args,
+              usage: { ...args.usage, applicationCache: false },
+            },
+            pending,
+          );
+          return {
+            output: { value: z.json().parse(value), model: feature.model },
+            model: feature.model,
+            tier: feature.tier,
+          };
+        },
+      },
+      await (
+        await import("./model-media")
+      ).retainModelMedia({
+        kind: "choice",
+        model: feature.model,
+        subject: args.subject,
+        rules: args.rules,
+        choices: [...args.choices],
+        allowNone: args.allowNone ?? true,
+        images: args.images ? [...args.images] : undefined,
+      }),
+      {
+        runId: args.usage.runId,
+        record: args.usage.entity
+          ? {
+              entity: args.usage.entity.entityKind,
+              id: args.usage.entity.entityId,
+            }
+          : undefined,
+      },
+    );
+    return validate(result.value);
+  }
   if (input.images?.length) {
     const selector = getDecisionModelConfig(feature.model).selector;
     const body = JSON.stringify({
@@ -594,7 +641,8 @@ async function runDecisionChoiceInternal(
     }
   }
   return withAiResponseCache({
-    enabled: feature.cache && !args.port,
+    enabled:
+      feature.cache && args.usage.applicationCache !== false && !args.port,
     batch: pending ? { batch: pending.cache, index: pending.index } : undefined,
     force: args.usage.force,
     keyInput: {

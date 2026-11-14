@@ -5,14 +5,12 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { emailReview, ledgerParty } from "~/server/db/schema";
 import { appendEmailReview } from "~/server/domains/email/repo/email-review-store";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
-import { recordFeedback } from "~/server/generic/suggestions/repo/suggestion";
-import { publishExactSuggestion } from "~/server/generic/suggestions/repo/suggestion-publication";
 
 import { withEmailEvidenceWrite } from "./email-evidence-write-scope";
 import { readEmailProtectingIntent } from "./email-review-intent";
@@ -123,56 +121,9 @@ describe("Email review transaction and retained intent", () => {
         checksum: "synthetic-old-checksum",
       },
     });
-    const publishConnection = (source: string) =>
-      publishExactSuggestion(ctx.db, {
-        publicationKey: `synthetic-connection:${source}`,
-        family: "recommendation",
-        subject: {
-          kind: "recommendation",
-          entity: "email",
-          recordId: f.mail.id,
-          scope: "connection.email-purchase",
-          candidateKey: source,
-        },
-        judgment: { candidateKey: source },
-        producer: null,
-        fingerprint: source,
-        evidence: {
-          candidate: {
-            relation: "email-purchase",
-            source: { entityKind: "email", entityId: source },
-            target: { entityKind: "purchase", entityId: "PUR-AAAAA" },
-            label: "Synthetic link",
-            evidence: { reasons: [], contradictions: [], unknowns: [] },
-          },
-        },
-      });
-    const connection = await publishConnection(f.mail.shortcode);
-    const review = await reviewSuggestion(ctx.db, kernelCtx(ctx), {
-      ...f.input,
-      suggestionId: connection.id,
-    });
     expect(
       await readEmailProtectingIntent(ctx.db, emailId.parse(f.mail.id)),
-    ).toMatchObject({
-      status: "captured",
-      feedbackIds: expect.arrayContaining([decision.id, review.feedbackId]),
-    });
-    const ambiguous = await publishConnection("EML-ZZZZZ");
-    await recordFeedback(ctx.db, {
-      suggestionId: ambiguous.id,
-      operationId: "synthetic-legacy-connection",
-      verdict: "wrong",
-      authority: "member",
-      actorUserId: ctx.actor.userId,
-      intent: "history",
-    });
-    expect(
-      await readEmailProtectingIntent(ctx.db, emailId.parse(f.mail.id)),
-    ).toMatchObject({
-      status: "held",
-      reason: expect.stringContaining("endpoint proof"),
-    });
+    ).toMatchObject({ status: "captured", feedbackIds: [decision.id] });
   });
 
   it("rolls back an aborted review atomically", async () => {
@@ -188,7 +139,6 @@ describe("Email review transaction and retained intent", () => {
             ...f.input,
             operationId: "synthetic-aborted-command",
           },
-          undefined,
           scope,
         );
         throw new Error("Synthetic abort after review");

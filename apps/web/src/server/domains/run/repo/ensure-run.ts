@@ -24,7 +24,6 @@ import {
 } from "~/server/db/helpers";
 import { run as runTable, ledgerParty, user } from "~/server/db/schema";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import {
   findOrCreateWithShortcode,
   insertWithShortcode,
@@ -144,13 +143,18 @@ export async function ensureRun(
       !completed &&
       input.execution !== false &&
       isExecutedRunPurpose(input.purpose)
-    )
-      await enqueueJob(tx, {
-        key: `run:${row.id}`,
-        kind: "run.execute",
-        input: { runId: row.id, purpose: input.purpose },
-        runId: row.id,
-      });
+    ) {
+      {
+        const { startRunPass } =
+          await import("~/server/workflows/runs/run-pass");
+        await startRunPass(tx, {
+          runId: row.id,
+          purpose: input.purpose,
+          generation: 1,
+          restart: false,
+        });
+      }
+    }
     // Refresh telemetry must not invalidate the family that is publishing it.
     await recordChange(tx, {
       kind: row.purpose === "derived_refresh" ? "projection" : "source",

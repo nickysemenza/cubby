@@ -1,3 +1,4 @@
+import { imageProcessingJobStateOptions } from "@cubby/schemas/compiler/activity-fields";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type {
   ImageShortcode,
@@ -29,11 +30,8 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { ArrowsMergeIcon } from "@phosphor-icons/react/dist/csr/ArrowsMerge";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
-import { CircleNotchIcon } from "@phosphor-icons/react/dist/csr/CircleNotch";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
-import { MinusCircleIcon } from "@phosphor-icons/react/dist/csr/MinusCircle";
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
-import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import type { QueryClient } from "@tanstack/react-query";
 import {
   skipToken,
@@ -78,7 +76,7 @@ import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { ProductVariantEvidence } from "~/features/product/product-variant-evidence";
 import {
   RUN_TARGET_STATE_LABEL,
-  RUN_TARGET_STATE_VARIANT,
+  RUN_TARGET_STATE_STAGE,
 } from "~/features/run/run-target-state";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { photoImport } from "~/integrations/tanstack-query/generated/domains/photoImport.gen";
@@ -117,7 +115,8 @@ import {
 } from "~/ui/primitives/tooltip";
 import { Facts } from "~/ui/records/facts";
 import { RecordList, RecordRow } from "~/ui/records/record-list";
-import { Badge, type BadgeVariant } from "~/ui/reui/badge";
+import { StateBadge } from "~/ui/records/state-badge";
+import { Badge } from "~/ui/reui/badge";
 import { Description } from "~/ui/text/description";
 import { tryFormatAmount } from "~/ui/text/format-amount";
 import { InlineTextDiff } from "~/ui/text/inline-text-diff";
@@ -3343,14 +3342,6 @@ function ProposalCard({
   );
 }
 
-const PROCESSING_LABEL = {
-  pending: "Queued",
-  waiting_for_device: "Waiting for Apple device",
-  leased: "Processing",
-  ready: "Done",
-  skipped: "Skipped",
-  failed: "Needs attention",
-} satisfies Record<ImageProcessingJobState, string>;
 const DESCRIPTION_BLOCKING = new Set<ImageProcessingJobState>([
   "pending",
   "waiting_for_device",
@@ -3367,15 +3358,6 @@ function awaitingDescriptions(
     return state != null && DESCRIPTION_BLOCKING.has(state);
   });
 }
-const PROCESSING_VARIANT = {
-  pending: "secondary",
-  waiting_for_device: "warning",
-  leased: "default",
-  ready: "positive",
-  skipped: "outline",
-  failed: "destructive",
-} satisfies Record<ImageProcessingJobState, BadgeVariant>;
-
 function ProcessingBadge({
   label,
   state,
@@ -3392,16 +3374,6 @@ function ProcessingBadge({
         {label}: not queued
       </span>
     );
-  const Icon =
-    state === "ready"
-      ? CheckCircleIcon
-      : state === "failed"
-        ? WarningCircleIcon
-        : state === "skipped"
-          ? MinusCircleIcon
-          : state === "leased"
-            ? CircleNotchIcon
-            : ClockIcon;
   const explanation =
     reason === "not_suitable"
       ? "The image was already transparent, or a previous eligibility policy skipped subject lift."
@@ -3409,13 +3381,15 @@ function ProcessingBadge({
         ? "The previous label-only policy skipped subject lift. Queue missing processing to retry."
         : reason;
   const badge = (
-    <Badge variant={PROCESSING_VARIANT[state]} className="max-w-full">
-      <Icon
-        className={`size-3 shrink-0 ${state === "leased" ? "animate-spin" : ""}`}
-        aria-hidden="true"
-      />
-      {label}: {PROCESSING_LABEL[state]}
-    </Badge>
+    <StateBadge
+      option={{
+        label: `${label}: ${imageProcessingJobStateOptions.find((option) => option.value === state)!.label}`,
+        stage: imageProcessingJobStateOptions.find(
+          (option) => option.value === state,
+        )!.stage,
+      }}
+      phase="active"
+    />
   );
   if (!explanation) return badge;
   return (
@@ -3423,7 +3397,7 @@ function ProcessingBadge({
       <TooltipTrigger
         render={<span className="inline-flex w-fit cursor-help" />}
         tabIndex={0}
-        aria-label={`${label}: ${PROCESSING_LABEL[state]}. ${explanation}`}
+        aria-label={`${label}: ${imageProcessingJobStateOptions.find((option) => option.value === state)!.label}. ${explanation}`}
       >
         {badge}
       </TooltipTrigger>
@@ -3494,9 +3468,13 @@ function PhotoTable({
               header: "Import",
               cell: (photo) => (
                 <Stack gap="tight">
-                  <Badge variant={RUN_TARGET_STATE_VARIANT[photo.targetState]}>
-                    {RUN_TARGET_STATE_LABEL[photo.targetState]}
-                  </Badge>
+                  <StateBadge
+                    option={{
+                      label: RUN_TARGET_STATE_LABEL[photo.targetState],
+                      stage: RUN_TARGET_STATE_STAGE[photo.targetState],
+                    }}
+                    phase="active"
+                  />
                   {groupByImage.get(photo.id) ? (
                     <span className="max-w-40 truncate font-mono text-2xs text-muted-foreground">
                       {groupByImage.get(photo.id)}

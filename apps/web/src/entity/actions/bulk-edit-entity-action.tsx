@@ -4,7 +4,7 @@ import { canClearExpenseDate } from "@cubby/schemas/expense-fields";
 import type { StructuredValueSchema } from "@cubby/schemas/structured-value-schema";
 import { countLabel } from "@cubby/shared/pluralize";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   FormProvider,
   useForm,
@@ -378,9 +378,6 @@ export function BulkEditDialogBody({
         .map((field) => [field.key, null]),
     ),
   });
-  const receiptHandler = useRef<((recordId: string) => Promise<void>) | null>(
-    null,
-  );
   // Reading `dirtyFields` here (not only inside a callback) is what
   // subscribes this component to RHF's proxy-tracked form state, so the
   // preview below and the submit payload both follow the live selection of
@@ -546,14 +543,7 @@ export function BulkEditDialogBody({
         .json()
         .parse(value === "" && field?.reference ? null : (value ?? null));
     }
-    const accepted = await onSubmit(data);
-    if (singleItem && accepted !== false) {
-      try {
-        await receiptHandler.current?.(singleItem.id);
-      } catch (error) {
-        showErrorToast(error, "Updated, but suggestion receipt failed");
-      }
-    }
+    await onSubmit(data);
   });
 
   return (
@@ -618,7 +608,6 @@ export function BulkEditDialogBody({
             // SAFETY: see the `suggestionStaticBasis` cast above.
             entity={entity as ShortcodeEntity}
             mode="edit"
-            receiptHandler={receiptHandler}
             staticBasis={suggestionStaticBasis}
             fieldKeys={fieldKeys}
           >

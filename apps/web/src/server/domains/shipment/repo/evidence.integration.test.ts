@@ -13,6 +13,7 @@ import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   auditLog,
@@ -23,6 +24,7 @@ import {
   vendor,
   runFinding,
   expense,
+  factKey,
   inventoryEntry,
   email,
   ledgerParty,
@@ -39,7 +41,6 @@ import { mergeVendors } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import { getEntityGraph } from "~/server/generic/entity-graph/repo/entity-graph";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 
@@ -1233,6 +1234,23 @@ describe("Shipment retained evidence", () => {
     const captures = await getDb(ctx.db).select().from(shipmentSourceCapture);
     expect(captures).toHaveLength(1);
     expect(captures[0]?.source).toEqual(input.source);
+    expect(captures[0]?.actorUserId).toBe(ctx.actor.userId);
+    const captureKeys = await getDb(ctx.db)
+      .select({ key: factKey.key, kind: factKey.factKind })
+      .from(factKey)
+      .where(eq(factKey.factId, captures[0]!.id));
+    expect(captureKeys).toEqual(
+      expect.arrayContaining([
+        {
+          key: `row:ShipmentSourceCapture:${captures[0]!.id}`,
+          kind: "shipment.capture",
+        },
+        {
+          key: `shipment:source:${captures[0]!.sourceKey}`,
+          kind: "shipment.capture",
+        },
+      ]),
+    );
     if (input.source.kind !== "sms_export")
       throw new Error("Synthetic SMS missing");
     await expect(

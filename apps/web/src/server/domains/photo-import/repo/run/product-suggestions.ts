@@ -1,20 +1,11 @@
-import { runEntityId } from "@cubby/schemas/identifiers";
 import type { PhotoGroupReview } from "@cubby/schemas/photo-import-run";
-import {
-  suggestionSubjects,
-  suggestionJudgments,
-} from "@cubby/schemas/suggestion";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
-import { product, suggestionTable } from "~/server/db/schema";
 import { loadImageAnalysisEvidence } from "~/server/domains/image/repo/image-analysis-summary";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
-import { publishExactSuggestion } from "~/server/generic/suggestions/repo/suggestion-publication";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
 async function photoReviewEvidence(db: Database, imageIds: string[]) {
@@ -41,7 +32,36 @@ export async function photoBrandCreateInputFingerprint(
   );
 }
 
-/** Photo drafts use the shared immutable review history without entering automatic application. */
+/** A draft's review key covers its retained source evidence; approval records the field Decision. */
+async function photoFieldKey(
+  db: Database,
+  productId: string,
+  field: string,
+  value: z.infer<ReturnType<typeof z.json>>,
+  review: PhotoGroupReview,
+  photoEvidence: Awaited<ReturnType<typeof photoReviewEvidence>>,
+) {
+  const fingerprint = await fieldInputFingerprint(
+    db,
+    "product",
+    productId,
+    field,
+    { lock: true },
+  );
+  const hash = await sha256Hex(
+    canonicalJson({
+      productId,
+      field,
+      value,
+      fingerprint,
+      photoEvidence,
+      observedName: review.observedName,
+      decisionRevision: review.fieldDecisionRevisions?.[field] ?? null,
+    }),
+  );
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+}
+
 export async function photoProductSuggestions(
   db: Database,
   input: {
@@ -53,17 +73,8 @@ export async function photoProductSuggestions(
     retained?: PhotoGroupReview["fieldSuggestions"];
   },
 ): Promise<NonNullable<PhotoGroupReview["fieldSuggestions"]>> {
-  const runId =
-    runEntityId.safeParse(input.runId).data ??
-    (await resolveOrThrow(db, "run", input.runId));
   const id = await resolveOrThrow(db, "product", input.productId);
-  const [current] = await getDb(db)
-    .select()
-    .from(product)
-    .where(eq(product.id, id));
-  if (!current) throw new Error("Selected Product no longer exists");
-  const photoEvidence = await photoReviewEvidence(db, input.imageIds);
-  const currentFields = z.record(z.string(), z.unknown()).parse(current);
+  const photos = await photoReviewEvidence(db, input.imageIds);
   const suggestions: NonNullable<PhotoGroupReview["fieldSuggestions"]> = [];
   for (const [field, raw] of Object.entries(
     input.review.productChanges ?? {},
@@ -80,70 +91,13 @@ export async function photoProductSuggestions(
         candidate.field === field &&
         canonicalJson(candidate.value) === canonicalJson(value),
     );
-    if (retained) {
-      suggestions.push(retained);
-      continue;
-    }
-    const fingerprint = await fieldInputFingerprint(db, "product", id, field);
-    const key = await sha256Hex(
-      canonicalJson({
-        runId,
-        groupKey: input.groupKey,
-        productId: id,
+    suggestions.push(
+      retained ?? {
+        id: await photoFieldKey(db, id, field, value, input.review, photos),
         field,
         value,
-        fingerprint,
-        photoEvidence,
-        observedName: input.review.observedName,
-        decisionRevision: input.review.fieldDecisionRevisions?.[field] ?? null,
-      }),
-    );
-    const currentValue = z.json().parse(currentFields[field] ?? null);
-    // Run-scoped drafts stay inactive and keyed by their Run evidence, so they
-    // never settle the field's queue rows.
-    const saved = await publishExactSuggestion(
-      db,
-      {
-        publicationKey: `photo-field:${key}`,
-        family: "field",
-        subject: { kind: "field", entity: "product", recordId: id, field },
-        judgment: {
-          value,
-          confidence: 0,
-          runnerUpValue: null,
-          runnerUpConfidence: null,
-          kind: currentValue === null ? "addition" : "correction",
-        },
-        fingerprint,
-        producer: null,
-        evidence: {
-          runId,
-          groupKey: input.groupKey,
-          observedName: input.review.observedName,
-          photoEvidence: z.json().parse(photoEvidence),
-          currentValue,
-          memberDecisionRevision:
-            input.review.fieldDecisionRevisions?.[field] ?? null,
-        },
-      },
-      {
-        entity: "product",
-        recordId: id,
-        field,
-        currentValue,
-        suggestedValue: value,
-        confidence: 0,
-        model: "photo-review",
-        status: "pending",
-        active: false,
-        kind: currentValue === null ? "addition" : "correction",
-        data: {
-          liveInputFingerprint: fingerprint,
-          photoReview: { runId, groupKey: input.groupKey },
-        },
       },
     );
-    suggestions.push({ id: saved.id, field, value });
   }
   return suggestions;
 }
@@ -173,47 +127,12 @@ export async function assertPhotoProductReviewCurrent(
       throw new Error(
         "Product correction has no retained review evidence; save the draft again before approval",
       );
-    const [saved] = await getDb(db)
-      .select({ prediction: suggestionTable, status: suggestionTable.status })
-      .from(suggestionTable)
-      .where(eq(suggestionTable.id, retained.id))
-      .for("update");
-    if (!saved || saved.prediction.family !== "field")
-      throw new Error(
-        "A selected Product correction was already reviewed; revise the photo draft before approval",
-      );
-    const subject = suggestionSubjects.field.parse(saved.prediction.subject);
-    const judgment = suggestionJudgments.field.parse(saved.prediction.judgment);
     if (
-      subject.entity !== "product" ||
-      subject.recordId !== id ||
-      subject.field !== field ||
-      canonicalJson(judgment.value) !== canonicalJson(value)
+      retained.id !==
+      (await photoFieldKey(db, id, field, value, review, photoEvidence))
     )
       throw new Error(
-        "Saved Product correction differs from its retained Suggestion",
-      );
-    if (
-      saved.prediction.fingerprint !==
-      (await fieldInputFingerprint(db, "product", id, field, { lock: true }))
-    )
-      throw new Error(
-        "Product correction inputs changed; clear and reselect the proposed field after reviewing the current Product",
-      );
-    const evidence = z
-      .object({ photoEvidence: z.json() })
-      .safeParse(saved.prediction.evidence);
-    if (
-      !evidence.success ||
-      canonicalJson(evidence.data.photoEvidence) !==
-        canonicalJson(photoEvidence)
-    )
-      throw new Error(
-        "Photo correction inputs changed; clear and reselect the proposed field after reviewing current image evidence",
-      );
-    if (saved.status !== "pending")
-      throw new Error(
-        "A selected Product correction was already reviewed; revise the photo draft before approval",
+        "Product or photo correction inputs changed; clear and reselect the proposed field after reviewing current evidence",
       );
   }
   if (

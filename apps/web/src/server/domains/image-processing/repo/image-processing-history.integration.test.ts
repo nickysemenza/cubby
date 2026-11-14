@@ -11,7 +11,6 @@ import { getDb } from "~/server/db/helpers";
 import {
   aiAnalysis,
   image,
-  imageProcessingAttempt,
   imageProcessingEvent,
   imageProcessingJob,
   imageProcessingOrphan,
@@ -23,8 +22,10 @@ import {
   updateDevice,
 } from "~/server/domains/device/repo/device";
 import { upsertDeviceFromHello } from "~/server/domains/device/repo/device-participation";
+import { imageExecutionReceipts } from "~/server/domains/image-processing/repo/execution-receipts";
 import {
   readImageExecutions,
+  releaseImageFixture,
   updateImageExecution,
 } from "~/server/domains/image-processing/repo/image-execution.fixtures";
 import * as cloudDescription from "~/server/domains/image-processing/service/cloud-description";
@@ -169,9 +170,9 @@ describe("image execution history conservation", () => {
       }),
     ).toBe(true);
     const [attempt] = await getDb(ctx.db)
-      .select({ executor: imageProcessingAttempt.executor })
-      .from(imageProcessingAttempt)
-      .where(eq(imageProcessingAttempt.id, lease.attemptId));
+      .select({ executor: imageExecutionReceipts.executor })
+      .from(imageExecutionReceipts)
+      .where(eq(imageExecutionReceipts.id, lease.attemptId));
     expect(attempt?.executor?.name).toBe("Kitchen phone");
   });
   it("fixes submission membership, reuses running work, and assigns each retry to only its new submission", async () => {
@@ -235,9 +236,9 @@ describe("image execution history conservation", () => {
     expect(await assignCloud(jobId, next.attemptId)).toBe(true);
     const attempts = await getDb(ctx.db)
       .select()
-      .from(imageProcessingAttempt)
-      .where(eq(imageProcessingAttempt.jobId, jobId))
-      .orderBy(imageProcessingAttempt.number);
+      .from(imageExecutionReceipts)
+      .where(eq(imageExecutionReceipts.jobId, jobId))
+      .orderBy(imageExecutionReceipts.number);
     expect(attempts).toHaveLength(2);
     expect(attempts[0]?.state).toBe("failed");
     expect(attempts[1]?.id).toBe(next.attemptId);
@@ -272,7 +273,7 @@ describe("image execution history conservation", () => {
       }),
     ).toBe(false);
     // The lease expires and another claim replaces the attempt.
-    await updateImageExecution(ctx.db, jobId, { leaseUntil: new Date(0) });
+    await releaseImageFixture(ctx.db, jobId);
     await claim(jobId);
     const result = {
       jobId,
@@ -292,15 +293,15 @@ describe("image execution history conservation", () => {
     );
     const [recorded] = await getDb(ctx.db)
       .select()
-      .from(imageProcessingAttempt)
-      .where(eq(imageProcessingAttempt.id, lease.attemptId));
+      .from(imageExecutionReceipts)
+      .where(eq(imageExecutionReceipts.id, lease.attemptId));
     expect(recorded?.executor?.deviceId).toBe(deviceId);
     // The reclaim expired it; the late skip is an executor failure, so it
     // lands in this attempt's history like any late failure, without
     // touching the newer attempt.
     expect(recorded).toMatchObject({
-      state: "failed",
-      error: "unsupported_format",
+      state: "released",
+      error: "Synthetic executor stopped",
     });
     const events = await getDb(ctx.db)
       .select()
@@ -414,7 +415,7 @@ describe("image execution history conservation", () => {
         await reserveImageAnalysisInput(ctx.db, lease.attemptId, key),
       ).toBe(true);
       if (change === "reclaimed") {
-        await updateImageExecution(ctx.db, jobId, { leaseUntil: new Date(0) });
+        await releaseImageFixture(ctx.db, jobId);
         await claim(jobId);
       } else if (change === "stopped") {
         await updateImageExecution(ctx.db, jobId, { leaseUntil: null });
@@ -511,6 +512,9 @@ describe("image execution history conservation", () => {
         completeCompanionImageProcessingResult(ctx.db, result),
       ];
       await vi.waitFor(() => expect(read).toHaveBeenCalled());
+      // Keep the owner's storage read blocked until the competing delivery
+      // has reached the claim fence; scheduling a later retry is a different case.
+      await Promise.race(completions);
       release();
       await Promise.all(completions);
       expect(read).toHaveBeenCalledTimes(1);
@@ -634,8 +638,8 @@ describe("image execution history conservation", () => {
     expect(execution?.availableAt.toISOString()).toBe(resumeAt);
     const [attempt] = await getDb(ctx.db)
       .select()
-      .from(imageProcessingAttempt)
-      .where(eq(imageProcessingAttempt.id, lease.attemptId));
+      .from(imageExecutionReceipts)
+      .where(eq(imageExecutionReceipts.id, lease.attemptId));
     expect(attempt?.state).toBe("released");
     const [saved] = await getDb(ctx.db)
       .select()
@@ -694,7 +698,7 @@ describe("image execution history conservation", () => {
   it("adopts cloud analysis only with its live lease and keeps rejected output in attempt history", async () => {
     const { source, jobId } = await setup();
     const old = await claim(jobId);
-    await updateImageExecution(ctx.db, jobId, { leaseUntil: new Date(0) });
+    await releaseImageFixture(ctx.db, jobId);
     await updateImageExecution(ctx.db, jobId, { runAt: new Date(0) });
     const current = await claim(jobId);
     const cloudAnalysis = {

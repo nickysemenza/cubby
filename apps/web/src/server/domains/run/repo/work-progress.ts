@@ -1,5 +1,4 @@
 import { aiUsageStatus } from "@cubby/schemas/ai";
-import { aiRefreshProgress } from "@cubby/schemas/ai-evaluation";
 import { mailReclassificationCheckpoint } from "@cubby/schemas/email-actions";
 import { runShortcode } from "@cubby/schemas/identifiers";
 import { runTargetDeviceWorkState } from "@cubby/schemas/photo-import-run";
@@ -9,7 +8,6 @@ import {
   importOperationStatusOut,
 } from "@cubby/schemas/purchase-import";
 import {
-  OWNED_AI_WORK_PURPOSES,
   runPurpose,
   RUN_KINDS,
   RUN_PURPOSE_LABEL,
@@ -223,9 +221,6 @@ function checkpointWorkItems(
   items: RunWorkItems,
   previous: RunWorkSamples | undefined,
 ): RunWorkItems {
-  const ai = OWNED_AI_WORK_PURPOSES.includes(purpose)
-    ? aiRefreshProgress.safeParse(owner.progress).data
-    : undefined;
   const mail =
     purpose === "mail_discovery"
       ? mailDiscoveryRunProgress.safeParse(owner.progress).data
@@ -234,21 +229,6 @@ function checkpointWorkItems(
     purpose === "mail_reclassify"
       ? mailReclassificationCheckpoint.safeParse(owner.progress).data
       : undefined;
-  if (ai)
-    items = {
-      ...items,
-      phase: "evaluate",
-      label: "Evaluating",
-      unit: "evaluations",
-      processed:
-        ai.completed +
-        ai.failed +
-        ai.blocked +
-        (ai.obsolete ?? 0) +
-        (ai.cancelled ?? 0),
-      total: ai.selected,
-      failures: ai.failed,
-    };
   if (mail) {
     const phase =
       mail.phase === "listing" || mail.phase === "fetching"

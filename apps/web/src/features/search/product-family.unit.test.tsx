@@ -62,7 +62,7 @@ describe("Product family current placement values", () => {
     expect(child.destination.id).toBe(placement.id);
     render(<ProductFamilyChildContent child={child} />);
     expect(screen.getByText("Synthetic room › Shelf")).toBeVisible();
-    expect(screen.getByLabelText("Not calculated yet")).toBeVisible();
+    expect(screen.getByText("Waiting for Cubby")).toBeVisible();
     expect(screen.queryByText("0 each")).not.toBeInTheDocument();
   });
 });

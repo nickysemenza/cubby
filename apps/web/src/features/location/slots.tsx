@@ -4,7 +4,7 @@ import type { FunctionComponent } from "react";
 import type { CollectionActionProps } from "~/entity/entity-detail/collection-actions";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
-import { SubjectJobsDisclosure } from "~/features/job/job-diagnostics";
+import { RecordWorkerFacts } from "~/entity/machinery/record-machinery";
 import { AiDescriptionSection } from "~/features/location/ai-description-section";
 import { Stack } from "~/ui/layout";
 
@@ -22,12 +22,12 @@ export const LocationAiDescription: DetailSlotComponent<"location"> = ({
   record: location,
 }) => (
   <Stack gap="sm">
+    <RecordWorkerFacts entity="location" id={location.id} />
     <EntityReportSlot
       slot="location.ai-description"
       id={location.id}
       record={location}
     />
-    <SubjectJobsDisclosure subject={{ kind: "location", id: location.id }} />
   </Stack>
 );
 

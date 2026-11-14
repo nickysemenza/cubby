@@ -10,7 +10,7 @@ import {
   type ImageMetadataExtractionRow,
 } from "~/server/domains/image/repo/image";
 import { deriveAndStoreImageCapture } from "~/server/domains/image/repo/image-capture-derivation";
-import type { Fenced } from "~/server/generic/jobs/types";
+import type { Publication } from "~/server/kernel/publication";
 
 /**
  * Writes extracted EXIF and re-derives the image's capture fields in one
@@ -34,7 +34,7 @@ export async function applyImageMetadataExtraction(
 
 /** Publish extracted metadata only while this Job and the original bytes remain current. */
 export async function publishExtractedImageMetadata(
-  fenced: Fenced,
+  fenced: Publication,
   imageId: ImageId,
   source: ImageMetadataExtractionRow,
   read: (
@@ -53,7 +53,8 @@ export async function publishExtractedImageMetadata(
     if (
       !current ||
       current.key !== source.key ||
-      current.contentType !== source.contentType
+      current.contentType !== source.contentType ||
+      current.sourceRevision !== source.sourceRevision
     )
       throw new Error("Image metadata source changed during extraction");
     await write(tx);

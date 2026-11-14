@@ -376,7 +376,12 @@ type PredicateValueOf<E extends Entity, K extends string> =
  * fails typecheck.
  */
 export type DerivedSqlArg<E extends Entity> = {
-  readonly [K in GeneratedDerivedValueKey<E>]: DerivedValueSql;
+  readonly [
+    K in Exclude<
+      GeneratedDerivedValueKey<E>,
+      "machineryStage" | "machineryActor"
+    >
+  ]: DerivedValueSql;
 } & {
   readonly [K in GeneratedDerivedPredicateKey<E>]: DerivedPredicateSql<
     PredicateValueOf<E, K>
@@ -658,13 +663,22 @@ const rollupSql = (entity: Entity, rollup: Rollup, table: PgTable): SQL => {
   const leaf = (column: string) =>
     sql`${sql.raw(traversal.leafAlias)}.${sql.identifier(column)}`;
   const value = rollup.column === null ? null : leaf(rollup.column);
+  // Minor-unit money aggregates integer cents, then reads back as dollars.
+  const minor =
+    entityFieldModels[rollup.target].storage.find(
+      (field) => field.column === rollup.column,
+    )?.specialized === "minor-unit-money";
   const aggregate =
     rollup.aggregate === "count"
       ? sql`count(*)::int`
       : rollup.aggregate === "sum"
-        ? // Accumulate exactly; summing double precision drifts by cents.
-          sql`COALESCE(sum(${value}::numeric), 0)::double precision`
-        : sql`${sql.raw(rollup.aggregate)}(${value})`;
+        ? minor
+          ? sql`(COALESCE(sum(${value}), 0) / 100.0)::double precision`
+          : // Accumulate exactly; summing double precision drifts by cents.
+            sql`COALESCE(sum(${value}::numeric), 0)::double precision`
+        : minor
+          ? sql`(${sql.raw(rollup.aggregate)}(${value}) / 100.0)::double precision`
+          : sql`${sql.raw(rollup.aggregate)}(${value})`;
   const firstAlias = sql.raw(first.alias);
   const conditions = [
     sql`(${first.condition})`,

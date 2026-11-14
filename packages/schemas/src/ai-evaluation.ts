@@ -1,5 +1,4 @@
 import { entityIdSchema } from "./identifier-fields";
-import { suggestionChildHandle } from "./suggestion-reference";
 import { z } from "zod";
 
 /** Stored marker distinguishing a member stop from other retained cancellations. */
@@ -59,24 +58,7 @@ export const suggestionSupersessionReceipt = z.object({
 export type SuggestionSupersessionReceipt = z.infer<
   typeof suggestionSupersessionReceipt
 >;
-/** Domain states only: retry and lease state belong to the drain's work item. */
-export const aiEvaluationState = z.enum([
-  "queued",
-  "result_ready",
-  "completed",
-  "blocked",
-  "failed",
-  "obsolete",
-  "cancelled",
-]);
-export const aiExecutionKind = z.enum([
-  "ai_refresh",
-  "mail_reclassify",
-  "suggestion_sweep",
-  "mail_discovery",
-]);
-export type AiExecutionKind = z.infer<typeof aiExecutionKind>;
-const aiEvaluationTargetKind = z.enum(["field", "email"]);
+
 /**
  * Why field automation evaluated a field, carried from scheduling to the
  * published Suggestion so Changes by Cubby can group by it. `ref` names a
@@ -93,26 +75,7 @@ export const fieldAutomationCause = z.object({
   ]),
   ref: z.string().optional(),
 });
-export type FieldAutomationCause = z.infer<typeof fieldAutomationCause>;
 
-export const aiEvaluationTarget = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal(aiEvaluationTargetKind.enum.field),
-    entity: z.string(),
-    recordId: z.uuid(),
-    field: z.string(),
-    suggestionIds: z.array(suggestionChildHandle),
-    cause: fieldAutomationCause.optional(),
-  }),
-  z.object({
-    kind: z.literal(aiEvaluationTargetKind.enum.email),
-    entity: z.literal("email"),
-    recordId: entityIdSchema("email"),
-    field: z.null(),
-    suggestionIds: z.array(suggestionChildHandle).max(0),
-  }),
-]);
-export type AiEvaluationTarget = z.infer<typeof aiEvaluationTarget>;
 export const aiRefreshManifest = z.record(
   z.string(),
   z.object({

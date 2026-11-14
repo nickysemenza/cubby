@@ -17,6 +17,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { purchaseRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.purchase.gen";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db";
 import { getDb, insertAndReturn, withTransaction } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
@@ -28,6 +29,7 @@ import {
   purchase,
 } from "~/server/db/schema";
 import { readExpense } from "~/server/domains/expense/repo/crud";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   linkExpensesToPurchaseWorkflow,
   splitExpenseWorkflow,
@@ -39,8 +41,8 @@ import {
 import { executeEntity } from "~/server/entity-kernel";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 import {
   makeExpenseInput,
   createProductFixture,
@@ -525,6 +527,7 @@ describe("purchase repository — mergePurchases", () => {
     const locked = Promise.withResolvers<number>();
     const release = Promise.withResolvers<void>();
     const editing = getDb(ctx.db).transaction(async (tx) => {
+      await enterWriteTransaction(tx, { lane: "money", mode: "member" });
       await tx
         .select({ id: purchase.id })
         .from(purchase)
@@ -536,10 +539,12 @@ describe("purchase repository — mergePurchases", () => {
       );
       locked.resolve(z.object({ pid: z.number() }).parse(result[0]).pid);
       await release.promise;
-      await tx
-        .update(purchase)
-        .set({ notes: sql`${purchase.notes} || E'\nConcurrent research'` })
-        .where(eq(purchase.id, keeper.entityId));
+      await updatePurchaseEventWhere(
+        tx,
+        "purchase",
+        { notes: sql`${purchase.notes} || E'\nConcurrent research'` },
+        eq(purchase.id, keeper.entityId),
+      );
     });
     const pid = await locked.promise;
     const folding = withTransaction(ctx.db, (tx) =>

@@ -3,12 +3,12 @@ import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { unwrapDb } from "~/server/db/helpers";
 import { entityExternalId } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { ENTITY_REPOSITORY_READ_SCHEMAS } from "~/server/generated/entity-bindings.gen";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createMcpServer } from "~/server/mcp/server";
 import {
   createProductIdentityFixture,
@@ -52,7 +52,7 @@ describe("entity_read field selection", () => {
     await insertWithShortcode(ctx.db, "expense", {
       purchaseId: purchase.id,
       name: "Synthetic selection line",
-      cost: 12.5,
+      cost: 1250n,
       date: "2026-09-01",
       costType: "materials",
       trade: "other",

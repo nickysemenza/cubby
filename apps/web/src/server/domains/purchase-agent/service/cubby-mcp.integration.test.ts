@@ -4,7 +4,7 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { requireActor } from "~/server/http/request-context";
 import { purchaseAgentToolCatalog } from "~/server/mcp/agent-tool-catalog";
 import { handleMcpRequest } from "~/server/mcp/server";

@@ -35,6 +35,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   email as emailTable,
@@ -45,9 +46,9 @@ import {
   user,
   vendorAccount,
 } from "~/server/db/schema";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { admitSupportingMailSource } from "~/server/domains/purchase-import/repo/mail-run-membership";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
 import { readMail, resolveMail } from "./mail-tool";
@@ -339,7 +340,7 @@ describe("Mail import source admission", () => {
       status: "researching",
     });
 
-    const existing = await insertWithShortcode(ctx.db, "purchase", {
+    const existing = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       orderId: "SYN-3",
     });
@@ -856,7 +857,9 @@ describe("Mail import source admission", () => {
         .where(
           and(eq(expense.purchaseId, purchases[0]!.id), notDeleted(expense)),
         );
-      expect(spend.reduce((sum, row) => sum + (row.cost ?? 0), 0)).toBe(24);
+      expect(
+        spend.reduce((sum, row) => sum + Number(row.cost ?? 0n) / 100, 0),
+      ).toBe(24);
     },
   );
 });

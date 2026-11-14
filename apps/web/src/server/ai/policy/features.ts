@@ -3,7 +3,7 @@
  *
  * Every feature-runner call is declared here once — tier (which
  * decides the model), token cap, reasoning effort, whether the gateway may
- * cache it, the prompt version the AiAnalysis store keys on, and the schema
+ * cache it, the prompt version the Answer envelope keys on, and the schema
  * the model must return. `run-feature.ts` (or `decision-model.ts`) alone reads a
  * record to actually place a call, so a gateway-wide policy change (a cache
  * TTL, a new middleware, a tier's model) is one edit here or there rather
@@ -11,7 +11,7 @@
  *
  * `model` is DERIVED from `tier` ({@link MODEL_FOR_TIER}): retiering a
  * feature moves its model, and swapping a tier's model moves every feature on
- * it. The AiAnalysis fingerprint and cache key read `model` off the record,
+ * it. The Answer envelope and cache key read `model` off the record,
  * so both follow automatically. A chat feature's tier is its ceiling: the
  * runner answers on the fast tier first and spends each stronger tier once,
  * only on an unusable or invalid answer (ADR 0027).
@@ -112,8 +112,6 @@ import {
   productVariantRelationPrompt,
 } from "./prompts/semantic-decisions";
 import {
-  statementChargeIdentityChoices,
-  statementChargeIdentityPrompt,
   statementCounterpartyChoices,
   statementCounterpartyPrompt,
   statementTransactionKindChoices,
@@ -240,17 +238,6 @@ export const MAIL_ATTACHMENT_PURPOSE_FEATURE = defineFeature({
   choices: mailAttachmentPurposeChoices,
   feature: "mail-attachment-purpose",
   promptVersion: "2026-10-14.1",
-  tier: "decision",
-  cache: true,
-  collectPayload: false,
-});
-
-/** Advisory label on a statement Transaction suggestion's attach candidate. */
-export const STATEMENT_CHARGE_IDENTITY_FEATURE = defineFeature({
-  prompt: statementChargeIdentityPrompt,
-  choices: statementChargeIdentityChoices,
-  feature: "statement-charge-identity",
-  promptVersion: "2026-11-12.1",
   tier: "decision",
   cache: true,
   collectPayload: false,
@@ -641,7 +628,6 @@ export const AI_FEATURES = [
   MAIL_ATTRIBUTION_FEATURE,
   MAIL_SOURCE_RELATION_FEATURE,
   MAIL_FINANCIAL_EVENT_FEATURE,
-  STATEMENT_CHARGE_IDENTITY_FEATURE,
   STATEMENT_TRANSACTION_KIND_FEATURE,
   LOAN_ESCROW_DISBURSEMENT_FEATURE,
   STATEMENT_COUNTERPARTY_FEATURE,

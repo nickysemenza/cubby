@@ -16,18 +16,13 @@ import {
   type PurchaseId,
   type VendorId,
 } from "@cubby/schemas/identifiers";
-import {
-  paymentTender,
-  type PaymentTender,
-} from "@cubby/schemas/purchase-import";
 import { cents, minorToMoney } from "@cubby/shared";
-import { and, asc, between, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, between, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
 import { advisoryXactLock } from "~/server/db/advisory-lock";
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import { notDeleted } from "~/server/db/helpers";
-import { columnArrayParam } from "~/server/db/helpers/query";
 import { outer } from "~/server/db/helpers/related";
 import { quotedTable } from "~/server/db/helpers/related";
 import {
@@ -40,6 +35,7 @@ import {
   purchase,
   purchasePaymentEvidence,
 } from "~/server/db/schema";
+import { postingWindowDayBounds } from "~/server/domains/financial-transaction/policy/settlement-window";
 import { financialEvidenceAmountMinor } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
   applyAllocationChanges,
@@ -53,16 +49,23 @@ import {
   purchaseRefundAccountIdsSql,
   transactionSettlementConflicts,
 } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
+import { combinedChargeAllocations } from "~/server/domains/purchase-import/policy/combined-charge";
+import { competingPaymentClaimants } from "~/server/domains/purchase-import/policy/competing-payments";
+import { matchCompletePaymentSet } from "~/server/domains/purchase-import/policy/import-lines";
+import { groupMemberNamesCharge } from "~/server/domains/purchase-import/policy/payment-match";
 import {
-  postingWindowDayBounds,
-  withinPostingInstantWindowSql,
-} from "~/server/domains/financial-transaction/repo/settlement-window";
+  RetainedPayment,
+  RetainedPaymentRow,
+  RetainedSettlementDiscoveryFacts,
+  Charge,
+  RetainedSettlementOutcome,
+  normalizePaymentSet,
+  anchorPayments,
+  toPolicyPayments,
+} from "~/server/domains/purchase-import/policy/retained-payments";
 import { unpricedForeignExpenseSql } from "~/server/domains/purchase-import/repo/writer-policy";
-import {
-  matchCompletePaymentSet,
-  type SettlementCandidate,
-} from "~/server/domains/purchase-import/repo/writer-policy";
 import { merchantVendorAllowsSettlementSql } from "~/server/domains/vendor/repo/merchant-vendor-inference";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 
 type SettlementReader = Pick<
   DrizzleTransaction,
@@ -78,15 +81,9 @@ export async function lockPartySettlement(
   tx: SettlementReader,
   ledgerPartyId: LedgerPartyId,
 ): Promise<void> {
+  await enterWriteTransaction(tx, { lane: "money", mode: "member" });
   await advisoryXactLock(tx, "purchase-settlement", ledgerPartyId);
 }
-
-type RetainedPayment = Readonly<
-  Pick<
-    typeof purchasePaymentEvidence.$inferSelect,
-    "amountMinor" | "chargedAt" | "cardLastFour" | "tender"
-  >
->;
 
 const retainedPaymentFields = {
   sourceClaimId: purchasePaymentEvidence.sourceClaimId,
@@ -95,43 +92,6 @@ const retainedPaymentFields = {
   cardLastFour: purchasePaymentEvidence.cardLastFour,
   tender: purchasePaymentEvidence.tender,
 };
-
-type RetainedPaymentRow = RetainedPayment &
-  Pick<typeof purchasePaymentEvidence.$inferSelect, "sourceClaimId">;
-
-type RetainedSettlementDiscoveryFacts = Readonly<{
-  target: Readonly<
-    Pick<typeof purchase.$inferSelect, "vendorId" | "date"> & {
-      statedTotal: number | null;
-    }
-  > | null;
-  hasAllocation: boolean;
-  hasNegativeAllocation: boolean;
-  payments: readonly RetainedPayment[] | "conflicting_sources";
-  ownerIds: readonly LedgerPartyId[];
-}>;
-
-type Charge = SettlementCandidate & {
-  kind: ReturnType<typeof financialTransactionKind.parse>;
-  accountId: FinancialAccountId;
-};
-
-export type RetainedSettlementOutcome =
-  | "allocated"
-  | "already_allocated"
-  | "no_evidence"
-  | "conflicting_sources"
-  | "incomplete"
-  | "competing";
-
-// Sources record the same payment at different precision (a full timestamp
-// and card on the page, a date only in an export), so they agree on amount
-// and charge day.
-// The UTC day on purpose: date-only sources arrive as UTC-midnight
-// timestamps, and the deferred-settlement SQL compares `chargedAt::date`.
-const paymentKey = (payment: RetainedPayment) =>
-  // oxlint-disable-next-line cubby/no-ad-hoc-calendar-day -- same UTC day as the SQL side
-  `${payment.amountMinor}|${payment.chargedAt?.toISOString().slice(0, 10) ?? ""}`;
 
 /**
  * One order's payment set. A Purchase seen through several sources (a browser
@@ -152,64 +112,6 @@ async function loadPaymentSet(
     );
   return normalizePaymentSet(rows);
 }
-
-function normalizePaymentSet(
-  rows: readonly RetainedPaymentRow[],
-): RetainedPayment[] | "conflicting_sources" {
-  const bySource = new Map<string, RetainedPayment[]>();
-  for (const row of rows) {
-    const set = bySource.get(row.sourceClaimId) ?? [];
-    set.push(row);
-    bySource.set(row.sourceClaimId, set);
-  }
-  const sets = [...bySource.values()];
-  const signature = (set: RetainedPayment[]) =>
-    set.map(paymentKey).sort().join(";");
-  const [first] = sets;
-  if (!first) return [];
-  if (!sets.every((set) => signature(set) === signature(first)))
-    return "conflicting_sources";
-  // Agreeing sources may differ in what they say paid: an order page omits a
-  // tender that the export names. A known tender is never left as a wildcard.
-  const knownTender = new Map<string, PaymentTender>();
-  const knownCard = new Map<string, string>();
-  for (const payment of sets.flat()) {
-    const key = paymentKey(payment);
-    if (payment.tender !== "unknown") {
-      const previous = knownTender.get(key);
-      if (previous && previous !== payment.tender) return "conflicting_sources";
-      knownTender.set(key, payment.tender);
-    }
-    if (payment.cardLastFour) {
-      const previous = knownCard.get(key);
-      if (previous && previous !== payment.cardLastFour)
-        return "conflicting_sources";
-      knownCard.set(key, payment.cardLastFour);
-    }
-  }
-  return first.map((payment) => ({
-    ...payment,
-    tender: knownTender.get(paymentKey(payment)) ?? payment.tender,
-    cardLastFour: knownCard.get(paymentKey(payment)) ?? payment.cardLastFour,
-  }));
-}
-
-/**
- * A wholly undated payment set stands at its order date: charges for such
- * orders post within the posting window of the order date. A dated line keeps
- * its instant, and its undated siblings stay bounded by it. Without either
- * there is no window, and an amount alone is coincidence, not evidence.
- */
-const anchorPayments = (
-  payments: readonly RetainedPayment[],
-  orderDate: string | null,
-): RetainedPayment[] =>
-  !orderDate || payments.some((payment) => payment.chargedAt)
-    ? [...payments]
-    : payments.map((payment) => ({
-        ...payment,
-        chargedAt: new Date(`${orderDate}T12:00:00.000Z`),
-      }));
 
 /**
  * Page-local discovery facts only. Plans still match each charge separately;
@@ -428,32 +330,6 @@ async function settleableCharges(
   ];
 }
 
-const toPolicyPayments = (payments: RetainedPayment[]) =>
-  payments.map((payment) => ({
-    amount: minorToMoney(payment.amountMinor),
-    chargedAt: payment.chargedAt?.toISOString(),
-    cardLastFour: payment.cardLastFour ?? undefined,
-    tender: payment.tender,
-  }));
-
-/** A charge absent from every payment's exact matcher cannot appear in its full plan. */
-export function retainedSettlementDiscoveryCouldMatch(
-  facts: RetainedSettlementDiscoveryFacts | undefined,
-  charge: SettlementCandidate,
-  existingCharge: boolean,
-) {
-  // Attachment previews can change an existing charge; the full planner uses
-  // its stored representation instead of the supplied additional charge.
-  if (existingCharge || !facts) return true;
-  return (
-    facts.payments !== "conflicting_sources" &&
-    anchorPayments(facts.payments, facts.target?.date ?? null).some(
-      (payment) =>
-        matchCompletePaymentSet(toPolicyPayments([payment]), [charge]) !== null,
-    )
-  );
-}
-
 /**
  * Other live Purchases still short of their own payment total whose retained
  * payment line could take this charge. Deliberately wide (any member, any
@@ -464,9 +340,16 @@ async function competingClaimants(
   charge: Charge,
   excludePurchaseId: PurchaseId,
 ): Promise<PurchaseId[]> {
-  const cards = charge.cardLastFours;
+  const amountMinor = financialEvidenceAmountMinor(charge.amount);
   const rows = await tx
-    .selectDistinct({ purchaseId: purchasePaymentEvidence.purchaseId })
+    .select({
+      purchaseId: purchasePaymentEvidence.purchaseId,
+      chargedAt: purchasePaymentEvidence.chargedAt,
+      tender: purchasePaymentEvidence.tender,
+      cardLastFour: purchasePaymentEvidence.cardLastFour,
+      paidMinor: sql<string>`coalesce((SELECT sum(fta."amountMinor") FROM "FinancialTransactionAllocation" fta WHERE fta."purchaseId"=${purchasePaymentEvidence.purchaseId} AND ${notDeleted("fta")} AND sign(fta."amountMinor")=sign(${amountMinor}::numeric)),0)::text`,
+      evidenceMinor: sql<string>`(SELECT sum(ppe."amountMinor") FROM "PurchasePaymentEvidence" ppe WHERE ppe."purchaseId"=${purchasePaymentEvidence.purchaseId} AND sign(ppe."amountMinor")=sign(${amountMinor}::numeric))::text`,
+    })
     .from(purchasePaymentEvidence)
     .innerJoin(
       purchase,
@@ -478,36 +361,17 @@ async function competingClaimants(
     .where(
       and(
         sql`${purchasePaymentEvidence.purchaseId} <> ${excludePurchaseId}::uuid`,
-        eq(
-          purchasePaymentEvidence.amountMinor,
-          financialEvidenceAmountMinor(charge.amount),
-        ),
-        // An undated line's charge date is unknown, so it competes for any
-        // charge of its amount; the order-date anchor never narrows it.
-        sql`(${purchasePaymentEvidence.chargedAt} IS NULL
-          OR ${withinPostingInstantWindowSql(purchasePaymentEvidence.chargedAt, charge.occurredAt)})`,
-        charge.storedValue
-          ? ne(purchasePaymentEvidence.tender, paymentTender.enum.card)
-          : ne(purchasePaymentEvidence.tender, paymentTender.enum.stored_value),
-        cards.length > 0
-          ? sql`(${purchasePaymentEvidence.cardLastFour} IS NULL
-              OR ${purchasePaymentEvidence.cardLastFour} = ANY(${columnArrayParam(cards)}))`
-          : undefined,
-        // A Purchase whose allocations already cover its payment lines makes
-        // no further claim; a partly settled one still does.
-        sql`abs(coalesce((
-          SELECT sum((${minorToDollarsSql(sql`fta."amountMinor"`, "numeric")})) FROM "FinancialTransactionAllocation" fta
-          WHERE fta."purchaseId" = "PurchasePaymentEvidence"."purchaseId"
-            AND ${notDeleted("fta")}
-            AND sign((${minorToDollarsSql(sql`fta."amountMinor"`, "numeric")})) = sign(${charge.amount}::numeric)
-        ), 0)) < abs((
-          SELECT ${minorToDollarsSql(sql`sum(ppe."amountMinor")`, "numeric")} FROM "PurchasePaymentEvidence" ppe
-          WHERE ppe."purchaseId" = "PurchasePaymentEvidence"."purchaseId"
-            AND sign(ppe."amountMinor") = sign(${charge.amount}::numeric)
-        ))`,
+        eq(purchasePaymentEvidence.amountMinor, amountMinor),
       ),
     );
-  return rows.map((row) => row.purchaseId);
+  return competingPaymentClaimants(
+    { ...charge, amountMinor },
+    rows.map((row) => ({
+      ...row,
+      paidMinor: BigInt(row.paidMinor),
+      evidenceMinor: BigInt(row.evidenceMinor),
+    })),
+  );
 }
 
 type PlannedAllocation = {
@@ -545,7 +409,6 @@ async function evidencedChargeGroup(
     .where(and(inArray(purchase.id, members), notDeleted(purchase)))
     .orderBy(asc(purchase.id));
   const rows = await query;
-  if (rows.length !== members.length) return null;
   const [allocated] = await tx
     .select({ id: financialTransactionAllocation.id })
     .from(financialTransactionAllocation)
@@ -556,16 +419,28 @@ async function evidencedChargeGroup(
       ),
     )
     .limit(1);
-  if (allocated) return null;
-  for (const row of rows) {
-    if (!(await namesOnlyThisCharge(tx, { ...input, row }))) return null;
-  }
-  const total = rows.reduce((sum, row) => sum + cents(row.statedTotal ?? 0), 0);
-  if (total !== cents(input.charge.amount)) return null;
-  return rows.map((row) => ({
-    purchaseId: row.id,
-    amount: row.statedTotal ?? 0,
-  }));
+  const membersRead = [];
+  for (const row of rows)
+    membersRead.push({
+      id: row.id,
+      statedTotalMinor:
+        row.statedTotal === null
+          ? null
+          : financialEvidenceAmountMinor(row.statedTotal),
+      namesThisCharge: await namesOnlyThisCharge(tx, { ...input, row }),
+    });
+  const plan = combinedChargeAllocations({
+    amountMinor: financialEvidenceAmountMinor(input.charge.amount),
+    memberIds: members,
+    hasAllocation: Boolean(allocated),
+    purchases: membersRead,
+  });
+  return (
+    plan?.map((row) => ({
+      purchaseId: row.purchaseId,
+      amount: minorToMoney(row.amountMinor),
+    })) ?? null
+  );
 }
 
 /** One group member: a single payment line naming this charge and no other. */
@@ -584,12 +459,6 @@ async function namesOnlyThisCharge(
   },
 ): Promise<boolean> {
   const { row } = input;
-  if (
-    row.vendorId !== input.vendorId ||
-    row.statedTotal === null ||
-    cents(row.statedTotal) <= 0
-  )
-    return false;
   const [claim] = await tx
     .select({ ledgerPartyId: importSourceClaim.ledgerPartyId })
     .from(importSourceClaim)
@@ -599,26 +468,38 @@ async function namesOnlyThisCharge(
     )
     .where(eq(importSourceOrder.purchaseId, row.id))
     .limit(1);
-  if (claim?.ledgerPartyId !== input.ledgerPartyId) return false;
   const retained = await loadPaymentSet(tx, row.id);
-  if (retained === "conflicting_sources" || retained.length !== 1) return false;
-  const payments = anchorPayments(retained, row.date);
-  if (
-    (payments[0]?.amountMinor ?? 0n) !==
-    financialEvidenceAmountMinor(input.charge.amount)
-  )
-    return false;
-  const own = matchCompletePaymentSet(
-    toPolicyPayments(payments),
-    await settleableCharges(tx, {
-      purchaseId: row.id,
-      ledgerPartyId: input.ledgerPartyId,
-      vendorId: input.vendorId,
-      payments,
-      additionalCharges: [input.charge],
-    }),
-  );
-  return own?.[0]?.transactionId === input.charge.id;
+  const payments =
+    retained === "conflicting_sources"
+      ? retained
+      : anchorPayments(retained, row.date);
+  const charges =
+    payments === "conflicting_sources"
+      ? []
+      : await settleableCharges(tx, {
+          purchaseId: row.id,
+          ledgerPartyId: input.ledgerPartyId,
+          vendorId: input.vendorId,
+          payments,
+          additionalCharges: [input.charge],
+        });
+  return groupMemberNamesCharge({
+    purchaseVendorId: row.vendorId,
+    vendorId: input.vendorId,
+    statedTotalMinor:
+      row.statedTotal === null
+        ? null
+        : financialEvidenceAmountMinor(row.statedTotal),
+    ownerId: claim?.ledgerPartyId ?? null,
+    ledgerPartyId: input.ledgerPartyId,
+    chargeId: input.charge.id,
+    amountMinor: financialEvidenceAmountMinor(input.charge.amount),
+    payments,
+    charges: charges.map((charge) => ({
+      ...charge,
+      amountMinor: financialEvidenceAmountMinor(charge.amount),
+    })),
+  });
 }
 
 /** The sum of a Purchase's live, priced Expense lines, or null when none. */
@@ -649,7 +530,7 @@ async function liveExpenseTotalCents(
     row.unresolved === 0 &&
     Number(row.uncovered) === 0 &&
     row.total !== null
-    ? cents(Number(row.total))
+    ? Number(row.total)
     : null;
 }
 

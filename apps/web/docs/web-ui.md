@@ -39,9 +39,28 @@ heading for the surface you are changing.
   entity-specific copy: `StateBadge` (`ui/records/state-badge.tsx`),
   `ProgressMeter` (`ui/feedback/progress-meter.tsx`, fed a `ProgressValue`;
   `countedProgress` builds one from a plain count) and `KindTag`
-  (`ui/records/kind-tag.tsx`). `StateBadge` draws needs-you, stalled and failed
-  as filled pills and the rest as a dot or glyph with a label; a wait adds its
-  queue position and estimate on the display clock.
+  (`ui/records/kind-tag.tsx`). `StateBadge` draws the option's declared stage:
+  Needs you and Stuck as filled pills, Working, Waiting, Done and Ended as a dot
+  or glyph with a label; a wait adds its queue position and estimate on the
+  display clock. A local value-to-tone map for a state is a bug: map the value
+  to a stage and draw it with `StateBadge`.
+- What is happening to a record has one hierarchy (ADR 0029 section 10); each
+  level answers one question and a fact appears only at the highest level whose
+  question it answers. A list row says the stage, who acts next and the first
+  gap in six words or fewer, with an ETA only when the actor is a queue or
+  time. The detail header says why and what to do in three lines: the stage
+  line, the first gap as one sentence with its single action, and a count line
+  ("3 inputs · 2 asks · 1 decision · $0.004") that opens the machinery panel.
+  The panel (`ui/derived/machinery-panel.tsx`, read through
+  `entity/machinery/record-machinery.tsx`) lists every gap, then every input
+  in the order the reconciler used it, then drift; raw model, tier, cost,
+  input hash, error and payload sit inside each row with Copy. Cubby's routine
+  work sits in the panel at the same weight as a member's. Every word comes
+  from `field-envelope-presentation.ts`: the stage words Needs you, Waiting,
+  Working, Stuck, Done and Ended; the actors you, Cubby, an agent, a named
+  source and time; the sentence `{Stage} · {waiting|working} for {input} from
+  {actor}`; row statuses Used, Skipped, Gap, Blocked and Failed as visible
+  words. An entity without a machinery capability keeps its `StateBadge`.
 
 ## Spacing and layout primitives
 
@@ -489,7 +508,9 @@ never call `PageWrapper` directly. Detail bodies use `DetailSections`
 
 - The detail header draws breadcrumb, title, `KindTag`, `StateBadge`, commands,
   then up to three declared `detail.lines` (64px label column) beside the
-  labelled AI summary from 1120px of pane width.
+  labelled AI summary from 1120px of pane width. For an entity with a
+  machinery capability the three machinery lines replace the `StateBadge` and
+  lead the summary; they wrap rather than truncate.
 - The workspace is a 272px side column (236px at 1000px or narrower) beside
   declared section groups as 44px tabs with counts. Without `detail.groups` an
   entity gets Overview, Work, Evidence, Relations and Activity. Every panel
@@ -516,46 +537,18 @@ surfaces keep their own engines.
 
 ## Work page
 
-`/activity` is the Work page: a health line, a Stuck section only when something
-is stuck, a closed Queue details disclosure, the Needs you queue, then links to Suggestions, Changes by Cubby,
-Missing facts, All work and History (`/history`, Run history and recorded
-Changes). It answers whether
-background work is healthy and what needs a member. Outside Queue details it
-uses no scheduler or queue vocabulary (wakes, leases, tickets, deadlines, pace,
-refresh counts); other telemetry belongs to Run pages and MCP.
+`/activity` is the Work page: a kernel health line, stuck records when present,
+the Needs you list, then links to Agent backlog, Suggestions, Changes by Cubby,
+Missing facts, All work and History. Run and record machinery disclose execution
+details beside the affected evidence.
 
-- The health line states Healthy, Catching up, Stuck or Unknown, never a count of
-  internal work, percentage or ETA. A failed read says the page cannot tell, with
-  raw diagnostics and Try again, and never claims all clear.
+- The health line states whether kernel work is stuck or catching up and when
+  work last finished. A failed read says the page cannot tell, with raw
+  diagnostics and Try again, and never claims all clear.
 - Stuck rows show an outcome title, one sentence on consequence or remedy, at
-  most one action, and a closed Technical details disclosure with the raw
-  failure and Copy. Eight rows show first; Show more reveals the rest in place. A
-  retry rereads every 10 seconds for two minutes, then stops.
-- A stopped row's sentence leads with the cause when the server names one
-  ("115 Mail discovery Runs keep deferring on provider capacity."), and its
-  Technical details carry the queue as text.
-- Queue details reads `job.activity` only once opened. It lists each Job kind
-  and drain unit as a flat hairline row: member label and stored unit name,
-  then claimed, finished, deferred and failed counts for the last hour, the
-  oldest due work, leases held, a drain's last pass and each group of waiting
-  Jobs with its Run links, then when the unit's due work drains at the kind's
-  last-5-minute pace ("Drains in about 26 min at the last 5 minutes' pace.");
-  funding groups are left out of that count, and a kind with no recent
-  completion reads "Pace unknown". AI evaluations follow, one row per feature with its
-  queued, answered-not-saved and blocked counts, oldest age and most common
-  error. Rows put the name beside the facts from 768px and stack below it; no
-  row scrolls sideways. A failed read shows the raw error and Try again.
-- Needs you is the embedded `WorkQueue` grouped by Reason over
-  `NEEDS_YOU_FILTERS`, the same population as the sidebar and Home. Empty, it
-  reads `Nothing needs you.`; with incomplete inputs it shows the known-work
-  notice instead, because an unknown source cannot be claimed empty. Source and
-  Problem keys never reach the member. The "More work" row leads with one quiet
-  link, "Agent backlog · N", to the Agent view; it never counts toward the
-  sidebar badge or Home.
-- When the published queue's last republish failed or its rows are over ten
-  minutes old, Home, Work and the full queue add one line: "Needs you last
-  updated <relative time>", "; the latest update failed" when it did, a closed
-  Technical details disclosure with Copy, and Retry. The rows stay.
+  most one record link, and a closed Technical details disclosure with the raw
+  failure and Copy. Eight rows show first; Show more reveals the rest in place.
+- Needs you reads `machinery.needsYou`, the kernel’s gaps whose actor is a member, grouped by the six stage words. Each row links its record and offers an inline decision when the gap has exactly one action. Page controls retain the full count; empty reads say `Nothing needs you.` Loading uses skeletons and failures show raw diagnostics and Retry. Home and sidebar use the same member-gap population. The health verdict remains independent.
 - The sidebar Work row shows the needs-you count and, only when something is
   stuck or the count is behind, a static warning glyph; the collapsed rail shows
   one dot with the same label. Healthy work shows nothing at any backlog size, a
@@ -565,3 +558,7 @@ refresh counts); other telemetry belongs to Run pages and MCP.
   and alias pruning require a successful preview before Apply; each
   Current/Proposed sample states its coverage, and the server rechecks
   eligibility at Apply. Repair comparisons span the width below the description.
+
+## Run machinery
+
+The Run diagnostics slot reads `machinery.runWork`, resolving the public Run code before `runWork` reads its scopes, asks and passes from one snapshot. Stage groups show live counts and total ask cost in tabular figures. Row disclosures retain full keys, states, attempts and errors; failures show raw diagnostics and Retry. Sweeps and photo review retain their existing workspace sections.

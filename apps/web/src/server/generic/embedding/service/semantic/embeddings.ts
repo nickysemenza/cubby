@@ -26,7 +26,7 @@ import {
   runEmbeddingFeature,
 } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
+import { WorkDeferredError } from "~/server/kernel/work-errors";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 import { getSemanticEmbeddingConfig } from "./config";
@@ -212,7 +212,7 @@ export async function embedTexts(
             if (funding === "paid" && paidFundingRefusal(body)) {
               // A member's search fails readably; background work waits for funding.
               if (opts?.interactive) throw failure;
-              throw new JobDeferredError(
+              throw new WorkDeferredError(
                 failure.message,
                 fundingResumeAt(),
                 "ai_funding_window",

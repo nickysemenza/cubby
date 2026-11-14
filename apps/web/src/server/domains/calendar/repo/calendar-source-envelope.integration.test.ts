@@ -3,8 +3,8 @@ import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { createMealWithEntityId } from "~/server/domains/meal/repo/crud";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 
 import { getCalendarRange } from "./calendar";
@@ -38,7 +38,7 @@ describe("Calendar selected source envelopes", () => {
     const expense = await insertWithShortcode(ctx.db, "expense", {
       name: "Synthetic calendar materials",
       date: "2026-10-10",
-      cost: 17,
+      cost: 1700n,
       projectId: project.id,
       lineKind: "principal",
       costType: "materials",

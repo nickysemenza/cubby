@@ -5,6 +5,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, insertAndReturn, notDeleted } from "~/server/db/helpers";
 import { amountToColumns } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
@@ -30,7 +31,6 @@ import {
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { findOrphanedProducts } from "~/server/generic/problems/repo/detectors-product";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 describe("meal food entry lifecycle", () => {
   const ctx = withTestDb();

@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { galleryWriteFields } from "./image-fields";
 import { historicalDateRangePresets } from "../date-range";
 import { idField, readOnly, timestampField } from "./field-policy";
@@ -32,6 +33,634 @@ import { z } from "zod";
 import { TRADE_SUGGEST_RULE, tradeSchema } from "@cubby/schemas/task-fields";
 export const { definition, readSchemas } = defineEntityModel({
   key: "purchase",
+  edges: [
+    defineEdge({
+      key: "Expense.purchaseId",
+      from: "expense",
+      to: "purchase",
+      cardinality: "one",
+      inverse: {
+        key: "purchase.incoming.Expense.purchaseId",
+        from: "purchase",
+        to: "expense",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "Expense.purchaseId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "expense",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "ledger",
+        label: "expenses",
+        description:
+          "A categorized line of spend booked against this purchase. All money lives on Expense.cost; the purchase's own statedTotal is a soft reconciliation cue and is never summed into spend.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "clear-live-fk-with-audit",
+              effect: "detach",
+              description:
+                "Deleting a purchase nulls its expenses' purchaseId rather than deleting them — an expense is the money, and deleting a purchase must never delete spend. Each detach is logged to the audit trail.",
+            },
+            handler: null,
+            before: {
+              module: "~/server/domains/purchase/repo/purchase",
+              export: "purchaseDeleteEdgeHandlers",
+              member: "preserveItemAttribution",
+            },
+            order: 5,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "repoint-live-fk-with-audit",
+              effect: "repoint",
+              description:
+                "Merging a purchase re-points its expenses onto the surviving purchase, logged to the audit trail.",
+            },
+            handler: {
+              module: "~/server/domains/purchase/repo/purchase",
+              export: "purchaseMergeEdgeHandlers",
+              member: "moveExpenses",
+            },
+            order: 5,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "Shipment.purchaseId",
+      from: "shipment",
+      to: "purchase",
+      cardinality: "one",
+      inverse: {
+        key: "purchase.incoming.Shipment.purchaseId",
+        from: "purchase",
+        to: "shipment",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "Shipment.purchaseId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "shipment",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "reference",
+        label: "shipments",
+        description: "The package's currently accepted order association.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "detach-shipment",
+              effect: "detach",
+              description:
+                "Packages and their tracking evidence survive without a Purchase association.",
+            },
+            handler: null,
+            order: 0,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "repoint-shipment",
+              effect: "repoint",
+              description:
+                "Packages follow the surviving Purchase without changing tracking evidence.",
+            },
+            handler: null,
+            order: 0,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "SourceOrderObservation.purchaseId",
+      from: "row:SourceOrderObservation",
+      to: "purchase",
+      cardinality: "one",
+      inverse: {
+        key: "purchase.incoming.SourceOrderObservation.purchaseId",
+        from: "purchase",
+        to: "row:SourceOrderObservation",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "SourceOrderObservation.purchaseId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "Immutable source extraction history.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "source order observations",
+        description:
+          "The original Purchase subject of an immutable source extraction.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Immutable observation history retains its original subject UUID through deletion and merge.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "preserve-source-observation",
+              effect: "preserve",
+              description:
+                "Immutable extraction history retains its original subject UUID and tombstone without being repointed.",
+            },
+            handler: null,
+            order: 1,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "preserve-source-observation",
+              effect: "preserve",
+              description:
+                "Immutable extraction history retains its original subject UUID and tombstone without being repointed.",
+            },
+            handler: null,
+            order: 1,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "ImportPreparedOrder.targetPurchaseId",
+      from: "row:ImportPreparedOrder",
+      to: "purchase",
+      cardinality: "one",
+      inverse: {
+        key: "purchase.incoming.ImportPreparedOrder.targetPurchaseId",
+        from: "purchase",
+        to: "row:ImportPreparedOrder",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "ImportPreparedOrder.targetPurchaseId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason:
+          "Workflow evidence about entities, not a relationship between them.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "prepared purchase targets",
+        description:
+          "The explicitly reviewed target captured during import preparation.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Preparation retains its original target tombstone. Deletion or merge invalidates commit and requires preparation against the current Purchase.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "preserve-prepared-target",
+              effect: "preserve",
+              description:
+                "An import preparation retains its reviewed target tombstone and must be prepared again before commit.",
+            },
+            handler: null,
+            order: 2,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "preserve-prepared-target",
+              effect: "preserve",
+              description:
+                "A merge invalidates preparation against the original target rather than silently changing its approved identity.",
+            },
+            handler: null,
+            order: 2,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "ImportSourceOrder.purchaseId",
+      from: "row:ImportSourceOrder",
+      to: "purchase",
+      cardinality: "one",
+      inverse: {
+        key: "purchase.incoming.ImportSourceOrder.purchaseId",
+        from: "purchase",
+        to: "row:ImportSourceOrder",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "ImportSourceOrder.purchaseId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason:
+          "Workflow evidence about entities, not a relationship between them.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "import source claims",
+        description:
+          "The accepted source order that produced this purchase and fences its replay. Deleting the purchase clears the link and keeps the row as the Email's accepted history.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "detach-import-order",
+              effect: "detach",
+              description:
+                "The order association stays as the Email's accepted history with its Purchase link cleared, and its original-line Product bindings are removed; importing the same order again adds a new association beside it.",
+            },
+            handler: {
+              module: "~/server/domains/purchase/repo/purchase",
+              export: "purchaseDeleteEdgeHandlers",
+              member: "detachSourceOrders",
+            },
+            order: 3,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "repoint-import-claim",
+              effect: "repoint",
+              description: "Source claims follow the surviving purchase.",
+            },
+            handler: null,
+            order: 3,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "PurchasePaymentEvidence.purchaseId",
+      from: "row:PurchasePaymentEvidence",
+      to: "purchase",
+      cardinality: "one",
+      inverse: {
+        key: "purchase.incoming.PurchasePaymentEvidence.purchaseId",
+        from: "purchase",
+        to: "row:PurchasePaymentEvidence",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "PurchasePaymentEvidence.purchaseId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "column",
+        column: "PurchasePaymentEvidence.purchaseId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "transaction",
+        label: "payment evidence",
+        description:
+          "A captured shipment or order payment tied to this purchase.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "delete-payment-evidence",
+              effect: "hard-delete",
+              description:
+                "Captured payment evidence has no meaning without its purchase.",
+            },
+            handler: null,
+            order: 4,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "repoint-payment-evidence",
+              effect: "repoint",
+              description:
+                "Captured payment evidence follows the surviving purchase.",
+            },
+            handler: null,
+            order: 4,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "purchase/EntityAttachment.entityId",
+      from: "row:EntityAttachment",
+      to: "purchase",
+      cardinality: "one",
+      inverse: {
+        key: "purchase.incoming.EntityAttachment.entityId",
+        from: "purchase",
+        to: "row:EntityAttachment",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "EntityAttachment.entityId",
+        constrained: true,
+        partition: {
+          column: "EntityAttachment.entityKind",
+          value: "purchase",
+        },
+      },
+      ownership: {
+        kind: "identity",
+        column: "EntityAttachment.entityId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "media",
+        label: "purchase documents",
+        description:
+          "A receipt, invoice, or other document attached to this purchase.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "soft-delete-association",
+              effect: "soft-delete",
+              description:
+                "Image associations are soft-deleted with the purchase, and each file is\n      deleted too unless something else still references it.",
+            },
+            handler: null,
+            order: 6,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "move-dedupe-and-soft-delete-source",
+              effect: "move-dedupe",
+              description:
+                "The absorbed purchase's images move onto the survivor, skipping any already filed there, and the source associations are soft-deleted.",
+            },
+            handler: {
+              module: "~/server/domains/purchase/repo/purchase",
+              export: "purchaseMergeEdgeHandlers",
+              member: "foldImages",
+            },
+            order: 6,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "FinancialTransactionAllocation.purchaseId",
+      from: "row:FinancialTransactionAllocation",
+      to: "purchase",
+      cardinality: "one",
+      inverse: {
+        key: "purchase.incoming.FinancialTransactionAllocation.purchaseId",
+        from: "purchase",
+        to: "row:FinancialTransactionAllocation",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "FinancialTransactionAllocation.purchaseId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "column",
+        column: "FinancialTransactionAllocation.transactionId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "transaction",
+        label: "settlement allocations",
+        description:
+          "A slice of one card or bank transaction attributed to this purchase. One real charge can settle several purchases, so the slice — not the whole transaction — is what this order settled. The amount is evidence only; spend remains SUM(Expense.cost).",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "soft-delete-allocations-of-affected-transactions",
+              effect: "soft-delete",
+              description:
+                "Deleting a purchase removes its settlement allocations — and, for a transaction that was split across this purchase and others, the sibling slices too, because a partial allocation set is not a legal state: a transaction has either none, or a set summing to its amount. Those transactions revert to unlinked evidence on their accounts; no amount changes. For the ordinary single-allocation transaction this is exactly equivalent to detaching it.",
+            },
+            handler: {
+              module: "~/server/domains/purchase/repo/purchase",
+              export: "purchaseDeleteEdgeHandlers",
+              member: "removeWholeAllocationSets",
+            },
+            order: 9,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "move-and-sum-amounts-then-soft-delete-source",
+              effect: "move-dedupe",
+              description:
+                "The absorbed purchase's settlement allocations move onto the survivor. Where BOTH purchases held a slice of the SAME transaction the two slices are SUMMED into one row rather than one being skipped — unlike images and product links an allocation carries an amount, so dropping the duplicate would destroy evidence and break the transaction's sum-to-amount invariant. The source rows are soft-deleted.",
+            },
+            handler: {
+              module: "~/server/domains/purchase/repo/purchase",
+              export: "purchaseMergeEdgeHandlers",
+              member: "foldAllocations",
+            },
+            order: 9,
+          },
+        },
+      },
+    }),
+  ],
+
   names: { singular: "Purchase", plural: "Purchases" },
   route: {
     listColumns: {
@@ -999,24 +1628,28 @@ export const { definition, readSchemas } = defineEntityModel({
               quiet: true,
               label: "Reconciles",
               phase: "finished",
+              stage: "done",
               color: "positive",
             },
             {
               value: "refund_adjusted",
               label: "Refund-adjusted",
               phase: "finished",
+              stage: "done",
               color: "neutral-status",
             },
             {
               value: "mismatch",
               label: "Needs review",
               phase: "needs",
+              stage: "needs_you",
               color: "warning",
             },
             {
               value: "unknown",
               label: "No stated total",
               phase: "active",
+              stage: "waiting",
               color: "neutral-status",
               glyph: {
                 phosphor: "Question",
@@ -1061,6 +1694,7 @@ export const { definition, readSchemas } = defineEntityModel({
             {
               value: "unknown",
               label: "No evidence",
+              stage: "waiting",
               color: "neutral-status",
               glyph: {
                 phosphor: "Question",
@@ -1070,16 +1704,19 @@ export const { definition, readSchemas } = defineEntityModel({
             {
               value: "pending",
               label: "Pending",
+              stage: "waiting",
               color: "warning",
             },
             {
               value: "match",
               label: "Settled",
+              stage: "done",
               color: "positive",
             },
             {
               value: "mismatch",
               label: "Mismatch",
+              stage: "needs_you",
               color: "destructive",
             },
           ],
@@ -1682,7 +2319,7 @@ export const { definition, readSchemas } = defineEntityModel({
     ],
   },
   capabilities: {
-    suggestions: ["statement_transaction"],
+    suggestions: [],
     dataQuality: {
       // Rows the stored evaluator reads beyond its own row (ADR 0021).
       inputs: [
@@ -2192,123 +2829,159 @@ export const { definition, readSchemas } = defineEntityModel({
 
 export default defineEntity(
   definition,
-  (r) => [
-    r
-      .field("purchaserOverrideId")
-      .named("purchaser-override", "Purchaser override", {
-        inverseOmit:
-          "LedgerParty.purchases lists the effective purchaser, which every override already decides.",
-      }),
-    // Accepted import sources, reviewed links and live suggestions (ADR 0011).
-    r
-      .derived("email", "many", "purchaseId", [
-        "ImportSourceOrder",
-        "EmailPurchaseDecision",
-        "OrderMailEvent",
-      ])
-      .named("emails", "Emails", {
-        sources: [
-          r
-            .query("purchaseEmails", "many")
-            .source("accepted", "Accepted Email evidence"),
-        ],
-      }),
-    r
-      .field("spendingCategoryId")
-      .named("spendingCategory", "Spending category"),
-    r.field("vendorId").named("vendor", "Vendor"),
-    r.field("vendorAccountId").named("vendor-account", "Vendor account"),
-    r.images(),
-    r
-      .path("financialTransaction", "many", [
-        {
-          edge: "FinancialTransactionAllocation.purchaseId",
-          direction: "incoming",
-        },
-        {
-          edge: "FinancialTransactionAllocation.transactionId",
-          direction: "outgoing",
-        },
-      ])
-      .named("financial-transactions", "Financial transactions", {
-        view: {
-          key: "transactions",
-          columnGroup: "Settlement",
-          order: "newest",
-          defaultVisible: true,
-        },
-      }),
-    r
-      .path("expense", "many", [
-        { edge: "Expense.purchaseId", direction: "incoming" },
-      ])
-      .named("expenses", "Expenses", {
-        view: {
-          columnGroup: "Booking",
-          order: "newest",
-          defaultVisible: true,
-        },
-      }),
-    r
-      .path("product", "many", [
-        { edge: "Expense.purchaseId", direction: "incoming" },
-        { edge: "Expense.productId", direction: "outgoing" },
-      ])
-      .named("products", "Products", {
-        view: { columnGroup: "Booking" },
-        sourceKey: "expense",
-        sources: [
-          r
-            .link("purchaseProduct", "outgoing")
-            .source("explicit", "Explicit product link"),
-        ],
-        mutation: {
-          source: "explicit",
-          itemSchema: {
-            module: "@cubby/schemas/common",
-            export: "entityRelationReferenceItemSchema",
-          },
-          rowSchema: {
-            module: "@cubby/schemas/purchase",
-            export: "purchaseProductOut",
-          },
-          adapter: {
-            module: "~/server/domains/purchase/repo/purchase-products",
-            export: "purchaseProductsRelationAdapter",
-          },
-          audiences: ["browser", "mcp"],
-        },
-      }),
-    r
-      .link("purchasePaymentAccount", "outgoing")
-      .named("paymentAccounts", "Payment accounts", {
-        sourceKey: "explicit",
-        mutation: {
-          source: "explicit",
-          itemSchema: {
-            module: "@cubby/schemas/common",
-            export: "entityRelationReferenceItemSchema",
-          },
-          rowSchema: {
-            module: "@cubby/schemas/purchase",
-            export: "purchasePaymentAccountOut",
-          },
-          adapter: {
-            module: "~/server/domains/purchase/repo/purchase-payment-accounts",
-            export: "purchasePaymentAccountsRelationAdapter",
-          },
-          audiences: ["browser", "mcp"],
-        },
-      }),
-    r.field("defaultProjectId").named("defaultProject", "Default project"),
-    r
-      .path("project", "many", [
-        { edge: "Expense.purchaseId", direction: "incoming" },
-        { edge: "Expense.projectId", direction: "outgoing" },
-      ])
-      .named("projects", "Projects", {
-        view: { columnGroup: "Booking" },
-      }),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r
+          .field("purchaserOverrideId")
+          .named("purchaser-override", "Purchaser override", {
+            inverseOmit:
+              "LedgerParty.purchases lists the effective purchaser, which every override already decides.",
+          }),
+        "ledgerParty.purchase.purchaser-override",
+      ),
+      // Accepted import sources, reviewed links and live suggestions (ADR 0011).
+      r.declare(
+        r
+          .derived("email", "many", "purchaseId", [
+            "ImportSourceOrder",
+            "EmailPurchaseDecision",
+            "OrderMailEvent",
+          ])
+          .named("emails", "Emails", {
+            sources: [
+              r
+                .query("purchaseEmails", "many")
+                .source("accepted", "Accepted Email evidence"),
+            ],
+          }),
+        "email.purchase.emails",
+      ),
+      r.declare(
+        r
+          .field("spendingCategoryId")
+          .named("spendingCategory", "Spending category"),
+        "spendingCategory.purchases",
+      ),
+      r.declare(
+        r.field("vendorId").named("vendor", "Vendor"),
+        "vendor.purchases",
+      ),
+      r.declare(
+        r.field("vendorAccountId").named("vendor-account", "Vendor account"),
+        "vendorAccount.purchases",
+      ),
+      r.declare(r.images(), "image.purchase.images"),
+      r.declare(
+        r
+          .path("financialTransaction", "many", [
+            {
+              edge: "FinancialTransactionAllocation.purchaseId",
+              direction: "incoming",
+            },
+            {
+              edge: "FinancialTransactionAllocation.transactionId",
+              direction: "outgoing",
+            },
+          ])
+          .named("financial-transactions", "Financial transactions", {
+            view: {
+              key: "transactions",
+              columnGroup: "Settlement",
+              order: "newest",
+              defaultVisible: true,
+            },
+          }),
+        "financialTransaction.purchase",
+      ),
+      r.declare(
+        r
+          .path("expense", "many", [
+            { edge: "Expense.purchaseId", direction: "incoming" },
+          ])
+          .named("expenses", "Expenses", {
+            view: {
+              columnGroup: "Booking",
+              order: "newest",
+              defaultVisible: true,
+            },
+          }),
+        "expense.purchase",
+      ),
+      r.declare(
+        r
+          .path("product", "many", [
+            { edge: "Expense.purchaseId", direction: "incoming" },
+            { edge: "Expense.productId", direction: "outgoing" },
+          ])
+          .named("products", "Products", {
+            view: { columnGroup: "Booking" },
+            sourceKey: "expense",
+            sources: [
+              r
+                .link("purchaseProduct", "outgoing")
+                .source("explicit", "Explicit product link"),
+            ],
+            mutation: {
+              source: "explicit",
+              itemSchema: {
+                module: "@cubby/schemas/common",
+                export: "entityRelationReferenceItemSchema",
+              },
+              rowSchema: {
+                module: "@cubby/schemas/purchase",
+                export: "purchaseProductOut",
+              },
+              adapter: {
+                module: "~/server/domains/purchase/repo/purchase-products",
+                export: "purchaseProductsRelationAdapter",
+              },
+              audiences: ["browser", "mcp"],
+            },
+          }),
+        "product.purchases",
+      ),
+      r.declare(
+        r
+          .link("purchasePaymentAccount", "outgoing")
+          .named("paymentAccounts", "Payment accounts", {
+            sourceKey: "explicit",
+            mutation: {
+              source: "explicit",
+              itemSchema: {
+                module: "@cubby/schemas/common",
+                export: "entityRelationReferenceItemSchema",
+              },
+              rowSchema: {
+                module: "@cubby/schemas/purchase",
+                export: "purchasePaymentAccountOut",
+              },
+              adapter: {
+                module:
+                  "~/server/domains/purchase/repo/purchase-payment-accounts",
+                export: "purchasePaymentAccountsRelationAdapter",
+              },
+              audiences: ["browser", "mcp"],
+            },
+          }),
+        "financialAccount.purchase.paymentAccounts",
+      ),
+      r.declare(
+        r.field("defaultProjectId").named("defaultProject", "Default project"),
+        "project.defaultPurchases",
+      ),
+      r.declare(
+        r
+          .path("project", "many", [
+            { edge: "Expense.purchaseId", direction: "incoming" },
+            { edge: "Expense.projectId", direction: "outgoing" },
+          ])
+          .named("projects", "Projects", {
+            view: { columnGroup: "Booking" },
+          }),
+        "project.purchases",
+      ),
+    ],
+  }),
   readSchemas,
 );

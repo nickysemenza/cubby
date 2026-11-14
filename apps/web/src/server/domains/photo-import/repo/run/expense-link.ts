@@ -3,6 +3,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, desc, eq, ilike, isNull, or } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, ilikeContains, notDeleted } from "~/server/db/helpers";
 import {
   expense,
@@ -59,7 +60,7 @@ export async function linkablePhotoGroupExpenses(
       code: expense.shortcode,
       name: expense.name,
       date: expense.date,
-      cost: expense.cost,
+      cost: expenseCostDollarsSql(),
       productQuantity: expense.productQuantity,
       purchaseId: expense.purchaseId,
       purchaseCode: purchase.shortcode,

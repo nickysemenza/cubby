@@ -1,0 +1,1 @@
+ALTER TABLE "Ask" ADD COLUMN "hosted" boolean DEFAULT false NOT NULL;

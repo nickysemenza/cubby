@@ -78,7 +78,6 @@ import {
   aiAnalysis,
   image,
   imageProcessingJob,
-  imageProcessingAttempt,
   run as runTable,
   photoRunImage,
   ledgerParty,
@@ -88,6 +87,7 @@ import {
   productCategory,
   entityExternalId,
 } from "~/server/db/schema";
+import { imageExecutionReceipts } from "~/server/domains/image-processing/repo/execution-receipts";
 import { imageJobDisplayStateSql } from "~/server/domains/image-processing/repo/image-job-state";
 import { loadImageRepresentations } from "~/server/domains/image-processing/repo/image-processing";
 import {
@@ -113,7 +113,6 @@ import { assertRunCapability } from "~/server/domains/run/repo/purpose-policy";
 import type { KernelServicesFor } from "~/server/entity-kernel/adapter";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
 import { assertPhotoGroupReviewIntent, commitPhotoGroup } from "./writer";
@@ -1050,7 +1049,6 @@ async function upsertProposal(
 
 async function recordPhotoBrandRejection(
   txDb: Database,
-  servicesFor: KernelServicesFor,
   run: LoadedRun,
   entry: ResolvedGroup,
   previous: ProposalRow | undefined,
@@ -1087,7 +1085,6 @@ async function recordPhotoBrandRejection(
       entry.brandId = null;
     }
     if (rejectedVendors.size) {
-      const crud = servicesFor(txDb);
       for (const suggestion of previous?.review?.fieldSuggestions ?? []) {
         if (
           suggestion.field !== "brandId" ||
@@ -1095,17 +1092,25 @@ async function recordPhotoBrandRejection(
           ![...rejectedVendors].some((id) => id === suggestion.value)
         )
           continue;
-        await reviewSuggestion(
-          txDb,
-          { ...crud, actorContext: actor },
-          {
-            suggestionId: suggestion.id,
-            operationId: `photo-brand-rejection:${run.id}:${entry.group.groupKey}:${suggestion.id}`,
-            verdict: "wrong",
-            intent: "history",
-            reason: "Member rejected the photo Brand proposal",
-          },
-        );
+        if (entry.productId) {
+          const vendorId = await resolveOrThrow(
+            txDb,
+            "vendor",
+            suggestion.value,
+          );
+          await (
+            await import("~/server/kernel/api")
+          ).decide(txDb, actor, [
+            {
+              channel: "veto",
+              kind: "veto",
+              subject: `product:${entry.productId}`,
+              field: "brandId",
+              value: vendorId,
+              proposalHash: `photo-brand-rejection:${run.id}:${entry.group.groupKey}:${suggestion.id}`,
+            },
+          ]);
+        }
       }
     }
   }
@@ -1246,7 +1251,7 @@ async function publishPhotoGroupingBoundary(
  */
 export async function proposePhotoGroups(
   db: Database,
-  servicesFor: KernelServicesFor,
+  _servicesFor: KernelServicesFor,
   rawInput: z.input<typeof proposePhotoGroupsInput>,
   /** Recorded as each written row's last writer; null = not known. */
   origin: PhotoGroupProposalOrigin | null = null,
@@ -1472,7 +1477,6 @@ export async function proposePhotoGroups(
     for (const entry of resolved) {
       await recordPhotoBrandRejection(
         txDb,
-        servicesFor,
         run,
         entry,
         existingByKey.get(entry.group.groupKey),
@@ -2287,12 +2291,12 @@ async function loadPhotoRunImages(
   const descriptionAttempts = descriptionJobIds.length
     ? await getDb(db)
         .select({
-          jobId: imageProcessingAttempt.jobId,
-          startedAt: imageProcessingAttempt.startedAt,
-          completedAt: imageProcessingAttempt.completedAt,
+          jobId: imageExecutionReceipts.jobId,
+          startedAt: imageExecutionReceipts.startedAt,
+          completedAt: imageExecutionReceipts.completedAt,
         })
-        .from(imageProcessingAttempt)
-        .where(inArray(imageProcessingAttempt.jobId, descriptionJobIds))
+        .from(imageExecutionReceipts)
+        .where(inArray(imageExecutionReceipts.jobId, descriptionJobIds))
     : [];
   const locallyAnalyzed = new Set(localAnalyses.map((entry) => entry.imageId));
   const hashById = new Map(rows.map((row) => [row.imageId, row.sha256]));

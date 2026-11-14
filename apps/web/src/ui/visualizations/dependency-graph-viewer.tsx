@@ -1,4 +1,3 @@
-import { humanize } from "@cubby/shared";
 import { type ComponentProps, useMemo } from "react";
 
 import { Row, Stack } from "~/ui/layout";
@@ -98,7 +97,7 @@ export function DependencyGraphViewer({
           .filter((node): node is GraphNode & { kind: string } =>
             Boolean(node.kind),
           )
-          .map((node) => [node.kind, node.kindLabel ?? humanize(node.kind)]),
+          .map((node) => [node.kind, node.kindLabel ?? "Other"]),
       ).entries(),
     ],
     [graph.nodes],

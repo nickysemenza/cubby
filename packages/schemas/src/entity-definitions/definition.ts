@@ -14,6 +14,7 @@ import {
 import type { ShortcodeFor, ShortcodeType } from "@cubby/shared";
 import { z } from "zod";
 import { dataQuality } from "../data-quality-shape";
+import { kernelStage } from "../kernel/stage";
 import { sortDirection, listGroupByDimensionsSchema } from "../pagination";
 import {
   dataQualityCheckKind,
@@ -24,6 +25,11 @@ import { photoCategoryKeys } from "../photo-categories";
 import { childTableMetadataSchema } from "./child-definition";
 import { listGroupMetricKeys } from "./list-group-metrics";
 import { createRelationships } from "./relationships";
+import {
+  edgeDefinitionSchema,
+  edgeRelationship,
+  type EdgeDefinition,
+} from "./edges";
 import { entityRelationMetadataSchema } from "./relationship-shape";
 
 /** The scalar shapes the entity compiler can persist and project. */
@@ -402,6 +408,8 @@ const buildMetadataSchemas = () => {
   const enumOptionStateFields = {
     /** The state phase this option places its record in; see `ENTITY_PHASES`. */
     phase: z.enum(ENTITY_PHASES).optional(),
+    /** The stage word a state option draws as (ADR 0029 section 10); `StateBadge` never reads colour. */
+    stage: kernelStage.optional(),
     /** What choosing a kind does, shown where the record explains its kind. */
     explanation: z
       .strictObject({
@@ -2794,9 +2802,7 @@ const buildMetadataSchemas = () => {
        * record scope of the Suggestions list reads this.
        */
       suggestions: z
-        .array(
-          z.enum(["statement_transaction", "transfer_pair", "product_pair"]),
-        )
+        .array(z.enum(["transfer_pair", "product_pair"]))
         .optional()
         .default([]),
       /**
@@ -2881,6 +2887,8 @@ const buildMetadataSchemas = () => {
             meta: z.boolean({ error: "must be a boolean" }).optional(),
             color: nonEmptyString().optional(),
             role: z.enum(enumRoles).optional(),
+            /** A state roster's stage word; filters carry it with the option. */
+            stage: kernelStage.optional(),
             glyph: enumIconSchema.optional(),
             /**
              * The filter fields this preset sets on a `range` descriptor
@@ -3276,6 +3284,7 @@ const buildMetadataSchemas = () => {
         })
         .strict(),
       relations: z.array(entityRelationMetadataSchema),
+      edges: z.array(edgeDefinitionSchema).optional().default([]),
       /**
        * `semantic`: lexical search plus an `EntityEmbedding` vector.
        * `lexical`: search without a vector (the financial entities, whose
@@ -3473,7 +3482,9 @@ export function defaultReadSchemas<
 }
 
 type EntityInput = Omit<EntityDeclaration, "relations">;
-type DefinedEntity<T> = Omit<T, "relations"> & {
+type RelationshipInput = { edges: EdgeDefinition[] };
+type DefinedEntity<T> = Omit<T, "relations" | "edges"> & {
+  edges: EdgeDefinition[];
   relations: EntityDeclaration["relations"];
 };
 
@@ -3523,25 +3534,28 @@ export function defineEntity<
       : { invalidReferenceField: InvalidReferenceFields<NoInfer<T>> }),
   relationships: (
     self: ReturnType<typeof createRelationships<NoInfer<T>>>,
-  ) => EntityDeclaration["relations"],
+  ) => RelationshipInput,
   readSchemas: S,
 ): DefinedEntity<T> & { readSchemas: S };
 export function defineEntity<const T extends EntityInput>(
   declaration: ValidDeclaration<T>,
   relationships: (
     self: ReturnType<typeof createRelationships<NoInfer<T>>>,
-  ) => EntityDeclaration["relations"],
+  ) => RelationshipInput,
 ): DefinedEntity<T> & { readSchemas: DefaultReadSchemas<T> };
 export function defineEntity<const T extends EntityInput>(
   declaration: T,
   relationships: (
     self: ReturnType<typeof createRelationships<NoInfer<T>>>,
-  ) => EntityDeclaration["relations"],
+  ) => RelationshipInput,
   readSchemas?: RawReadSchemas,
 ) {
+  const input = relationships(createRelationships(declaration));
+  const edges = [...(declaration.edges ?? []), ...input.edges];
   return {
     ...declaration,
-    relations: relationships(createRelationships(declaration)),
+    edges,
+    relations: input.edges.flatMap(edgeRelationship),
     readSchemas: readSchemas ?? defaultReadSchemas(declaration),
   };
 }

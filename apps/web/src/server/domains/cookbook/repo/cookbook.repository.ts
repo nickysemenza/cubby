@@ -1,11 +1,8 @@
 import { cookbookSchemaBindings } from "~/entity/generated/entity-schema-bindings.cookbook.gen";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import { defineRepository } from "~/server/entity-kernel/repo/repository";
 
-import {
-  COOKBOOK_DELETE_EDGE_POLICY,
-  cookbookScaffold,
-  updateCookbook,
-} from "./cookbook";
+import { cookbookScaffold, updateCookbook } from "./cookbook";
 
 /**
  * A cookbook is born from an EPUB import and deleted with its recipes by that
@@ -14,7 +11,7 @@ import {
  */
 export const cookbookRepository = defineRepository("cookbook", {
   schemas: cookbookSchemaBindings,
-  lifecycle: { delete: COOKBOOK_DELETE_EDGE_POLICY },
+  lifecycle: { delete: DECLARED_EDGE_DELETE_POLICIES.cookbook },
   scaffold: cookbookScaffold,
   update: (ctx, shortcode, data) =>
     updateCookbook(ctx.db, shortcode, data, ctx.actorContext),

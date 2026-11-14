@@ -6,6 +6,12 @@ import Testing
 
 @Suite("Entity row presentation")
 struct EntityRowPresentationTests {
+    @Test func headerNeverChoosesAmongPaidRecoveryDecisions() {
+        #expect(RecordMachineryHeader.inlineAction([String]()) == nil)
+        #expect(RecordMachineryHeader.inlineAction(["Only action"]) == "Only action")
+        #expect(RecordMachineryHeader.inlineAction(["It was not sent: ask again", "Keep unknown"]) == nil)
+    }
+
     private func field(_ value: JSONValue) -> JSONValue {
         [
             "current": ["assignment": .null, "controls": ["kind": "readonly", "reason": "computed"]],
@@ -35,13 +41,11 @@ struct EntityRowPresentationTests {
     }
 
     // A self-label timestamp must still reach the shared date presentation, not print raw ISO text.
-    @Test func runActivitySelfLabelRetainsDatePresentation() throws {
+    @Test func runActivityRetainsDatePresentation() throws {
         let timestamp = "2026-09-12T10:00:00.000Z"
         let row = EntityRow(
             id: "RUN-4K7M", title: "Synthetic run", subtitle: nil, imageURL: nil,
             raw: ["id": "RUN-4K7M", "activityAt": .string(timestamp)])
-        let field = try #require(EntityCatalog[.run].fields.first { $0.key == "activityAt" })
-        #expect(field.labelPath == "activityAt")
         let fact = try #require(
             EntityRowPresentation.resolve(descriptor: EntityCatalog[.run], row: row, columns: ["activityAt"])
                 .facts.first { $0.id == "activityAt" })
@@ -135,7 +139,7 @@ struct EntityRowPresentationTests {
             ])
         let presentation = EntityRowPresentation.resolve(descriptor: EntityCatalog[.product], row: row)
         #expect(presentation.facts.first?.id == "dataQuality")
-        #expect(presentation.facts.first?.value == "Needs data")
+        #expect(presentation.facts.first?.value == "Needs you")
         #expect(EntityRowPresentation.needsData(in: row))
         let category = EntityRow(
             id: "SPC-1001", title: "Synthetic tools", subtitle: nil, imageURL: nil,
@@ -145,7 +149,7 @@ struct EntityRowPresentationTests {
             ])
         let unassessed = EntityRowPresentation.resolve(
             descriptor: EntityCatalog[.spendingCategory], row: category)
-        #expect(unassessed.facts.first?.value == "Not assessed")
+        #expect(unassessed.facts.first?.value == "Waiting")
         #expect(!EntityRowPresentation.needsData(in: category))
     }
 
@@ -227,7 +231,7 @@ struct EntityRowPresentationTests {
         ]
         #expect(try fact(assignment: ["kind": "none"], result: household).value == "Household")
         #expect(try !fact(assignment: ["kind": "none"], result: household).inherited)
-        #expect(try fact(assignment: inherit, result: ["kind": "missing"]).value == "Updating…")
+        #expect(try fact(assignment: inherit, result: ["kind": "missing"]).value == "Waiting for Cubby")
     }
 
     /// A scored entity's record can itself be unassessed (null score), and an exceptions-only
@@ -243,9 +247,13 @@ struct EntityRowPresentationTests {
             return EntityRowPresentation.resolve(descriptor: EntityCatalog[.product], row: row)
                 .facts.first?.value
         }
-        #expect(quality(["score": .null, "status": "not_assessed"]) == "Not assessed")
-        #expect(quality(["score": 100, "status": "complete_with_exceptions"]) == "Complete with exceptions")
-        #expect(quality(["score": 99, "status": "defect"]) == "Defect")
+        for option in EntityCatalog[.product].field("dataQuality")?.valueOptions ?? [] {
+            #expect(option.label == FieldEnvelopePresentation.dataQualityLabel(option.value))
+        }
+        #expect(quality(["score": 100, "status": "complete"]) == "Done")
+        #expect(quality(["score": .null, "status": "not_assessed"]) == "Waiting")
+        #expect(quality(["score": 100, "status": "complete_with_exceptions"]) == "Done with exceptions")
+        #expect(quality(["score": 99, "status": "defect"]) == "Stuck")
     }
 
     @Test func resolvesOnlyDeclaredFactsInMetadataOrder() throws {

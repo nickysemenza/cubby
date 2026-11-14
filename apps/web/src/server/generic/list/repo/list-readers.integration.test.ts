@@ -11,13 +11,13 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { inventoryEntry } from "~/server/db/schema";
 import { ingredientScaffold } from "~/server/domains/ingredient/repo/search";
 import { locationSearch } from "~/server/domains/location/repo/crud";
 import { productSearch } from "~/server/domains/product/repo/crud";
 import { projectScaffold } from "~/server/domains/project/repo/lookup";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createIngredientFixture,

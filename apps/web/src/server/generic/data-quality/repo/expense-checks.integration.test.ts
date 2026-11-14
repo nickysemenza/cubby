@@ -3,10 +3,10 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
 import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { storedQuality } from "~/server/testing/quality.fixtures";
 import { makeExpenseInput } from "~/server/testing/repo.fixtures";

@@ -36,8 +36,8 @@ import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/text/description";
 import { StatusText } from "~/ui/text/status-text";
 
-import { StatusPill } from "../job/job-status";
 import type { DecisionPresenter } from "./decision-presenters";
+import { StatusPill } from "./work-status";
 
 const helper = createCubbyColumnHelper<RunDecision>();
 const decisionId = (row: RunDecision) => row.id;
@@ -474,11 +474,7 @@ function QueueDecisionLedger(props: LedgerProps) {
     <DecisionLedgerBody
       {...props}
       reviewReady={async (rows) =>
-        (
-          await review.review(rows, (row) =>
-            acceptItem(row, review.statementChoice(row)),
-          )
-        ).length
+        (await review.review(rows, (row) => acceptItem(row))).length
       }
     />
   );

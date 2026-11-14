@@ -1,9 +1,9 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import { jobWaitReason } from "@cubby/schemas/job";
+import { executionWaitReason } from "@cubby/schemas/execution";
 
 import type { UnparsedError } from "~/lib/error-utils";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
+import { WorkDeferredError } from "~/server/kernel/work-errors";
 
 const cooperative = new AsyncLocalStorage<boolean>();
 
@@ -31,12 +31,12 @@ export function aiWorkDeferral(
     if (error instanceof AiWorkDeferredError) return error;
     // A funding wait is not shared capacity: it stops the work for the window.
     if (
-      error instanceof JobDeferredError &&
-      error.reason === jobWaitReason.enum.ai_funding_window
+      error instanceof WorkDeferredError &&
+      error.reason === executionWaitReason.enum.ai_funding_window
     )
       return null;
     // Cache contention uses the Job control signal; item isolation must retain the wait.
-    if (error instanceof JobDeferredError) {
+    if (error instanceof WorkDeferredError) {
       const deferred = new AiWorkDeferredError(error.until.getTime());
       deferred.cause = error;
       return deferred;

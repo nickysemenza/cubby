@@ -24,7 +24,16 @@ export {
   UNRESOLVABLE_ENTITY_FILTER,
 } from "./filter";
 
-export { cents, dollars, round2, moneyToMinor, minorToMoney } from "./money";
+export {
+  cents,
+  dollars,
+  round2,
+  moneyToMinor,
+  minorToMoney,
+  nullableMinorToMoney,
+  wholeCentToMinor,
+  nullableWholeCentToMinor,
+} from "./money";
 
 export {
   getErrorMessage,

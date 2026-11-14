@@ -675,7 +675,6 @@ describe("MCP catalog schemas", () => {
       // id; a submission is a child row, not a shortcode entity.
       "entity_read.filters.submissionId",
       // Jobs have no shortcode: a Job set filter names execution rows by id.
-      "maintenance.retry_now.filter.ids",
       // A tree list's children scope names a parent of the listed entity's own
       // kind, so no single prefix pattern fits.
       "entity_read.nesting.parentId",
@@ -690,7 +689,6 @@ describe("MCP catalog schemas", () => {
       "field_explanation.explain.scope.entityId",
       "field_explanation.image_chain.entityId",
       "maintenance.classify_image_provenance.afterId",
-      "maintenance_read.logs.jobId",
       "nutrition.remove_food.id",
       "nutrition.remove_recipe.id",
       "nutrition.save_food.id",
@@ -744,7 +742,6 @@ describe("MCP catalog schemas", () => {
       "suggestions_read.list.recordIds",
       "suggestions.review.items[].operationId",
       // Preview consumes the same opaque Suggestion review handle as acceptance.
-      "finance_read.preview_suggestion.suggestionId",
       "suggestions.review.items[].suggestionId",
       // A Changes by Cubby row names the same opaque Suggestion handle.
       "suggestions.field_authority.suggestionId",
@@ -956,7 +953,7 @@ describe("MCP catalog publication without services", () => {
     expect([...paged]).toEqual(
       expect.arrayContaining([
         "activity_read.list",
-        "activity_read.queue",
+        "machinery_read.needs_you",
         "activity_read.report",
         "ai_read.usage_recent",
         "entity_graph_read.graph",

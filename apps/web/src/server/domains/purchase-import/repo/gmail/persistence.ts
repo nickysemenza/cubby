@@ -329,8 +329,10 @@ export async function saveEmail(
     orderMailId?: string | null;
   },
 ) {
+  // Gmail message identity names one immutable observation. Re-fetch differences
+  // do not replace its checksum; retained originals and classification observations
+  // carry their own exact-content checksums.
   const fields = {
-    checksum: input.checksum,
     classification: input.classification,
     classificationStage: input.classificationStage ?? null,
     classificationReason: input.classificationReason ?? null,
@@ -346,6 +348,7 @@ export async function saveEmail(
         mailboxId: input.mailboxId,
         provider: "gmail",
         messageId: input.messageId,
+        checksum: input.checksum,
         ...fields,
       }),
     });
@@ -450,24 +453,20 @@ export async function saveMailboxMetadata(
           mailboxId: identity.mailboxId,
           messageId: identity.messageId,
           checksum: input.checksum,
+          sender: input.mail.headers.from?.trim() || null,
+          subject: input.mail.headers.subject?.trim() || null,
+          receivedAt: dateFromInternalDate(input.mail.internalDate),
+          threadId: input.mail.threadId ?? null,
           status: "pending",
         }) satisfies Omit<typeof emailTable.$inferInsert, "shortcode">,
     });
     const superseded = await supersedeLegacyEmail(tx, identity);
+    // Keep the first observed headers, including absent headers, on re-fetch.
     const fields = mailboxMetadataFields(input, row);
     const changed =
       (
-        [
-          "orderMailId",
-          "sender",
-          "subject",
-          "threadId",
-          "historyId",
-          "executionPolicy",
-          "searchOrigin",
-        ] as const
+        ["orderMailId", "historyId", "executionPolicy", "searchOrigin"] as const
       ).some((key) => fields[key] !== row[key]) ||
-      fields.receivedAt?.getTime() !== row.receivedAt?.getTime() ||
       fields.searchExpiresAt?.getTime() !== row.searchExpiresAt?.getTime();
     if (changed)
       await tx
@@ -487,10 +486,6 @@ function mailboxMetadataFields(
 ) {
   return {
     orderMailId: row.orderMailId,
-    sender: input.mail.headers.from?.trim() || row.sender || null,
-    subject: input.mail.headers.subject?.trim() || row.subject || null,
-    receivedAt: dateFromInternalDate(input.mail.internalDate) ?? row.receivedAt,
-    threadId: input.mail.threadId ?? row.threadId,
     historyId: input.mail.historyId ?? row.historyId,
     executionPolicy: input.executionPolicy,
     searchOrigin: input.memberSearch

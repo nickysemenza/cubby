@@ -20,11 +20,10 @@ client-safe inspector/graph metadata. `executeEntity(context, command)` remains
 the public kernel entry point, while repositories retain transaction ownership
 and domain invariants.
 
-Physical edges remain typed foreign keys or join tables. Their stable domain
-semantics are separate from operation-specific lifecycle policies. Each delete
-or merge policy records an executable owner (`kernel` or `workflow`) and a
-disposition for every incoming edge. Logical relationships do not carry a
-deletion policy, and Cubby does not introduce an EAV or generic edge table.
+Physical edges remain typed foreign keys or join tables. Each `defineEdge` declaration owns its stable domain
+semantics and separate delete/merge policies, including the named functions that execute
+specialized behavior. Compositions name their physical sources and inherit their policies.
+The generator emits the physical catalog and lifecycle bindings; repositories own execution.
 
 ## Consequences
 
@@ -33,7 +32,7 @@ dispatch, and the inspector and documentation can share canonical logical graph
 data. Relationships with multiple evidence paths, such as Purchase products,
 remain one logical relation with explicit provenance. Adding a mutable relation
 requires a literal declaration and typed adapter; adding lifecycle behavior
-requires a physical-edge policy owned by the operation that executes it.
+requires a policy on its edge declaration, naming the function that the operation executes.
 
 Repository code remains necessary for locking, atomic replacement, audit
 ordering, specialized workflows, and other invariants that cannot be inferred
@@ -49,11 +48,10 @@ a stored edge table.
 
 ## Amendment (ADR 0007)
 
-Pure pairings of two entities — wish candidates, purchase products, project
+Pure pairings of two entities — purchase payment accounts, purchase products, project
 tools, garden entry plantings, kit components, task and project dependencies —
 now share one generic `EntityLink` table whose kinds are declared in
-`packages/schemas/src/entity-links.ts`. That reverses this ADR's "no generic
+`packages/schemas/src/entity-definitions/link-edges.ts`. That reverses this ADR's "no generic
 edge table" for those seven pairings only. Everything else here holds: other
-edges stay typed foreign keys, lifecycle stays a per-operation policy, and a
-link kind's merge collision rule is declared per end, not on the logical
-relationship.
+edges stay typed foreign keys, lifecycle policies are declared separately per operation on the edge, and each
+link end declares its merge collision rule.

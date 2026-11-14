@@ -8,7 +8,7 @@ import {
   renderWithEditorMetadata as render,
 } from "#web/tests/editor-metadata.fixtures.ts";
 
-import { DecisionChain, DecisionValue } from "./decision-chain";
+import { DecisionValue, FieldChain } from "./decision-chain";
 
 let harness: ReturnType<typeof createBrowserTestHarness> | undefined;
 afterEach(() => {
@@ -65,24 +65,29 @@ const base: ReadableFieldEnvelope = {
     },
   },
 };
+function Chain({ data }: { data: FieldExplanationOutput }) {
+  return (
+    <FieldChain
+      entity={data.subject.entityKind}
+      id={data.subject.entityId}
+      field={data.field}
+      envelope={data.envelope}
+      data={data}
+    />
+  );
+}
+const chain = () =>
+  within(screen.getByRole("list", { name: "Value decision chain" }));
+
 it("uses the declared enum label for the deciding value", () => {
-  render(<DecisionChain data={explain(base)} />);
-  expect(
-    within(screen.getByRole("region", { name: "Effective result" })).getByText(
-      "Other",
-    ),
-  ).toBeVisible();
-  expect(
-    within(screen.getByRole("region", { name: "Your choice" })).getByText(
-      "Other",
-    ),
-  ).toBeVisible();
+  render(<Chain data={explain(base)} />);
+  expect(chain().getByText("Other")).toBeVisible();
   expect(screen.queryByText("other")).not.toBeInTheDocument();
 });
 it("links the inherited source in the deciding level", () => {
   harness = createBrowserTestHarness();
   render(
-    <DecisionChain
+    <Chain
       data={explain({
         ...base,
         current: { ...base.current, assignment: { kind: "inherit" } },
@@ -110,7 +115,7 @@ it("links the inherited source in the deciding level", () => {
 });
 it("does not invent edit controls for an allocated result", () => {
   render(
-    <DecisionChain
+    <Chain
       data={explain({
         ...base,
         current: {
@@ -128,7 +133,7 @@ it("does not invent edit controls for an allocated result", () => {
     />,
   );
   expect(
-    screen.queryByRole("button", { name: "Use inherited" }),
+    screen.queryByRole("button", { name: "Let Cubby decide" }),
   ).not.toBeInTheDocument();
 });
 
@@ -161,10 +166,6 @@ it.each([
     },
   });
   data.field = "projectId";
-  render(<DecisionChain data={data} />);
-  expect(
-    within(screen.getByRole("region", { name: "Effective result" })).getByText(
-      label,
-    ),
-  ).toBeVisible();
+  render(<Chain data={data} />);
+  expect(chain().getByText(label)).toBeVisible();
 });

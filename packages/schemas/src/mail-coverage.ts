@@ -172,3 +172,38 @@ export const mailCoverage = z.strictObject({
 });
 export type MailCoverage = z.infer<typeof mailCoverage>;
 export type MailCoverageRow = z.infer<typeof mailCoverageRow>;
+
+/** Presentation of search progress and attribution, shared by coverage surfaces. */
+export function mailCoverageLabel(value: string): string {
+  const labels = {
+    no_search_identity: "No search identity",
+    not_started: "Waiting",
+    in_progress: "Working",
+    no_matches: "No matches",
+    matches_found: "Matches found",
+    complete: "Done",
+    unmapped: "Unmapped",
+    verified: "Verified",
+    shared: "Shared",
+    disputed: "Disputed",
+    excluded: "Excluded",
+    running: "Working",
+    queued: "Waiting",
+    paused: "Waiting",
+    idle: "Done",
+    paused_auth: "Needs you",
+    paused_offline: "Waiting",
+    needs_review: "Needs you",
+    completed: "Done",
+    failed: "Stuck",
+    dispatch_failed: "Stuck",
+    retried: "Ended",
+    waiting_for_funding: "Waiting",
+    listing: "Finding messages",
+    fetching: "Reading messages",
+  };
+  return (
+    Object.entries(labels).find(([key]) => key === value)?.[1] ??
+    "Progress unavailable"
+  );
+}

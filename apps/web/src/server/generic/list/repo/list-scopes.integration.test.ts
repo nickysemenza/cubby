@@ -10,6 +10,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { getDb, uuidArrayParam } from "~/server/db/helpers";
 import {
@@ -33,7 +34,6 @@ import { taskScaffold } from "~/server/domains/task/repo/lookup";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { listOperations } from "~/server/entity-kernel/list-operations";
 import type { ListFilterValues } from "~/server/generic/list/repo/field-compiler";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { createTestRequestContext } from "~/server/testing/request-context";
 

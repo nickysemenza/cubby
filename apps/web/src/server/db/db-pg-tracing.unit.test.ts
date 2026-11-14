@@ -2,15 +2,7 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import type pg from "pg";
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  withJobExecution,
-  setJobStepKey,
-  withJobPhase,
-  type JobExecutionDetails,
-} from "../generic/jobs/context";
-import type { JobClaim } from "../generic/jobs/jobs.fixtures";
 import * as tracing from "../observability/tracing";
-import type { Database } from "./database";
 import { withDatabaseOperationMetrics } from "./db-observability";
 import {
   createPoolQueryOwnershipBoundary,
@@ -35,46 +27,6 @@ const queryResult = (): pg.QueryResult => ({
 // Failures: queued work can look like database execution, a rejected query can
 // poison the client tail, or reused leases can inherit the wrong role/owner.
 describe("node-postgres tracing adapters", () => {
-  it("keeps overlapping Job phases isolated and restores only unfinished stages", async () => {
-    const details: JobExecutionDetails = { stepKey: null };
-    const first = Promise.withResolvers<void>();
-    const second = Promise.withResolvers<void>();
-    const db = fromPartial<Database>({});
-    const claim = fromPartial<JobClaim>({ kind: "ai.evaluation" });
-    await withJobExecution(
-      db,
-      claim,
-      () =>
-        withJobPhase("evaluation.infer", async () => {
-          const a = withJobPhase("connections.acquire", () => first.promise);
-          const b = withJobPhase("connections.fields", () => second.promise);
-          expect(details.phase).toBe(
-            "evaluation.infer, connections.acquire, connections.fields",
-          );
-          await withJobExecution(db, claim, () =>
-            withJobPhase("other-job", async () => {
-              expect(details.phase).not.toContain("other-job");
-            }),
-          );
-          first.resolve();
-          await a;
-          expect(details.phase).toBe("evaluation.infer, connections.fields");
-          const failure = new Error("Synthetic phase failure");
-          second.reject(failure);
-          await expect(b).rejects.toBe(failure);
-          expect(details.phase).toBe("evaluation.infer");
-        }),
-      details,
-    );
-    expect(details.phase).toBeUndefined();
-    expect(details.phaseStartedAt).toBeUndefined();
-    expect(Object.keys(details.phaseMs ?? {}).sort()).toEqual([
-      "connections.acquire",
-      "connections.fields",
-      "evaluation.infer",
-    ]);
-  });
-
   it("attributes queued queries to isolated callers through enrichment spans", async () => {
     const attributes: Record<string, string | number | boolean | undefined>[] =
       [];
@@ -142,17 +94,6 @@ describe("node-postgres tracing adapters", () => {
         "start.query.product.list",
         "workflow.routine.products",
       ]);
-      await withJobExecution(
-        fromPartial<Database>({}),
-        fromPartial<JobClaim>({ kind: "run.execute" }),
-        async () => {
-          setJobStepKey("products");
-          await connection.query("select 4");
-        },
-      );
-      expect(attributes.at(-1)).toMatchObject({
-        "cubby.db.caller": "job.run.execute.products",
-      });
       await connection.query("select 5");
       expect(attributes.at(-1)?.["cubby.db.caller"]).toBeUndefined();
       expect(tracing.databaseTraceCaller()).toBeUndefined();

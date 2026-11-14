@@ -1,5 +1,5 @@
+import { executionWaitReason } from "@cubby/schemas/execution";
 import type { RunId } from "@cubby/schemas/identifiers";
-import { jobWaitReason } from "@cubby/schemas/job";
 import {
   aiBudgetSettings,
   type AiBudgetSettings,
@@ -16,7 +16,7 @@ import { roundTo } from "~/lib/round-to";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { aiUsage, appSettings } from "~/server/db/schema";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
+import { WorkDeferredError } from "~/server/kernel/work-errors";
 
 import { aiBudgetWindow, fundingResumeAt } from "./budget-window";
 
@@ -45,7 +45,7 @@ export const budgetUsd = (value: number) => `$${roundTo(value, 4)}`;
  * cannot answer. It is the one funding wait every Job, drain and Run step
  * recognizes, resuming at {@link fundingResumeAt} without spending an attempt.
  */
-export class AiBudgetExhaustedError extends JobDeferredError {
+export class AiBudgetExhaustedError extends WorkDeferredError {
   constructor(
     readonly status: AiBudgetStatus,
     message = `AI budget reached: ${budgetUsd(status.paid.spentUsd)} of $${status.paid.limitUsd} paid since ${status.windowStart}; paid work resumes at ${status.windowEnd}.`,
@@ -53,7 +53,7 @@ export class AiBudgetExhaustedError extends JobDeferredError {
     super(
       message,
       fundingResumeAt(status.windowEnd),
-      jobWaitReason.enum.ai_funding_window,
+      executionWaitReason.enum.ai_funding_window,
     );
     this.name = "AiBudgetExhaustedError";
   }
@@ -63,9 +63,9 @@ export class AiBudgetExhaustedError extends JobDeferredError {
 export const findFundingWait = (error: UnparsedError) =>
   findErrorCause(
     error,
-    (cause): cause is JobDeferredError =>
-      cause instanceof JobDeferredError &&
-      cause.reason === jobWaitReason.enum.ai_funding_window,
+    (cause): cause is WorkDeferredError =>
+      cause instanceof WorkDeferredError &&
+      cause.reason === executionWaitReason.enum.ai_funding_window,
   );
 
 export async function setAiBudget(

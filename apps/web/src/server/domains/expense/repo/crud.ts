@@ -1,7 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { type ExpenseUpdateInput } from "@cubby/schemas/entities/expense";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   EXPENSE_DATE_REQUIRED_MESSAGE,
   hasValidExpenseDate,
@@ -24,17 +23,20 @@ import type {
   ExpenseCreateInput,
 } from "@cubby/schemas/project";
 import { rawExpenseOut } from "@cubby/schemas/work-raw-read";
+import { nullableMinorToMoney, nullableWholeCentToMinor } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import {
   buildPartialUpdateValues,
+  databaseForTransaction,
   notDeleted,
   unwrapDb,
   withTransaction,
+  withTransactionOn,
   touchUpdatedAt,
 } from "~/server/db/helpers";
 import { outer } from "~/server/db/helpers/related";
@@ -45,6 +47,8 @@ import {
   requireLineRoleClassifier,
   type ExpenseLineRoleClassifier,
 } from "~/server/domains/expense/repo/line-role-classifier";
+import { createPurchaseEventRecords } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { updatePurchaseEventRecords } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   assertExplicitSourceClaimsForAmountChange,
   replaceLedgerSourceClaims,
@@ -70,7 +74,6 @@ import {
   defineMutationWriter,
   type MutationReceipt,
 } from "~/server/entity-kernel/repo/repository";
-import type { WriteLayer } from "~/server/entity-kernel/repo/write-layer";
 import { createAppError } from "~/server/errors/app-error";
 import {
   computeChanges,
@@ -83,7 +86,7 @@ import {
   resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertManyWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 
 import {
   expenseInheritanceReadExtras,
@@ -92,33 +95,6 @@ import {
 } from "./expense-inheritance";
 import { assertQuantitySignMatchesCost, expenseAuditChildren } from "./helpers";
 import { expenseScaffold } from "./lookup";
-
-export const EXPENSE_DELETE_EDGE_POLICY = {
-  "ImportSourceProduct.expenseId": {
-    code: "preserve-receipt-line-history",
-    effect: "preserve",
-    description:
-      "Deleting an Expense retains its historical receipt reference so an identity-only association cannot revive a cleared Product claim.",
-  },
-  "ExpenseAttribution.expenseId": {
-    code: "soft-delete-attributions",
-    effect: "soft-delete",
-    description:
-      "Deleting an Expense removes its unitless beneficiary and initial-funder shares; no money exists on those child rows.",
-  },
-  "LedgerSourceClaim.expenseId": {
-    code: "soft-delete-source-references",
-    effect: "soft-delete",
-    description:
-      "Deleting an Expense retires the normalized import references that identify that ledger row.",
-  },
-  "EntityExternalId.entityId": {
-    code: "soft-delete-metadata",
-    effect: "soft-delete",
-    description:
-      "Outside identifiers (a Notion page, a Drive folder) are soft-deleted with the record, releasing them to be recorded again.",
-  },
-} as const satisfies IncomingEdgePolicy<"expense", OperationDisposition>;
 
 type ExpenseUpdateData = ExpenseUpdateInput["data"];
 
@@ -161,30 +137,33 @@ const resolveLivePurchaseId = (
   shortcode: PurchaseShortcode,
 ): Promise<PurchaseId> => resolveOrThrow(tx, "purchase", shortcode);
 
+const expenseUpdateValues = (data: ResolvedExpenseUpdate) =>
+  buildPartialUpdateValues({
+    spendingCategoryId: data.spendingCategoryId,
+    economicRole: data.economicRole,
+    name: data.name,
+    cost:
+      data.cost === undefined ? undefined : nullableWholeCentToMinor(data.cost),
+    date: data.date,
+    lineKind: data.lineKind,
+    lineBasis: data.lineBasis,
+    costType: data.costType,
+    trade: data.trade,
+    url: data.url,
+    notes: data.notes,
+    future: data.future,
+    projectId: data.projectId,
+    productId: data.productId,
+    productQuantity: data.productQuantity,
+    purchaseId: data.purchaseId,
+  });
+
 const expenseCrud = createEntityCrud({
   table: expense,
   entity: "expense",
   scaffold: expenseScaffold,
   output: rawExpenseOut,
-  toUpdate: (data: ResolvedExpenseUpdate) =>
-    buildPartialUpdateValues({
-      spendingCategoryId: data.spendingCategoryId,
-      economicRole: data.economicRole,
-      name: data.name,
-      cost: data.cost,
-      date: data.date,
-      lineKind: data.lineKind,
-      lineBasis: data.lineBasis,
-      costType: data.costType,
-      trade: data.trade,
-      url: data.url,
-      notes: data.notes,
-      future: data.future,
-      projectId: data.projectId,
-      productId: data.productId,
-      productQuantity: data.productQuantity,
-      purchaseId: data.purchaseId,
-    }),
+  toUpdate: expenseUpdateValues,
   auditUpdateFields: [...entityFieldModels.expense.audit],
 });
 
@@ -497,7 +476,7 @@ export const updateExpense = defineMutationWriter({
       const nestedBefore = nestedChanged
         ? await readNestedExpenseAudit(tx, id)
         : undefined;
-      const qualityBefore = await tx.query.expense.findFirst({
+      const storedQuality = await tx.query.expense.findFirst({
         where: {
           RAW: (table: PgTable) =>
             relationalSql(table, and(eq(expense.id, id), notDeleted(expense))),
@@ -516,6 +495,10 @@ export const updateExpense = defineMutationWriter({
           trade: true,
         },
       });
+      const qualityBefore = storedQuality && {
+        ...storedQuality,
+        cost: nullableMinorToMoney(storedQuality.cost),
+      };
       const nextCost =
         data.cost === undefined ? (qualityBefore?.cost ?? null) : data.cost;
       if (qualityBefore?.cost === null && nextCost !== null) {
@@ -675,6 +658,7 @@ export const updateExpense = defineMutationWriter({
           state.id,
           "beneficiary",
           beneficiaries ?? [],
+          actor,
         );
       }
       if (funders !== undefined) {
@@ -683,6 +667,7 @@ export const updateExpense = defineMutationWriter({
           state.id,
           "funder",
           funders ?? [],
+          actor,
         );
       }
       if (sourceClaims !== undefined) {
@@ -760,6 +745,7 @@ export const updateExpense = defineMutationWriter({
     };
 
     return withTransaction(db, async (tx) => {
+      await enterWriteTransaction(tx, { lane: "money", mode: "member" });
       const state = await loadUpdateState(tx);
       const {
         explicitPurchaseId,
@@ -793,13 +779,13 @@ export const updateExpense = defineMutationWriter({
             ? (state.qualityBefore?.purchaseId ?? null)
             : explicitPurchaseId,
         );
-        const receipt = await expenseCrud.update(
-          tx,
-          state.id,
-          update,
+        await updatePurchaseEventRecords(
+          databaseForTransaction(tx),
+          "expense",
+          [{ id: state.id, values: expenseUpdateValues(update) }],
           actor,
-          async (_db, receipt) => receipt,
         );
+        const receipt = { entityId: state.id };
         // A Product or category change can put a Product where its spending
         // category forbids one.
         await validateProductPolicy(tx, { expenseIds: [state.id] });
@@ -864,13 +850,13 @@ export const updateExpense = defineMutationWriter({
           ? (state.qualityBefore?.purchaseId ?? null)
           : resolved,
       );
-      const receipt = await expenseCrud.update(
-        tx,
-        state.id,
-        update,
+      await updatePurchaseEventRecords(
+        databaseForTransaction(tx),
+        "expense",
+        [{ id: state.id, values: expenseUpdateValues(update) }],
         actor,
-        async (_db, receipt) => receipt,
       );
+      const receipt = { entityId: state.id };
       // A Product or category change can put a Product where its spending
       // category forbids one; a folded superseded charge can reclassify the
       // target Purchase's other lines, so check it whole once this line lands.
@@ -1007,7 +993,7 @@ const expenseInsertValues = (
   spendingCategoryId,
   economicRole: data.economicRole,
   name: data.name,
-  cost: data.cost,
+  cost: nullableWholeCentToMinor(data.cost),
   date: data.date,
   lineKind: tuple.lineKind,
   lineBasis: data.lineBasis,
@@ -1027,6 +1013,7 @@ async function writeNewExpenseLedgerRows(
   tx: DrizzleTransaction,
   inputs: readonly ExpenseCreateInput[],
   created: readonly { id: ExpenseId }[],
+  actor: ActorContext,
 ) {
   for (const [index, data] of inputs.entries()) {
     const expenseId = created[index]!.id;
@@ -1036,6 +1023,7 @@ async function writeNewExpenseLedgerRows(
         expenseId,
         "beneficiary",
         data.beneficiaries,
+        actor,
       );
     if (data.funders?.length)
       await replaceExpenseAttributionRole(
@@ -1043,6 +1031,7 @@ async function writeNewExpenseLedgerRows(
         expenseId,
         "funder",
         data.funders,
+        actor,
       );
     if (data.sourceClaims?.length)
       await replaceLedgerSourceClaims(
@@ -1051,70 +1040,6 @@ async function writeNewExpenseLedgerRows(
         data.sourceClaims,
       );
   }
-}
-
-/**
- * Principal Expenses without a Product, staged in a write layer on resolved
- * references: `createExpenses`' checks, values, attribution rows and create
- * audit. Booking lineage is stored with the row. Insert the layer's
- * Purchases first: inheritance validation reads them.
- */
-export function stageExpenses(
-  layer: WriteLayer,
-  items: readonly {
-    data: ExpenseCreateInput;
-    projectId: ProjectId | null;
-    purchaseId: PurchaseId;
-    spendingCategoryId: SpendingCategoryId | null;
-    bookingTransactionCode: string | null;
-  }[],
-) {
-  const tuples = items.map(({ data, projectId, purchaseId }) => {
-    if (data.productId || data.lineKind === undefined)
-      throw new Error("Staged Expenses are classified lines without a Product");
-    return expenseCreateTuple(data, {
-      lineKind: resolveExpenseLineKind({
-        lineKind: data.lineKind,
-        productId: null,
-      }),
-      projectId,
-      productId: null,
-      purchaseId,
-    });
-  });
-  const staged = layer.stage(
-    "expense",
-    items.map((item, index) => ({
-      ...expenseInsertValues(
-        item.data,
-        tuples[index]!,
-        item.spendingCategoryId,
-      ),
-      bookingTransactionCode: item.bookingTransactionCode,
-    })),
-  );
-  return { staged, tuples };
-}
-
-/** Validate and insert staged Expenses, then their attribution rows and audit. */
-export async function insertStagedExpenses(
-  layer: WriteLayer,
-  stagedExpenses: ReturnType<typeof stageExpenses>,
-  inputs: readonly ExpenseCreateInput[],
-  actor: ActorContext,
-) {
-  await validateExpenseInheritances(layer.tx, stagedExpenses.tuples);
-  const created = await layer.insert("expense", stagedExpenses.staged);
-  await writeNewExpenseLedgerRows(layer.tx, inputs, created);
-  layer.audit(
-    actor,
-    created.map((row) => ({
-      entityKind: "expense" as const,
-      entityId: row.id,
-      action: "create" as const,
-    })),
-  );
-  return created;
 }
 
 export async function createExpenses(
@@ -1139,6 +1064,7 @@ export async function createExpenses(
         : await requireLineRoleClassifier(classifyLineRole)(db, actor, data),
     );
   return withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     // Same transaction as the insert: a vendor or charge created here must not
     // outlive a failed expense write.
     // A caller-supplied `purchaseId` skips `resolveCharge` entirely, so this is
@@ -1193,14 +1119,15 @@ export async function createExpenses(
       "spendingCategory",
       inputs.map((data) => data.spendingCategoryId),
     );
-    const created = await insertManyWithShortcode(
+    const created = await createPurchaseEventRecords(
       tx,
       "expense",
       inputs.map((data, index) =>
         expenseInsertValues(data, tuples[index]!, categoryIds[index]!),
       ),
+      actor,
     );
-    await writeNewExpenseLedgerRows(tx, inputs, created);
+    await writeNewExpenseLedgerRows(tx, inputs, created, actor);
     await logAuditEntries(
       tx,
       actor,
@@ -1255,7 +1182,25 @@ export const deleteExpensesWithPurchaseEffects = async (
   }
 
   return await withTransaction(db, async (tx) => {
-    const ids = await resolveAllOrThrow(tx, "expense", shortcodes);
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
+    return removeExpensesWithPurchaseEffects(
+      tx,
+      await resolveAllOrThrow(tx, "expense", shortcodes),
+      actor,
+    );
+  });
+};
+
+/** The Expense delete policy by id; the kernel's removal of an Expense runs it too. */
+export const removeExpensesWithPurchaseEffects = async (
+  db: Database | DrizzleTransaction,
+  ids: ExpenseId[],
+  actor: ActorContext,
+): Promise<{
+  priceAffectedProductIds: ProductId[];
+  result: DeleteExpensesWithPurchaseEffectsOut;
+}> =>
+  withTransactionOn(db, async (tx) => {
     const qualityTargets = await tx.query.expense.findMany({
       where: {
         RAW: (table: PgTable) =>
@@ -1280,7 +1225,7 @@ export const deleteExpensesWithPurchaseEffects = async (
     // transaction; the purchase and pricing effects around it are expense's.
     const { deleted } = await deleteByPolicy(tx, {
       entity: "expense",
-      policy: EXPENSE_DELETE_EDGE_POLICY,
+      policy: DECLARED_EDGE_DELETE_POLICIES.expense,
       ids,
       actor,
     });
@@ -1362,7 +1307,6 @@ export const deleteExpensesWithPurchaseEffects = async (
       },
     };
   });
-};
 
 export const deleteExpenses = async (
   db: Database,

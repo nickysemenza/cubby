@@ -1,5 +1,6 @@
 import type { EntityFieldEnvelopeRead } from "@cubby/schemas/entity-field-envelopes";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { FIELD_RESET_LABEL } from "@cubby/schemas/field-envelope-presentation";
 import { type ProductFilters } from "@cubby/schemas/product";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 
@@ -365,7 +366,7 @@ export const productListOverride = defineListOverride<
                       }}
                       config={{
                         type: "currency",
-                        clearable: { label: "Use inherited" },
+                        clearable: { label: FIELD_RESET_LABEL },
                       }}
                       renderValue={() => (
                         <ProductCostValue envelope={product.fields.cost} />

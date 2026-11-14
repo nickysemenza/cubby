@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { readOnly, timestampField } from "./field-policy";
 import { capitalize } from "@cubby/shared/text-case";
 import { z } from "zod";
@@ -7,6 +8,315 @@ import { shortcodeSchema } from "../identifier-fields";
 import { statementDateKind } from "../source-transaction-record-fields";
 export const { definition, readSchemas } = defineEntityModel({
   key: "transactionImport",
+  edges: [
+    defineEdge({
+      key: "SourceTransactionRecord.batchId",
+      from: "sourceTransactionRecord",
+      to: "transactionImport",
+      cardinality: "one",
+      inverse: {
+        key: "transactionImport.incoming.SourceTransactionRecord.batchId",
+        from: "transactionImport",
+        to: "sourceTransactionRecord",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "SourceTransactionRecord.batchId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "sourceTransactionRecord",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "first-ingest provenance",
+        description: "The import that first retained a source observation.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "SourceOccurrence.physicalImportId",
+      from: "sourceOccurrence",
+      to: "transactionImport",
+      cardinality: "one",
+      inverse: {
+        key: "transactionImport.incoming.SourceOccurrence.physicalImportId",
+        from: "transactionImport",
+        to: "sourceOccurrence",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "SourceOccurrence.physicalImportId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "sourceOccurrence",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "physical source identities",
+        description:
+          "The original physical collection reserves each positioned occurrence.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Collection retirement never releases its original position identities.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "SourceOccurrence.withdrawalImportId",
+      from: "sourceOccurrence",
+      to: "transactionImport",
+      cardinality: "one",
+      inverse: {
+        key: "transactionImport.incoming.SourceOccurrence.withdrawalImportId",
+        from: "transactionImport",
+        to: "sourceOccurrence",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "SourceOccurrence.withdrawalImportId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "sourceOccurrence",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "withdrawal proofs",
+        description:
+          "The completed provider collection that confirmed source withdrawal.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "A retained withdrawal remains evidence after collection retirement.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "SourceObservationAnnotation.withdrawalImportId",
+      from: "row:SourceObservationAnnotation",
+      to: "transactionImport",
+      cardinality: "one",
+      inverse: {
+        key: "transactionImport.incoming.SourceObservationAnnotation.withdrawalImportId",
+        from: "transactionImport",
+        to: "row:SourceObservationAnnotation",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "SourceObservationAnnotation.withdrawalImportId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "column",
+        column: "SourceObservationAnnotation.observationId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "original withdrawal proofs",
+        description:
+          "Original observation withdrawal history preserves its collection identity.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason: "Historical provenance survives collection retirement.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "TransactionImportRecord.importId",
+      from: "row:TransactionImportRecord",
+      to: "transactionImport",
+      cardinality: "one",
+      inverse: {
+        key: "transactionImport.incoming.TransactionImportRecord.importId",
+        from: "transactionImport",
+        to: "row:TransactionImportRecord",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "TransactionImportRecord.importId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "column",
+        column: "TransactionImportRecord.importId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "received record memberships",
+        description:
+          "The retained membership of one resumable transaction import.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Retained import membership survives retirement of its collection.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+  ],
+
   names: { singular: "Transaction import", plural: "Transaction imports" },
   table: "TransactionImport",
   identifiers: { brand: "TransactionImportId", shortcode: "TIM-" },
@@ -360,24 +670,35 @@ export const { definition, readSchemas } = defineEntityModel({
 
 export default defineEntity(
   definition,
-  (r) => [
-    r
-      .path("sourceTransactionRecord", "many", [
-        { edge: "TransactionImportRecord.importId", direction: "incoming" },
-        {
-          edge: "TransactionImportRecord.statementRowId",
-          direction: "outgoing",
-        },
-      ])
-      .named("records", "Source transaction records"),
-    r
-      .path("sourceTransactionRecord", "many", [
-        { edge: "SourceTransactionRecord.batchId", direction: "incoming" },
-      ])
-      .named("firstRecords", "First recorded here"),
-    r
-      .query("sourceObservationWithdrawal", "many", true)
-      .named("withdrawnRecords", "Withdrawal proof for"),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r
+          .path("sourceTransactionRecord", "many", [
+            { edge: "TransactionImportRecord.importId", direction: "incoming" },
+            {
+              edge: "TransactionImportRecord.statementRowId",
+              direction: "outgoing",
+            },
+          ])
+          .named("records", "Source transaction records"),
+        "sourceTransactionRecord.imports",
+      ),
+      r.declare(
+        r
+          .path("sourceTransactionRecord", "many", [
+            { edge: "SourceTransactionRecord.batchId", direction: "incoming" },
+          ])
+          .named("firstRecords", "First recorded here"),
+        "sourceTransactionRecord.firstImport",
+      ),
+      r.declare(
+        r
+          .query("sourceObservationWithdrawal", "many", true)
+          .named("withdrawnRecords", "Withdrawal proof for"),
+        "sourceTransactionRecord.transactionImport.withdrawnRecords",
+      ),
+    ],
+  }),
   readSchemas,
 );

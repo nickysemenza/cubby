@@ -4,7 +4,7 @@ import type {
   ProposedImportFix,
   SourceOrderReconciliationResolution,
 } from "@cubby/schemas/purchase-import";
-import { minorToMoney } from "@cubby/shared";
+import { minorToMoney, nullableMinorToMoney } from "@cubby/shared";
 import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
@@ -203,7 +203,7 @@ export async function loadSourceReconciliationState(
     ),
     ...(resolution?.kind === "replace_lines" ? resolution.expenseIds : []),
   ]);
-  const expenses = await tx
+  const lockedExpenses = await tx
     .select()
     .from(expense)
     .where(
@@ -219,6 +219,11 @@ export async function loadSourceReconciliationState(
     )
     .orderBy(asc(expense.id))
     .for("update");
+  // Reconciliation fingerprints and comparisons keep the dollar-number shape.
+  const expenses = lockedExpenses.map((row) => ({
+    ...row,
+    cost: nullableMinorToMoney(row.cost),
+  }));
   if (
     expenses.some(
       (row) => row.purchaseId !== null && row.purchaseId !== target.id,

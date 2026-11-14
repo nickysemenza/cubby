@@ -1,65 +1,57 @@
 import { backgroundTaskMessageSchema } from "@cubby/schemas/queue-messages";
+import { sql } from "drizzle-orm";
 
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
-import {
-  runPermit,
-  runRecovery,
-  type PermitRuntime,
-} from "~/server/generic/jobs/service/permits";
 
 import type { BackgroundQueueBatch } from "../background-queue-types";
+import { coalesceBackgroundWakes, wakeAt } from "./publish";
 
 export interface BackgroundQueueConsumerPorts {
-  /** `unit` names the background unit whose page failed, for grouping. */
-  readonly captureException: (error: UnparsedError, unit?: string) => void;
+  readonly captureException: (error: UnparsedError) => void;
   readonly afterSuccess?: () => Promise<void>;
-  /** The permit runtime; production handlers and drains by default. */
-  readonly runtime?: (db: Database) => PermitRuntime;
 }
 
-/**
- * Each delivery is one permit (`maxBatchSize` 1). The unit it runs owns its own
- * retries in Postgres, so a permit acknowledges whatever the unit's outcome;
- * only a failure before or around selection (the database unreachable, say)
- * retries delivery. An unreadable envelope is still a permit; a recovery
- * envelope runs only the claim it names, if that claim still needs it.
- */
-const isRetiredRecovery = (body: unknown) =>
-  typeof body === "object" && body !== null && "recover" in body;
-
+/** The kernel rows own retries. A permit only wakes them and schedules their next deadline. */
 export async function handleBackgroundQueueBatch(
   db: Database,
   batch: BackgroundQueueBatch,
   ports: BackgroundQueueConsumerPorts,
 ) {
-  for (const message of batch.messages) {
-    try {
-      const envelope = backgroundTaskMessageSchema.safeParse(message.body).data;
-      // A recovery in a retired shape names claims this runtime cannot fence;
-      // running it as a permit would start an extra chain. The cron backstops it.
-      if (!envelope && isRetiredRecovery(message.body)) {
-        message.ack();
-        continue;
-      }
-      if (envelope?.ring)
-        await (
-          await import("~/server/domains/image-processing/repo/image-processing-ring")
-        ).ringDueDeviceWork(db);
-      const runtime =
-        ports.runtime?.(db) ??
-        (await import("~/server/workflows/jobs")).productionPermitRuntime(
-          db,
-          ports.captureException,
-        );
-      const unit = envelope?.recover
-        ? await runRecovery(runtime, envelope.recover)
-        : await runPermit(runtime);
-      message.ack();
-      if (unit) await ports.afterSuccess?.();
-    } catch (error) {
-      ports.captureException(error);
-      message.retry({ delaySeconds: 30 });
-    }
+  return coalesceBackgroundWakes(() =>
+    consumeBackgroundQueueBatch(db, batch, ports),
+  );
+}
+
+async function consumeBackgroundQueueBatch(
+  db: Database,
+  batch: BackgroundQueueBatch,
+  ports: BackgroundQueueConsumerPorts,
+) {
+  const { runProductionKernel } = await import("~/server/kernel/api");
+  const { kernelNextSql } = await import("~/server/kernel/runner");
+  const { productionKernel } = await import("~/server/kernel/kernel");
+  const { repositoryQueries } =
+    await import("~/server/db/repository-access.boundary");
+  try {
+    const ring = batch.messages.some(
+      (message) =>
+        backgroundTaskMessageSchema.safeParse(message.body).data?.ring,
+    );
+    if (ring)
+      await (
+        await import("~/server/domains/image-processing/repo/image-processing-ring")
+      ).ringDueDeviceWork(db);
+    const ran = await runProductionKernel(db, { budgetMs: 20_000 });
+    const result = await repositoryQueries(db).execute<{ at: string | null }>(
+      sql`SELECT to_char((${kernelNextSql((await productionKernel()).registry)}), 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS at`,
+    );
+    const at = result.rows[0]?.at;
+    if (at) await wakeAt(new Date(at), { source: "kernel.successor" });
+    for (const message of batch.messages) message.ack();
+    if (ran) await ports.afterSuccess?.();
+  } catch (error) {
+    ports.captureException(error);
+    for (const message of batch.messages) message.retry({ delaySeconds: 30 });
   }
 }

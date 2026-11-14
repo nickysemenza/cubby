@@ -16,22 +16,17 @@ import { describe, expect, it, vi } from "vitest";
 import { identifyMedia } from "~/server/ai/run-feature";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import { getDb } from "~/server/db/helpers";
-import {
-  aiAnalysis,
-  image,
-  imageProcessingAttempt,
-  imageProcessingJob,
-} from "~/server/db/schema";
+import { aiAnalysis, image, imageProcessingJob } from "~/server/db/schema";
+import { appendExecutionReceipt } from "~/server/domains/image-processing/repo/execution-receipt-write";
 import {
   readImageExecutions,
-  updateImageExecution,
+  releaseImageFixture,
 } from "~/server/domains/image-processing/repo/image-execution.fixtures";
 import {
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
 } from "~/server/domains/image-processing/repo/processor-policy";
-import { cloudImageDrain } from "~/server/domains/image-processing/service/cloud-drain";
 import { dispatchImageProcessingWakeup } from "~/server/domains/image-processing/service/dispatch";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { getVerifiedImageRendition } from "~/server/domains/image/repo/image-identification";
@@ -207,58 +202,14 @@ describe("independent durable image identification", () => {
     });
   });
 
-  it("recovers exactly a lapsed cloud attempt once and re-arms at its new lease", async () => {
-    const { row, identification } = await setup();
-    // An AVIF without a rendition defers before any provider call.
-    await getDb(ctx.db)
-      .update(image)
-      .set({ contentType: "image/avif" })
-      .where(eq(image.id, row.id));
-    const crashed = await lease(identification.id);
-    await getDb(ctx.db)
-      .update(imageProcessingJob)
-      .set({ leaseUntil: new Date(Date.now() - 1_000) })
-      .where(eq(imageProcessingJob.id, identification.id));
-    const armed: { id: string; attempt: string; leaseExpiresAt: Date }[] = [];
-    const recover = (attempt: string) =>
-      cloudImageDrain.recover!(
-        ctx.db,
-        { id: identification.id, attempt },
-        async (claim) => {
-          armed.push(claim);
-        },
-      );
-    // Another attempt's recovery claims nothing.
-    expect(await recover(crypto.randomUUID())).toEqual({ claimed: 0 });
-    // Overlapping recoveries of one attempt: exactly one reclaims and runs it.
-    const results = await Promise.all([
-      recover(crashed.attemptId),
-      recover(crashed.attemptId),
-    ]);
-    expect(results.map((result) => result.claimed).sort()).toEqual([0, 1]);
-    // The reclaim arms its own recovery, for its new attempt, at its own lease.
-    expect(armed).toEqual([
-      {
-        id: identification.id,
-        attempt: expect.not.stringMatching(crashed.attemptId),
-        leaseExpiresAt: expect.any(Date),
-        source: "image-cloud-lease",
-      },
-    ]);
-    expect(armed[0]!.leaseExpiresAt.getTime()).toBeGreaterThan(
-      Date.now() + 15 * 60_000,
-    );
-  });
-
   it("reuses only a verified snapshot for the current source, never staging or old source bytes", async () => {
     const { row, cloud } = await setup();
     const imageId = parseEntityId("image", row.id);
     const inputKey = `tests/${crypto.randomUUID()}.jpg`;
-    const [attempt] = await getDb(ctx.db)
-      .insert(imageProcessingAttempt)
-      .values({
-        id: crypto.randomUUID(),
-        jobId: cloud.id,
+    const attempt = await appendExecutionReceipt(ctx.db, {
+      id: crypto.randomUUID(),
+      jobId: cloud.id,
+      patch: {
         number: 1,
         state: "ready",
         inputKey,
@@ -268,20 +219,21 @@ describe("independent durable image identification", () => {
           renditionKey: "staging-key",
           renditionHash: "b".repeat(64),
         },
-      })
-      .returning();
+      },
+    });
     expect(await getVerifiedImageRendition(ctx.db, imageId)).toBeNull();
-    await getDb(ctx.db)
-      .update(imageProcessingAttempt)
-      .set({
+    await appendExecutionReceipt(ctx.db, {
+      id: attempt.id,
+      jobId: cloud.id,
+      patch: {
         diagnostics: {
           sourceHash: hash,
           normalizationRevision: 1,
           renditionKey: inputKey,
           renditionHash: "b".repeat(64),
         },
-      })
-      .where(eq(imageProcessingAttempt.id, attempt!.id));
+      },
+    });
     expect(await getVerifiedImageRendition(ctx.db, imageId)).toEqual({
       key: inputKey,
       sha256: "b".repeat(64),
@@ -320,17 +272,18 @@ describe("independent durable image identification", () => {
       .update(imageProcessingJob)
       .set({ sourceContentHash: sourceHash })
       .where(eq(imageProcessingJob.imageId, imageId));
-    await getDb(ctx.db)
-      .update(imageProcessingAttempt)
-      .set({
+    await appendExecutionReceipt(ctx.db, {
+      id: attempt.id,
+      jobId: cloud.id,
+      patch: {
         diagnostics: {
           sourceHash,
           normalizationRevision: 1,
           renditionKey: inputKey,
           renditionHash,
         },
-      })
-      .where(eq(imageProcessingAttempt.id, attempt!.id));
+      },
+    });
     const fetch = vi
       .spyOn(externalFetch, "fetchExternalResponse")
       .mockImplementation(async (url) => {
@@ -488,9 +441,7 @@ describe("independent durable image identification", () => {
           .where(eq(image.id, row.id));
       // An expired lease alone is still adoptable; a newer claim is stale.
       if (stale === "lease") {
-        await updateImageExecution(ctx.db, identification.id, {
-          leaseUntil: new Date(Date.now() - 1_000),
-        });
+        await releaseImageFixture(ctx.db, identification.id);
         await lease(identification.id);
       }
       if (stale === "revision")

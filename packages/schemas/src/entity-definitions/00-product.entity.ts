@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { galleryImagesField } from "./image-fields";
 import { historicalDateRangePresets } from "../date-range";
 import { aliasList, readOnly, timestampField } from "./field-policy";
@@ -72,6 +73,1127 @@ import { selectControlOptions } from "./select-control-options";
 export const { definition, readSchemas } = defineEntityModel(
   {
     key: "product",
+    edges: [
+      defineEdge({
+        key: "Cookbook.productId",
+        from: "cookbook",
+        to: "product",
+        cardinality: "one",
+        inverse: {
+          key: "product.incoming.Cookbook.productId",
+          from: "product",
+          to: "cookbook",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "Cookbook.productId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "entity",
+          entity: "cookbook",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "reference",
+          label: "cookbooks",
+          description:
+            "A Cookbook whose physical copy this Product is — the book on the shelf behind the imported EPUB. Deleting the Product leaves the cookbook and its recipes intact; only the shelf link goes.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "block-live-cookbook-copy",
+                effect: "block",
+                description:
+                  "A product that is a cookbook's physical copy can't be deleted — unlink the cookbook first. Blocking rather than clearing the link because the policy vocabulary has no set-null effect, and a soft-delete here would take the cookbook and every recipe it imported with it.",
+                reason: "PRODUCT_HAS_COOKBOOKS",
+                label: "cookbooks",
+              },
+              handler: {
+                module: "~/server/domains/product/repo/crud",
+                export: "refuseProductDeletion",
+                argument: "Cookbook.productId",
+              },
+              order: 0,
+            },
+            merge: {
+              kind: "disposition",
+              disposition: {
+                code: "repoint-to-survivor",
+                effect: "repoint",
+                description:
+                  "A Cookbook whose physical copy was merged away re-points onto the survivor, the same plain repoint as a Location. Nothing dedupes: a survivor claimed by two cookbooks is odd but not destructive, and refusing the merge over it would be worse than letting the operator unlink one.",
+              },
+              handler: null,
+              order: 0,
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "Location.productId",
+        from: "location",
+        to: "product",
+        cardinality: "one",
+        inverse: {
+          key: "product.incoming.Location.productId",
+          from: "product",
+          to: "location",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "Location.productId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "entity",
+          entity: "location",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "reference",
+          label: "locations",
+          description:
+            "A Location that IS an instance of this Product — the bin, tote or rack itself, not stock held in it. Deleting the Product would leave a `furniture` location (whose type only means an instance of a Product) with no identity at all.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "block-live-location-identity",
+                effect: "block",
+                description:
+                  "A product that a location IS can't be deleted — a linked location carries no `type` of its own, so orphaning it would leave it with no identity at all.",
+                reason: "PRODUCT_HAS_LOCATIONS",
+                label: "locations",
+              },
+              handler: {
+                module: "~/server/domains/product/repo/crud",
+                export: "refuseProductDeletion",
+                argument: "Location.productId",
+              },
+              order: 1,
+            },
+            merge: {
+              kind: "disposition",
+              disposition: {
+                code: "repoint-to-survivor",
+                effect: "repoint",
+                description:
+                  "Locations that ARE a merged product re-point onto the survivor. A plain repoint, not a fold: many locations legitimately share one SKU (twelve bins can all be the same tote), so there is no slot to collide on.",
+              },
+              handler: null,
+              order: 1,
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "InventoryEntry.productId",
+        from: "inventory",
+        to: "product",
+        cardinality: "one",
+        inverse: {
+          key: "product.incoming.InventoryEntry.productId",
+          from: "product",
+          to: "inventory",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "InventoryEntry.productId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "entity",
+          entity: "inventory",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "acquisition",
+          label: "inventory entries",
+          description:
+            "A shelf or bin count of this product currently on hand — proof it was actually acquired, not just cataloged.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "block-live-inventory",
+                effect: "block",
+                description:
+                  "A product still on a shelf can't be deleted — empty the inventory first.",
+                reason: "PRODUCT_HAS_INVENTORY",
+                label: "inventory entries",
+              },
+              handler: {
+                module: "~/server/domains/product/repo/crud",
+                export: "refuseProductDeletion",
+                argument: "InventoryEntry.productId",
+              },
+              order: 2,
+            },
+            merge: {
+              kind: "disposition",
+              disposition: {
+                code: "repoint-or-sum-same-location",
+                effect: "move-dedupe",
+                description:
+                  "A merged product's stock moves onto the survivor; entries in a location the survivor already stocks are summed into the survivor's entry and the absorbed one is soft-deleted.",
+              },
+              handler: {
+                module: "~/server/domains/product/repo/merge",
+                export: "productMergeEdgeHandlers",
+                member: "foldInventory",
+              },
+              order: 2,
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "Task.subjectProductId",
+        from: "task",
+        to: "product",
+        cardinality: "one",
+        inverse: {
+          key: "product.incoming.Task.subjectProductId",
+          from: "product",
+          to: "task",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "Task.subjectProductId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "entity",
+          entity: "task",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "history",
+          label: "tasks referencing them",
+          description:
+            "Durable work history performed on this product (e.g. a repair or maintenance task); deleting the subject would leave that history nameless.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "block-live-task-subject",
+                effect: "block",
+                description:
+                  "A product that is the subject of work history can't be deleted — the task would be left nameless.",
+                reason: "PRODUCT_HAS_TASKS",
+                label: "tasks referencing them",
+              },
+              handler: {
+                module: "~/server/domains/product/repo/crud",
+                export: "refuseProductDeletion",
+                argument: "Task.subjectProductId",
+              },
+              order: 3,
+            },
+            merge: {
+              kind: "disposition",
+              disposition: {
+                code: "repoint-to-survivor",
+                effect: "repoint",
+                description:
+                  "Work history whose subject was a merged product re-points onto the survivor.",
+              },
+              handler: null,
+              order: 3,
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "Expense.productId",
+        from: "expense",
+        to: "product",
+        cardinality: "one",
+        inverse: {
+          key: "product.incoming.Expense.productId",
+          from: "product",
+          to: "expense",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "Expense.productId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "entity",
+          entity: "expense",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "acquisition",
+          label: "expenses",
+          description:
+            "A spend-ledger line recording money spent acquiring this product — the source of its net cost and owned/sold window; an orphaned product would silently corrupt that derivation with no restore path.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "block-live-expense",
+                effect: "block",
+                description:
+                  "A product with ledger spend can't be deleted — net cost and the owned/sold window derive from those rows.",
+                reason: "PRODUCT_HAS_EXPENSES",
+                label: "expenses",
+              },
+              handler: {
+                module: "~/server/domains/product/repo/crud",
+                export: "refuseProductDeletion",
+                argument: "Expense.productId",
+              },
+              order: 4,
+            },
+            merge: {
+              kind: "disposition",
+              disposition: {
+                code: "repoint-live-fk-with-audit",
+                effect: "repoint",
+                description:
+                  "A merged product's ledger lines are re-pointed onto the survivor, logged to the audit trail — net cost and the owned/sold window derive from them.",
+              },
+              handler: {
+                module: "~/server/domains/product/repo/merge",
+                export: "productMergeEdgeHandlers",
+                member: "moveExpenses",
+              },
+              order: 4,
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "Planting.sourceProductId",
+        from: "planting",
+        to: "product",
+        cardinality: "one",
+        inverse: {
+          key: "product.incoming.Planting.sourceProductId",
+          from: "product",
+          to: "planting",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "Planting.sourceProductId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "entity",
+          entity: "planting",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "history",
+          label: "source products",
+          description:
+            "A planting can retain the seed packet, seedling, or plant it came from.",
+          liveness: {
+            kind: "allow-target-deleted",
+            reason:
+              "Planting provenance retains its recorded source Product through a merge tombstone.",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "block-garden-source",
+                effect: "block",
+                description:
+                  "A planting retains its source product for growing history.",
+                reason: "CONSTRAINT_VIOLATION",
+                label: "garden plantings",
+              },
+              handler: {
+                module: "~/server/domains/product/repo/crud",
+                export: "refuseProductDeletion",
+                argument: "Planting.sourceProductId",
+              },
+              order: 5,
+            },
+            merge: {
+              kind: "disposition",
+              disposition: {
+                code: "preserve-garden-source",
+                effect: "preserve",
+                description:
+                  "Planting provenance retains the merged product tombstone rather than rewriting its recorded source.",
+              },
+              handler: null,
+              order: 5,
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "Device.productId",
+        from: "device",
+        to: "product",
+        cardinality: "one",
+        inverse: {
+          key: "product.incoming.Device.productId",
+          from: "product",
+          to: "device",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "Device.productId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "entity",
+          entity: "device",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "reference",
+          label: "devices",
+          description: "A device whose physical hardware is this Product.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "clear-hardware",
+                effect: "detach",
+                description:
+                  "Deleting a product clears any device's hardware link rather than blocking the delete — a device survives as one with no linked hardware.",
+              },
+              handler: null,
+              order: 6,
+            },
+            merge: {
+              kind: "disposition",
+              disposition: {
+                code: "repoint-to-survivor",
+                effect: "repoint",
+                description:
+                  "A device whose hardware was merged away re-points onto the survivor, the same plain repoint as a Location or Cookbook.",
+              },
+              handler: null,
+              order: 6,
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "ImportSourceProduct.productId",
+        from: "row:ImportSourceProduct",
+        to: "product",
+        cardinality: "one",
+        inverse: {
+          key: "product.incoming.ImportSourceProduct.productId",
+          from: "product",
+          to: "row:ImportSourceProduct",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "ImportSourceProduct.productId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "excluded",
+          reason:
+            "Workflow evidence about entities, not a relationship between them.",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "history",
+          label: "original order lines",
+          description:
+            "The exact original ordered line identifies this Product without implying an inventory movement or financial amount.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "block-original-order-evidence",
+                effect: "block",
+                description:
+                  "A Product identified by a retained original order line cannot be deleted; a supported Product merge preserves that evidence.",
+                reason: "CONSTRAINT_VIOLATION",
+                label: "original order lines",
+              },
+              handler: {
+                module: "~/server/domains/product/repo/crud",
+                export: "refuseProductDeletion",
+                argument: "ImportSourceProduct.productId",
+              },
+              order: 7,
+            },
+            merge: {
+              kind: "disposition",
+              disposition: {
+                code: "repoint-original-order-evidence",
+                effect: "repoint",
+                description:
+                  "Original order-line bindings follow the surviving Product while their retained extraction and checksum remain unchanged.",
+              },
+              handler: null,
+              order: 7,
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "MealFoodEntry.productId",
+        from: "row:MealFoodEntry",
+        to: "product",
+        cardinality: "one",
+        inverse: {
+          key: "product.incoming.MealFoodEntry.productId",
+          from: "product",
+          to: "row:MealFoodEntry",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "MealFoodEntry.productId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "column",
+          column: "MealFoodEntry.mealId",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "reference",
+          label: "meal food entries",
+          description:
+            "A recorded product amount whose nutrition is recalculated from the current product source while its entered quantity remains fixed.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "block-live-meal-food-entry",
+                effect: "block",
+                description:
+                  "A product used by a live meal food entry can't be deleted because the recorded grams depend on that product's nutrition source.",
+                reason: "CONSTRAINT_VIOLATION",
+                label: "meal food entries",
+              },
+              handler: {
+                module: "~/server/domains/product/repo/crud",
+                export: "refuseProductDeletion",
+                argument: "MealFoodEntry.productId",
+              },
+              order: 8,
+            },
+            merge: {
+              kind: "disposition",
+              disposition: {
+                code: "repoint-meal-food-entries",
+                effect: "repoint",
+                description:
+                  "Recorded meal food entries move onto the surviving product while their gram amounts remain fixed.",
+              },
+              handler: null,
+              order: 8,
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "ProductUnitMapping.productId",
+        from: "row:ProductUnitMapping",
+        to: "product",
+        cardinality: "one",
+        inverse: {
+          key: "product.incoming.ProductUnitMapping.productId",
+          from: "product",
+          to: "row:ProductUnitMapping",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "ProductUnitMapping.productId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "column",
+          column: "ProductUnitMapping.productId",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "metadata",
+          label: "unit mappings",
+          description:
+            "A hand-entered conversion (volume ↔ weight ↔ price) for this product; authored data, not evidence of purchase.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "soft-delete-metadata",
+                effect: "soft-delete",
+                description:
+                  "Hand-entered unit conversions are soft-deleted with the product.",
+              },
+              handler: null,
+              order: 9,
+            },
+            merge: {
+              kind: "disposition",
+              disposition: {
+                code: "repoint-or-discard-conflicting-conversion",
+                effect: "move-dedupe",
+                description:
+                  "A merged product's hand-entered unit conversions move onto the survivor; one stating a unit pair the survivor already states is dropped — silently when the ratio agrees, and named in the audit trail when it disagrees.",
+              },
+              handler: {
+                module: "~/server/domains/product/repo/merge",
+                export: "productMergeEdgeHandlers",
+                member: "foldUnitMappings",
+              },
+              order: 9,
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "product/EntityAttachment.entityId",
+        from: "row:EntityAttachment",
+        to: "product",
+        cardinality: "one",
+        inverse: {
+          key: "product.incoming.EntityAttachment.entityId",
+          from: "product",
+          to: "row:EntityAttachment",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "EntityAttachment.entityId",
+          constrained: true,
+          partition: {
+            column: "EntityAttachment.entityKind",
+            value: "product",
+          },
+        },
+        ownership: {
+          kind: "identity",
+          column: "EntityAttachment.entityId",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "media",
+          label: "product photos",
+          description:
+            "A photo or manual attachment for this product; says nothing about ownership.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "soft-delete-association",
+                effect: "soft-delete",
+                description:
+                  "Image associations are soft-deleted with the product, and each file is\n      deleted too unless something else still references it.",
+              },
+              handler: null,
+              order: 10,
+            },
+            merge: {
+              kind: "disposition",
+              disposition: {
+                code: "move-dedupe-shared-image",
+                effect: "move-dedupe",
+                description:
+                  "A merged product's image associations move onto the survivor, skipping any image already attached to it.",
+              },
+              handler: {
+                module: "~/server/domains/product/repo/merge",
+                export: "productMergeEdgeHandlers",
+                member: "moveImages",
+              },
+              order: 10,
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "ProductConversionCoverage.productId",
+        from: "row:ProductConversionCoverage",
+        to: "product",
+        cardinality: "one",
+        inverse: {
+          key: "product.incoming.ProductConversionCoverage.productId",
+          from: "product",
+          to: "row:ProductConversionCoverage",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "ProductConversionCoverage.productId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "column",
+          column: "ProductConversionCoverage.productId",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "metadata",
+          label: "conversion coverage projections",
+          description:
+            "A rebuildable conversion-graph projection owned by this product.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "hard-delete-conversion-projection",
+                effect: "hard-delete",
+                description:
+                  "The rebuildable conversion coverage projection is deleted with the product.",
+              },
+              handler: null,
+              order: 11,
+            },
+            merge: {
+              kind: "disposition",
+              disposition: {
+                code: "discard-rebuildable-projection",
+                effect: "hard-delete",
+                description:
+                  "Absorbed products' conversion projections are discarded; the survivor is marked stale and rebuilt from the merged graph.",
+              },
+              handler: {
+                module: "~/server/domains/product/repo/merge",
+                export: "productMergeEdgeHandlers",
+                member: "discardConversionCoverage",
+              },
+              order: 11,
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "PhotoGroupProposal.productId",
+        from: "row:PhotoGroupProposal",
+        to: "product",
+        cardinality: "one",
+        inverse: {
+          key: "product.incoming.PhotoGroupProposal.productId",
+          from: "product",
+          to: "row:PhotoGroupProposal",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "PhotoGroupProposal.productId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "column",
+          column: "PhotoGroupProposal.runId",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "reference",
+          label: "photo group proposals",
+          description:
+            "A reviewed photo group that chose, or committed to, this Product.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "clear-proposal-product",
+                effect: "detach",
+                description:
+                  "Deleting a product clears a photo group proposal's product choice; a proposed group must then pick another Product before approval.",
+              },
+              handler: null,
+              order: 12,
+            },
+            merge: {
+              kind: "disposition",
+              disposition: {
+                code: "repoint-to-survivor",
+                effect: "repoint",
+                description:
+                  "A photo group proposal that chose (or committed to) a merged-away product follows the survivor.",
+              },
+              handler: null,
+              order: 12,
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "product/EntityExternalId.entityId",
+        from: "row:EntityExternalId",
+        to: "product",
+        cardinality: "one",
+        inverse: {
+          key: "product.incoming.EntityExternalId.entityId",
+          from: "product",
+          to: "row:EntityExternalId",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "EntityExternalId.entityId",
+          constrained: true,
+          partition: {
+            column: "EntityExternalId.entityKind",
+            value: "product",
+          },
+        },
+        ownership: {
+          kind: "identity",
+          column: "EntityExternalId.entityId",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "metadata",
+          label: "external ids",
+          description:
+            "An identifier another system gives this record (an ASIN, a barcode, a settlement reference, a Notion page); says nothing about ownership or spend.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "soft-delete-metadata",
+                effect: "soft-delete",
+                description:
+                  "External ids (e.g. ASINs) are soft-deleted with the product.",
+              },
+              handler: null,
+              order: 13,
+            },
+            merge: {
+              kind: "disposition",
+              disposition: {
+                code: "repoint-product-identifiers",
+                effect: "move-dedupe",
+                description:
+                  "Identifiers move onto the survivor. A conflicting source/kind primary survives as a secondary and is named in the response and audit trail.",
+              },
+              handler: {
+                module: "~/server/domains/product/repo/merge",
+                export: "productMergeEdgeHandlers",
+                member: "moveExternalIds",
+              },
+              order: 13,
+            },
+          },
+        },
+      }),
+    ],
+
     names: { singular: "Product", plural: "Products" },
     route: {
       listColumns: {
@@ -1473,7 +2595,7 @@ Rules:
           control: { kind: "checkbox" },
           display: { columnGroup: "Stock", listHidden: true },
           // "intentional": a Product's own decision that matches its category
-          // is still a decision, so bulk "Use inherited values" never clears it.
+          // is still a decision, so bulk "Let Cubby decide" never clears it.
           resolution: {
             reset: { stockTracked: null },
             redundancy: "intentional",
@@ -3819,157 +4941,215 @@ Rules:
 
 export default defineEntity(
   definition,
-  (r) => [
-    r.field("brandId").named("brand", "Brand"),
-    r.field("categoryId").named("category", "Classification"),
-    r.field("ingredientId").named("ingredient", "Ingredient"),
-    r.field("growsPlantId").named("grows-plant", "Grows plant"),
-    r
-      .path("planting", "many", [
-        { edge: "Planting.sourceProductId", direction: "incoming" },
-      ])
-      .named("plantings", "Plantings"),
-    r
-      .link("projectTool", "incoming")
-      .named("project-uses", "Used on projects", {
-        view: {
-          key: "usedOnProjects",
-          columnGroup: "Work",
-          filterPrefix: "usedOnProject",
-          inverseKey: "project.usedTools",
-        },
-      }),
-    r
-      .path("vendor", "many", [
-        { edge: "Expense.productId", direction: "incoming" },
-        { edge: "Expense.purchaseId", direction: "outgoing" },
-        { edge: "Purchase.vendorId", direction: "outgoing" },
-      ])
-      .named("vendors", "Vendors", {
-        view: {
-          columnGroup: "Purchasing",
-          inverseKey: "vendor.products",
-        },
-      }),
-    r
-      .path("project", "many", [
-        { edge: "Expense.productId", direction: "incoming" },
-        { edge: "Expense.projectId", direction: "outgoing" },
-      ])
-      .named("purchased-projects", "Projects", {
-        view: {
-          key: "projects",
-          columnGroup: "Work",
-          inverseKey: "project.purchasedProducts",
-        },
-      }),
-    r
-      .path("purchase", "many", [
-        { edge: "Expense.productId", direction: "incoming" },
-        { edge: "Expense.purchaseId", direction: "outgoing" },
-      ])
-      .named("purchases", "Purchases", {
-        view: { columnGroup: "Purchasing", order: "newest" },
-        sourceKey: "expense",
-        list: {
-          rowSchema: {
-            module: "@cubby/schemas/purchase",
-            export: "productPurchaseOut",
-          },
-          adapter: {
-            module: "~/server/domains/purchase/repo/purchase-products",
-            export: "productPurchasesRelationAdapter",
-          },
-        },
-        sources: [
-          r
-            .link("purchaseProduct", "incoming")
-            .source("explicit", "Explicit purchase link"),
-        ],
-      }),
-    r
-      .path("expense", "many", [
-        { edge: "Expense.productId", direction: "incoming" },
-      ])
-      .named("expenses", "Expenses", {
-        view: { columnGroup: "Purchasing", order: "newest" },
-      }),
-    r
-      .path("inventory", "many", [
-        { edge: "InventoryEntry.productId", direction: "incoming" },
-      ])
-      .named("inventory", "Inventory", {
-        view: {
-          columnGroup: "Stock",
-          order: "newest",
-          filterPrefix: "relatedInventory",
-        },
-      }),
-    r
-      .path("task", "many", [
-        { edge: "Task.subjectProductId", direction: "incoming" },
-      ])
-      .named("tasks", "Tasks", {
-        view: { columnGroup: "Work", order: "task" },
-      }),
-    r
-      .path("meal", "many", [
-        { edge: "MealFoodEntry.productId", direction: "incoming" },
-        { edge: "MealFoodEntry.mealId", direction: "outgoing" },
-      ])
-      .named("meals", "Eaten at meals", {
-        view: {
-          columnGroup: "Food",
-          order: "newest",
-          inverseKey: "meal.foodProducts",
-        },
-      }),
-    r
-      .path("ledgerParty", "many", [
-        { edge: "MealFoodEntry.productId", direction: "incoming" },
-        { edge: "MealFoodEntry.ledgerPartyId", direction: "outgoing" },
-      ])
-      .named("eaters", "Eaten by", {
-        view: { columnGroup: "Food", filterPrefix: "eater" },
-      }),
-    r
-      .path("location", "many", [
-        { edge: "Location.productId", direction: "incoming" },
-      ])
-      .named("locations", "Serving as locations"),
-    r.images(),
-    r.link("productComponent", "outgoing").named("components", "Components", {
-      empty: "This isn't a kit yet — no components added.",
-      sourceKey: "explicit",
-      mutation: {
-        source: "explicit",
-        itemSchema: {
-          module: "@cubby/schemas/common",
-          export: "productComponentRelationItemSchema",
-        },
-        rowSchema: {
-          module: "@cubby/schemas/product-components",
-          export: "productComponentOut",
-        },
-        adapter: {
-          module: "~/server/domains/product/repo/product-components",
-          export: "productComponentsRelationAdapter",
-        },
-        audiences: ["browser", "mcp"],
-      },
-    }),
-    r
-      .link("productComponent", "incoming")
-      .named("containing-kits", "Containing kits", {
-        empty: "Not used as a component in any kit yet.",
-        sourceKey: "explicit",
-      }),
-    r
-      .external("usda-food", "usda", [
-        "EntityExternalId.externalId",
-        "Product.fdc_id",
-      ])
-      .named("usda-food", "USDA food"),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r.field("brandId").named("brand", "Brand"),
+        "vendor.branded-products",
+      ),
+      r.declare(
+        r.field("categoryId").named("category", "Classification"),
+        "productCategory.products",
+      ),
+      r.declare(
+        r.field("ingredientId").named("ingredient", "Ingredient"),
+        "ingredient.products",
+      ),
+      r.declare(
+        r.field("growsPlantId").named("grows-plant", "Grows plant"),
+        "plant.products",
+      ),
+      r.declare(
+        r
+          .path("planting", "many", [
+            { edge: "Planting.sourceProductId", direction: "incoming" },
+          ])
+          .named("plantings", "Plantings"),
+        "planting.source-product",
+      ),
+      r.declare(
+        r
+          .link("projectTool", "incoming")
+          .named("project-uses", "Used on projects", {
+            view: {
+              key: "usedOnProjects",
+              columnGroup: "Work",
+              filterPrefix: "usedOnProject",
+              inverseKey: "project.usedTools",
+            },
+          }),
+        "project.usedTools",
+      ),
+      r.declare(
+        r
+          .path("vendor", "many", [
+            { edge: "Expense.productId", direction: "incoming" },
+            { edge: "Expense.purchaseId", direction: "outgoing" },
+            { edge: "Purchase.vendorId", direction: "outgoing" },
+          ])
+          .named("vendors", "Vendors", {
+            view: {
+              columnGroup: "Purchasing",
+              inverseKey: "vendor.products",
+            },
+          }),
+        "vendor.products",
+      ),
+      r.declare(
+        r
+          .path("project", "many", [
+            { edge: "Expense.productId", direction: "incoming" },
+            { edge: "Expense.projectId", direction: "outgoing" },
+          ])
+          .named("purchased-projects", "Projects", {
+            view: {
+              key: "projects",
+              columnGroup: "Work",
+              inverseKey: "project.purchasedProducts",
+            },
+          }),
+        "project.purchasedProducts",
+      ),
+      r.declare(
+        r
+          .path("purchase", "many", [
+            { edge: "Expense.productId", direction: "incoming" },
+            { edge: "Expense.purchaseId", direction: "outgoing" },
+          ])
+          .named("purchases", "Purchases", {
+            view: { columnGroup: "Purchasing", order: "newest" },
+            sourceKey: "expense",
+            list: {
+              rowSchema: {
+                module: "@cubby/schemas/purchase",
+                export: "productPurchaseOut",
+              },
+              adapter: {
+                module: "~/server/domains/purchase/repo/purchase-products",
+                export: "productPurchasesRelationAdapter",
+              },
+            },
+            sources: [
+              r
+                .link("purchaseProduct", "incoming")
+                .source("explicit", "Explicit purchase link"),
+            ],
+          }),
+        "purchase.products",
+      ),
+      r.declare(
+        r
+          .path("expense", "many", [
+            { edge: "Expense.productId", direction: "incoming" },
+          ])
+          .named("expenses", "Expenses", {
+            view: { columnGroup: "Purchasing", order: "newest" },
+          }),
+        "expense.product",
+      ),
+      r.declare(
+        r
+          .path("inventory", "many", [
+            { edge: "InventoryEntry.productId", direction: "incoming" },
+          ])
+          .named("inventory", "Inventory", {
+            view: {
+              columnGroup: "Stock",
+              order: "newest",
+              filterPrefix: "relatedInventory",
+            },
+          }),
+        "inventory.product",
+      ),
+      r.declare(
+        r
+          .path("task", "many", [
+            { edge: "Task.subjectProductId", direction: "incoming" },
+          ])
+          .named("tasks", "Tasks", {
+            view: { columnGroup: "Work", order: "task" },
+          }),
+        "task.subject",
+      ),
+      r.declare(
+        r
+          .path("meal", "many", [
+            { edge: "MealFoodEntry.productId", direction: "incoming" },
+            { edge: "MealFoodEntry.mealId", direction: "outgoing" },
+          ])
+          .named("meals", "Eaten at meals", {
+            view: {
+              columnGroup: "Food",
+              order: "newest",
+              inverseKey: "meal.foodProducts",
+            },
+          }),
+        "meal.foodProducts",
+      ),
+      r.declare(
+        r
+          .path("ledgerParty", "many", [
+            { edge: "MealFoodEntry.productId", direction: "incoming" },
+            { edge: "MealFoodEntry.ledgerPartyId", direction: "outgoing" },
+          ])
+          .named("eaters", "Eaten by", {
+            view: { columnGroup: "Food", filterPrefix: "eater" },
+          }),
+        "ledgerParty.product.eaters",
+      ),
+      r.declare(
+        r
+          .path("location", "many", [
+            { edge: "Location.productId", direction: "incoming" },
+          ])
+          .named("locations", "Serving as locations"),
+        "location.product",
+      ),
+      r.declare(r.images(), "image.product.images"),
+      r.declare(
+        r
+          .link("productComponent", "outgoing")
+          .named("components", "Components", {
+            empty: "This isn't a kit yet — no components added.",
+            sourceKey: "explicit",
+            mutation: {
+              source: "explicit",
+              itemSchema: {
+                module: "@cubby/schemas/common",
+                export: "productComponentRelationItemSchema",
+              },
+              rowSchema: {
+                module: "@cubby/schemas/product-components",
+                export: "productComponentOut",
+              },
+              adapter: {
+                module: "~/server/domains/product/repo/product-components",
+                export: "productComponentsRelationAdapter",
+              },
+              audiences: ["browser", "mcp"],
+            },
+          }),
+        "product.containing-kits",
+      ),
+      r.declare(
+        r
+          .link("productComponent", "incoming")
+          .named("containing-kits", "Containing kits", {
+            empty: "Not used as a component in any kit yet.",
+            sourceKey: "explicit",
+          }),
+        "product.components",
+      ),
+      r.declare(
+        r
+          .external("usda-food", "usda", [
+            "EntityExternalId.externalId",
+            "Product.fdc_id",
+          ])
+          .named("usda-food", "USDA food"),
+        "usda-food.product.usda-food",
+      ),
+    ],
+  }),
   readSchemas,
 );

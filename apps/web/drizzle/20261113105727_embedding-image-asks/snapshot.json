@@ -1,0 +1,840 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "3622d19a-ed28-4de7-95ec-152b6990deba",
+  "prevIds": [
+    "f70013e3-8e49-45b9-8990-fadac7286363"
+  ],
+  "footprints": [
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "ImageEvidence"
+      ],
+      "writes": [
+        "s|tbl|public.ImageEvidence",
+        "n|tbl|public.ImageEvidence",
+        "e|tbl|public.ImageEvidence",
+        "n|rel|public.ImageEvidence",
+        "n|type|public.ImageEvidence",
+        "n|rel|public.ImageEvidence_pkey",
+        "n|rel|public.ImageEvidence_inputHash_key"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "drop_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "ImageProcessingAttempt"
+      ],
+      "writes": [
+        "s|tbl|public.ImageProcessingAttempt",
+        "n|tbl|public.ImageProcessingAttempt",
+        "e|tbl|public.ImageProcessingAttempt",
+        "n|rel|public.ImageProcessingAttempt",
+        "n|type|public.ImageProcessingAttempt"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "drop_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "EntityEmbedding",
+        "EntityEmbedding_cleanup_idx"
+      ],
+      "writes": [
+        "s|idx|public.EntityEmbedding_cleanup_idx",
+        "n|idx|public.EntityEmbedding_cleanup_idx",
+        "e|idx|public.EntityEmbedding_cleanup_idx",
+        "n|rel|public.EntityEmbedding_cleanup_idx"
+      ],
+      "reads": [
+        "e|tbl|public.EntityEmbedding",
+        "n|sch|public",
+        "e|col|public.EntityEmbedding.deletionRetryAt"
+      ],
+      "sharedWrites": []
+    },
+    {
+      "statementType": "drop_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "EntityEmbedding",
+        "EntityEmbedding_deletion_exhausted_idx"
+      ],
+      "writes": [
+        "s|idx|public.EntityEmbedding_deletion_exhausted_idx",
+        "n|idx|public.EntityEmbedding_deletion_exhausted_idx",
+        "e|idx|public.EntityEmbedding_deletion_exhausted_idx",
+        "n|rel|public.EntityEmbedding_deletion_exhausted_idx"
+      ],
+      "reads": [
+        "e|tbl|public.EntityEmbedding",
+        "n|sch|public",
+        "e|col|public.EntityEmbedding.updatedAt"
+      ],
+      "sharedWrites": []
+    },
+    {
+      "statementType": "drop_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "SearchDocument",
+        "SearchDocument_embedding_due_idx"
+      ],
+      "writes": [
+        "s|idx|public.SearchDocument_embedding_due_idx",
+        "n|idx|public.SearchDocument_embedding_due_idx",
+        "e|idx|public.SearchDocument_embedding_due_idx",
+        "n|rel|public.SearchDocument_embedding_due_idx"
+      ],
+      "reads": [
+        "e|tbl|public.SearchDocument",
+        "n|sch|public",
+        "e|col|public.SearchDocument.embeddingDueAt"
+      ],
+      "sharedWrites": []
+    },
+    {
+      "statementType": "drop_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "SearchDocument",
+        "SearchDocument_embedding_exhausted_idx"
+      ],
+      "writes": [
+        "s|idx|public.SearchDocument_embedding_exhausted_idx",
+        "n|idx|public.SearchDocument_embedding_exhausted_idx",
+        "e|idx|public.SearchDocument_embedding_exhausted_idx",
+        "n|rel|public.SearchDocument_embedding_exhausted_idx"
+      ],
+      "reads": [
+        "e|tbl|public.SearchDocument",
+        "n|sch|public",
+        "e|col|public.SearchDocument.updatedAt"
+      ],
+      "sharedWrites": []
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "ImageProcessingJob",
+        "askId"
+      ],
+      "writes": [
+        "s|col|public.ImageProcessingJob.askId",
+        "n|col|public.ImageProcessingJob.askId",
+        "e|col|public.ImageProcessingJob.askId"
+      ],
+      "reads": [
+        "n|tbl|public.ImageProcessingJob",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "Answer",
+        "claimToken"
+      ],
+      "writes": [
+        "s|col|public.Answer.claimToken",
+        "n|col|public.Answer.claimToken",
+        "e|col|public.Answer.claimToken"
+      ],
+      "reads": [
+        "n|tbl|public.Answer",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "Answer",
+        "executor"
+      ],
+      "writes": [
+        "s|col|public.Answer.executor",
+        "n|col|public.Answer.executor",
+        "e|col|public.Answer.executor"
+      ],
+      "reads": [
+        "n|tbl|public.Answer",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "Ask",
+        "executor"
+      ],
+      "writes": [
+        "s|col|public.Ask.executor",
+        "n|col|public.Ask.executor",
+        "e|col|public.Ask.executor"
+      ],
+      "reads": [
+        "n|tbl|public.Ask",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "drop_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "EntityEmbedding",
+        "deletionRetryAt"
+      ],
+      "writes": [
+        "s|col|public.EntityEmbedding.deletionRetryAt",
+        "n|col|public.EntityEmbedding.deletionRetryAt",
+        "e|col|public.EntityEmbedding.deletionRetryAt"
+      ],
+      "reads": [
+        "n|tbl|public.EntityEmbedding",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "drop_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "EntityEmbedding",
+        "deletionAttempts"
+      ],
+      "writes": [
+        "s|col|public.EntityEmbedding.deletionAttempts",
+        "n|col|public.EntityEmbedding.deletionAttempts",
+        "e|col|public.EntityEmbedding.deletionAttempts"
+      ],
+      "reads": [
+        "n|tbl|public.EntityEmbedding",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "drop_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "EntityEmbedding",
+        "deletionError"
+      ],
+      "writes": [
+        "s|col|public.EntityEmbedding.deletionError",
+        "n|col|public.EntityEmbedding.deletionError",
+        "e|col|public.EntityEmbedding.deletionError"
+      ],
+      "reads": [
+        "n|tbl|public.EntityEmbedding",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "drop_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "EntityEmbedding",
+        "deletionFailingSince"
+      ],
+      "writes": [
+        "s|col|public.EntityEmbedding.deletionFailingSince",
+        "n|col|public.EntityEmbedding.deletionFailingSince",
+        "e|col|public.EntityEmbedding.deletionFailingSince"
+      ],
+      "reads": [
+        "n|tbl|public.EntityEmbedding",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "drop_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "SearchDocument",
+        "embeddingDueAt"
+      ],
+      "writes": [
+        "s|col|public.SearchDocument.embeddingDueAt",
+        "n|col|public.SearchDocument.embeddingDueAt",
+        "e|col|public.SearchDocument.embeddingDueAt"
+      ],
+      "reads": [
+        "n|tbl|public.SearchDocument",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "drop_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "SearchDocument",
+        "embeddingGeneration"
+      ],
+      "writes": [
+        "s|col|public.SearchDocument.embeddingGeneration",
+        "n|col|public.SearchDocument.embeddingGeneration",
+        "e|col|public.SearchDocument.embeddingGeneration"
+      ],
+      "reads": [
+        "n|tbl|public.SearchDocument",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "drop_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "SearchDocument",
+        "embeddingLeaseToken"
+      ],
+      "writes": [
+        "s|col|public.SearchDocument.embeddingLeaseToken",
+        "n|col|public.SearchDocument.embeddingLeaseToken",
+        "e|col|public.SearchDocument.embeddingLeaseToken"
+      ],
+      "reads": [
+        "n|tbl|public.SearchDocument",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "drop_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "SearchDocument",
+        "embeddingLeaseUntil"
+      ],
+      "writes": [
+        "s|col|public.SearchDocument.embeddingLeaseUntil",
+        "n|col|public.SearchDocument.embeddingLeaseUntil",
+        "e|col|public.SearchDocument.embeddingLeaseUntil"
+      ],
+      "reads": [
+        "n|tbl|public.SearchDocument",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "drop_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "SearchDocument",
+        "embeddingAttempts"
+      ],
+      "writes": [
+        "s|col|public.SearchDocument.embeddingAttempts",
+        "n|col|public.SearchDocument.embeddingAttempts",
+        "e|col|public.SearchDocument.embeddingAttempts"
+      ],
+      "reads": [
+        "n|tbl|public.SearchDocument",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "drop_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "SearchDocument",
+        "embeddingError"
+      ],
+      "writes": [
+        "s|col|public.SearchDocument.embeddingError",
+        "n|col|public.SearchDocument.embeddingError",
+        "e|col|public.SearchDocument.embeddingError"
+      ],
+      "reads": [
+        "n|tbl|public.SearchDocument",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "drop_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "SearchDocument",
+        "embeddingFailingSince"
+      ],
+      "writes": [
+        "s|col|public.SearchDocument.embeddingFailingSince",
+        "n|col|public.SearchDocument.embeddingFailingSince",
+        "e|col|public.SearchDocument.embeddingFailingSince"
+      ],
+      "reads": [
+        "n|tbl|public.SearchDocument",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "public",
+        "ImageEvidence"
+      ],
+      "writes": [
+        "s|fk|public.ImageEvidence.ImageEvidence_entity_fk",
+        "n|fk|public.ImageEvidence.ImageEvidence_entity_fk",
+        "e|fk|public.ImageEvidence.ImageEvidence_entity_fk",
+        "n|con|public.ImageEvidence.ImageEvidence_entity_fk"
+      ],
+      "reads": [
+        "n|tbl|public.ImageEvidence",
+        "n|sch|public",
+        "n|tbl|public.Entity",
+        "n|sch|public",
+        "n|col|public.ImageEvidence.entityId",
+        "n|col|public.ImageEvidence.entityKind",
+        "n|col|public.Entity.id",
+        "n|col|public.Entity.kind",
+        "e|uniqueness|public.Entity.id.kind"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "name": "ImageEvidence",
+        "isRlsEnabled": false,
+        "entityType": "tables"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ImageProcessingJob",
+        "name": "askId",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Answer",
+        "name": "claimToken",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Answer",
+        "name": "executor",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Ask",
+        "name": "executor",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ImageEvidence",
+        "name": "id",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ImageEvidence",
+        "name": "entityId",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ImageEvidence",
+        "name": "entityKind",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ImageEvidence",
+        "name": "inputHash",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ImageEvidence",
+        "name": "kind",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ImageEvidence",
+        "name": "value",
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ImageEvidence",
+        "name": "createdAt",
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ImageEvidence",
+        "name": "updatedAt",
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ImageEvidence",
+        "name": "ImageEvidence_entity_fk",
+        "nameExplicit": true,
+        "columns": [
+          "entityId",
+          "entityKind"
+        ],
+        "schemaTo": "public",
+        "tableTo": "Entity",
+        "columnsTo": [
+          "id",
+          "kind"
+        ],
+        "onUpdate": "NO ACTION",
+        "onDelete": "NO ACTION",
+        "entityType": "fks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ImageEvidence",
+        "name": "ImageEvidence_pkey",
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "entityType": "pks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ImageEvidence",
+        "name": "ImageEvidence_inputHash_key",
+        "nameExplicit": false,
+        "columns": [
+          "inputHash"
+        ],
+        "nullsNotDistinct": false,
+        "entityType": "uniques"
+      }
+    },
+    {
+      "op": "drop",
+      "key": "tables\u0000[\"public\",\"ImageProcessingAttempt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"ImageProcessingAttempt\",\"id\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"ImageProcessingAttempt\",\"jobId\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"ImageProcessingAttempt\",\"number\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"ImageProcessingAttempt\",\"submissionId\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"ImageProcessingAttempt\",\"inputKey\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"ImageProcessingAttempt\",\"state\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"ImageProcessingAttempt\",\"executor\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"ImageProcessingAttempt\",\"assignedUserId\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"ImageProcessingAttempt\",\"assignedConnectionId\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"ImageProcessingAttempt\",\"diagnostics\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"ImageProcessingAttempt\",\"result\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"ImageProcessingAttempt\",\"error\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"ImageProcessingAttempt\",\"startedAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"ImageProcessingAttempt\",\"completedAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"EntityEmbedding\",\"deletionRetryAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"SearchDocument\",\"embeddingDueAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"SearchDocument\",\"embeddingGeneration\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"SearchDocument\",\"embeddingLeaseToken\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"SearchDocument\",\"embeddingLeaseUntil\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"SearchDocument\",\"embeddingAttempts\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"SearchDocument\",\"embeddingError\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"EntityEmbedding\",\"deletionAttempts\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"EntityEmbedding\",\"deletionError\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"EntityEmbedding\",\"deletionFailingSince\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"SearchDocument\",\"embeddingFailingSince\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"ImageProcessingAttempt_job_number_key\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"ImageProcessingAttempt_device_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"ImageProcessingAttempt_submission_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"EntityEmbedding_cleanup_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"SearchDocument_embedding_due_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"EntityEmbedding_deletion_exhausted_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"SearchDocument_embedding_exhausted_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"ImageProcessingAttempt_device_started_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"ImageProcessingAttempt_device_completed_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "fks\u0000[\"public\",\"ImageProcessingAttempt\",\"ImageProcessingAttempt_jobId_ImageProcessingJob_id_fk\"]"
+    },
+    {
+      "op": "drop",
+      "key": "fks\u0000[\"public\",\"ImageProcessingAttempt\",\"ImageProcessingAttempt_submissionId_ImageProcessingSubmission_i\"]"
+    },
+    {
+      "op": "drop",
+      "key": "pks\u0000[\"public\",\"ImageProcessingAttempt\",\"ImageProcessingAttempt_pkey\"]"
+    },
+    {
+      "op": "drop",
+      "key": "checks\u0000[\"public\",\"ImageProcessingAttempt\",\"ImageProcessingAttempt_number_check\"]"
+    },
+    {
+      "op": "drop",
+      "key": "checks\u0000[\"public\",\"ImageProcessingAttempt\",\"ImageProcessingAttempt_state_check\"]"
+    }
+  ]
+}

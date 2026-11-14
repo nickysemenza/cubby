@@ -5,7 +5,9 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { unwrapDb } from "~/server/db/helpers";
+import { updateBankTransactionsWhere } from "~/server/domains/financial-transaction/repo/bank.fixtures";
 import {
   createGardenEntry,
   createPlanting,
@@ -19,7 +21,6 @@ import {
   updateVendor,
 } from "~/server/domains/vendor/repo/vendor";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
@@ -405,8 +406,10 @@ describe("data quality: finance and project entities", () => {
       ctx.actor,
     );
     // A changed input keeps the member's waiver even when the gap persists.
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "FinancialTransaction" SET merchant = ' ' WHERE id = ${gap.entityId}`,
+    await updateBankTransactionsWhere(
+      ctx.db,
+      { merchant: " " },
+      sql`id = ${gap.entityId}`,
     );
     await publishQualityFixtures(ctx.db, "financialTransaction");
     const waived = (

@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, withTransaction } from "~/server/db/helpers";
 import {
   ledgerParty,
@@ -24,10 +25,7 @@ import {
   lookupEntityLabels,
   lookupEntityReferences,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import {
-  findOrCreateWithShortcode,
-  insertWithShortcode,
-} from "~/server/generic/shortcode/repo/shortcode-utils";
+import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 /**
  * `VendorAccount.lastRunAt` / `lastSuccessAt` are read from Run — the latest

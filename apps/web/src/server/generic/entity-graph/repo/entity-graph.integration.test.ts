@@ -549,7 +549,7 @@ describe("entity graph repository", () => {
           ({ productId, purchaseId, index }) => ({
             shortcode: testShortcode("expense", `EXP-BATCH-${index}`),
             name: `Batched graph expense ${index}`,
-            cost: 1,
+            cost: 100n,
             date: "2026-09-08",
             lineKind: "principal",
             lineBasis: "item_line",

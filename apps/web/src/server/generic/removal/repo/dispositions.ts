@@ -51,7 +51,11 @@ import {
   INCOMING_EDGES,
   type IncomingEdge,
 } from "~/server/db/entity-incoming-edges";
-import { notDeleted, withTransactionOn } from "~/server/db/helpers";
+import {
+  notDeleted,
+  withTransactionOn,
+  databaseForTransaction,
+} from "~/server/db/helpers";
 import { entityAttachment, photoRunImage } from "~/server/db/schema";
 import { mergePhotoRunImages } from "~/server/domains/run/repo/run-target-merge";
 import { countByTarget, impact } from "~/server/entity-kernel/repo/impact";
@@ -74,6 +78,7 @@ import {
   SHORTCODE_TABLE,
   type ShortcodeTable,
 } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 
 type Policy = Readonly<Record<string, OperationDisposition>>;
 type Tx = DrizzleTransaction;
@@ -96,6 +101,11 @@ export interface DeleteHooks<E extends RemovableEntity> {
   /** The root's own removal; child effects are always per edge. */
   removal?: "soft" | "hard";
 }
+
+const ownsReference = async (edge: EdgePhysical) => {
+  const { columnOwner } = await import("~/server/kernel/api");
+  return (await columnOwner(edge.table, edge.property)) !== null;
+};
 
 type EdgePhysical = {
   key: string;
@@ -120,8 +130,7 @@ const physicalEdges = <E extends RemovableEntity>(
   };
   return Object.entries(effectiveIncomingEdgePolicy(entity, policy))
     .map(([key, disposition]) => {
-      // SAFETY: each policy `satisfies IncomingEdgePolicy<E, …>`, so every key
-      // names an edge of this entity.
+      // SAFETY: generation checks policy keys against physical declarations for this entity.
       const edge = (INCOMING_EDGES[entity] as Record<string, IncomingEdge>)[
         key
       ]!;
@@ -252,10 +261,21 @@ const detach = async (
           .from(edge.table)
           .where(where)
       : [];
-  await tx
-    .update(edge.table)
-    .set({ [edge.property]: null })
-    .where(where);
+  if (await ownsReference(edge)) {
+    const { repointOwnedReference } = await import("~/server/kernel/api");
+    await repointOwnedReference(databaseForTransaction(tx), {
+      table: edge.table,
+      column: edge.property,
+      fromIds: ids,
+      toId: null,
+      where,
+    });
+  } else {
+    await tx
+      .update(edge.table)
+      .set({ [edge.property]: null })
+      .where(where);
+  }
   if (source && detached.length > 0)
     await logAuditEntries(
       tx,
@@ -367,6 +387,7 @@ export const deleteByPolicy = async <E extends RemovableEntity>(
 ): Promise<PolicyDeleteResult<E>> => {
   const { entity, policy, shortcodes, actor, removal = "soft" } = args;
   return withTransactionOn(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     const requested = [
       ...new Set(
         args.ids ?? (await resolveAllOrThrow(tx, entity, shortcodes ?? [])),
@@ -514,17 +535,30 @@ export const applyMergePolicy = async <E extends RemovableEntity>(
       );
       continue;
     }
-    const rows = await tx
-      .update(edge.table)
-      .set({ [edge.property]: args.keepId })
-      .where(
-        and(
-          inArray(edge.column, [...args.loserIds]),
-          args.liveOnly ? liveWhere(edge) : undefined,
-        ),
-      )
-      .returning();
-    repointed[edge.key] = rows.length;
+    const where = and(
+      inArray(edge.column, [...args.loserIds]),
+      args.liveOnly ? liveWhere(edge) : undefined,
+    );
+    if (await ownsReference(edge)) {
+      const { repointOwnedReference } = await import("~/server/kernel/api");
+      repointed[edge.key] = await repointOwnedReference(
+        databaseForTransaction(tx),
+        {
+          table: edge.table,
+          column: edge.property,
+          fromIds: args.loserIds,
+          toId: args.keepId,
+          where,
+        },
+      );
+    } else {
+      const rows = await tx
+        .update(edge.table)
+        .set({ [edge.property]: args.keepId })
+        .where(where)
+        .returning();
+      repointed[edge.key] = rows.length;
+    }
   }
   return repointed;
 };

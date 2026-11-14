@@ -16,7 +16,7 @@ dependency.
 | Concern                       | Provider                           | Production resource                                                                      |
 | ----------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------- |
 | Web application and APIs      | Cloudflare Workers                 | Worker `cubby`, custom domain `cubby.nickysemenza.com`                                   |
-| Purchase-import orchestration | Agents SDK + pi-durable            | Worker `cubby`: `purchase.dispatch` Job, Durable Object `PurchaseImportRunAgent`         |
+| Purchase-import orchestration | Agents SDK + pi-durable            | Worker `cubby`: `purchase.dispatch` Pass, Durable Object `PurchaseImportRunAgent`        |
 | PostgreSQL                    | Neon through Cloudflare Hyperdrive | One Neon origin, three Hyperdrive configurations                                         |
 | Images and documents          | Cloudflare R2                      | Bucket `foo`, public origin `https://media.nickysemenza.com`                             |
 | Product lookup                | Main Worker + PostgreSQL           | `UpcLookupCache` table, upcitemdb fallback (no key)                                      |
@@ -67,26 +67,20 @@ or updated by `cf deploy` from the checked-in configuration's Build Output.
 
 ### Background work
 
-Postgres `Job` and the drains' own rows own background execution;
-[Durable Jobs](jobs.md) owns the runtime contract and
-[ADR 0015](adr/0015-unified-durable-work-coordination.md) the coordination
-decision. The infrastructure it depends on:
+Postgres kernel claims own background execution;
+[kernel work](jobs.md) owns the runtime contract and
+[ADR 0029](adr/0029-evidence-facts-and-reconcilers.md) the coordination decision. The infrastructure it depends on:
 
-- `cubby-background` carries only the permit envelope. Every delivery,
-  including an unreadable envelope, is one permit to run one unit and is
-  acknowledged whatever the unit's outcome; failures before or around selection
-  retry delivery up to three times
-  ([selection and admission](jobs.md#selection-and-admission)).
+- `cubby-background` carries wake permits. One delivery batch invokes the kernel runner within a bounded time budget, then schedules the next durable deadline. A database or transport failure retries the delivery.
 - Telemetry has its separate `cubby-telemetry` queue.
-- One hourly cron trigger is the timer and backstop for every permit
-  ([deadline scheduling](jobs.md#deadline-scheduling-and-idle-recovery)).
+- The hourly cron starts scheduled Passes, invokes the kernel runner and sends a backstop permit. Claim deadlines arrange their own recovery wakes.
 
 ### Worker startup
 
 The agent runtime (Agents SDK, pi-durable, MCP client) stays off every page
 request: the exported Durable Object is a shell that loads
 `server/domains/purchase-agent/service/run-agent.ts` on its first event, and the
-Job handler loads the dispatch host only when a purchase dispatch is due.
+dispatch Pass loads the host when its Run is due.
 `apps/web/tooling/checks/check-server-closure.ts` reports the static entry,
 browser API bootstrap, combined page path and total output; the API bootstrap
 includes the dispatch adapter's static imports, while individual operation
@@ -117,11 +111,7 @@ latency is mostly outside this profile: production traces carry
 The purchase agent coordinates import Runs inside Worker `cubby`. Its
 checked-in configuration in `apps/web/cloudflare.config.ts` is the SQLite
 Durable Object class `PurchaseImportRunAgent` (binding `PURCHASE_IMPORT_RUN`,
-one instance per Run), the SQLite Durable Object class
-`CoordinatorGateDurableObject` (binding `COORDINATOR_GATE`, one instance named
-`household`) that queues their work turns
-([budget](#background-connection-budget)), and the `purchase.dispatch` Job
-handler. Runtime
+one instance per Run) and the `purchase.dispatch` kernel Pass. Runtime
 behavior, model context, observation and the agent's **trust boundary** (no
 `env`, Run-bound services, delegated MCP, the `cubby/purchase-agent-boundary`
 lint rule) are in the
@@ -138,7 +128,7 @@ calls and rechecks the live grant and Run ownership on every request.
 Pi-durable conversations live in the coordinator's Durable Object, so moving
 the class between Workers or replacing it does not carry them over: terminate
 the Runs whose coordinator is active (`running` and `paused_*`) before such a
-deploy. Job dispatch intent remains in Postgres; coordinator SQLite receipts and
+deploy. Pass dispatch intent remains in Postgres; coordinator SQLite receipts and
 conversations must be preserved across that change.
 
 Each member authorizes once from Settings. Verify the client/grant without
@@ -220,64 +210,35 @@ and 1 telemetry (`apps/web/cloudflare.config.ts`), so at most 18 sockets. The
 cron runs its backstop and the daily pass one after the other, so 2 more. That
 leaves 20 sockets for Durable Object requests.
 
-Purchase coordinators (one `PurchaseImportRunAgent` per import Run) share a
-household-wide cap of 6 concurrent work turns, about 12 sockets, leaving room
-for CalendarFeed rebuilds and other Durable Object requests, which are bounded
-only by their own traffic. The singleton `CoordinatorGateDurableObject`
-(`purchase-import/operations/coordinator-gate.ts`) admits them without
-Postgres, so a waiting coordinator opens no database scope.
-
-- **Turns.** Before an alarm, a dispatch or a member prompt loads the agent,
-  its host asks the gate for the Run's turn (10-minute lease) and keeps it
-  while pi works, renewing on every entry, on a heartbeat and before database
-  work near the lease's end; the check that confirms pi idle releases it. An
-  idle check that fails or does not answer within 10 s is undecidable; three in
-  a row spanning two heartbeats stop renewal: database work ends at the current
-  deadline and the coordinator asks again after lease plus grace. One
-  in-instance step queue orders acquire, renew, idle check and release.
-- **Fence.** pi's Run services refuse database work once the turn is lost
-  (`CoordinatorLeaseLostError`, transient), so the Run takes its existing
-  transient path.
-- **Queue.** Refused coordinators wait in one FIFO list and keep their place
-  across polls. A freed slot is reserved 60 s for the first eligible waiter,
-  which the gate wakes (`turnReady`); holders plus live reservations never
-  exceed the cap, and a later waiter overtakes only while the head leaves its
-  reservation unclaimed. Unpolled waiters leave after 15 minutes; a lapsed
-  holder's slot is re-granted only after its lease plus a 5-minute grace.
-- **Waiting.** Nothing loads: an alarm re-arms 15 s–5 min later besides the
-  gate's wake; a `purchase.dispatch` defers with `provider_capacity` and no
-  attempt while its coordinator keeps polling on the same alarm backoff, and
-  brings the Job forward when reserved a turn (fallback
-  re-poll 8–12 minutes, 1–2 minutes when the gate cannot be asked); a prompt
-  takes only a turn free beyond every reservation and otherwise answers 503
-  with `Retry-After` without joining the queue. A member's stop never waits.
-- **Runs.** The cap starts, resumes, retries, cancels and reassigns nothing.
-  Stale-Run expiry skips Runs holding or queued for a turn (the gate's
-  `status()`), so a just-granted Run is exempt until its lease plus grace
-  lapses, and expires nothing when the gate cannot answer.
+Purchase coordinators (one `PurchaseImportRunAgent` per import Run) share
+six live `purchase.dispatch` Pass claims in the kernel partition
+`household.agent-turns`. Each Pass holds its slot while Pi works, including
+its model Asks and tools, and renews its 90-second claim every 30 seconds.
+This bounds coordinators to about 12 sockets, leaving room for CalendarFeed
+rebuilds and other Durable Object requests. Full partitions wait 15 seconds
+with `provider_capacity`; cancellation or expiry frees a slot. Agent services
+fence every database/model turn on the Pass token. Alarms and durable member
+prompts request a Pass; observation reads do not load Pi. Stale-Run expiry
+exempts Runs with owed dispatch Passes. Admission uses a short Postgres claim
+transaction, then releases the lock before network work.
 
 Past the budget, Hyperdrive queues for an origin slot and then fails the query
 with SQLSTATE 58000 "Timed out while waiting for an open slot in the pool".
-Those failures are transient (no attempts spent; see [Jobs](jobs.md#retries)),
+Those failures are transient (no attempts spent; see [kernel work](jobs.md#waits-and-limits)),
 so exceeding the budget slows work rather than losing it.
 
 Watch for the margin running out:
 
-- `58000` pool-slot timeouts in Sentry, grouped by the `cubby.background.unit`
-  tag, and coordinator admission faults on purchase Runs.
-- `Job.lastExecution.errorClass = 'transient'` on Job and `background.drain`
-  record rows (`drain:<unit>`), and a rising `queryMs` relative to `wallMs`.
+- `58000` pool-slot timeouts in Sentry, grouped by queue and kernel traces, and coordinator admission faults on purchase Runs.
+- `waitCause` and `lastError` on kernel claims
+  and growing waits in the machinery panel.
 - Long `db.acquire` spans on queue, cron and Durable Object traces.
 - The background configuration's origin connection count in the Hyperdrive
   dashboard approaching 40.
-- Coordinator turn waits: `cubby.coordinator.turn = waiting | unavailable`
-  (with `.holders`, `.position`, `.retry_ms`) on `purchase-agent.alarm` and
-  `.dispatch` spans and as a Sentry tag, the `purchase-agent.turn` log, and
-  deferred `purchase.dispatch` Jobs (`Job.lastExecution.outcome = 'deferred'`).
-  The gate's own state is its `status()` RPC on
-  `env.COORDINATOR_GATE.getByName("household")`: the Run ids holding a turn and
-  those queued, in order (the same read stale-Run expiry uses); its storage holds
-  the full queue under the `gate` key.
+- Coordinator capacity waits: `Pass.name = 'purchase.dispatch'` with
+  `waitCause = 'provider_capacity'`, alongside its claim deadline, attempts and
+  raw error in the Run's machinery panel. Live `claimPartition` rows across
+  Pass and Ask show slot occupancy.
 
 Raise `max_concurrency` only with the origin cap, and only after measuring pool
 waits.
@@ -335,17 +296,17 @@ cf workers secrets update NAME --worker cubby
 cf workers secrets list --worker cubby
 ```
 
-| Name                   | Storage                        | Purpose                                                                                                                                                                                            |
-| ---------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BETTER_AUTH_SECRET`   | `cubby` Worker secret          | Better Auth signing/encryption                                                                                                                                                                     |
-| `R2_ACCESS_KEY_ID`     | `cubby` Worker secret          | Main R2 S3 credential                                                                                                                                                                              |
-| `R2_SECRET_ACCESS_KEY` | `cubby` Worker secret          | Main R2 S3 credential                                                                                                                                                                              |
-| `GOOGLE_CLIENT_SECRET` | `cubby` Worker secret          | Google OAuth confidential credential                                                                                                                                                               |
-| `GOOGLE_CLIENT_ID`     | Checked-in Worker `vars` value | Public Google OAuth client identifier                                                                                                                                                              |
-| `APNS_KEY_ID`          | `cubby` Worker secret          | APNs token-auth key id (photo-run Live Activities and alerts)                                                                                                                                      |
-| `APNS_TEAM_ID`         | `cubby` Worker secret          | Apple Developer team id that owns the APNs key                                                                                                                                                     |
-| `APNS_PRIVATE_KEY`     | `cubby` Worker secret          | APNs `.p8` PKCS8 PEM; absent = pushes recorded unsent                                                                                                                                              |
-| `AI_GATEWAY_API_KEY`   | Worker/local secret            | Cloudflare API token: authenticated REST inference, including named subscriber BYOK and paid third-party passthrough; with account-scoped Workers Observability Edit it also reads inline Job logs |
+| Name                   | Storage                        | Purpose                                                                                                               |
+| ---------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET`   | `cubby` Worker secret          | Better Auth signing/encryption                                                                                        |
+| `R2_ACCESS_KEY_ID`     | `cubby` Worker secret          | Main R2 S3 credential                                                                                                 |
+| `R2_SECRET_ACCESS_KEY` | `cubby` Worker secret          | Main R2 S3 credential                                                                                                 |
+| `GOOGLE_CLIENT_SECRET` | `cubby` Worker secret          | Google OAuth confidential credential                                                                                  |
+| `GOOGLE_CLIENT_ID`     | Checked-in Worker `vars` value | Public Google OAuth client identifier                                                                                 |
+| `APNS_KEY_ID`          | `cubby` Worker secret          | APNs token-auth key id (photo-run Live Activities and alerts)                                                         |
+| `APNS_TEAM_ID`         | `cubby` Worker secret          | Apple Developer team id that owns the APNs key                                                                        |
+| `APNS_PRIVATE_KEY`     | `cubby` Worker secret          | APNs `.p8` PKCS8 PEM; absent = pushes recorded unsent                                                                 |
+| `AI_GATEWAY_API_KEY`   | Worker/local secret            | Cloudflare API token: authenticated REST inference, including named subscriber BYOK and paid third-party passthrough; |
 
 OAuth client IDs, Cloudflare account IDs, resource IDs, public origins, and
 Sentry DSNs are identifiers, not credentials. They may be committed. OAuth
@@ -515,7 +476,7 @@ with its route's model for the call's tier (`CHAT_TIER_MODELS`). A step advances
 only on a funding refusal. Window budgets, the plan budget and their defaults
 live in `apps/web/src/server/ai/budget.ts`; this page owns the provider setup
 and the refusal mechanics below. Run funding pauses and resumption are in
-[Durable Jobs](jobs.md#funding-waits).
+[Durable Jobs](jobs.md#waits-and-limits).
 
 Provider credits (Claude and OpenAI API) have no window budget: each runs until
 its provider refuses, and the status reports its standard-cost spend by provider
@@ -683,7 +644,7 @@ the shared decision runner (`server/ai/decision-model.ts`).
 
 - Independent all-or-fail decisions use `runDecisionChoices`; callers keeping
   partial answers settle choices with outcomes that carry their original typed
-  work item, and the cooperative option owns the Job's yield scope. Both wait
+  work item, and the cooperative option owns the claim's yield scope. Both wait
   for every started request before returning, including when a sibling fails.
   Callers do not maintain parallel question-index arrays.
 - Finite collections that must prepare evidence or perform dependent choices
@@ -777,7 +738,7 @@ sources wait, without consuming attempts, for the normalization job's verified
 JPEG snapshot.
 
 Execution (device parking, leases, retries, cutouts) is owned by
-[Durable Jobs](jobs.md#image-processing). Payload bounds: JPEG analysis reads
+[Durable Jobs](jobs.md#scopes-asks-and-passes). Payload bounds: JPEG analysis reads
 are bounded before buffering, description and companion normalization at
 4 MiB, identification at 2 MiB. Four overlapping descriptions hold at most
 16 MiB of retained rendition bytes, with additional bounded streaming,
@@ -796,38 +757,8 @@ diagnostic.
 
 ## Observability
 
-### Inline Job logs and limits
-
-Job claim/page/publish/defer/fail logs emit one JSON object with `runId`,
-`jobId`, `kind`, `jobKey`, `stepKey`, `generation`, `attempt` and `waitReason`.
-Workers Logs indexes
-[structured JSON objects](https://developers.cloudflare.com/workers/observability/logs/workers-logs/#logging-structured-json-objects);
-raw errors keep their credential-scrubbed diagnostic detail.
-
-A Run's Diagnostics section and an Image's or Location's Jobs slot read one
-Job's raw Worker lines through `job.logs`
-(`server/generic/jobs/service/job-logs.ts`). It calls the Workers Observability
-telemetry query API,
-`POST /accounts/{account}/workers/observability/telemetry/query`.
-
-- **Filter.** `jobId` OR `runId` (the top-level fields `@cubby/worker-tracing`
-  logs), view `events`, at most 500 lines.
-- **Window.** The Job's active window, with a minute of margin either side.
-- **Credentials.** The query authenticates with the `AI_GATEWAY_API_KEY`
-  Worker secret. That Cloudflare API token must also carry the account-scoped
-  Workers Observability Edit permission: the telemetry query endpoint requires
-  Write even for reads.
-- **Missing token.** Without `AI_GATEWAY_API_KEY` the panel reads "not
-  configured". A token without the permission returns 401/403, which the panel
-  shows as the scrubbed raw error. A local run with the key queries the
-  account's logs, which hold no local Job lines.
-- **Retention.** A window older than Workers Logs' 7-day retention reads "raw
-  logs expired".
-- **Failures.** A failed query shows its raw response, redacted only by
-  `scrubErrorMessage`, with Retry and the dashboard link.
-
-Run plan, ETA and page-sample contracts are in
-[Durable Jobs](jobs.md#run-progress-and-diagnostics).
+Run diagnostics read kernel scopes, Asks, Passes and raw stored errors through the machinery panel.
+Run plan, ETA and page samples follow [kernel work](jobs.md#Wakes-and-progress).
 
 ### Error tracking and traces
 

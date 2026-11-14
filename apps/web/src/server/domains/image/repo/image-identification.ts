@@ -41,11 +41,11 @@ import {
   aiAnalysis,
   entityAttachment,
   image,
-  imageProcessingAttempt,
   imageProcessingJob,
   product,
   productCategory,
 } from "~/server/db/retained-tables";
+import { imageExecutionReceipts } from "~/server/domains/image-processing/repo/execution-receipts";
 
 const fingerprintSchema = z.object({
   sourceContentHash: z.string(),
@@ -270,14 +270,14 @@ export async function getVerifiedImageRendition(
 ): Promise<{ key: string; sha256: string } | null> {
   const attempts = await getDb(db)
     .select({
-      key: imageProcessingAttempt.inputKey,
-      diagnostics: imageProcessingAttempt.diagnostics,
+      key: imageExecutionReceipts.inputKey,
+      diagnostics: imageExecutionReceipts.diagnostics,
       hash: image.sha256,
     })
-    .from(imageProcessingAttempt)
+    .from(imageExecutionReceipts)
     .innerJoin(
       imageProcessingJob,
-      eq(imageProcessingJob.id, imageProcessingAttempt.jobId),
+      eq(imageProcessingJob.id, imageExecutionReceipts.jobId),
     )
     .innerJoin(image, eq(image.id, imageProcessingJob.imageId))
     .where(
@@ -294,7 +294,7 @@ export async function getVerifiedImageRendition(
         eq(imageProcessingJob.sourceContentHash, image.sha256),
       ),
     )
-    .orderBy(desc(imageProcessingAttempt.startedAt));
+    .orderBy(desc(imageExecutionReceipts.startedAt));
   for (const attempt of attempts) {
     const parsed = retainedRendition.safeParse(attempt.diagnostics);
     if (

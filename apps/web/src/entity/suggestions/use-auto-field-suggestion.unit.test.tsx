@@ -422,7 +422,7 @@ describe("useAutoFieldSuggestion", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Why this value" }));
     fireEvent.click(
-      await screen.findByRole("button", { name: "Use inherited" }),
+      await screen.findByRole("button", { name: "Let Cubby decide" }),
     );
     expect(form.getValues("projectMode")).toBe("inherit");
     expect(form.getValues("projectId")).toBeNull();
@@ -781,7 +781,7 @@ describe("useAutoFieldSuggestion", () => {
     expect(calls[0]?.basisMode).toBe("provided");
   });
 
-  it("preserves a newer category draft when explicit finance Apply finishes later, while acknowledging its saved default", async () => {
+  it("preserves a newer category draft when explicit finance Apply finishes later", async () => {
     let form!: UseFormReturn<FieldValues>;
     const proposal: FieldSuggestion = {
       suggestionId: "88888888-8888-4888-8888-888888888888",
@@ -856,13 +856,7 @@ describe("useAutoFieldSuggestion", () => {
     );
     expect(isDirtyText("spendingCategoryId")).toBe("true");
     expect(form.getValues("name")).toBe("Unsaved sibling note");
-    expect(reviewCalls).toContainEqual(
-      expect.objectContaining({
-        suggestionId: proposal.suggestionId,
-        intent: "apply",
-        application: { kind: "saved_field", recordId: "EXP-4K7M" },
-      }),
-    );
+    expect(reviewCalls).toEqual([]);
     act(() => form.resetField("spendingCategoryId"));
     expect(form.getValues("spendingCategoryId")).toBe("SPC-4K7M");
   });
@@ -987,14 +981,7 @@ describe("useAutoFieldSuggestion", () => {
 
     await waitFor(() => expect(form.getValues("trade")).toBe("cabinetry"));
     expect(isDirtyText("trade")).toBe("true");
-    await waitFor(() =>
-      expect(reviewCalls).toContainEqual(
-        expect.objectContaining({
-          suggestionId: tradeSuggestion.suggestionId,
-          intent: "draft",
-        }),
-      ),
-    );
+    expect(reviewCalls).toEqual([]);
   });
 
   it.each([

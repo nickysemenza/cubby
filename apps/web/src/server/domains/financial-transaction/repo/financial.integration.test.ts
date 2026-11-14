@@ -872,7 +872,7 @@ describe("financial repositories — critical invariants", () => {
 
   /**
    * `SourceTransactionRecord.accountId` is declared `block` in
-   * FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY, and it is the one edge in the
+   * DECLARED_EDGE_DELETE_POLICIES.financialAccount, and it is the one edge in the
    * lifecycle registry that fails OPEN. The FK is nullable, so a missing guard
    * does not throw — the account simply vanishes while live triaged rows keep
    * pointing at it, silently discarding the triage judgment that put them
@@ -1426,19 +1426,16 @@ describe("financial repositories — critical invariants", () => {
       updateFinancialTransaction(ctx.db, payout.id, { kind: "fee" }, ctx.actor),
     ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
 
-    // The last line of defence when app validation is bypassed used to be a DB
-    // CHECK. It was dropped with the `purchaseId` column it read: once "is this
-    // linked" became a question about another table, a row-level CHECK could no
-    // longer ask it. So a raw UPDATE now SUCCEEDS — and the detector is what
-    // catches it. That is a real reduction in enforcement, and this asserts the
-    // replacement actually fires rather than quietly assuming it does.
-    await getDb(ctx.db).execute(
-      sql`UPDATE "FinancialTransaction" SET "amountMinor" = 14022 WHERE "shortcode" = ${payout.id}`,
-    );
+    // A raw SQL caller cannot bypass the reconciler's ownership boundary.
+    await expect(
+      getDb(ctx.db).execute(
+        sql`UPDATE "FinancialTransaction" SET "amountMinor" = 14022 WHERE "shortcode" = ${payout.id}`,
+      ),
+    ).rejects.toMatchObject({ cause: { name: "OwnedColumnWriteError" } });
     const defects = await findFinancialTransactionAllocationDefects(ctx.db);
     expect(
-      defects.find((defect) => defect.id === payout.id)?.reasons,
-    ).toContain("kind-sign-violation");
+      defects.find((defect) => defect.id === payout.id)?.reasons ?? [],
+    ).not.toContain("kind-sign-violation");
   });
 
   // Provider and owner filter accounts without collapsing distinct balances.

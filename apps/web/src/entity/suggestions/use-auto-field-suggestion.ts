@@ -377,7 +377,6 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
       context.clearAutoFilled(field);
       return;
     }
-    await context?.reviewDraft(field, suggestion);
     // SAFETY: see the auto-fill effect above — same caller-declared
     // `valueKind` relationship.
     form.setValue(

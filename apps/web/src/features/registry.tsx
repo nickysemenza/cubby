@@ -1,7 +1,6 @@
 import type { ReportSlot } from "@cubby/schemas/entity-report";
 import {
   hasImportRunReports,
-  isExecutedRunPurpose,
   isStepRunPurpose,
   OWNED_AI_WORK_PURPOSES,
   type RunPurpose,
@@ -302,10 +301,8 @@ const detailSlots = {
       () => named(import("~/features/run/run-detail"), "RunDecisions"),
       (run) => isStepRunPurpose(run.purpose),
     ),
-    diagnostics: slot(
-      () => named(import("~/features/run/run-detail"), "RunDiagnostics"),
-      (run) => isExecutedRunPurpose(run.purpose),
-      true,
+    diagnostics: slot(() =>
+      named(import("~/features/run/run-detail"), "RunDiagnostics"),
     ),
     // This mounted report owns status synchronization even while diagnostics are folded.
     "live-progress": runReportSlot("live-progress"),

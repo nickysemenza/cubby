@@ -2,6 +2,8 @@ import { ledgerPartyRawOut as rawLedgerPartyOut } from "@cubby/schemas/entity-co
 import { z } from "zod";
 
 import { ledgerPartySchemaBindings } from "~/entity/generated/entity-schema-bindings.ledgerParty.gen";
+import { DECLARED_EDGE_MERGE_POLICIES } from "~/server/db/generated/declared-edges.gen";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import {
   asActor,
   defineRepository,
@@ -10,8 +12,6 @@ import {
 import {
   createLedgerParty,
   deleteLedgerParties,
-  LEDGER_PARTY_DELETE_EDGE_POLICY,
-  LEDGER_PARTY_MERGE_EDGE_POLICY,
   ledgerPartyScaffold,
   readLedgerParty,
   mergeLedgerParties,
@@ -39,8 +39,8 @@ const ledgerPartyMergeSummary = z.object({
 export const ledgerPartyRepository = defineRepository("ledgerParty", {
   schemas: ledgerPartySchemaBindings,
   lifecycle: {
-    delete: LEDGER_PARTY_DELETE_EDGE_POLICY,
-    merge: LEDGER_PARTY_MERGE_EDGE_POLICY,
+    delete: DECLARED_EDGE_DELETE_POLICIES.ledgerParty,
+    merge: DECLARED_EDGE_MERGE_POLICIES.ledgerParty,
   },
   scaffold: ledgerPartyScaffold,
   create: asActor(createLedgerParty),

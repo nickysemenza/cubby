@@ -176,9 +176,6 @@ export const getCalendarFeedNamespace = (): Env["CALENDAR_FEED"] | undefined =>
 export const getPurchaseImportRunAgentNamespace = () =>
   currentEnv()?.PURCHASE_IMPORT_RUN;
 
-/** The household coordinator-turn gate (`purchase-import/operations/coordinator-gate.ts`). */
-export const getCoordinatorGateNamespace = () => currentEnv()?.COORDINATOR_GATE;
-
 /** USDA release Durable Objects and the active release name (`server/domains/usda-release`). */
 export const getUsdaReleaseEnv = ():
   | Pick<Env, "USDA_RELEASE" | "USDA_ACTIVE_RELEASE">

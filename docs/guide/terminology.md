@@ -532,10 +532,8 @@ leave before the pager reaches them end as `removed`. An `estimate` step reads
 percentage or ETA. A step that has not started reads "Not started".
 _Avoid_: phase (a progress sample), child Run
 
-**Job**:
-One unit of background work with its own attempts and status, shown under
-Background work. A Run's work executes as a Job. A Job is not one household
-record.
+**Pass**:
+Resumable non-model work with a kernel claim and durable cursor. A Run's execution is a Pass keyed by that Run. Model, embedding and image calls are Asks with retained Answers.
 _Avoid_: task, workflow instance
 
 **Image processing job**:
@@ -796,19 +794,13 @@ _Avoid_: automation history
 A classification or change already acted on without waiting for household
 review. The household can review it afterwards and mark it Wrong.
 
-**Transaction suggestion**:
-A Suggestion, computed from one statement charge, to create a
-Financial Transaction, attach the charge to an existing one, supersede a
-recorded hold with its posted row, or void a hold a later export no longer
-contains, or book spending on an already matched transaction. It uses the
-`statement_transaction` Suggestion family and the shared review path. Posted
-spending also books or links Expenses; a transaction alone adds no spend.
-Clean booking and uncertainty follow
-[evidence convergence](../import-evidence-convergence.md). A clean one is
-bulk-acceptable: a create is clean only when at least two of the category
-rule, the decision label and merchant history agree on its kind, none
-disagrees, and the counterparty is not a person.
-_Avoid_: statement proposal, auto-match
+**Statement gap**:
+A missing input or decision that prevents a statement occurrence from becoming a
+FinancialTransaction or supported spending. The record's machinery shows its
+current evidence and actions. Applying an observation records durable decisions;
+Purchase and Expense records carry spending. A transaction alone adds no spend.
+See [evidence convergence](../import-evidence-convergence.md#statement-booking).
+_Avoid_: transaction suggestion, statement proposal
 
 **Transfer pair suggestion**:
 A Suggestion, in the `transfer_pair` family, that two opposite money movements
@@ -857,8 +849,7 @@ _Avoid_: dismissal (a presentation preference, not a correctness verdict)
 
 **Sweep**:
 A bulk pass that computes Suggestions across a filtered set of records. A
-member's "Find suggestions" starts one Sweep across the field and statement
-Suggestion families in scope, with one part per family. A Sweep is a Run kind
+member's "Find suggestions" starts a field Sweep over the chosen records and fields. A Sweep is a Run kind
 whose families contribute Run steps; its evaluations are not child Runs.
 _Avoid_: backfill (when the work produces Suggestions rather than derived data)
 

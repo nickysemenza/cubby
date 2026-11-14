@@ -1,18 +1,20 @@
-import { moneyToMinor } from "@cubby/shared";
+import { moneyToMinor, nullableWholeCentToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { expense } from "~/server/db/schema";
+import { seedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   readRecordWorkQueue,
   readWorkQueue,
 } from "~/server/domains/work/service/work-queue-read";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { publishAllQualityFixtures } from "~/server/testing/quality.fixtures";
 
@@ -31,17 +33,17 @@ describe("financial Work sources", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic Work facts vendor",
     });
-    const order = await insertWithShortcode(ctx.db, "purchase", {
+    const order = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-01",
       displayLabel: "Synthetic Work facts order",
     });
     const line = async (cost: number) =>
-      insertWithShortcode(ctx.db, "expense", {
+      createPurchaseEventRecord(ctx.db, "expense", {
         purchaseId: order.id,
         name: "Synthetic Work facts line",
         costType: "materials",
-        cost,
+        cost: nullableWholeCentToMinor(cost),
         date: "2026-09-01",
         trade: "other",
         lineKind: "principal",
@@ -54,23 +56,23 @@ describe("financial Work sources", () => {
       .update(expense)
       .set({ deletedAt: new Date() })
       .where(eq(expense.id, deleted.id));
-    const empty = await insertWithShortcode(ctx.db, "purchase", {
+    const empty = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-01",
     });
-    const planned = await insertWithShortcode(ctx.db, "purchase", {
+    const planned = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2999-01-01",
     });
-    const plannedLines = await insertWithShortcode(ctx.db, "purchase", {
+    const plannedLines = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-01",
     });
-    await insertWithShortcode(ctx.db, "expense", {
+    await createPurchaseEventRecord(ctx.db, "expense", {
       purchaseId: plannedLines.id,
       name: "Synthetic planned Work line",
       costType: "materials",
-      cost: 20,
+      cost: 2000n,
       date: "2026-09-01",
       future: true,
       trade: "other",
@@ -140,7 +142,7 @@ describe("financial Work sources", () => {
       "financialAccount",
       account.output.id,
     );
-    const transfer = await insertWithShortcode(ctx.db, "financialTransaction", {
+    const transfer = await seedBankTransaction(ctx.db, {
       accountId,
       kind: "account_transfer",
       status: "posted",

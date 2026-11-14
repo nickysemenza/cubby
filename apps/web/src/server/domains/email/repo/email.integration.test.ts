@@ -7,6 +7,7 @@ import {
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import {
   emailClassificationObservation,
@@ -20,7 +21,6 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeEntity } from "~/server/entity-kernel";
 import { buildKernelContext } from "~/server/entity-kernel/reference-universe.fixtures";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 
 // Persisted-read failures: contentless messages disappear; absent historical
@@ -423,7 +423,7 @@ describe("Email generic persisted reads", () => {
       });
     }
   });
-  it("shows independent reviewed relevance without rewriting routing and marks changed content unreviewed", async () => {
+  it("shows independent reviewed relevance without rewriting routing", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic independent reviewer",
       kind: "member",
@@ -479,26 +479,6 @@ describe("Email generic persisted reads", () => {
               },
             },
           },
-        },
-      },
-    });
-    await getDb(ctx.db).execute(
-      sql`UPDATE "Email" SET checksum = ${"b".repeat(64)} WHERE id = ${email.id}::uuid`,
-    );
-    const changed = await executeEntity(context, {
-      action: "get",
-      missing: "error",
-      entity: "email",
-      id: parseShortcodeFor("email", email.shortcode),
-    });
-    expect(changed.item).toMatchObject({
-      classification: "unrelated",
-      fields: {
-        reviewedClassification: {
-          result: { decision: { outcome: { kind: "empty" } } },
-        },
-        reviewedClassificationReason: {
-          result: { decision: { outcome: { kind: "empty" } } },
         },
       },
     });

@@ -11,6 +11,7 @@ import {
   entityDetailParams,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
+import { useMachinery } from "~/entity/machinery/record-machinery";
 import { entityMetadata } from "~/entity/metadata";
 import {
   RecordWorkQueueRow,
@@ -19,6 +20,7 @@ import {
 import { formatCount } from "~/lib/number-format";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { RecordList, RecordRow } from "~/ui/records/record-list";
+import { StateMark } from "~/ui/records/state-badge";
 
 import { readPathValue } from "../read-path";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
@@ -48,16 +50,12 @@ export function declaredNeedsOf<E extends GenericDetailEntity>(
   return parsed.success ? (parsed.data ?? []) : [];
 }
 
-const needsMark = (failed: boolean) => (
-  <span
-    aria-hidden
-    className={
-      failed
-        ? "mt-1 block size-2 rounded-[1.5px] bg-destructive"
-        : "mt-1 block size-2 rounded-[1.5px] bg-needs"
-    }
-  />
-);
+const needsMark = (failed: boolean) =>
+  failed ? (
+    <StateMark kind="failed" className="mt-0.5" />
+  ) : (
+    <StateMark kind="needs" className="mt-1 block size-2 bg-needs" />
+  );
 
 /**
  * Needs you: the declared `side.needs` items (else the record's Work queue
@@ -82,8 +80,17 @@ function NeedsYou<E extends GenericDetailEntity>({
   // failure they are what the failure left, so they take its mark.
   const itemsFailed =
     readRecordState(queryClient, entity, record)?.failed === true;
+  const machinery = useMachinery({ entity, id: record.id });
   const queue = useRecordWorkQueue(record.id, declared === undefined);
-  const rows = declared === undefined ? queue.rows : [];
+  const rows =
+    declared === undefined
+      ? queue.rows.filter(
+          (row) =>
+            !machinery.data?.machinery?.gaps.items.some(
+              (gap) => gap.input === row.reason,
+            ),
+        )
+      : [];
   const named = new Set(
     rows.flatMap((row) => row.gaps.map((gap): string => gap.check)),
   );

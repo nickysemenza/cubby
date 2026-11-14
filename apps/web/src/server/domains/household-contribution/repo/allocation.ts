@@ -127,7 +127,7 @@ const expenseAllocationSeedsSql = (
         ${includeUnpriced ? sql`NULL::uuid` : scope.projectIds ? sql`derived_cost."projectId"` : effectiveExpenseProjectSql()} AS "projectId",
         ${expense.purchaseId} AS "purchaseId",
         ${expense.future} AS future,
-        ${scope.projectIds ? sql`derived_cost."costCents"` : sql`round((${expense.cost})::numeric * 100)::bigint`} AS cost_cents
+        ${scope.projectIds ? sql`derived_cost."costCents"` : sql`${expense.cost}`} AS cost_cents
       FROM ${expense}
       ${scope.projectIds ? sql`JOIN (${expenseDerivedCostsSql({ projectIds: scope.projectIds }, scope.expenseIds)}) derived_cost ON derived_cost."expenseId" = ${expense.id}` : sql``}
       WHERE ${scopeCondition(scope, includeUnpriced)}

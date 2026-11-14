@@ -1,6 +1,5 @@
 import { auditEntitySchema } from "@cubby/schemas/audit";
 import type { ActorContext } from "@cubby/schemas/context";
-import { costTypeSchema } from "@cubby/schemas/expense-fields";
 import type { LedgerPartyId } from "@cubby/schemas/identifiers";
 import type { RunId } from "@cubby/schemas/identifiers";
 import {
@@ -19,8 +18,11 @@ import {
   type ProposedImportFix,
   type RunFindingRoutingKind,
 } from "@cubby/schemas/purchase-import";
-import { tradeSchema } from "@cubby/schemas/task-fields";
-import { cents } from "@cubby/shared";
+import {
+  cents,
+  wholeCentToMinor,
+  nullableWholeCentToMinor,
+} from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import {
   and,
@@ -42,7 +44,6 @@ import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
   expense,
   auditLog,
-  expenseAttribution,
   inventoryEntry,
   ledgerParty,
   orderMail,
@@ -52,8 +53,12 @@ import {
   runFinding,
 } from "~/server/db/schema";
 import { validateExpenseInheritance } from "~/server/domains/expense/repo/expense-inheritance";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { receivableProductIds } from "~/server/domains/inventory/repo/stock-tracking";
-import { decideLineWrite } from "~/server/domains/purchase-import/repo/writer-policy";
+import { decideLineWrite } from "~/server/domains/purchase-import/policy/import-lines";
+import { replacementLineFields } from "~/server/domains/purchase-import/policy/replacement-lines";
 import { findingHasExpired } from "~/server/domains/run/repo/finding-expiry";
 import {
   publishRunFinding,
@@ -67,7 +72,7 @@ import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 
 import {
   aggregateReplacementApprovalFingerprint,
@@ -106,7 +111,7 @@ async function refundTally(
       and(
         eq(expense.purchaseId, purchaseId),
         eq(expense.economicRole, "vendor"),
-        sql`round(${expense.cost} * 100) = ${-refundCents}`,
+        sql`${expense.cost} = ${-refundCents}`,
         notDeleted(expense),
       ),
     );
@@ -253,17 +258,17 @@ async function applyFix(
       .limit(1);
     if (!targetProduct)
       throw new Error("The proposed Product no longer exists.");
-    const [updated] = await tx
-      .update(expense)
-      .set({ productId, updatedAt: new Date() })
-      .where(
-        and(
-          eq(expense.id, expenseId),
-          isNull(expense.productId),
-          notDeleted(expense),
-        ),
-      )
-      .returning({ id: expense.id });
+    const [updated] = await updatePurchaseEventWhere(
+      tx,
+      "expense",
+      { productId, updatedAt: new Date() },
+      and(
+        eq(expense.id, expenseId),
+        isNull(expense.productId),
+        notDeleted(expense),
+      ),
+      actor,
+    );
     if (!updated) throw new Error("The proposed Expense no longer exists.");
     await validateProductPolicy(tx, { expenseIds: [expenseId] });
     await logAuditEntries(tx, actor, [
@@ -301,10 +306,10 @@ async function applyFix(
       }))
     )
       return;
-    const row = await insertWithShortcode(tx, "expense", {
+    const row = await createPurchaseEventRecord(tx, "expense", {
       purchaseId,
       name: fix.title,
-      cost: fix.amount,
+      cost: wholeCentToMinor(fix.amount),
       date: targetPurchase.date,
       lineKind: "principal",
       lineBasis: "item_line",
@@ -323,9 +328,6 @@ async function applyFix(
     runId,
   });
 }
-
-const principalOnly = <T>(lineKind: string, value: T | null): T | null =>
-  lineKind === "principal" ? value : null;
 
 async function applyAggregateReplacement(
   tx: DrizzleTransaction,
@@ -364,7 +366,6 @@ async function applyAggregateReplacement(
       "The Purchase changed after this preview; prepare the receipt again.",
     );
   const allocations = await redistributeReplacementAttributions(
-    tx,
     preview.allocations,
     fix.lines,
   );
@@ -397,37 +398,18 @@ async function applyAggregateReplacement(
     const identity = fix.reviewedLineIdentities[lineIndex]!;
     const productId = await products.resolve(line, identity);
     const quantity = receiptProductQuantity(productId, line, identity);
-    assertClassificationPolicies("expense", {
+    const { costMinor, ...fields } = replacementLineFields({
+      aggregate,
+      title: line.title,
+      seller: line.seller,
+      costMinor: nullableWholeCentToMinor(line.amount),
       lineKind: identity.lineKind,
-      lineBasis: "item_line",
-      productId,
-      projectId: principalOnly(identity.lineKind, aggregate.projectId),
-      spendingCategoryId: principalOnly(
-        identity.lineKind,
-        aggregate.spendingCategoryId,
-      ),
     });
-    const row = await insertWithShortcode(tx, "expense", {
+    assertClassificationPolicies("expense", { ...fields, productId });
+    const row = await createPurchaseEventRecord(tx, "expense", {
+      ...fields,
+      cost: costMinor,
       purchaseId,
-      name: line.title,
-      notes:
-        [aggregate.notes, line.seller ? `Seller: ${line.seller}` : null]
-          .filter(Boolean)
-          .join("\n") || null,
-      cost: line.amount,
-      date: aggregate.date,
-      future: aggregate.future,
-      lineKind: identity.lineKind,
-      lineBasis: "item_line",
-      economicRole: "vendor",
-      costType: costTypeSchema.parse(aggregate.costType),
-      trade: tradeSchema.nullable().parse(aggregate.trade),
-      projectId: principalOnly(identity.lineKind, aggregate.projectId),
-      spendingCategoryId: principalOnly(
-        identity.lineKind,
-        aggregate.spendingCategoryId,
-      ),
-      bookingTransactionCode: aggregate.bookingTransactionCode,
       productId,
       productQuantity: quantity,
     });
@@ -435,7 +417,9 @@ async function applyAggregateReplacement(
       (allocation) => allocation.lineIndex === lineIndex,
     );
     if (lineAllocations.length)
-      await tx.insert(expenseAttribution).values(
+      await insertPurchaseEventRows(
+        tx,
+        "ExpenseAttribution",
         lineAllocations.map((allocation) => ({
           expenseId: row.id,
           role: allocation.role,
@@ -478,10 +462,13 @@ async function applyAggregateReplacement(
     audit: { into: audit },
   });
   await logAuditEntries(tx, actor, audit);
-  await tx
-    .update(purchase)
-    .set({ displayLabel: targetPurchase.displayLabel ?? aggregate.name })
-    .where(and(eq(purchase.id, purchaseId), isNull(purchase.deletedAt)));
+  await updatePurchaseEventWhere(
+    tx,
+    "purchase",
+    { displayLabel: targetPurchase.displayLabel ?? aggregate.name },
+    and(eq(purchase.id, purchaseId), isNull(purchase.deletedAt)),
+    actor,
+  );
 }
 
 /** Owner eligibility stays stable without blocking another Product writer's Finding FK. */
@@ -517,6 +504,7 @@ export async function resolveRunFinding(
       "ask_member needs the one question the member must answer.",
     );
   return withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     await lockFindingSettlement(tx, input.id, actor);
     const [finding] = await tx
       .select({
@@ -687,6 +675,7 @@ export async function resolveArrivedFindingsForPurchase(
   actor: ActorContext,
 ): Promise<{ resolved: number }> {
   return withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     const openFindings = await tx
       .select({ id: runFinding.id })
       .from(runFinding)

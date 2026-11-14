@@ -3,7 +3,7 @@ import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 
 import { getCalendarRange, getCalendarSchedule } from "./calendar";
 
@@ -28,7 +28,7 @@ describe("calendar effective attribution", () => {
     });
     await insertWithShortcode(ctx.db, "expense", {
       name: "Outside visible dates",
-      cost: 2,
+      cost: 200n,
       date: "2026-09-19",
       lineKind: "principal",
       costType: "materials",
@@ -37,7 +37,7 @@ describe("calendar effective attribution", () => {
     });
     await insertWithShortcode(ctx.db, "expense", {
       name: "Other project item",
-      cost: 8,
+      cost: 800n,
       date: "2026-09-20",
       lineKind: "principal",
       costType: "materials",
@@ -47,7 +47,7 @@ describe("calendar effective attribution", () => {
     });
     await insertWithShortcode(ctx.db, "expense", {
       name: "Shared tax",
-      cost: 1,
+      cost: 100n,
       date: "2026-09-20",
       lineKind: "tax",
       costType: "services",

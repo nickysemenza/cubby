@@ -11,7 +11,7 @@ import {
 } from "@cubby/schemas/entity-collection";
 import type { ImageRawOut as RawImageOutput } from "@cubby/schemas/entity-contracts/image";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { EntityLinkKind } from "@cubby/schemas/entity-links";
+import type { EntityLinkKind } from "@cubby/schemas/entity-link-catalog";
 import {
   displayGtin,
   type ExternalIdInput,
@@ -68,6 +68,7 @@ import { uniq } from "es-toolkit";
 import { z } from "zod";
 
 import { productRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.product.gen";
+import { holdFieldsValues } from "~/server/ai/fields/repo/field-decisions";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import {
@@ -85,6 +86,10 @@ import {
   categoryStockTrackingSql,
 } from "~/server/db/computed/product-category-sql";
 import { productClassificationEvidenceSql } from "~/server/db/computed/product-classification-evidence";
+import {
+  DECLARED_EDGE_DELETE_POLICIES,
+  DECLARED_EDGE_DELETE_HOOKS,
+} from "~/server/db/generated/declared-edges.gen";
 import {
   assertNoDependents,
   associatePendingImages,
@@ -192,11 +197,7 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import { liveAliasSqlText } from "~/server/lib/live-row";
 
 import { assertProductCategoryChange } from "./classification";
-import {
-  PRODUCT_DELETE_EDGE_POLICY,
-  isRetainingEdgeKey,
-  type ProductRetainingEdgeKey,
-} from "./edge-roles";
+import { type ProductRetainingEdgeKey } from "./edge-roles";
 import {
   splitProductImages,
   mapProductExternalIds,
@@ -1579,12 +1580,22 @@ export async function createProductRecord<TOutput>(
         }),
       );
       await assertExternalIdsAvailable(tx, desiredExternalIds);
-      const newProduct = await insertWithShortcode(tx, "product", {
-        ...columnData,
-        brandId: await resolveProductBrand(tx, productData.brandId),
-        categoryId,
-        ingredientId: ingredientId ?? null,
-      });
+      const fields = holdFieldsValues(
+        "product",
+        {
+          ...columnData,
+          brandId: await resolveProductBrand(tx, productData.brandId),
+          categoryId,
+          ingredientId: ingredientId ?? null,
+        },
+        "create",
+      );
+      const newProduct = await insertWithShortcode(
+        tx,
+        "product",
+        fields.values,
+      );
+      await fields.settle(tx, actor, newProduct.id);
       await lockExternalIdentifierParents(tx, [
         { entityId: newProduct.id, entityKind: "product" },
       ]);
@@ -1867,6 +1878,11 @@ export async function updateProduct<TOutput>(
 
   try {
     const updatedProduct = await withTransaction(db, async (tx) => {
+      // The kernel's `fields` settlement follows; the household write gate
+      // comes before every record lock, as in a Vendor merge.
+      await (
+        await import("~/server/kernel/api")
+      ).enterHouseholdGate(databaseForTransaction(tx));
       // Vendor merge locks identities before their Products. Match that order
       // even when an edit resubmits the Product's current Brand.
       const resolvedBrandId =
@@ -1924,12 +1940,26 @@ export async function updateProduct<TOutput>(
       // set" rather than no-op-ing. Skip the column update entirely and reuse
       // the row this same transaction already read; nothing else can have
       // changed it since.
-      const hasScalarChanges = Object.values(updateData).some(
+      const fields = holdFieldsValues("product", updateData);
+      const hasScalarChanges = Object.values(fields.values).some(
         (value) => value !== undefined,
       );
-      const updated = hasScalarChanges
-        ? await updateLiveAndReturn(tx, product, updateData, id)
+      let updated = hasScalarChanges
+        ? await updateLiveAndReturn(tx, product, fields.values, id)
         : beforeProduct;
+      await fields.settle(tx, actor, id, beforeProduct);
+      // The kernel applied the held `fields` columns in this transaction.
+      if (fields.held.length)
+        updated =
+          (await tx.query.product.findFirst({
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(
+                  table,
+                  and(eq(product.id, id), notDeleted(product)),
+                ),
+            },
+          })) ?? updated;
 
       if (updated.categoryId !== beforeProduct.categoryId)
         await validateLiveInheritedPolicies(tx, { kind: "product", ids: [id] });
@@ -2378,7 +2408,12 @@ export const quickCreateProductRecord = async (
   // Product behind for the recovery to find instead of the winner.
   const { newProduct } = await withTransaction(db, async (tx) => {
     const brandId = await resolveProductBrand(tx, data.brandId);
-    const productValues = { ...values, brandId };
+    const fields = holdFieldsValues(
+      "product",
+      { ...values, brandId },
+      "create",
+    );
+    const productValues = fields.values;
     // An explicit `shortcode` only comes from the import/restore path, which is
     // replaying a code that already exists; everything else mints one through
     // `insertWithShortcode` so it gets the collision retry.
@@ -2393,6 +2428,7 @@ export const quickCreateProductRecord = async (
       await applyPrimaryBarcode(tx, inserted.id, incomingGtin);
     }
 
+    await fields.settle(tx, actor, inserted.id);
     await logAuditEntry(tx, actor, {
       entityKind: "product",
       entityId: inserted.id,
@@ -2412,7 +2448,7 @@ export const quickCreateProductRecord = async (
  * `./edge-roles`). `Record` over that type requires an entry for every
  * acquisition/history edge, so adding one to `PRODUCT_EDGE_ROLES` is a
  * compile error here until it's wired up — the same completeness guarantee
- * `IMAGE_HARD_DELETE` gives `deleteImages` in `repo/image.ts`, extended to a
+ * `DECLARED_EDGE_DELETE_POLICIES.image` gives `deleteImages` in `repo/image.ts`, extended to a
  * shape (a `.query.<table>.findMany` call) a flat disposition string can't
  * express, since each acquisition edge lives on a different table.
  */
@@ -2563,29 +2599,30 @@ const PRODUCT_RETAINING_DEPENDENTS = {
  * column alone is not the rule. The decision still keys off the delete
  * policy's own `block` effect.
  */
-const PRODUCT_BLOCK_GUARDS = Object.fromEntries(
-  Object.entries(PRODUCT_RETAINING_DEPENDENTS).flatMap(([key, fetch]) => {
-    if (!isRetainingEdgeKey(key)) return [];
-    const disposition = PRODUCT_DELETE_EDGE_POLICY[key];
-    if (disposition.effect !== "block") return [];
-    const guard = async (tx: DrizzleTransaction, ids: ProductId[]) =>
-      assertNoDependents({
-        offendingParentIds: (await fetch(tx, ids)).map((d) => d.productId),
-        fetchNames: (failedIds) =>
-          tx.query.product.findMany({
-            where: {
-              RAW: (table: PgTable) =>
-                relationalSql(table, inArray(product.id, failedIds)),
-            },
-            columns: { name: true },
-          }),
-        reason: disposition.reason,
-        message: (count, names) =>
-          `Cannot delete ${count} product(s): ${names} have ${disposition.label}. Remove them first.`,
-      });
-    return [[key, guard]];
-  }),
-);
+export const refuseProductDeletion = async (
+  tx: DrizzleTransaction,
+  ids: ProductId[],
+  edge: keyof typeof PRODUCT_RETAINING_DEPENDENTS,
+): Promise<void> => {
+  const disposition = DECLARED_EDGE_DELETE_POLICIES.product[edge];
+  if (disposition.effect !== "block")
+    throw new Error(`Not a blocking Product edge: ${edge}`);
+  const fetch = PRODUCT_RETAINING_DEPENDENTS[edge];
+  await assertNoDependents({
+    offendingParentIds: (await fetch(tx, ids)).map((row) => row.productId),
+    fetchNames: (failedIds) =>
+      tx.query.product.findMany({
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, inArray(product.id, failedIds)),
+        },
+        columns: { name: true },
+      }),
+    reason: disposition.reason,
+    message: (count, names) =>
+      `Cannot delete ${count} product(s): ${names} have ${disposition.label}. Remove them first.`,
+  });
+};
 
 /**
  * Product deletes take uuids. Returns the R2 keys of images the cascade
@@ -2611,10 +2648,10 @@ export const deleteProducts = (
     );
     const removal = await deleteByPolicy(tx, {
       entity: "product",
-      policy: PRODUCT_DELETE_EDGE_POLICY,
+      policy: DECLARED_EDGE_DELETE_POLICIES.product,
       ids,
       actor,
-      overrides: PRODUCT_BLOCK_GUARDS,
+      overrides: DECLARED_EDGE_DELETE_HOOKS.product.overrides,
       beforeDelete: (tx, ids) =>
         lockExternalIdentifierParents(
           tx,

@@ -2,12 +2,14 @@ import { financialTransactionSettlementViolation } from "@cubby/schemas/financia
 import { describe, expect, it } from "vitest";
 
 import {
-  decideStatementKind,
   isLoanPayment,
   kindAgreed,
   ownAccountNamed,
+} from "~/server/domains/transaction-import/policy/statement-transaction-kind";
+import {
+  decideStatementKind,
   statementTransactionKind,
-} from "./statement-transaction-kind";
+} from "~/server/domains/transaction-import/repo/statement-policy-wire";
 
 describe("statementTransactionKind", () => {
   it("recognizes earned bank interest filed under a generic income category", () => {

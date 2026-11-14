@@ -44,17 +44,6 @@ export function undecidedFieldValue(
   ).safeParse(value).success;
 }
 
-/** Entities with at least one field Cubby may evaluate after a write. */
-const automatedEntities = new Set<string>(
-  generatedFieldSuggestionPolicies.flatMap((policy) =>
-    policy.mode !== "prune" && policy.apply !== "review" ? [policy.entity] : [],
-  ),
-);
-
-/** Whether a create or update of `entity` owes field automation a look. */
-export const fieldAutomationWatches = (entity: string) =>
-  automatedEntities.has(entity);
-
 /** Every declared spending review, preserving its entity/field/context correlation. */
 type FinanceReviewDeclaration =
   (typeof generatedFieldSuggestionPolicies)[number] extends infer Policy

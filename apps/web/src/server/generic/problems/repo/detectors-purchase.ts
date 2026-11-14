@@ -126,18 +126,18 @@ export const findDuplicateSpendCandidates = async (
   db: Database,
 ): Promise<ProblemItem<"duplicateSpendCandidates">[]> => {
   const cents = (value: SQL) => sql`round(${value}::numeric, 2)`;
-  const expenseTotal = sql`COALESCE(sum(le."cost"), 0)`;
+  const expenseTotal = sql`(COALESCE(sum(le."costMinor"), 0) / 100.0)`;
   const statedTotal = minorToDollarsSql(sql`p."statedTotalMinor"`, "numeric");
 
   const res = await getDb(db).execute<DuplicateSpendRow>(sql`
     WITH orphan AS (
-      SELECT e."shortcode", e."name", e."cost", e."date"
+      SELECT e."shortcode", e."name", (e."costMinor" / 100.0) AS "cost", e."date"
       FROM ${expense} e
       WHERE ${notDeleted("e")}
         AND e."purchaseId" IS NULL
         AND ${sql.raw(actualExpenseSql("e"))}
-        AND e."cost" IS NOT NULL
-        AND e."cost" <> 0
+        AND e."costMinor" IS NOT NULL
+        AND e."costMinor" <> 0
     ),
     purchase_total AS (
       SELECT

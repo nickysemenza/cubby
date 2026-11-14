@@ -1,6 +1,6 @@
 # ADR 0024: Repository read declaration
 
-Status: Accepted. Amends [ADR 0006](0006-durable-entity-identity-and-attachments.md)
+Status: Superseded in part by [ADR 0029](0029-evidence-facts-and-reconcilers.md). Accepted. Amends [ADR 0006](0006-durable-entity-identity-and-attachments.md)
 (reads stop following merge redirects) and builds on
 [ADR 0019](0019-domain-first-server-layout.md) (no module-level registries) and
 [ADR 0021](0021-derived-values.md) (derived values).

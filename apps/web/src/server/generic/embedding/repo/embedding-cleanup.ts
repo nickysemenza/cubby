@@ -1,41 +1,8 @@
 import { embeddingArtifactState } from "@cubby/schemas/derived-refresh";
-import { and, inArray, isNull, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
-import { entityEmbedding } from "~/server/db/retained-tables";
-
-export async function findDeletableEmbeddingArtifactIds(
-  db: Database,
-  ids: readonly string[],
-) {
-  if (!ids.length) return new Set<string>();
-  const rows = await getDb(db)
-    .select({
-      id: entityEmbedding.id,
-      artifactState: entityEmbedding.artifactState,
-      deletedAt: entityEmbedding.deletedAt,
-      deletionId: entityEmbedding.deletionId,
-    })
-    .from(entityEmbedding)
-    .where(
-      and(
-        inArray(entityEmbedding.id, [...ids]),
-        isNull(entityEmbedding.deletionId),
-      ),
-    );
-  return new Set(
-    rows
-      .filter(
-        (row) =>
-          row.artifactState !== embeddingArtifactState.enum.selected &&
-          (row.deletedAt !== null ||
-            row.artifactState === embeddingArtifactState.enum.retired ||
-            row.artifactState === embeddingArtifactState.enum.failed),
-      )
-      .map((row) => row.id),
-  );
-}
 
 /** Receipts apply only while artifacts remain deletable. */
 export async function recordEmbeddingDeletions(

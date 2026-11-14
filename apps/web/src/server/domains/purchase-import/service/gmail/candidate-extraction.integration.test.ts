@@ -4,9 +4,11 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import {
   email as emailTable,
+  orderMail,
   purchase,
   expense,
   run as runTable,
@@ -14,7 +16,6 @@ import {
   emailCandidateObservation,
 } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import type { GmailProvider } from "../../repo/gmail/types";
 import { ingestGmailMessages } from "./ingest";
@@ -130,25 +131,42 @@ describe("read-only Gmail candidate production wiring", () => {
       (await getDb(ctx.db).select().from(runTable)).map((row) => row.purpose),
     ).toEqual(["mail_discovery"]);
   });
-  it("refuses a selected candidate when persisted Email source identity changes during the decision", async () => {
-    const input = await setup();
-    await expect(
-      ingestGmailMessages(ctx.db, gmail, {
-        ...input,
-        candidateChoice: async () => {
-          await getDb(ctx.db)
-            .update(emailTable)
-            .set({ checksum: "b".repeat(64) })
-            .where(eq(emailTable.messageId, "synthetic-message"));
-          return { selectedIndex: 0, confidence: "high", probability: 0.95 };
-        },
-      }),
-    ).rejects.toThrow("source changed");
-    expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
-    expect(
-      await getDb(ctx.db).select().from(emailCandidateObservation),
-    ).toEqual([]);
-  });
+  it.each(["ownership", "retained checksum"] as const)(
+    "refuses a selected candidate when persisted %s changes during the decision",
+    async (change) => {
+      const input = await setup();
+      await expect(
+        ingestGmailMessages(ctx.db, gmail, {
+          ...input,
+          candidateChoice: async () => {
+            if (change === "ownership") {
+              const foreign = await insertWithShortcode(ctx.db, "ledgerParty", {
+                name: "Synthetic foreign owner",
+                kind: "guest",
+              });
+              await getDb(ctx.db)
+                .update(emailTable)
+                .set({ ledgerPartyId: foreign.id })
+                .where(eq(emailTable.messageId, "synthetic-message"));
+            } else {
+              await getDb(ctx.db)
+                .update(orderMail)
+                .set({ rawChecksum: "b".repeat(64) });
+            }
+            return { selectedIndex: 0, confidence: "high", probability: 0.95 };
+          },
+        }),
+      ).rejects.toThrow(
+        change === "ownership"
+          ? "Email candidate original is unavailable"
+          : "Email candidate original source changed",
+      );
+      expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+      expect(
+        await getDb(ctx.db).select().from(emailCandidateObservation),
+      ).toEqual([]);
+    },
+  );
   it("keeps unrelated structured email headers without parsing, model calls, candidate history or retained body", async () => {
     const input = await setup();
     const completeProvider: GmailProvider = {

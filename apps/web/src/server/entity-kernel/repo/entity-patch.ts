@@ -23,9 +23,15 @@ import type {
   PgUpdateSetSource,
 } from "drizzle-orm/pg-core";
 
+import {
+  settleFieldEdits,
+  splitFieldsValues,
+} from "~/server/ai/fields/repo/field-decisions";
+import { fieldsPlanOf } from "~/server/ai/fields/repo/plan";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   buildPartialUpdateValues,
+  databaseForTransaction,
   notDeleted,
   withTransaction,
   withTransactionOn,
@@ -66,59 +72,107 @@ export async function patchEntityRows<T extends PatchTable>(
   }
   if (ids.length === 0 || keys.length === 0) return [];
 
-  const values = buildPartialUpdateValues(patch);
+  // `fields` columns are decisions the kernel applies per record.
+  const fieldsPlan = fieldsPlanOf(definition.entity);
+  const { authored: values, owned } = splitFieldsValues(
+    fieldsPlan,
+    buildPartialUpdateValues(patch),
+  );
+  const writesColumns = Object.keys(values).length > 0;
   return withTransactionOn(db, async (tx) => {
     const { table } = definition;
-    // SAFETY: This is the explicit projection of the same generic table.
-    // Drizzle's conditional FROM and driver result unions erase that relation.
-    const result = await tx
-      .select(getTableColumns(table))
-      .from(table as PgTable)
-      .$dynamic()
-      .where(and(inArray(table.id, [...ids]), notDeleted(table)));
+    const select = () =>
+      // SAFETY: This is the explicit projection of the same generic table.
+      // Drizzle's conditional FROM and driver result unions erase that relation.
+      tx
+        .select(getTableColumns(table))
+        .from(table as PgTable)
+        .$dynamic()
+        .where(and(inArray(table.id, [...ids]), notDeleted(table)));
     // SAFETY: The query projects getTableColumns(table); PatchTable requires
     // its id to be a non-null string, preserving this generic row shape.
-    const before = result as (InferSelectModel<T> & { id: string })[];
+    const before = (await select()) as (InferSelectModel<T> & {
+      id: string;
+    })[];
     const changes = before.flatMap((row) => {
       const audit = computeChanges(row, { ...row, ...values }, [
         ...definition.fields,
       ]);
-      return audit ? [{ row, audit }] : [];
+      const held = Object.entries(owned).some(
+        ([key, value]) => String(row[key] ?? "") !== String(value ?? ""),
+      );
+      return audit || held ? [{ row, audit }] : [];
     });
     if (changes.length === 0) return [];
 
     // Widen only the builder's table metadata; the same table instance owns
     // both the patch and RETURNING projection.
     const updateTable: PgTable = table;
-    const updated = await tx
-      .update(updateTable)
-      .set(values)
-      .where(
-        and(
-          inArray(
-            table.id,
-            changes.map(({ row }) => row.id),
-          ),
-          notDeleted(table),
-        ),
-      )
-      .returning();
+    const kernel = await import("~/server/kernel/api");
+    if (writesColumns)
+      await kernel.lockWrites(databaseForTransaction(tx), {
+        table,
+        ids: changes.map(({ row }) => row.id),
+        columns: Object.keys(values),
+      });
+    const updated = writesColumns
+      ? await tx
+          .update(updateTable)
+          .set(values)
+          .where(
+            and(
+              inArray(
+                table.id,
+                changes.map(({ row }) => row.id),
+              ),
+              notDeleted(table),
+            ),
+          )
+          .returning()
+      : changes.map(({ row }) => row);
     // SAFETY: RETURNING projects the same table columns and non-null id as
     // the pre-update query.
-    const rows = updated as (InferSelectModel<T> & { id: string })[];
+    let rows = updated as (InferSelectModel<T> & { id: string })[];
     const written = new Set(rows.map((row) => row.id));
     await logAuditEntries(
       tx,
       actor,
       changes
-        .filter(({ row }) => written.has(row.id))
+        .filter(({ row, audit }) => audit && written.has(row.id))
         .map(({ row, audit }) => ({
           entityKind: definition.entity,
           entityId: row.id,
           action: "update",
-          changes: audit,
+          changes: audit ?? undefined,
         })),
     );
+    if (writesColumns)
+      await kernel.emitWrites(databaseForTransaction(tx), {
+        table,
+        ids: [...written],
+        columns: Object.keys(values),
+        entity: definition.entity,
+      });
+    if (fieldsPlan) {
+      const database = databaseForTransaction(tx);
+      for (const { row, audit } of changes)
+        await settleFieldEdits(
+          database,
+          actor,
+          fieldsPlan,
+          row.id,
+          row,
+          owned,
+          audit ?? undefined,
+        );
+      if (Object.keys(owned).length) {
+        // SAFETY: as above; the kernel applied the held columns in this transaction.
+        const after = (await select()) as (InferSelectModel<T> & {
+          id: string;
+        })[];
+        rows = after.filter((row) => written.has(row.id));
+      }
+    }
     return rows;
   });
 }
@@ -179,6 +233,17 @@ export async function bulkPatchEntities<
     const { table } = spec;
     const values = buildPartialUpdateValues(await spec.values(tx, data));
     const ids = await resolveAllOrThrow(tx, spec.entity, shortcodes);
+    // `fields` columns are decisions the kernel applies per record.
+    const fieldsPlan = fieldsPlanOf(spec.entity);
+    const { authored, owned } = splitFieldsValues(fieldsPlan, values);
+    const kernel = await import("~/server/kernel/api");
+    const database = databaseForTransaction(tx);
+    // Revisions before the row locks below, the order a kernel apply takes.
+    await kernel.lockWrites(database, {
+      table,
+      ids,
+      columns: Object.keys(authored),
+    });
     const queryTable: PgTable = table;
     // SAFETY: the explicit projection of the same generic table, whose id and
     // shortcode columns PatchTable/T require.
@@ -195,18 +260,36 @@ export async function bulkPatchEntities<
     }
     await spec.validate?.(tx, before, values);
     // SAFETY: `values` is a partial row of `table`, defined values only.
-    const set = values as PgUpdateSetSource<T>;
-    await tx
-      .update(table)
-      .set(set)
-      .where(and(inArray(table.id, ids), notDeleted(table)));
-    await spec.afterWrite?.(tx);
+    const set = authored as PgUpdateSetSource<T>;
+    if (Object.keys(authored).length)
+      await tx
+        .update(table)
+        .set(set)
+        .where(and(inArray(table.id, ids), notDeleted(table)));
     const fields = Object.keys(getTableColumns(table)).filter(
       (key): key is Extract<keyof BulkRow<T>, string> =>
-        Object.hasOwn(values, key),
+        Object.hasOwn(authored, key),
     );
+    if (fields.length)
+      await kernel.emitWrites(database, {
+        table,
+        ids,
+        columns: fields,
+        entity: spec.entity,
+      });
+    for (const row of before)
+      await settleFieldEdits(
+        database,
+        actor,
+        fieldsPlan,
+        row.id,
+        row,
+        owned,
+        computeChanges(row, { ...row, ...authored }, [...fields]) ?? undefined,
+      );
+    await spec.afterWrite?.(tx);
     const auditEntries = before.flatMap((row) => {
-      const changes = computeChanges(row, { ...row, ...values }, [...fields]);
+      const changes = computeChanges(row, { ...row, ...authored }, [...fields]);
       return changes
         ? [
             {

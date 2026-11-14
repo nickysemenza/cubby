@@ -1,7 +1,20 @@
-export { derivedRebuild } from "./derived-rebuild-schema";
 export { qualitySnapshot } from "./quality-snapshot-schema";
-export { job } from "./job-schema";
-export { workItem, workPublication } from "./work-item-schema";
+export {
+  answer,
+  ask,
+  askScope,
+  decision,
+  drift,
+  evidenceBinding,
+  factKey,
+  kernelPass,
+  keyRev,
+  manualEntry,
+  recordKey,
+  scopeDep,
+  scopeDirty,
+  scopeState,
+} from "./kernel-schema";
 import type { AiAnalysisRuntime } from "@cubby/schemas/ai";
 import {
   aiAnalysisEntityKind,
@@ -9,12 +22,7 @@ import {
 } from "@cubby/schemas/ai-analysis-fields";
 import type { AuditEntityKind, AuditFieldChange } from "@cubby/schemas/audit";
 import type { Amount } from "@cubby/schemas/codec";
-import {
-  auditAuthoritySchema,
-  auditChannelSchema,
-  type AuditAuthority,
-  type AuditChannel,
-} from "@cubby/schemas/context";
+import { auditChannelSchema, type AuditChannel } from "@cubby/schemas/context";
 import { embeddingArtifactState } from "@cubby/schemas/derived-refresh";
 import {
   type EntityAttachmentRole,
@@ -22,7 +30,7 @@ import {
   entityAttachmentStorage,
 } from "@cubby/schemas/entity-attachment";
 import { entitySchema, type Entity } from "@cubby/schemas/entity-core";
-import type { EntityLinkKind } from "@cubby/schemas/entity-links";
+import type { EntityLinkKind } from "@cubby/schemas/entity-link-catalog";
 import type {
   EntityId,
   DeviceId,
@@ -32,6 +40,10 @@ import type {
   UserId,
 } from "@cubby/schemas/identifiers";
 import { productImagePurpose } from "@cubby/schemas/image-summary";
+import type {
+  KernelAuditProvenance,
+  KernelJson,
+} from "@cubby/schemas/kernel/machinery";
 import type { LedgerSourceClaimNormalizedEvidence } from "@cubby/schemas/ledger-transfer";
 import type { PurchaseDocumentKind } from "@cubby/schemas/purchase";
 import { purchaseDocumentKindValues } from "@cubby/schemas/purchase-fields";
@@ -89,9 +101,11 @@ import {
 } from "./entity-link-schema";
 import {
   device,
+  email,
   expense,
   image,
   ledgerTransfer,
+  location,
   run,
 } from "./generated/entity-table-definitions.gen";
 import { sqlEnumConstant } from "./sql-enum";
@@ -192,24 +206,12 @@ export const entityEmbedding = pgTable(
     observedAt: timestamp("observedAt", { mode: "date" }),
     indexedAt: timestamp("indexedAt", { mode: "date" }),
     deletionId: text("deletionId"),
-    /** A failed vector deletion waits until then (`embeddingCleanupStore`). */
-    deletionRetryAt: timestamp("deletionRetryAt", { mode: "date" }),
-    /** Consecutive failed deletions; the drain stops at its bound and keeps the error. */
-    deletionAttempts: integer("deletionAttempts").notNull().default(0),
-    deletionError: text("deletionError"),
-    /** First failed deletion of the current streak, transient ones included. */
-    deletionFailingSince: timestamp("deletionFailingSince", { mode: "date" }),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },
   (table) => [
     // A rebuildable projection of one live identity (ADR 0006).
     entityRefFk("EntityEmbedding_entity_fk", table),
-    index("EntityEmbedding_cleanup_idx")
-      .on(table.deletionRetryAt)
-      .where(
-        sql`${table.deletionId} IS NULL AND ${table.artifactState} <> ${sqlEnumConstant(embeddingArtifactState, "selected")}`,
-      ),
     uniqueIndex("EntityEmbedding_entity_model_key")
       .on(
         table.entityKind,
@@ -221,13 +223,6 @@ export const entityEmbedding = pgTable(
       // One selected vector per source and config; an upload in flight sits beside it.
       .where(
         sql`${table.deletedAt} IS NULL AND ${table.artifactState} = ${sqlEnumConstant(embeddingArtifactState, "selected")}`,
-      ),
-    // Work status asks for deletions that exhausted their attempts
-    // (`JOB_NEEDS_ATTENTION_ATTEMPTS`); the table holds the vectors' text.
-    index("EntityEmbedding_deletion_exhausted_idx")
-      .on(table.updatedAt)
-      .where(
-        sql`${table.deletionId} IS NULL AND ${table.deletionAttempts} >= 5`,
       ),
     index("EntityEmbedding_entity_idx").on(table.entityKind, table.entityId),
     index("EntityEmbedding_model_idx").on(
@@ -275,32 +270,12 @@ export const searchDocument = pgTable(
     normalizedText: text("normalizedText").notNull(),
     searchVector: pgTsVector("searchVector").notNull(),
     sourceHash: text("sourceHash").notNull(),
-    /** When a fresh embedding is owed; null when none is (`embeddingRefreshStore`). */
-    embeddingDueAt: timestamp("embeddingDueAt", { mode: "date" }),
-    /** Bumped by each mark: which intent a page settles, not who may pay for it. */
-    embeddingGeneration: integer("embeddingGeneration").notNull().default(0),
-    /** The page allowed to call the provider for this source. A mark never touches it. */
-    embeddingLeaseToken: uuid("embeddingLeaseToken"),
-    embeddingLeaseUntil: timestamp("embeddingLeaseUntil", { mode: "date" }),
-    embeddingAttempts: integer("embeddingAttempts").notNull().default(0),
-    embeddingError: text("embeddingError"),
-    /** First failed refresh of the current streak, transient ones included. */
-    embeddingFailingSince: timestamp("embeddingFailingSince", { mode: "date" }),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },
   (table) => [
     // A rebuildable projection of one live identity (ADR 0006).
     entityRefFk("SearchDocument_entity_fk", table),
-    // Work status asks for refreshes that exhausted their attempts.
-    index("SearchDocument_embedding_exhausted_idx")
-      .on(table.updatedAt)
-      .where(
-        sql`${table.embeddingAttempts} >= 5 AND ${table.deletedAt} IS NULL`,
-      ),
-    index("SearchDocument_embedding_due_idx")
-      .on(table.embeddingDueAt)
-      .where(sql`${table.embeddingDueAt} IS NOT NULL`),
     uniqueIndex("SearchDocument_live_entity_key")
       .on(table.entityKind, table.entityId)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -450,7 +425,7 @@ export const entityAttachment = pgTable(
  * Every many-to-many relationship between two entities (ADR 0007): a kit's
  * components, an order's products, a project's tools, a garden entry's
  * plantings, a wish's candidates, and task/project dependencies. Kinds and
- * their endpoint kinds are declared once in `@cubby/schemas/entity-links`;
+ * their endpoint kinds are declared once in `@cubby/schemas/entity-link-catalog`;
  * the CHECKs below are rendered from that map (`entity-link-schema.ts`), and
  * the derived-DDL trigger refuses a live link to a deleted entity.
  *
@@ -589,6 +564,55 @@ export const ledgerSourceClaim = pgTable(
  * One relation per subject kind; ids are unique across entity tables, so a
  * join on `entityId` needs no kind filter.
  */
+
+/** One immutable observation from a location photo pass. */
+export const connectionCandidateEvidence = pgTable(
+  "ConnectionCandidateEvidence",
+  {
+    id: pkUuid(),
+    scopeKey: text("scopeKey").notNull(),
+    fingerprint: text("fingerprint")
+      .notNull()
+      .unique("ConnectionCandidateEvidence_fingerprint_key"),
+    sourceEntity: text("sourceEntity").notNull(),
+    sourceId: uuid("sourceId").notNull(),
+    targetEntity: text("targetEntity").notNull(),
+    targetId: uuid("targetId").notNull(),
+    candidate: jsonb("candidate").notNull().$type<KernelJson>(),
+    basis: jsonb("basis").notNull().$type<KernelJson>(),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("ConnectionCandidateEvidence_scope_idx").on(table.scopeKey),
+  ],
+);
+
+export const mailHandlingReceipt = pgTable("MailHandlingReceipt", {
+  id: pkUuid(),
+  runId: uuid("runId")
+    .notNull()
+    .references(() => run.id),
+  emailId: uuid("emailId")
+    .notNull()
+    .references(() => email.id),
+  key: text("key").notNull().unique("MailHandlingReceipt_key_key"),
+  receipt: jsonb("receipt").notNull().$type<KernelJson>(),
+  createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+});
+
+export const photoInventoryEvidence = pgTable("PhotoInventoryEvidence", {
+  id: pkUuid(),
+  locationId: uuid("locationId")
+    .notNull()
+    .references(() => location.id),
+  runId: uuid("runId").references(() => run.id),
+  fingerprint: text("fingerprint")
+    .notNull()
+    .unique("PhotoInventoryEvidence_fingerprint_key"),
+  sourceSnapshot: jsonb("sourceSnapshot").notNull().$type<KernelJson>(),
+  result: jsonb("result").notNull().$type<KernelJson>(),
+  createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+});
 
 export const aiAnalysis = pgTable(
   "AiAnalysis",
@@ -807,32 +831,15 @@ export const auditLog = pgTable(
         name: "AuditLog_runId_Run_id_fk",
         onDelete: "set null",
       }),
-    // Null for a person, import or agent write, which Cubby never overwrites.
-    authority: text("authority").$type<AuditAuthority>(),
-    // Set in the writer's transaction for rows field automation must read;
-    // the field-automation drain clears it. Exact and restart-safe, unlike a
-    // createdAt cursor, which a long transaction commits behind.
-    automationPending: boolean("automationPending").notNull().default(false),
+    /** A kernel apply's scope, reconciler version and inputs; null for any other write. */
+    provenance: jsonb("provenance").$type<KernelAuditProvenance>(),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
   },
   (table) => [
-    index("AuditLog_automationPending_idx")
-      .on(table.createdAt, table.id)
-      .where(sql`${table.automationPending}`),
-    index("AuditLog_automatic_createdAt_idx")
+    // Changes by Cubby: kernel applies, newest first.
+    index("AuditLog_kernel_createdAt_idx")
       .on(table.createdAt.desc())
-      .where(
-        sql`${table.authority} = ${sqlEnumConstant(auditAuthoritySchema, "automatic")}`,
-      ),
-    check(
-      "AuditLog_authority_check",
-      sql`${table.authority} IN (${sql.join(
-        auditAuthoritySchema.options.map((authority) =>
-          sqlEnumConstant(auditAuthoritySchema, authority),
-        ),
-        sql`, `,
-      )})`,
-    ),
+      .where(sql`${table.provenance} IS NOT NULL`),
     // NULLS FIRST is Postgres's own `DESC` default: it matches the feed's
     // `ORDER BY "createdAt" DESC, id DESC` and the index production carries.
     // Drizzle's bare `.desc()` would declare NULLS LAST, which that ORDER BY
@@ -873,10 +880,6 @@ type AppSettingValue =
   | AppSettingValue[]
   | { [key: string]: AppSettingValue };
 
-// Activation identity is shared by its writer and prepared-evidence read fences.
-export const AI_REFRESH_ACTIVATION_SETTINGS_ID =
-  "00000000-0000-4000-8000-000000000074";
-
 export const appSettings = pgTable("AppSettings", {
   id: pkUuid(),
   metadata: jsonb("metadata").$type<Record<string, AppSettingValue>>(),
@@ -895,3 +898,17 @@ export const pgStatStatementsInfo = pgView("pg_stat_statements_info", {
 }).existing();
 
 export * from "./read-snapshot-schema";
+
+/** Source-revision image observations; the mutable Image remains the display projection. */
+export const imageEvidence = pgTable(
+  "ImageEvidence",
+  {
+    id: pkUuid(),
+    ...entityRef<"image">({ nullable: false }),
+    inputHash: text("inputHash").notNull().unique(),
+    kind: text("kind").notNull(),
+    value: jsonb("value").notNull(),
+    ...baseTimestamps(),
+  },
+  (table) => [entityRefFk("ImageEvidence_entity_fk", table)],
+);

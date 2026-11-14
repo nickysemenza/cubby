@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { borrowedImagesField } from "./image-fields";
 import { historicalDateRangePresets } from "../date-range";
 import { idField, readOnly, timestampField } from "./field-policy";
@@ -45,6 +46,285 @@ import { z } from "zod";
 import { optionalProjectAllocationsSchema } from "@cubby/schemas/field-resolution";
 export const { definition, readSchemas } = defineEntityModel({
   key: "expense",
+  edges: [
+    defineEdge({
+      key: "ImportSourceProduct.expenseId",
+      from: "row:ImportSourceProduct",
+      to: "expense",
+      cardinality: "one",
+      inverse: {
+        key: "expense.incoming.ImportSourceProduct.expenseId",
+        from: "expense",
+        to: "row:ImportSourceProduct",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "ImportSourceProduct.expenseId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason:
+          "Workflow evidence about entities, not a relationship between them.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "metadata",
+        label: "receipt lines",
+        description:
+          "The receipt line refers to its current editable Expense; the Expense owns its Product.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "A deleted Expense remains the historical receipt target and contributes no current Product claim.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "preserve-receipt-line-history",
+              effect: "preserve",
+              description:
+                "Deleting an Expense retains its historical receipt reference so an identity-only association cannot revive a cleared Product claim.",
+            },
+            handler: null,
+            order: 0,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "ExpenseAttribution.expenseId",
+      from: "row:ExpenseAttribution",
+      to: "expense",
+      cardinality: "one",
+      inverse: {
+        key: "expense.incoming.ExpenseAttribution.expenseId",
+        from: "expense",
+        to: "row:ExpenseAttribution",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "ExpenseAttribution.expenseId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "column",
+        column: "ExpenseAttribution.expenseId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "composition",
+        label: "party shares",
+        description:
+          "Unitless beneficiary or initial-funder weights that allocate this Expense without storing money.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "soft-delete-attributions",
+              effect: "soft-delete",
+              description:
+                "Deleting an Expense removes its unitless beneficiary and initial-funder shares; no money exists on those child rows.",
+            },
+            handler: null,
+            order: 1,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "LedgerSourceClaim.expenseId",
+      from: "row:LedgerSourceClaim",
+      to: "expense",
+      cardinality: "one",
+      inverse: {
+        key: "expense.incoming.LedgerSourceClaim.expenseId",
+        from: "expense",
+        to: "row:LedgerSourceClaim",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "LedgerSourceClaim.expenseId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason:
+          "Workflow evidence about entities, not a relationship between them.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "metadata",
+        label: "import source references",
+        description:
+          "Durable external identity proving which normalized source row became this Expense.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "soft-delete-source-references",
+              effect: "soft-delete",
+              description:
+                "Deleting an Expense retires the normalized import references that identify that ledger row.",
+            },
+            handler: null,
+            order: 2,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "expense/EntityExternalId.entityId",
+      from: "row:EntityExternalId",
+      to: "expense",
+      cardinality: "one",
+      inverse: {
+        key: "expense.incoming.EntityExternalId.entityId",
+        from: "expense",
+        to: "row:EntityExternalId",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "EntityExternalId.entityId",
+        constrained: true,
+        partition: {
+          column: "EntityExternalId.entityKind",
+          value: "expense",
+        },
+      },
+      ownership: {
+        kind: "identity",
+        column: "EntityExternalId.entityId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "metadata",
+        label: "external ids",
+        description:
+          "An identifier another system gives this record (an ASIN, a barcode, a settlement reference, a Notion page); says nothing about ownership or spend.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "soft-delete-metadata",
+              effect: "soft-delete",
+              description:
+                "Outside identifiers (a Notion page, a Drive folder) are soft-deleted with the record, releasing them to be recorded again.",
+            },
+            handler: null,
+            order: 3,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+  ],
+
   names: { singular: "Expense", plural: "Expenses" },
   route: {
     listColumns: {
@@ -1123,7 +1403,7 @@ Rules:
       },
       { key: "shortcode", specialized: "shortcode" },
       "name",
-      { key: "cost", specialized: "double-precision" },
+      { key: "cost", specialized: "minor-unit-money" },
       "date",
       {
         key: "lineKind",
@@ -1342,8 +1622,8 @@ Rules:
         sql: "{deletedAt} IS NOT NULL OR {lineKind} IN ('principal', 'unclassified') OR ({projectId} IS NULL AND {purchaseId} IS NOT NULL)",
       },
       {
-        name: "Expense_cost_whole_cent_check",
-        sql: "{cost} IS NULL OR abs({cost} * 100 - round({cost} * 100)) < 0.0000001",
+        name: "Expense_cost_minor_range_check",
+        sql: "{cost} IS NULL OR abs({cost}) <= 100000000000000",
       },
       // Signed; zero only where the money is known to be negative — see the
       // ledger rule on `productQuantity`.
@@ -1900,7 +2180,7 @@ Rules:
     ],
   },
   capabilities: {
-    suggestions: ["statement_transaction"],
+    suggestions: [],
     images: {
       storage: false,
       displaySourceOverrides: [
@@ -2256,28 +2536,45 @@ Rules:
 
 export default defineEntity(
   definition,
-  (r) => [
-    r
-      .field("spendingCategoryId")
-      .named("spendingCategory", "Category override"),
-    r.field("purchaseId").named("purchase", "Purchase"),
-    r.field("projectId").named("project", "Project"),
-    r.field("productId").named("product", "Product"),
-    r
-      .path("financialTransaction", "many", [
-        { edge: "Expense.purchaseId", direction: "outgoing" },
-        {
-          edge: "FinancialTransactionAllocation.purchaseId",
-          direction: "incoming",
-        },
-        {
-          edge: "FinancialTransactionAllocation.transactionId",
-          direction: "outgoing",
-        },
-      ])
-      .named("transactions", "Purchase transactions", {
-        view: { columnGroup: "Evidence", order: "newest" },
-      }),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r
+          .field("spendingCategoryId")
+          .named("spendingCategory", "Category override"),
+        "spendingCategory.expenses",
+      ),
+      r.declare(
+        r.field("purchaseId").named("purchase", "Purchase"),
+        "purchase.expenses",
+      ),
+      r.declare(
+        r.field("projectId").named("project", "Project"),
+        "project.expenses",
+      ),
+      r.declare(
+        r.field("productId").named("product", "Product"),
+        "product.expenses",
+      ),
+      r.declare(
+        r
+          .path("financialTransaction", "many", [
+            { edge: "Expense.purchaseId", direction: "outgoing" },
+            {
+              edge: "FinancialTransactionAllocation.purchaseId",
+              direction: "incoming",
+            },
+            {
+              edge: "FinancialTransactionAllocation.transactionId",
+              direction: "outgoing",
+            },
+          ])
+          .named("transactions", "Purchase transactions", {
+            view: { columnGroup: "Evidence", order: "newest" },
+          }),
+        "financialTransaction.expenses",
+      ),
+    ],
+  }),
   readSchemas,
 );

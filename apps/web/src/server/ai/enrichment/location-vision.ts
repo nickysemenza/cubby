@@ -2,7 +2,6 @@ import type {
   ApproveDetectedInventoryItemInput,
   ApproveDetectedInventoryItemOut,
   RawDetectedInventory as DetectedInventory,
-  DetectedInventoryAiResult,
   DetectedInventoryItem,
   RawDetectedItem as DetectedItem,
   LocationDescription,
@@ -25,19 +24,21 @@ import { rawProductCategorySummary } from "@cubby/schemas/product-category-field
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import type { z } from "zod";
+import { z } from "zod";
 
+import { locationDescriptionInput } from "~/server/ai/fields/analysis";
+import {
+  modelAskFor,
+  structuredModelInput,
+  type ModelInput,
+} from "~/server/ai/model-asks";
 import { type AiCallOwner } from "~/server/ai/policy/call-owner";
 import {
   buildLocationAnalysisFingerprint,
   LOCATION_DESCRIPTION_FEATURE,
   LOCATION_INVENTORY_DETECTION_FEATURE,
 } from "~/server/ai/policy/features";
-import {
-  getCachedAiAnalysisRecord,
-  upsertAiAnalysis,
-} from "~/server/ai/repo/ai-analysis";
-import { recordFeatureUsage } from "~/server/ai/run-feature";
+import { readModelAnswer } from "~/server/ai/repo/model-answer";
 import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
 import { getDb, runBeforeCommitDatabase } from "~/server/db/helpers";
@@ -64,14 +65,12 @@ import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-br
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { semanticProductCandidates } from "~/server/generic/embedding/service/semantic-search.service";
-import { outsideJob } from "~/server/generic/jobs/outside-job";
-import type { Fenced } from "~/server/generic/jobs/types";
 import {
   resolveLiveShortcode,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { publishBackgroundTasks } from "~/server/workflows/background-tasks/publish";
-
+import { publishTransaction } from "~/server/kernel/publication";
+import type { Publication } from "~/server/kernel/publication";
 const log = createLogger("ai.analysis");
 
 const MAX_ANALYSIS_IMAGES = 5;
@@ -219,36 +218,6 @@ function detectionCacheMetadata(
   };
 }
 
-async function recordLocationAiUsage(
-  db: Database,
-  input: {
-    feature:
-      | typeof LOCATION_DESCRIPTION_FEATURE
-      | typeof LOCATION_INVENTORY_DETECTION_FEATURE;
-    operation: string;
-    cacheStatus: "hit";
-    durationMs: number;
-    locationId: LocationId;
-    owner: AiCallOwner;
-  },
-): Promise<void> {
-  await recordFeatureUsage(
-    input.feature,
-    {
-      db,
-      ...input.owner,
-      operation: input.operation,
-      entity: { entityKind: "location", entityId: input.locationId },
-    },
-    {
-      // A miss's model call records its own row through the runner.
-      transport: "cache",
-      durationMs: input.durationMs,
-      cacheStatus: input.cacheStatus,
-    },
-  );
-}
-
 /**
  * The description plus where it came from. The provenance travels with the
  * answer because the UI labels it: which model read the shelf, when it read
@@ -268,7 +237,7 @@ export interface LocationDescriptionResult extends LocationDescription {
 
 /** Provider work finishes before this transaction; only current inputs may publish. */
 async function publishLocationAnalysis(
-  fenced: Fenced,
+  fenced: Publication,
   locationId: LocationId,
   imageCodes: readonly string[],
   currentFingerprint: (tx: Database) => Promise<string>,
@@ -329,7 +298,7 @@ export async function describeLocation(
   owner: AiCallOwner,
   ai: LocationVisionAiPort = productionLocationVisionAiPort,
   /** The executing Job's fence; a member request owns no Job. */
-  fenced: Fenced = outsideJob(db),
+  fenced: Publication = publishTransaction(db),
 ): Promise<LocationDescriptionResult> {
   const location = await readLocationById(db, locationId);
 
@@ -343,55 +312,49 @@ export async function describeLocation(
     LOCATION_DESCRIPTION_FEATURE,
     { locationName: location.name, images },
   );
-  const analysisKey = {
-    entityKind: "location" as const,
-    entityId: locationId,
-    feature: LOCATION_DESCRIPTION_FEATURE,
-    inputFingerprint,
-  };
-  const cached = await getCachedAiAnalysisRecord(db, analysisKey);
-  if (cached) {
-    const hitMetadata = cacheMetadata(
-      "hit",
-      LOCATION_DESCRIPTION_FEATURE,
-      inputFingerprint,
-    );
-    log.info("analysis", {
-      ...hitMetadata,
-      entityKind: "location",
-      entityId: locationId,
-    });
-    await recordLocationAiUsage(db, {
-      feature: LOCATION_DESCRIPTION_FEATURE,
-      operation: "locationDescription",
-      cacheStatus: "hit",
-      durationMs: 0,
-      locationId,
-      owner,
-    });
-    return {
-      ...cached.result,
-      cache: hitMetadata,
-      analyzedAt: cached.analyzedAt,
-      previousDescription,
-    };
-  }
-
-  const result = await ai.describeLocation(
-    images.map((img) => img.url),
-    location.name,
+  const kind = modelAskFor(LOCATION_DESCRIPTION_FEATURE);
+  const input = locationDescriptionInput(location.name, images);
+  const cached = await readModelAnswer(db, kind, input);
+  const { withAsk, reconcileNow } = await import("~/server/kernel/api");
+  const answer = await withAsk(
+    db,
     {
-      db,
-      ...owner,
-      operation: "locationDescription",
-      cacheStatus: "miss",
-      entity: { entityKind: "location", entityId: locationId },
+      ...kind,
+      admit:
+        ai === productionLocationVisionAiPort ? kind.admit : async () => {},
+      produce: async () => {
+        const result = await ai.describeLocation(
+          images.map((photo) => photo.url),
+          location.name,
+          {
+            db,
+            ...owner,
+            operation: "locationDescription",
+            applicationCache: false,
+            entity: { entityKind: "location", entityId: locationId },
+          },
+        );
+        return {
+          output: {
+            value: z.json().parse(result),
+            model: LOCATION_DESCRIPTION_FEATURE.model,
+          },
+          model: LOCATION_DESCRIPTION_FEATURE.model,
+          tier: LOCATION_DESCRIPTION_FEATURE.tier,
+        };
+      },
+    },
+    input,
+    {
+      runId: owner.runId,
+      scopes: [{ kind: "fields", key: `location:${locationId}` }],
     },
   );
+  const result = LOCATION_DESCRIPTION_FEATURE.schema.parse(answer.value);
   await publishLocationAnalysis(
     fenced,
     locationId,
-    images.map((image) => image.id),
+    images.map((photo) => photo.id),
     async (tx) => {
       const current = await readLocationById(tx, locationId);
       return buildLocationAnalysisFingerprint(LOCATION_DESCRIPTION_FEATURE, {
@@ -401,25 +364,20 @@ export async function describeLocation(
     },
     inputFingerprint,
     async (tx) => {
-      await upsertAiAnalysis(tx, analysisKey, result);
+      await reconcileNow(tx, [
+        { kind: "fields", key: `location:${locationId}` },
+      ]);
       await recordChange(tx, { kind: "projection", categories: ["location"] });
     },
   );
-  const missMetadata = cacheMetadata(
-    "miss",
-    LOCATION_DESCRIPTION_FEATURE,
-    inputFingerprint,
-  );
-  log.info("analysis", {
-    ...missMetadata,
-    entityKind: "location",
-    entityId: locationId,
-  });
-
   return {
     ...result,
-    cache: missMetadata,
-    analyzedAt: new Date(),
+    cache: cacheMetadata(
+      cached ? "hit" : "miss",
+      LOCATION_DESCRIPTION_FEATURE,
+      inputFingerprint,
+    ),
+    analyzedAt: cached?.createdAt ?? new Date(),
     previousDescription,
   };
 }
@@ -567,7 +525,7 @@ export interface DetectedInventoryResult extends DetectedInventory {
 
 /**
  * Detect inventory items from location photos.
- * Returns detected items for user review — does not persist anything.
+ * Appends the observation as evidence and returns detected items for review.
  */
 export async function detectInventoryItems(
   db: Database,
@@ -576,7 +534,7 @@ export async function detectInventoryItems(
   imageIds?: readonly string[],
   ai: LocationVisionAiPort = productionLocationVisionAiPort,
   /** The executing Job's fence; a member request owns no Job. */
-  fenced: Fenced = outsideJob(db),
+  fenced: Publication = publishTransaction(db),
 ): Promise<DetectedInventoryResult> {
   const location = await readLocationById(db, locationId);
 
@@ -589,60 +547,85 @@ export async function detectInventoryItems(
     LOCATION_INVENTORY_DETECTION_FEATURE,
     { locationName: location.name, images },
   );
-  const analysisKey = {
-    entityKind: "location" as const,
-    entityId: locationId,
-    feature: LOCATION_INVENTORY_DETECTION_FEATURE,
-    inputFingerprint,
-  };
-  const cached = await getCachedAiAnalysisRecord(db, analysisKey);
-  const cacheStatus = cached ? "hit" : "miss";
-  let raw: DetectedInventoryAiResult;
-  let analyzedAt = new Date();
-
-  if (cached) {
-    raw = cached.result;
-    analyzedAt = cached.analyzedAt;
-    await recordLocationAiUsage(db, {
-      feature: LOCATION_INVENTORY_DETECTION_FEATURE,
-      operation: "locationInventoryDetection",
-      cacheStatus: "hit",
-      durationMs: 0,
-      locationId,
-      owner,
-    });
-  } else {
-    raw = await ai.detectInventoryItems(
-      images.map((img) => img.url),
+  const kind = modelAskFor(LOCATION_INVENTORY_DETECTION_FEATURE);
+  const input: ModelInput = structuredModelInput(
+    LOCATION_INVENTORY_DETECTION_FEATURE,
+    LOCATION_INVENTORY_DETECTION_FEATURE.request(
+      images.map((photo) => photo.url),
       location.name,
-      {
-        db,
-        ...owner,
-        operation: "locationInventoryDetection",
-        cacheStatus: "miss",
-        entity: { entityKind: "location", entityId: locationId },
-      },
-    );
-    await publishLocationAnalysis(
-      fenced,
-      locationId,
-      images.map((image) => image.id),
-      async (tx) => {
-        const current = await readLocationById(tx, locationId);
-        return buildLocationAnalysisFingerprint(
-          LOCATION_INVENTORY_DETECTION_FEATURE,
+    ),
+    { inputFingerprint },
+  );
+  const cached = await readModelAnswer(db, kind, input);
+  const { withAsk } = await import("~/server/kernel/api");
+  const answer = await withAsk(
+    db,
+    {
+      ...kind,
+      admit:
+        ai === productionLocationVisionAiPort ? kind.admit : async () => {},
+      produce: async () => {
+        const result = await ai.detectInventoryItems(
+          images.map((photo) => photo.url),
+          location.name,
           {
-            locationName: current.name,
-            images: selectDetectionImages(current.images ?? [], imageIds),
+            db,
+            ...owner,
+            operation: "locationInventoryDetection",
+            applicationCache: false,
+            entity: { entityKind: "location", entityId: locationId },
           },
         );
+        return {
+          output: {
+            value: z.json().parse(result),
+            model: LOCATION_INVENTORY_DETECTION_FEATURE.model,
+          },
+          model: LOCATION_INVENTORY_DETECTION_FEATURE.model,
+          tier: LOCATION_INVENTORY_DETECTION_FEATURE.tier,
+        };
       },
-      inputFingerprint,
-      async (tx) => {
-        await upsertAiAnalysis(tx, analysisKey, raw);
-      },
-    );
-  }
+    },
+    input,
+    { runId: owner.runId, record: { entity: "location", id: locationId } },
+  );
+  const raw = LOCATION_INVENTORY_DETECTION_FEATURE.schema.parse(answer.value);
+  const cacheStatus = cached ? "hit" : "miss";
+  const analyzedAt = cached?.createdAt ?? new Date();
+  await publishLocationAnalysis(
+    fenced,
+    locationId,
+    images.map((photo) => photo.id),
+    async (tx) => {
+      const current = await readLocationById(tx, locationId);
+      return buildLocationAnalysisFingerprint(
+        LOCATION_INVENTORY_DETECTION_FEATURE,
+        {
+          locationName: current.name,
+          images: selectDetectionImages(current.images ?? [], imageIds),
+        },
+      );
+    },
+    inputFingerprint,
+    async (tx) => {
+      await (
+        await import("~/server/ai/fields/repo/photo-evidence")
+      ).appendPhotoInventoryObservation(tx, {
+        locationId,
+        runId: owner.runId,
+        fingerprint: inputFingerprint,
+        sourceSnapshot: {
+          locationName: location.name,
+          images: images.map((photo) => ({
+            id: photo.id,
+            url: photo.url,
+            updatedAt: photo.updatedAt.toISOString(),
+          })),
+        },
+        result: z.json().parse(raw),
+      });
+    },
+  );
 
   const cache = detectionCacheMetadata(cacheStatus, inputFingerprint);
   log.info("analysis", {
@@ -747,20 +730,16 @@ export const selectLocationDescriptionBackfill = async (
   return locations.map((location) => location.id);
 };
 
-/** Publish one description-refresh task per selected location. */
+/** Owe each selected location's fields scope; Answers are shared with inline requests. */
 export const enqueueLocationDescriptionBackfill = async (
   db: Database,
   locationIds: readonly LocationId[],
 ): Promise<{ enqueued: number; total: number }> => {
-  const requestedAt = new Date().toISOString();
-  const receipt = await publishBackgroundTasks(
+  await (
+    await import("~/server/kernel/api")
+  ).reconcileNow(
     db,
-    locationIds.map((locationId) => ({
-      kind: "location-ai.description.refresh" as const,
-      requestedAt,
-      locationId,
-    })),
-    { source: "location-ai.description.backfill" },
+    locationIds.map((id) => ({ kind: "fields", key: `location:${id}` })),
   );
-  return { enqueued: receipt.count, total: locationIds.length };
+  return { enqueued: locationIds.length, total: locationIds.length };
 };

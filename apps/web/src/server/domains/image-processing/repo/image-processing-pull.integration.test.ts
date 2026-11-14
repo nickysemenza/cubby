@@ -11,11 +11,11 @@ import { describe, expect, it, vi } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import {
   image,
-  imageProcessingAttempt,
   imageProcessingEvent,
   imageProcessingJob,
 } from "~/server/db/schema";
 import { createDevice } from "~/server/domains/device/repo/device";
+import { imageExecutionReceipts } from "~/server/domains/image-processing/repo/execution-receipts";
 import {
   readImageExecutions,
   updateImageExecution,
@@ -39,7 +39,10 @@ import {
   releaseAssignedImageProcessingJob,
   renewAssignedImageProcessingLease,
 } from "./image-processing";
-import { assignImageProcessingExecutor } from "./image-processing-history";
+import {
+  assignImageProcessingExecutor,
+  findImageProcessingDeviceAssignment,
+} from "./image-processing-history";
 
 // Devices claim parked device work directly, honoring its backoff, and never
 // steal cloud jobs. A 60 s lease is renewed by heartbeat; release is never an
@@ -162,7 +165,7 @@ describe("background companion leases", () => {
     expect(order.every((id) => owned.includes(id))).toBe(true);
     expect(order).not.toContain(backfill);
     expect(new Set(order).size).toBe(8);
-    const attempts = await getDb(ctx.db).select().from(imageProcessingAttempt);
+    const attempts = await getDb(ctx.db).select().from(imageExecutionReceipts);
     expect(attempts).toHaveLength(8);
     expect(attempts.every((attempt) => attempt.state === "running")).toBe(true);
   });
@@ -225,7 +228,7 @@ describe("background companion leases", () => {
       }
       const attempts = await getDb(ctx.db)
         .select()
-        .from(imageProcessingAttempt);
+        .from(imageExecutionReceipts);
       expect(attempts).toHaveLength(2);
       expect(new Set(attempts.map((attempt) => attempt.jobId)).size).toBe(2);
     } finally {
@@ -285,7 +288,7 @@ describe("background companion leases", () => {
       ]);
       const attempts = await getDb(ctx.db)
         .select()
-        .from(imageProcessingAttempt);
+        .from(imageExecutionReceipts);
       expect(attempts.map((attempt) => attempt.jobId).sort()).toEqual(
         [prefix, backfill].sort(),
       );
@@ -341,7 +344,7 @@ describe("background companion leases", () => {
     const [released] = await readImageExecutions(ctx.db, unsupported);
     expect(released?.leaseToken).toBeNull();
     expect(released!.availableAt.getTime()).toBeGreaterThan(Date.now());
-    const attempts = await getDb(ctx.db).select().from(imageProcessingAttempt);
+    const attempts = await getDb(ctx.db).select().from(imageExecutionReceipts);
     expect(attempts).toHaveLength(1);
     expect(attempts[0]?.jobId).toBe(ready);
   });
@@ -374,7 +377,7 @@ describe("background companion leases", () => {
     expect(execution?.leaseToken).toBeNull();
     expect(execution?.state).toBe("queued");
     expect(
-      await getDb(ctx.db).select().from(imageProcessingAttempt),
+      await getDb(ctx.db).select().from(imageExecutionReceipts),
     ).toHaveLength(0);
   });
 
@@ -502,8 +505,8 @@ describe("background companion leases", () => {
     ).toBe(false);
     const [attempt] = await getDb(ctx.db)
       .select()
-      .from(imageProcessingAttempt)
-      .where(eq(imageProcessingAttempt.id, first.attemptId));
+      .from(imageExecutionReceipts)
+      .where(eq(imageExecutionReceipts.id, first.attemptId));
     expect(attempt).toMatchObject({
       state: "released",
       error: "Background execution released",
@@ -535,6 +538,7 @@ describe("background companion leases", () => {
       }),
     ).toEqual({ ok: false, reason: "lease_lost" });
     await expire(jobId);
+    expect(await releaseAssignedImageProcessingJob(ctx.db, input)).toBe(true);
     const replacement = await claim(
       parseEntityId("device", crypto.randomUUID()),
     );
@@ -572,20 +576,39 @@ describe("background companion leases", () => {
     const next = await claim();
     if (!next) throw new Error("Expected retry lease");
     await assign(next);
+    expect(
+      await findImageProcessingDeviceAssignment(ctx.db, {
+        jobId: next.id,
+        attemptId: next.attemptId,
+        deviceId,
+        userId,
+      }),
+    ).toBe(true);
     await expire(jobId);
+    expect(
+      await claim(parseEntityId("device", crypto.randomUUID())),
+    ).toBeNull();
+    expect(
+      await releaseAssignedImageProcessingJob(ctx.db, {
+        jobId: next.id,
+        attemptId: next.attemptId,
+        deviceId,
+        userId,
+      }),
+    ).toBe(true);
     const newest = await claim(parseEntityId("device", crypto.randomUUID()));
-    expect(newest?.id).toBe(jobId);
+    expect(newest?.id).toBe(next.id);
     // A newer attempt owns it: not adopted, but the failure is history.
     expect(
       (await completeImageProcessingJob(ctx.db, failure(next))).adopted,
     ).toBe(false);
     const [attempt] = await getDb(ctx.db)
       .select()
-      .from(imageProcessingAttempt)
-      .where(eq(imageProcessingAttempt.id, next.attemptId));
+      .from(imageExecutionReceipts)
+      .where(eq(imageExecutionReceipts.id, next.attemptId));
     expect(attempt).toMatchObject({
-      state: "failed",
-      error: "Synthetic late device failure",
+      state: "released",
+      error: "Background execution released",
     });
     const events = await getDb(ctx.db)
       .select({

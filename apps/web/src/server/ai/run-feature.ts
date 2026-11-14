@@ -90,7 +90,8 @@ import {
 import { recordAiUsage } from "~/server/ai/usage";
 import type { Database } from "~/server/db";
 import { inspectImageFile } from "~/server/domains/image/repo/image-integrity";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
+import { insideProduce } from "~/server/kernel/produce-ledger";
+import { WorkDeferredError } from "~/server/kernel/work-errors";
 
 import { isGatewayAdmissionWait } from "./gateway-egress-client";
 
@@ -123,6 +124,13 @@ export interface AiRunContext<T = unknown> extends Pick<
   cacheStatus?: "hit" | "miss" | "none";
   applicationCacheStatus?: ApplicationCacheStatus;
   /**
+   * `false` when the caller already holds this call's in-flight claim: a
+   * kernel Ask claims its `inputHash` on the same response cache.
+   */
+  applicationCache?: boolean;
+  /** Saved artifact metadata covered by the model Ask envelope. */
+  answerRevision?: z.infer<ReturnType<typeof z.json>>;
+  /**
    * Skip the gateway's response cache despite an identical request body —
    * what a "regenerate" action needs, since an unchanged prompt would
    * otherwise return the very answer the user just rejected.
@@ -147,6 +155,8 @@ export interface AiRunContext<T = unknown> extends Pick<
    * ladder changes.
    */
   onAnswered?: (model: SupportedChatModel) => void;
+  /** The retained response supplied to the kernel Answer writer. */
+  onProduced?: (details: { raw: string; tier: string }) => void;
 }
 
 interface Answered<T> {
@@ -456,7 +466,7 @@ async function resolveImageContent(
       // AVIF normalization already belongs to the device image pipeline. Do
       // not pay for an unsupported request or repeatedly ask the refusing edge.
       if (!retained && inspected.detectedContentType === "image/avif")
-        throw new JobDeferredError(
+        throw new WorkDeferredError(
           "AI image is waiting for device JPEG normalization",
           new Date(Date.now() + 15 * 60_000),
           "device",
@@ -885,6 +895,75 @@ export async function runStructuredFeature<T>(
       reasoning: "Input preparation",
     });
   }
+  if (ctx.db && !insideProduce() && ports === productionStructuredRunPorts) {
+    const { modelAskFor, structuredModelInput } = await import("./model-asks");
+    const { withAsk } = await import("~/server/kernel/api");
+    const media = await identifyMedia(request, ctx.db);
+    const kind = modelAskFor(spec);
+    // Domain validation also applies to replayed Answers. A repair changes
+    // the question and therefore has its own durable Ask and paid result.
+    let question = media.sent;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const sent = question;
+      const input = await (
+        await import("./model-media")
+      ).retainModelMedia(structuredModelInput(spec, sent, ctx.answerRevision));
+      const result = await withAsk(
+        ctx.db,
+        {
+          ...kind,
+          async produce() {
+            let model = spec.model;
+            let details: { raw: string; tier: string } | undefined;
+            const value = await runStructuredFeature(
+              spec,
+              sent,
+              {
+                ...ctx,
+                applicationCache: false,
+                validate: undefined,
+                onProduced: (response) => {
+                  details = response;
+                  ctx.onProduced?.(response);
+                },
+                onAnswered: (answered) => {
+                  model = answered;
+                },
+              },
+              ports,
+            );
+            return {
+              output: { value: z.json().parse(value), model },
+              model,
+              tier: spec.tier,
+              ...details,
+            };
+          },
+        },
+        input,
+        {
+          runId: ctx.runId,
+          record: ctx.entity
+            ? { entity: ctx.entity.entityKind, id: ctx.entity.entityId }
+            : undefined,
+        },
+      );
+      const model = supportedChatModelSchema.safeParse(result.model);
+      if (model.success) ctx.onAnswered?.(model.data);
+      const value = spec.schema.parse(result.value);
+      const checked = ctx.validate?.(value);
+      if (!checked || checked.ok) return value;
+      if (attempt === 1)
+        throw new Error(
+          `Structured output for "${spec.feature}" is invalid: ${checked.issues.join("; ")}`,
+        );
+      question = {
+        ...sent,
+        messages: [...sent.messages, buildRepairTurn(checked.issues, value)],
+      };
+    }
+    throw new Error("Structured validation exhausted its repair");
+  }
   const placeCall = async (
     callRequest: AiChatRequest,
     plan: StructuredRunPlan,
@@ -985,6 +1064,7 @@ export async function runStructuredFeature<T>(
           },
         );
       }
+      ctx.onProduced?.({ raw: JSON.stringify(message), tier: spec.tier });
       return { value, model: answeredBy(message) };
     } catch (error) {
       // A failed call is still a call on its transport — a connected ChatGPT
@@ -1049,7 +1129,10 @@ export async function runStructuredFeature<T>(
       );
     return parsed;
   };
-  const cached = spec.cache && ports === productionStructuredRunPorts;
+  const cached =
+    spec.cache &&
+    ports === productionStructuredRunPorts &&
+    ctx.applicationCache !== false;
   const media = cached
     ? await identifyMedia(request, ctx.db)
     : { sent: request, keyed: request };
@@ -1299,11 +1382,11 @@ export async function runEmbeddingFeature(
   );
   if (failures.length) {
     const deferred = failures.find(
-      (error): error is JobDeferredError => error instanceof JobDeferredError,
+      (error): error is WorkDeferredError => error instanceof WorkDeferredError,
     );
     if (deferred && deferred.cause == null)
       deferred.cause = failures.find(
-        (error) => !(error instanceof JobDeferredError),
+        (error) => !(error instanceof WorkDeferredError),
       );
     throw deferred ?? failures[0];
   }

@@ -1,8 +1,5 @@
-import {
-  suggestionFamily,
-  mailDecisionFamily,
-} from "@cubby/schemas/suggestion";
-import { eq, sql } from "drizzle-orm";
+import { mailDecisionFamily } from "@cubby/schemas/suggestion";
+import { and, eq, notInArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
@@ -23,11 +20,15 @@ export async function loadReviewPrediction(db: Database, input: Review) {
         subject: suggestionTable.subject,
         judgment: suggestionTable.judgment,
         producer: suggestionTable.producer,
-        // Only field application consumes captured correction inputs; history must not load unrelated snapshots.
-        evidence: sql`CASE WHEN ${suggestionTable.family} = ${suggestionFamily.enum.field} AND ${input.intent === "apply"} THEN ${suggestionTable.evidence} ELSE NULL END`,
+        evidence: sql`NULL`,
       })
       .from(suggestionTable)
-      .where(eq(suggestionTable.id, input.suggestionId))
+      .where(
+        and(
+          eq(suggestionTable.id, input.suggestionId),
+          notInArray(suggestionTable.family, ["field", "recommendation"]),
+        ),
+      )
       .limit(1);
     // A mail decision's owner answers for its handle; carried rows kept their id.
     if (

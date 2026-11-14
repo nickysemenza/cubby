@@ -15,13 +15,13 @@ import { buildEntity } from "tooling/factories/build";
 import { raceUniqueInsert, TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import { amountFromColumns } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   expense,
   financialAccount,
-  financialTransactionAllocation,
   inventoryEntry,
   purchase,
   product,
@@ -31,6 +31,8 @@ import {
   createExpense,
   readExpenseById,
 } from "~/server/domains/expense/repo/crud";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { moveInventoryEntries } from "~/server/domains/inventory/repo/bulk";
 import {
   createInventoryEntry,
@@ -60,7 +62,6 @@ import { buildKernelContext } from "~/server/entity-kernel/reference-universe.fi
 import { executeEntitySelectionIds } from "~/server/entity-kernel/selection-ids";
 import { withListGroupBy } from "~/server/generic/list/repo/list";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createLocationFixture,
@@ -324,10 +325,12 @@ describe("inventory ownership mutations", () => {
         ledgerPartyId: owner.entityId,
         inventoryOwnerDefaultEnabled: false,
       });
-      await dbc
-        .update(purchase)
-        .set({ vendorAccountId: account.id })
-        .where(eq(purchase.id, acquired.purchase.id));
+      await updatePurchaseEventWhere(
+        ctx.db,
+        "purchase",
+        { vendorAccountId: account.id },
+        eq(purchase.id, acquired.purchase.id),
+      );
       const paymentAccount = await insertWithShortcode(
         ctx.db,
         "financialAccount",
@@ -350,7 +353,7 @@ describe("inventory ownership mutations", () => {
           postedDate: "2026-09-01",
         },
       );
-      await dbc.insert(financialTransactionAllocation).values({
+      await insertPurchaseEventRows(ctx.db, "FinancialTransactionAllocation", {
         transactionId: payment.id,
         purchaseId: acquired.purchase.id,
         amountMinor: moneyToMinor(200),

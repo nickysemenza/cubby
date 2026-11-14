@@ -11,6 +11,7 @@ import type { Trade } from "@cubby/schemas/task-fields";
 import { and, eq } from "drizzle-orm";
 import type { z } from "zod";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
@@ -25,7 +26,6 @@ import {
   readRetainedMail,
   type RetainedMail,
 } from "~/server/domains/mail/repo/retained-mail";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture,
   makeProductInput,
@@ -185,9 +185,7 @@ export async function liveExpenseCents(db: Database, purchaseId: string) {
         notDeleted(expense),
       ),
     );
-  return rows
-    .map((row) => Math.round((row.cost ?? 0) * 100))
-    .sort((a, b) => a - b);
+  return rows.map((row) => Number(row.cost ?? 0n)).sort((a, b) => a - b);
 }
 
 export async function purchasesForOrder(db: Database, orderId: string) {

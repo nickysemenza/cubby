@@ -13,18 +13,78 @@ reference to a deleted, ignored or superseded observation invalidates current
 advice. The source/external-ID lookup index therefore includes tombstones; the
 separate live-only unique index still enforces active observation identity.
 
+## Money rules
+
+Pure policy lives under `apps/web/src/server/domains/<domain>/policy/`.
+Repositories load evidence and submit observations and decisions. The kernel
+applies `bankEvent` and statement-first `purchaseEvent` under its household
+write gate. Order and Email evidence, payment matching, transfer pairing and
+shipment state use the existing import writers. Empty searches are evidence too: loaders must supply empty arrays
+and explicit missing rows rather than omit competing candidates.
+
+| Domain / module                                         | Decision and read inputs                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `transaction-import/source-intake-plan`                 | Occurrence head, withdrawal and membership plans from the complete `SourceOccurrence`, retained `SourceTransactionRecord`, `TransactionImport` and `TransactionImportRecord` rows in `SourceIntakeLoaded`, with an explicit observation time and prepared source fingerprints. Provider revisions without ordering proof have no selected head.                                                               |
+| `transaction-import/source-identity-plan`               | Reviewed identity proof and the resulting owner changes from complete occurrence/observation rows, account identity, accepted transaction id, historical bindings, alias rows and reviewed expected versions. Missing heads, aliases and targets remain explicit inputs.                                                                                                                                      |
+| `transaction-import/source-transaction-record-identity` | Provider identity and source-reference fingerprints from source, account, date, provider-signed amount, original descriptor and provider identity claims.                                                                                                                                                                                                                                                     |
+| `transaction-import/statement-effective-movement`       | Effective sign and loan movement from provider amount, descriptor, merchant and category; loan authority reads live account/party identity, source aliases, provider account ids and Vendor names/aliases.                                                                                                                                                                                                    |
+| `transaction-import/statement-transaction-kind`         | Kind votes, spending eligibility and person/payment-rail policy from effective amount, provider category, descriptor, account kind, transfer evidence and counterparty/rule/model/history votes.                                                                                                                                                                                                              |
+| `transaction-import/charge-identity`                    | Stable charge key from occurrence source and charge key.                                                                                                                                                                                                                                                                                                                                                      |
+| `transaction-import/transfer-pair`                      | Opposite-leg candidates, overlaps, competitors, clean/apply blockers and fingerprints from the complete loaded leg pool, including empty account/candidate searches and each leg's collection membership, account/owner, dates, signed amount, source refs, status-derived eligibility and labels.                                                                                                            |
+| `financial-account/purchaser`                           | Live household spending/loan authority and individual purchaser from account identity/deletion, owner kind/deletion and dated primary-cardholder identity/deletion plus sole-access proof.                                                                                                                                                                                                                    |
+| `financial-transaction/settlement-window`               | Three-day instant, calendar-date and prefilter bounds from explicitly supplied dates. Indexed loaders retain their declared candidate windows.                                                                                                                                                                                                                                                                |
+| `financial-transaction/spending-prerequisites`          | Spending and Vendor-creation blockers from transaction kind/amount/date/source refs, account/owner, resolved purchaser, Vendor resolution ambiguity and counterparty/name/confidence/escrow advice.                                                                                                                                                                                                           |
+| `financial-transaction/booking-action`                  | Link existing spending or create a lump from live Expense costMinor/future/economicRole/lineKind, carried-cost provenance, transaction amount and the sum of other same-direction eligible allocations.                                                                                                                                                                                                       |
+| `financial-transaction/booking-fingerprint`             | Retained JSON fingerprints and fresh booking lineage from the exact supplied preview, serialized evidence and Expense row order.                                                                                                                                                                                                                                                                              |
+| `purchase-import/import-plan`                           | Import write blocks from accepted extraction status/reason and candidate currency, order date, total and line prices.                                                                                                                                                                                                                                                                                         |
+| `purchase-import/import-lines`                          | Exact line matching, aggregate replacement eligibility and unique complete payment matching from existing Expense identity/title/amount/role/product/quantity/source claim, extracted lines, retained payments and all eligible charge candidates.                                                                                                                                                            |
+| `purchase-import/accepted-source`                       | Accepted-source financial replay and Product-choice guards, original line binding, target review and tender learning from accepted extraction, proposed extraction, `ImportSourceOrder.originalOrder`, `ImportSourceProduct` bindings, merged Product identities and retained `PurchasePaymentEvidence` amountMinor/chargedAt/cardLastFour/tender. Empty retained/binding searches participate in the result. |
+| `purchase-import/retained-payments`                     | Agreement across payment sources and order-date anchoring from `PurchasePaymentEvidence.sourceClaimId/amountMinor/chargedAt/cardLastFour/tender` in evidence-index order, plus `Purchase.date`. Discovery uses allocation presence and candidate charge facts.                                                                                                                                                |
+| `purchase-import/replacement-attributions`              | Exact signed line and party margins from the resolved Expense allocation role/party/key/cents and accepted line minor amounts. Largest remainders use the party key as the tie-breaker.                                                                                                                                                                                                                       |
+
+Repository wire adapters convert dollar inputs into signed minor units for
+statement kind, effective movement and spending prerequisites. Booking capacity,
+row intents, recorded splits, combined-charge conservation, payment matching and
+attribution transport use minor units. Source-intake requests, transfer-pair
+judgments and import extraction policies retain their wire-shaped inputs.
+Frozen fingerprint envelopes retain their exact dollar fields and key order.
+`digestValue`, source-identity hashes and transfer-pair fingerprints are
+synchronous over plain data; a canonical evidence string uses
+`digestValue({ evidence })`, with the same bytes as the streaming adapter.
+
+The following functions share these explicit read contracts. Empty arrays and
+missing lookup rows remain inputs to the decisions.
+
+| Functions                                                                                                      | Declared reads                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `statementBookingRows`                                                                                         | FinancialTransaction amountMinor, shortcode, effective date and label; selected Purchase shortcode or absence; resolved account purchaser and Vendor; Expense category, role, cost type, trade, beneficiary decisions; prior eligible allocation capacity. Its Purchase/Expense references are intents resolved by the existing writers.                                                                                                                                                                                                                                                                                                                                                                                    |
+| `decideSpendingCandidates`                                                                                     | Purchase id, shortcode, displayLabel, date, vendorId and deletedAt; Expense purchaseId, deletedAt, future, economicRole, costMinor, lineKind and bookingTransactionCode; PurchasePaymentEvidence purchaseId, amountMinor and chargedAt; FinancialTransactionAllocation purchaseId, transactionId, amountMinor and deletedAt; linked FinancialTransaction id, accountId, amountMinor, status, kind, deletedAt, ledgerTransferId and shortcode; FinancialAccount id and deletedAt; whole-transaction live allocation totals; reimbursement Expense existence. The indexed pool includes explicit Purchases, nearby payment amounts, nearby Vendor Purchases, positive-allocation Purchases and undated exact payment amounts. |
+| `competingPaymentClaimants`                                                                                    | Purchase id/deletedAt; every other Purchase's same-amount PurchasePaymentEvidence purchaseId, amountMinor, chargedAt, tender and cardLastFour; FinancialTransactionAllocation purchaseId, amountMinor and deletedAt; all retained payment and live allocation totals of that sign, across every source, owner and Vendor.                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `availableSpendingMinor`                                                                                       | Live Expense costMinor, lineKind, future, economicRole and bookingTransactionCode; linked allocation amountMinor; transaction/account deletion, transaction id, shortcode, kind, status, amountMinor, ledgerTransferId and whole-transaction allocation total.                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `recordedSpendingOutcome`                                                                                      | Every live allocation Purchase id and amountMinor; every linked Purchase id, shortcode and capacity; explicit beneficiary intent; stored/current lineage equality.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `allocationSetViolation`                                                                                       | Transaction kind and amountMinor; the complete proposed allocation Purchase ids and amountMinor, including an empty set.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `completePaymentMatches`                                                                                       | Complete retained payment amountMinor, chargedAt, cardLastFour and tender; every eligible charge id, amountMinor, occurredAt, cardLastFours and storedValue flag.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `groupMemberNamesCharge`, `combinedChargeAllocations`                                                          | Every requested live Purchase id, vendorId, date and statedTotalMinor; first accepted source-claim owner; normalized payment set and complete eligible charge set; allocation existence for the whole group.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `bookingVendorCreations`, `bookingVendorSelection`, `createdVendorConflict`                                    | Reviewed Vendor choices; Vendor id, shortcode, name, aliases and deletedAt for every raw and cleaned name's resolution candidates, including misses; live explicitly selected Vendors; creation results; a fresh resolution after minting. Creation aliases contain the distinct raw merchant label, except issuer card-fee labels.                                                                                                                                                                                                                                                                                                                                                                                         |
+| `vendorPurchaseFolds`                                                                                          | Ordered keeper/loser Vendor ids and every live Purchase id, vendorId, orderId and notes. Null order ids never collide; existing keeper slots win, followed by loser order and Purchase id.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `replacementLineFields`, `replacementAttributions`                                                             | Replaced Expense notes, date, future, costType, trade, projectId, spendingCategoryId and bookingTransactionCode; accepted line title, seller, minor cost and role; resolved per-role allocation party, key and cents. Only principal lines inherit Project/category; every line retains the other aggregate fields.                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `duplicateSourceOrderReplay`, `duplicateSourceOrderRefusal`, `pairLines`                                       | EntityIdentity id/mergedIntoId and the survivor AuditLog convergence receipt; both live Purchases' vendorId, vendorAccountId, orderId, normalized order key and date; linked Email mailbox/thread identities; accepted duplicate source-order existence; financial source-claim existence; complete Expense id, title, costMinor, lineKind, Product, Project, quantity, economicRole, attribution and carried booking/category/trade fields on both Purchases.                                                                                                                                                                                                                                                              |
+| `convergenceAccountAvailable`, `financialConvergenceRefusal`                                                   | Live transaction status, kind, amountMinor and ledgerTransferId; resolved dated funding party, account owner, actor member, primary holder, authorized-user periods and payment window; source refs; complete live allocations; accepted Purchase/Vendor identities; settlement conflicts; exact stored/current booking and lineage fingerprints. Load stages precede their corresponding decisions and preserve the existing write/lock sequence.                                                                                                                                                                                                                                                                          |
+| `spendingCategoryForDiscovery`, `refundSpendingCategory`, `bookingSpendingCategory`, `reviewedCategoryRefusal` | Live SpendingCategory id, shortcode and deletedAt; explicit category and history-review intent; advice confidence/conflict; every Vendor category-history result; refund original's live Expense id, costMinor, lineKind, future and economicRole plus each effective category.                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+
 ## Statement booking
 
 Bank transactions are evidence; Expenses are the spending ledger. Statement
 imports and re-imports discover booking work for every observed charge,
 including unchanged observations already matched to an unbooked transaction.
-Clean purchases and fees book spending automatically; uncertain work remains in
-the shared Suggestions queue. Transfers, card payments, earned interest and ordinary income
+Supported purchases and fees book spending automatically; ambiguous identity,
+missing order details and unsupported facts remain machinery gaps. A member
+resolves these gaps through durable kernel decisions. Transfers, card payments, earned interest and ordinary income
 remain settlement-only: clean ones are created automatically without Expenses.
 A uniquely supported opposite leg is created as a pair; an unpaired movement
 with supported kind evidence can be recorded alone. Ambiguous pairings remain
 in review.
-All money continues to be `SUM(Expense.cost)`. Interest earned is recorded as
+All money continues to be `SUM(Expense.costMinor)`. Interest earned is recorded as
 `interest` with an inflow; interest linked to a Purchase remains an outflow.
 
 Pending or unknown provider status does not prevent an otherwise supported
@@ -116,58 +176,31 @@ dates; settlement never freezes that derived value into an override.
 
 ### Shared planner
 
-The financial spending planner and booking writer are shared by direct finance
-commands, statement create/attach/supersede, matched-transaction `book`, and
-import convergence. Current evidence and the complete allocation graph are
-revalidated in the outer serializable write with its application receipt. The
-review family declares this snapshot requirement; unrelated review families
-keep their transaction boundaries. Attach plans use the target transaction's
-current facts, since attaching evidence alone changes no kind, amount or
-posting state. Already-booked spending is a no-op, and another possible
-Purchase prevents a new clean booking.
+Statement intake appends immutable source occurrences and observations. The
+`bankEvent` reconciler owns the FinancialTransaction projection for one occurrence
+or manual entry. It composes head selection, effective movement and kind policy,
+and reads stored answers for its declared statement-kind ask. The `purchaseEvent`
+reconciler owns one bank event's Purchases, Expenses, allocations and attributions.
+It composes spending prerequisites, candidates, blockers, recorded splits, Vendor
+selection, category selection and `statementBookingRows`; exact minor-unit
+conservation is checked before apply.
 
-Discovery selects candidates from names, dates, amounts and retained payment
-evidence before reading their receipt graphs. The payment matcher rejects
-prospective charges that cannot match any retained payment line before loading
-stored charge competitors; plausible payments keep the complete planner. A
-review-only positive-charge plan with an unresolved booking prerequisite does
-not hydrate candidate Expenses, attributions, allocations or vendor category
-history; refund category inheritance and already-booked checks still read their
-graphs. Page preparation batches read-only candidate facts and coalesces
-in-flight receipt-graph reads for concurrent previews; eligible candidates'
-payment-evidence rows load together in per-Purchase order, and review-only
-candidates load none. Cached page evidence never reaches a booking commit. The
-graph reader keeps compact decision fields and canonical JSON of the complete
-graph, and snapshot hashing reproduces identical fingerprint bytes;
-attributions, notes and payment-account facts remain evidence dependencies.
-Ready plans and commit-time validation recheck those dependencies and current
-ownership. A read-only preview group resolves its prospective aggregate Expense
-categories together after preparing every draft. Commit groups prepare fresh
-drafts under their locks and resolve them before any financial write. Persisted booking-lineage fingerprints are unchanged by any of this.
-A booking preview's classification revision covers the live spending
-categories, the Product category mappings and that booking's own Vendors (its
-Vendor and its target Purchase's Vendor); every preview and commit path uses
-that definition, so a policy change to another Vendor never stales a review.
+Both reconcilers load every key of a batch together. The kernel reserves linked
+identities, compares input revisions and applies records, dependencies and audit
+rows as a bounded atomic batch. Natural keys preserve ids across replay. Baseline
+bindings accept retained ledger records; disagreement produces drift and writes
+no derived ledger changes. Member decisions override derivation and survive reruns.
 
-Statement creates and attaches commit one independent layer per serializable
-transaction. The layer's facts (accounts, attach targets, purchaser proof,
-retained payments, Vendor identity and candidates) are read once in that
-transaction. A create is planned on its prospective source and an attach on
-its target with the pending reference, and the written transaction must
-reproduce that plan's snapshot. A charge on an earlier charge's target, or
-whose ready booking shares a Vendor, Purchase, Vendor name (equal or
-contained) or an equal amount within seven days with an earlier charge of the
-layer, is declined as dependent and commits in a later transaction. Every
-refusal, including an unavailable occurrence, is decided before any write; a
-plan that changes after the write raises a divergence error so the caller
-rolls the layer back and applies that charge alone. A layer's new entities
-are written kind by kind, each kind in one insert, with one audit insert.
+Statement apply, attach, book, purchaser and Expense overrides, allocations,
+splits and rejection record decisions through `decide`. Attach names a reviewed
+transaction and records explicit identity; selected fields become assignments.
+An ambiguous event stays unbooked until a same or distinct decision resolves it.
+Waiting for order details remains a gap with a member booking action.
 
-Matched transactions with live allocations create no new statement booking
-work; an existing pending booking is revisited so completion can retire it.
-Expense edits use generic field Suggestions, and allocation reconciliation uses
-explicit finance commands. Transactions without statement observations can
-invoke the shared commands directly; statement discovery uses retained rows.
+Direct finance commands and order/payment convergence use the same pure money
+policies. Their reviewed correction, payment-match and transfer boundaries retain
+their owning evidence and concurrency rules. Their ledger writes pass through
+purchase-event evidence or decisions and the reconciler.
 
 ### Categories and Vendors
 
@@ -227,9 +260,18 @@ candidates unless the member chose standalone spending; older review-only spendi
 already settles and that may be this same charge, still needs review.
 
 Nearby candidates without explicit payment or member evidence require review
-only when known remaining Purchase capacity can cover the charge, or capacity
-is unknown. Settled Purchases and those with insufficient remaining capacity
-remain visible as context and do not prevent automatic new spending.
+while their remaining capacity is open, short of the charge or unknown; a
+settled one stops blocking only under the exclusion below, so a recurring
+charge at one Vendor books past last period's Purchase once that Purchase's
+own charge provably differs.
+
+A charge joins an existing Purchase, through an identity decision or a chosen
+Purchase, only when that Purchase's priced vendor lines in the charge's
+direction leave room for the whole charge. Unknown capacity, an unclassified
+line or partial coverage stays a decision gap, and no lump is added beside
+those lines; a Purchase with no such lines takes the charge as a lump. Moving a
+booked charge to another Purchase removes the Purchase, lump and shares its
+booking created, unless that Purchase holds other spending, which stays a gap.
 
 For positive charges, actual nonfuture vendor Expenses on partly paid
 same-Vendor Purchases outside that window or without dates also prevent
@@ -266,33 +308,14 @@ vendor spending, excluding future and reimbursement lines, supplies the refund
 category unless a member explicitly chooses another. An unmatched refund needs
 explicit review before a standalone refund Purchase is booked.
 
-### Automatic booking rule
+### Automatic booking
 
-Applying statement evidence refreshes pending advice on the same account within
-seven days of each affected date, plus explicit copies. Disjoint date windows
-stay disjoint. Refreshes coalesce within a page and use the shared Suggestion
-batch publisher, preserving unchanged advice, paid labels and member decisions.
-
-The clean booking rule (clean spending creates, books and supersedes,
-clean non-spending creates, and supported non-spending or paired copy attaches) is fixed code and always on; there is no member
-switch or audit sample. Each application still uses `suggestions.review` and records automatic authority and its policy
-revision in Changes by Cubby. Booking writes are import evidence: they are not
-Cubby-set field values, and field automation never revises them. Changing a booking policy never turns an old
-transaction-only receipt into proof of spending; regenerate and revalidate the
-unbooked work.
-
-Wrong feedback preserves the original Suggestion, its automatic application
-receipt and booked records. It records a review, not an undo or a repair
-request for already-booked Purchases, Expenses or allocations. The next
-suggestion run uses the current-evidence rules: eligible field questions can be
-reassessed, while an unchanged rejected answer is withheld from automatic
-application. An unchanged rejected statement suggestion remains rejected.
-Changed evidence may produce a new suggestion; there is no historical
-correction pass. Shared correction coordination explicitly holds semantic
-repair for `statement_transaction` and `transfer_pair`; these families have no
-supported ready plan. Source amount/withdrawal correction requires its own
-current source proof and never grants authority for kind/category changes or
-transfer re-pairing.
+Supported statement spending reconciles without a Suggestion or review receipt.
+The kernel audit records the input evidence, decisions, scope and rules revision.
+Changing a derivation never overwrites a baseline or a member assignment. Rejection
+is a durable decision; releasing it is explicit. Source identity and withdrawal
+proof remain with the occurrence owner. Amount, category and transfer decisions
+have separate authority and cannot substitute for one another.
 
 ## Mail evidence admission
 
@@ -336,6 +359,13 @@ intake keeps URL, stable external key, offset capture time and literal content.
 Browser order extractions keep their package facts in the accepted extraction;
 callers record a tracking capture explicitly through `shipments.record` when
 they have the original page content.
+
+Original shipment captures enter through the kernel's `append` as
+`shipment.capture` evidence. The source-key/checksum constraint decides duplicate
+intake; replay reads the retained capture without updating it. Capture row and
+source keys retain its provenance. Evidence visibility belongs to the capturing
+member. Shipment and Email outcomes use the existing import writers; package
+observations supply shipment identity separately from the raw capture.
 
 Email agents route package observations through `shipments.record` and use
 `purchase_import.mail_resolve` for association/disposition; linked resolutions
@@ -1047,22 +1077,21 @@ no observation → alias owner → transaction account → copied source judgmen
 loop. Member suppression is read from its Suggestion owner, without copying
 another current decision ledger into the occurrence.
 
-Cubby reconciles accepted revisions in one snapshot transaction. An automatic
-amount correction or withdrawal requires the original automatic-decision and
-Expense-lineage fingerprints, one unchanged generated lump, unchanged
-allocation and member shares, no itemization, claims or attached independent
-evidence, and current corroboration that agrees. Amount corrections update the
-transaction, allocation and Expense together. Withdrawal retires the generated
-Expense through supported writers, voids the transaction and keeps references
-and history. Edited, itemized or conflicting bookings stay in the Suggestions
-queue for individual FinancialTransaction/Expense review; recording source
-changes never silently overwrites them. A source date revision that changes the
-booking's effective funding date requires individual review of dated
-allocations and Expenses. Status/date-only refusals remain durable Suggestions
-even when the amount is unchanged; supported posting updates may proceed when
-the effective funding date stays unchanged. Current evidence that already
-agrees with the booked amount and lifecycle needs no write and opens no review,
-whatever the booking's decision provenance.
+Accepted revisions reconcile through the `bankEvent` and `purchaseEvent`
+scopes. A revised amount updates the transaction, its allocation and its
+generated lump together. Once a member adds lines or allocation slices to the
+booking, a revision whose slices no longer sum to the movement is a
+disagreement: the scope writes nothing automatic until evidence or a decision
+resolves it. A confirmed withdrawal or supersession removes the transaction its
+occurrence created, and its generated Purchase, lump, shares and allocation go
+with it. A transaction another bank event attaches or another live occurrence
+accepts stays. A transaction or booking carrying member decisions stays with an
+`unsupported` gap; permission to book a lump without order details is not such
+a decision, and account or kind readings of the withdrawn row hold nothing. A
+voided charge, one paired as a transfer and one whose kind leaves purchase, fee
+and refund, including by a member's kind decision, remove their generated
+booking under the same rule. Current evidence that already agrees with the
+booked amount and lifecycle needs no write and opens no review.
 
 ### Collections and withdrawal
 
@@ -1075,14 +1104,10 @@ including zeros. A page or visible-only query cannot establish absence. The
 skill must identify unsupported accounts, including Monarch connections
 excluded by its MCP, rather than reporting them current.
 
-Evidence, memberships, revisions and the statement Sweep's Job intent commit in
-one transaction; waking happens after commit. Corrections recheck the automatic
-spending switch under its transaction lock; pausing it blocks money changes and
-retirement as well as new booking. Scheduling failure rolls admission back. The
-outer DB-only snapshot write uses bounded retries for serialization conflicts,
-including late derived-refresh Job contention, rebuilding evidence and Sweep
-admission together on each attempt. Dry runs and unchanged replays create no
-Runs, Jobs, Suggestions or money; Jobs own interrupted execution recovery. A
+Evidence, memberships, revisions and dirty scope keys commit in one transaction;
+waking happens after commit. The outer DB-only snapshot write uses bounded
+retries for serialization conflicts and rebuilds the evidence and dirty keys
+together. Dry runs and unchanged replays create no money or producer demand. A
 new collection can advance observation time without changing the original
 source record; `refreshed` counts those new observations of known facts.
 Completed collections reject additional membership. A reappearing withdrawn
@@ -1140,155 +1165,14 @@ same transaction. An occurrence whose replacement anyone already set or
 cleared is never superseded automatically. Any other group keeps its
 `siblings`.
 
-### Statement Sweeps
+### Statement reconciliation
 
-Recording rows starts a routine statement Sweep; `run.sweep` reruns it. Default
-background labeling is unscoped.
-
-**Stored answers.** Each model question is asked once per distinct input. A
-statement Suggestion stores `data.answers` per question (kind, counterparty,
-each candidate, escrow, merchant) as `{value, input, versions, models}`, where
-`input` is that question's exact projected input and `versions` the feature
-prompt versions that produced it. A later pass reuses an answer when its input
-and versions equal the current ones, reading the charge's slot rows and prior
-publications through observation identity and aliases, newest first, per
-question. A completed abstention is an answer; a failed or unavailable call is
-not and stays a retained item failure. Reuse is per question, so a changed
-candidate re-asks only its own label. Answers never enter either hash. The AI
-response cache holds every completed answer, so a missing stored answer usually
-refills from it without a provider call. An unchanged repeat pass makes no
-model call, publication insert or answer write.
-
-A statement amount reaching a question is the effective movement. Escrow and
-merchant answers come from spending advice: merchant identity and support
-inputs use the merchant key, and the escrow input carries the merchant,
-description, source category and effective amount. A stored answer saves under
-the charge's advisory lock to the active slot row; if the charge moved, the
-write is dropped.
-
-**Fingerprints and dismissals.** Two hashes keep their meanings: the rule
-evidence hash and the labelled output hash. The rule evidence payload carries
-the frozen hash-scheme tag `{revision, cleanPolicy}`, which changes only with
-the serialized payload shape. The labelled hash excludes the spending judgment,
-so a Vendor or alias edit neither reopens a dismissal nor republishes. A revision-scoped dismissal holds
-while both hashes are equal, so a policy-only change keeps it; changed rule
-evidence or changed labelled output reopens the charge. A permanent "Never
-suggest" holds separately. The automatic policy revision is separate from the
-hash scheme: an unchanged row whose matched rules differ under the current
-policy is restamped in place under its lock and never republished, and an
-active pending row's stamp must match the live policy to apply.
-
-**Pages.** Generation and labeling commit bounded pages of independent charges;
-[statement pages](jobs.md#statement-pages) owns the page sizes and the
-cooperative page budget. Generation is a scan: charges that need a label,
-member review, no action, a hold or are out of scope do not bar a later ready
-charge. Labeling asks only unanswered applicable questions, saves each paid
-answer before publication, and hands the charges to the shared
-publish-and-settle path that generation and retries use. Identity questions
-stay batched; merchant/spending preparation runs in waves of
-`STATEMENT_SPENDING_CONCURRENCY`, with field questions batched within each
-wave, and a single page allowance admits fresh context-fitting questions in
-identity/kind/counterparty/spending order, reserving spending before the next
-charge. Stored answers stay usable after the allowance is exhausted. Untouched
-charges keep their complete candidate population and inclusive cursor; they
-receive no skipped outcome or completion. When the page budget ends, a page
-settles started work and saves answered questions before yielding; it does not
-interrupt an in-flight provider request. Cache contention and lookup deferrals
-remain typed waits, neither retained item failures nor triggers for uncached
-model calls. Failed items remain unresolved even after scanning ends: a
-completed scan with retained failures is not completed reconciliation. Page
-caches are discarded after their page: label work, publication and financial
-application rebuild current facts, and a commit never uses a page cache as
-validation. These bounds limit repeated work after interruption; they are no
-wall-time guarantee.
-
-**Publication and settlement.** Every Sweep, scoped or not, settles every
-eligible statement row: an active pending row whose current stamp matches the
-live automatic policy, whose source is eligible, whose kind and clean status
-agree and whose scope admits it. Import scope narrows what a pass admits; it is
-not what makes a row eligible. A Sweep that completes leaves no eligible row
-unapplied; commit refusals, member-review rows and Uncategorized bookings are
-counted, never hidden. Publication carries each charge's Suggestion receipt and
-original application order. A failed batch reconciles each charge through the
-same locked admission path: committed publications recover their pending
-application receipts before testing the obsolete input fence, and finish
-retirement before acknowledgement; recovery does not recreate or restamp
-labels. Resumed application receipts repeat that exact retirement check before
-application, including recovery from a crash before the after-commit callback
-started. Automatic financial application admits only the original ready prefix.
-Generation and label pages apply compatible creates through the same guarded
-transactions of at most 32, one dependency layer each
-([statement pages](jobs.md#statement-pages)). Each rebuilds current evidence
-under its locks and preserves per-charge receipts; declined items use single
-admission, and a row whose Suggestion moved is re-found by charge before it is
-applied. A booked primary's copies come from other sources, so no import scope
-admits them; the neighbour refresh republishes their paired attach for the pass
-that owns them. Before any application on a generation page, its own rule
-selection decides which charges need admission. An as-is attach uses its proven
-paired Transaction even beside other candidates; an unpaired ambiguous attach
-requires an explicit target. Preview, stale-term comparison, spending
-preparation and application use that same target. Charges already skipped by
-the current label page do not split that prefix; failed, unfinished and
-applicable-rule charges stop it. Unscoped passes may complete consecutive
-no-action receipts in bounded transactions: lock the exact receipts, verify
-their charge/evidence, active pending state and absent rule descriptors, then
-clear only the proven prefix through the projection writer. A missing, replaced
-or rule-bearing receipt stops the batch. Single-item admissions regenerate
-first once the page has written, since regeneration can introduce actionable
-rules, and the page's charges a write affects are republished together before
-their admission. A failed proposal build bisects so failures retain their own
-references. Statement application and booking request only identity output from
-their mutation writers when they consume only IDs; the writers keep validation,
-locks, audits, allocations and receipts.
-
-**Retries.** Retrying failed statement labels consumes only the retained charge
-references, one charge at a time, without moving the original population
-cursor. Each charge is regenerated under the Run's retained account/date/import
-scope before its current label work is selected. Model waits and funding pauses
-keep that charge; disabled automatic AI work pauses the retry rather than
-discarding it. Healthy charges and later arrivals are not added to the retry
-population. An obsolete Job generation or lease interrupts the invocation;
-per-charge error isolation must not turn that ownership signal into an item
-failure or retry.
-
-**Scope.** A statement Sweep carries its full account/date/import scope
-through hold counting, paging, input inspection, label counting, selection,
-retries and receipt admission. Hold selection intersects the account filter
-with retained charge membership/date before cursor limits; it admits whole
-holds and keeps every pending settlement reference's evidence. Explicit
-withdrawal proof is still required for a void proposal; incomplete membership
-supplies none. Date and import filters intersect on retained source
-observations, including withdrawal imports; the date is the source
-`statementDate`, not the Suggestion timestamp. Account scope uses live
-generation-preview resolution, including stored and accepted-settlement hints;
-void targets use their live transaction's account. Scope follows regeneration
-and is checked again inside automatic review's serializable write admission,
-and scoped answer saves, label publications and receipt completions recheck the
-live resolver inside their write transactions, so valid fresh evidence for
-another account cannot authorize an effect. An out-of-scope result keeps
-evidence and stored answers without publishing or acknowledging that target;
-excluded receipts keep `applicationPending` and their original
-`applicationOrder`, and completion counts include only IDs the writer admitted.
-
-`run.sweep` and its estimate accept a statement family's optional `importId` as
-a TransactionImport shortcode (`TIM-…`). Both resolve the live retained
-collection before estimation or Run/Job creation; invalid, missing and deleted
-references refuse. Account and date filters intersect its retained charge
-membership. Selected charges still use current observations from other
-collections sharing their identity; unrelated charge identities stay excluded.
-This reprocesses retained evidence under the automatic policies, including
-clean spending booking. An empty or unscoped Sweep does not admit held or
-ambiguous sources, and attachments wait for review. Incomplete collections
-allow supported positive processing but prove no absence, withdrawal,
-reconciliation or completion. A Sweep changes neither collection coverage nor
-`completedAt` and records no withdrawals.
-
-**Logs.** RunStep page samples keep selection, discovery, label preparation,
-decision, spending-fact, spending, publication and ordered-application wall
-times plus database metrics; ordered application includes no-action prefix
-validation and receipt settlement and must not be mistaken for model latency.
-Generation logs separate selection, preparation, publication and
-import-application durations with aggregate counts, without source records.
+Evidence mutations dirty their keyed statement scopes in the same transaction.
+The kernel reconciles each scope against retained Answers and independent member
+Decisions. Every charge shows its stage, gaps and provenance; Work exposes due,
+claimed and exhausted scopes and Asks with Retry and raw failures. Statement
+reconciliation uses no member-started Sweep or label-page booking path. The
+member-started field Sweep evaluates declared fields over its selected population.
 
 ### Unlinked spending and ownership exits
 
@@ -1312,7 +1196,7 @@ history can show an acquisition with unknown USD item cost; neither its cost nor
 quantity enters USD pricing averages.
 
 A separately supported USD aggregate remains the only booked amount. Source
-amounts never enter `Expense.cost`, USD payment evidence or USD sums. Exact
+amounts never enter `Expense.costMinor`, USD payment evidence or USD sums. Exact
 foreign source itemization is present independently of Product resolution;
 booking is recorded when the USD aggregate covers the purchase, while USD item
 valuation stays unknown. Unresolved ordinary USD costs still make booking
@@ -1443,14 +1327,16 @@ Settled money is stored as signed exact minor units (bigint): source amounts,
 `PurchasePaymentEvidence.amountMinor` (signed USD, including original zero
 lines, which are neither discarded nor merged),
 `FinancialTransactionAllocation.amountMinor` (signed, nonzero), FinancialTransaction
-amounts and Purchase `statedTotalMinor` (nullable). Sums, keys, conservation,
-merging and direct comparisons use minor units. Native, MCP, entity and audit
-wires, purchase-import and spending boundaries, and retained fingerprints keep
-dollar numbers (`amount`, `statedTotal`), including the frozen reconciliation
-fingerprint shape. Source extracts and successful receipts are never rewritten.
-`Expense.cost` stays a dollar value until its noisy originals have exact
-decimal evidence or a member judgment; a diagnostic tolerance classifies
-floating noise but never authorizes rounding stored money.
+amounts, Purchase `statedTotalMinor` (nullable) and Expense `costMinor`
+(nullable, signed USD). Sums, keys, conservation, merging and direct
+comparisons use minor units. Native, MCP, entity and audit wires,
+purchase-import and spending boundaries, and retained fingerprints keep dollar
+numbers (`amount`, `statedTotal`, `cost`), including the frozen
+reconciliation fingerprint shape. Source extracts and successful receipts are
+never rewritten. Expense writers accept a dollar value only when it resolves to
+a whole cent within binary float tolerance and refuse anything else. Foreign
+amounts stay in source evidence; Expense accounting is USD. Preimages of
+converted money tables are retained in the `archive` schema.
 
 SQL money projections share `server/db/computed/money.ts`, with explicit numeric
 or float8 result types. Raw SQL dollar fields entering retained JavaScript
@@ -1468,142 +1354,30 @@ capture, photo approval and product import end to end.
 
 ## Reviewing statement outcomes
 
-Public `run.sweep` family entries take `importId`, `accountIds` and `since`
-directly, for example `{ family: "statement_transaction", importId: "TIM-4K7MN" }`.
-Unknown fields, including a nested `scope`, are rejected before any Run starts;
-an invalid scope must never silently broaden a financial pass.
+Source transaction records browse immutable observations; Transaction imports
+browse retained collections. Each import's reconciliation report separates
+observation match states from booking coverage for distinct FinancialTransactions.
+Collection membership follows charge identity across revisions. Overlapping
+collections are not additive, and booking proves neither source completeness nor
+itemization.
 
-Matched booking discovery can use the accepted transaction's live account when
-retained source bindings, provider scope, aliases and card evidence resolve no
-account. This server-owned fallback neither writes an alias nor changes source
-facts. Ambiguous or conflicting provider scope cannot use it. A resolved source
-account that differs from the accepted transaction remains an explicit review
-conflict and cannot qualify as clean advice. Generation and fresh application
-rebuild use the same account resolution.
+A record's machinery exposes its gaps, evidence, decisions and drift. Apply the
+current observation with `sourceTransactionRecord.apply` (MCP `finance.apply`):
+create, attach, supersede, void, book or reject. An attach names the reviewed
+FinancialTransaction; selected transaction columns become assignments. Purchaser,
+Vendor, category and booking choices become purchase-event decisions. Ambiguous
+identity requires an explicit same or distinct decision. A missing order leaves
+a waiting gap with an explicit book action.
 
-The shared Suggestions list and counts accept retained source observations and
-TransactionImports in `recordIds`. Source scope follows the charge identity
-across revisions, and collection scope uses retained membership rather than
-first ownership. Multiple observations of one charge return one proposal. These
-reads expose served proposals only: an empty result does not establish complete
-source coverage or reconciliation, and listing does not refresh or validate an
-application. Preview and acceptance keep their current-evidence guards. Source
-scoping changes no overlap or financial identity decisions.
-
-Suggestions is the reconciliation workspace: pending proposals and the Changes
-by Cubby audit. Source transaction records is
-the generic imported-evidence browser; Transaction imports shows the retained
-collections. Each import's reconciliation report separates retained-observation
-match states from booking coverage for its distinct matched Financial
-Transactions. Charge matching includes retained revisions outside the selected
-collection; repeated observations do not multiply its transaction counts.
-Collections can overlap, so their figures are not additive. Unmatched evidence
-is outside the booking denominator, and recorded booking proves neither
-balanced settlement, source completeness nor itemization. Filter the declared
-evidence projection by account, amount, date and match state as needed. Several
-observations can describe the same charge.
-
-Statement review shows Source, Proposed result and Evidence. The read-only
-`sourceTransactionRecord.previewSuggestion` (MCP
-`finance_read.preview_suggestion`) revalidates the Suggestion fingerprint and
-live charge before projecting a draft through the same action gates and
-spending planner as acceptance. Published review holds, including source
-lifecycle conflicts, refuse both preview and acceptance before projecting
-financial effects. It writes no aliases or records. The preview identifies
-transaction changes, vendor reuse/creation and alias effects, Purchase/Expense
-and settlement effects, purchaser basis and the explicit vendor-account state.
-Changing a web draft refreshes the reviewed result; acceptance still replans
-inside its write boundary. Agents may call the preview to inspect uncertain
-effects; it is optional, never acceptance authority or a prerequisite to a
-supported `suggestions.review`. The write always validates the current
-Suggestion, application and spending. Preview and acceptance rebuild the charge
-from retained evidence, carry the reviewed model labels onto it, and refuse,
-naming each part, only when what the chosen action writes changed: the
-account, statement date and provider status, plus a create's transaction fields,
-paired transaction and transfer, an attach's target (its amount, differing
-fields and eligibility), or the superseded, voided or matched transaction.
-Accepting the recommendation as reviewed also refuses when a ready booking's
-effect, purchaser, Vendor, category or Purchase moved (`spending.<field>`).
-Other candidates, merchant history, sibling and snapshot drift do not refuse; a
-correction's own action, kind or booking is replanned at acceptance.
-
-Candidates share the generic eligible-target predicate. A transaction another
-charge already settles or claims, or one of the wrong sign, amount or kind,
-stays listed as `eligibility: "context"` with its `contextReason`; it never
-blocks a create, never earns an attach recommendation, and attaching to it
-refuses with the next step. Evidence that names a transaction (a provider match,
-an identity hold, or the booked copy of the same bank event) marks it
-`explicit`.
-
-Explicit MCP review supplying `booking` or `kindOverride`, or choosing a
-nonrecommended action, uses `verdict: "wrong"` with
-`correction: { present: true, value: application }` and the same `application`.
-This includes a Create draft that keeps the recommended action but supplies
-booking choices. Preview checks financial effects; application also enforces
-the verdict and correction-presence contract. Kind controls apply only to a
-Create draft; an attachment first uses Preview new transaction to review that
-alternative. Provider category is evidence, not a Cubby spending-category
-assignment: keep each provider/category observation, joining other provider
-charges only through authoritative settlement references to the same
-transaction.
-
-Statement attachment also converges spending. A spending result requiring
-review blocks attachment even when no transaction fields are selected. For an
-already accepted transaction with a separately authorized explicit booking,
-inspect existing spending, book through the supported command, then refresh the
-proposal against that booking. Preserve the accepted transaction, source
-references and allocations. A lineage refusal remains unresolved; never restore
-Expense values or member attribution to force attachment. An authorized
-identity-only repair must merge the current reference set atomically through
-the writer; replacing a client-side snapshot can remove concurrent attachments.
-
-### Working the statement backlog
+Retained baseline bindings accept existing FinancialTransactions, Purchases,
+Expenses, allocations and attributions. Derivation that disagrees reports drift
+without ledger writes. Member assignments and rejections survive replay. Review
+source holds and withdrawal proof before changing identity or movement; a new
+answer or a successful replay cannot override a member decision.
 
 The [statement backlog workflow](../.agents/skills/financial-evidence-import/references/statement-backlog.md)
-owns the step-by-step review of the Transaction suggestion backlog.
-
-### Retained review holds and preservation
-
-For temporary review holds, keep prior judgments and a unique marker, keep the
-cases visible in the member review, and count them as unresolved. If holding
-depends on current booking eligibility, check that eligibility and apply the
-hold atomically with the relevant source and transaction locks. Intake copies
-judgments into later revisions: reopening must discover original rows and
-marked descendants within the proven source identity. Restore only exact
-temporary-hold matches and preserve every newer member decision; restoring a
-fixed list of old row IDs can leave newer observations held.
-
-Before resuming a retained booking case, read the member review and saved case
-plans for the exact source, transaction and Purchase identities. Carry
-unresolved objections and explicit decisions into the next review brief. A new
-preview, approval or successful replay does not itself supersede a prior hold.
-Resolve the objection against current evidence and the owning policy before
-writing; keep the earlier finding and record why the case can proceed.
-Distinguish a reviewer's recommendation from a member's decision. A later
-review cannot override an explicit member decision.
-
-Identify intended targets inside protected cohort snapshots before writing.
-Preserve every unrelated row and allow only the exact reviewed target effects,
-including their specific booking timestamps and allocations. Do not exclude an
-entire set or broadly ignore timestamp changes because a target appears there.
-Receipt replay and independent preservation read-back establish separate facts.
-
-### Statement review receipts and classification
-
-Statement `suggestions.review` application records a command receipt with
-operation ID `command-application:<operationId>` in the `decisions` of the
-Suggestion identified by the review handle. Read that Suggestion by the handle,
-not by `evaluationId`. This family does not require `acceptanceReceipt` to
-establish successful application.
-
-Replay the exact committed review request under the same actor and operation
-ID. The generic command returns its original applied outcome from the receipt
-before reapplying the family or checking current spending fingerprints. Compare
-the original Suggestion, its decision entry, status and applied result, then
-independently verify unchanged source, ledger and attribution graphs. This API
-does not return the `replayed: true` flag used by direct
-`finance.commit_booking`; that writer has its own replay and current-lineage
-checks.
+owns the agent's review sequence. Direct finance previews retain their reviewed
+fingerprints and lineage contracts.
 
 Direct booking previews distinguish `candidateCategoryId` (also kept as
 `spendingCategoryId`) from `categoryOverride`, the category input persisted on a

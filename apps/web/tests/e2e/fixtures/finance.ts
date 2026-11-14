@@ -1,3 +1,4 @@
+import { insertFieldsFixture } from "~/server/ai/fields/fields.fixtures";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { moneyToMinor } from "@cubby/shared";
@@ -25,13 +26,13 @@ export async function seedSplitSettlementPrerequisite(
   const db = getFixtureDb();
   const member = await ensureMemberParty(page, name);
   const vendor = await insertWithShortcode(db, "vendor", { name });
-  const first = await insertWithShortcode(db, "purchase", {
+  const first = await insertFieldsFixture(db, "purchase", {
     vendorId: vendor.id,
     orderId: "SYN-SPLIT-1",
     date: "2026-09-10",
     statedTotal: 4250n,
   });
-  const second = await insertWithShortcode(db, "purchase", {
+  const second = await insertFieldsFixture(db, "purchase", {
     vendorId: vendor.id,
     orderId: "SYN-SPLIT-2",
     date: "2026-09-10",
@@ -42,7 +43,7 @@ export async function seedSplitSettlementPrerequisite(
     identity: { kind: "credit_card", network: "visa" },
     ledgerPartyId: member.id,
   });
-  const transaction = await insertWithShortcode(db, "financialTransaction", {
+  const transaction = await insertFieldsFixture(db, "financialTransaction", {
     accountId: card.id,
     kind: "purchase",
     status: "posted",

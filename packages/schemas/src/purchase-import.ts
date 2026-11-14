@@ -857,9 +857,9 @@ export const purchaseAgentEvent = z.discriminatedUnion("type", [
 ]);
 export type PurchaseAgentEvent = z.infer<typeof purchaseAgentEvent>;
 /**
- * One delivery identity per event. The dispatch Job key and the coordinator
- * operation id both derive from it, so retries converge on one Job and one
- * submission. Queued Jobs and coordinator history store both spellings.
+ * One delivery identity per event. The dispatch Pass events and the coordinator
+ * operation id both derive from it, so retries converge on one event and one
+ * submission. Queued Pass events and coordinator history store both spellings.
  */
 export function purchaseAgentEventKeys(
   event: Pick<PurchaseAgentEvent, "runId" | "type" | "eventId">,

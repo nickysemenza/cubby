@@ -266,7 +266,7 @@ describe("declared entity displays", () => {
       renderRowCell(column.cell, record),
     );
     const view = render(<>{cell}</>, { wrapper: harness.wrapper });
-    expect(screen.getByLabelText("Not calculated yet")).toBeInTheDocument();
+    expect(screen.getByText("Waiting for Cubby")).toBeInTheDocument();
     view.unmount();
     harness.dispose();
   });
@@ -863,14 +863,11 @@ describe("declared entity displays", () => {
         }),
       { wrapper: MetadataProvider },
     );
-    expect(result.current.visit((column) => column.id).slice(0, 6)).toEqual([
-      "image",
-      "displayName",
-      "dataQuality",
-      "vendorId",
-      "displayLabel",
-      "date",
-    ]);
+    const ids = result.current.visit((column) => column.id);
+    expect(ids.indexOf("displayName")).toBeLessThan(
+      ids.indexOf("machineryStage"),
+    );
+    expect(ids.indexOf("machineryStage")).toBeLessThan(ids.indexOf("vendorId"));
   });
 
   it("leaves standard identity rendering to the shared table without duplicating it", () => {
@@ -1489,7 +1486,7 @@ it("edits the effective inherited checkbox and restores the nullable override", 
     save,
   );
   view.rerender(<>{explicitOverrides.stockTracked!().value}</>);
-  fireEvent.click(screen.getByRole("button", { name: "Use inherited" }));
+  fireEvent.click(screen.getByRole("button", { name: "Let Cubby decide" }));
   await waitFor(() =>
     expect(save).toHaveBeenCalledWith({
       id: record.id,

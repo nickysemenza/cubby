@@ -8,15 +8,16 @@ import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { account, user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import { aiUsage, mailboxCursor, run, runOperation } from "~/server/db/schema";
 import { startMailDiscovery } from "~/server/domains/purchase-import/operations/gmail/discovery";
 import { checkpointMailboxCoverage } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { readRunPass } from "~/server/domains/run/repo/run-execution";
 import { requireActor } from "~/server/http/request-context";
+import { readPasses } from "~/server/kernel/pass.fixtures";
 import { createMcpServer } from "~/server/mcp/server";
 import { callMcpTool } from "~/server/testing/mcp-test-utils";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -116,17 +117,10 @@ describe("member discovery readiness through MCP", () => {
       .where(eq(run.purpose, "mail_discovery"));
     if (!discovery) throw new Error("Synthetic discovery missing");
     const id = discovery.id;
-    expect(
-      await readJobs(ctx.db, { key: `run:${id}` }).then((rows) =>
-        rows.map(({ input, kind, state }) => ({ kind, state, input })),
-      ),
-    ).toEqual([
-      {
-        kind: "run.execute",
-        state: "queued",
-        input: { runId: id, purpose: "mail_discovery" },
-      },
-    ]);
+    expect(await readRunPass(ctx.db, id)).toMatchObject({
+      state: "due",
+      generation: 1,
+    });
     const coverage = mailboxCoverage.parse({
       version: 1,
       baselineHistoryId: "100",
@@ -189,7 +183,8 @@ describe("member discovery readiness through MCP", () => {
         },
       ]);
     const beforeRuns = await getDb(ctx.db).select().from(run);
-    const beforeJobs = await readJobs(ctx.db, {});
+    const beforeJobs = await readPasses(ctx.db, {});
+    const beforePass = await readRunPass(ctx.db, id);
     const beforeReceipts = await getDb(ctx.db).select().from(runOperation);
     const beforeCursor = await getDb(ctx.db).select().from(mailboxCursor);
     const mcpContext = requireActor(
@@ -278,7 +273,8 @@ describe("member discovery readiness through MCP", () => {
     expect(
       (await read("transcript", discovery.shortcode, foreignContext)).isError,
     ).toBe(true);
-    expect(await readJobs(ctx.db, {})).toEqual(beforeJobs);
+    expect(await readPasses(ctx.db, {})).toEqual(beforeJobs);
+    expect(await readRunPass(ctx.db, id)).toEqual(beforePass);
     expect(await getDb(ctx.db).select().from(run)).toEqual(beforeRuns);
     expect(await getDb(ctx.db).select().from(runOperation)).toEqual(
       beforeReceipts,

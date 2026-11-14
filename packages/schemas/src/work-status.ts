@@ -1,18 +1,17 @@
+import { entitySchema } from "./entity";
 import { z } from "zod";
 
-/** One thing that stopped, in member language; `key` is its Job kind or subject. */
+/** One thing that stopped, in member language; `key` is its record shortcode. */
 const workStuckItem = z.object({
   key: z.string(),
   title: z.string(),
+  record: z
+    .object({ entity: entitySchema, id: z.string() })
+    .nullable()
+    .default(null),
   body: z.string(),
   since: z.iso.datetime(),
   action: z.discriminatedUnion("type", [
-    z.object({
-      type: z.literal("retry"),
-      kinds: z.array(z.string()).min(1),
-      /** Narrows Retry to failed work, leaving healthy waits in the kind alone. */
-      needsAttention: z.boolean().optional(),
-    }),
     z.object({
       type: z.literal("link"),
       label: z.string(),
@@ -35,5 +34,40 @@ export const workStatus = z.object({
   /** Work has waited a while but is still finishing. */
   behind: z.boolean(),
   stuck: z.array(workStuckItem),
+  stuckCount: z.number().int().nonnegative().default(0),
 });
 export type WorkStatus = z.infer<typeof workStatus>;
+
+/** Durable queue diagnostics; retries name one exhausted item. */
+export const workRetryTarget = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("scope"), kind: z.string(), key: z.string() }),
+  z.object({ type: z.literal("ask"), id: z.uuid() }),
+  z.object({ type: z.literal("pass"), kind: z.string(), key: z.string() }),
+]);
+export const workDiagnostics = z.object({
+  lastFinishedAt: z.iso.datetime().nullable(),
+  groups: z.array(
+    z.object({
+      type: z.enum(["scope", "ask", "pass"]),
+      kind: z.string(),
+      due: z.number(),
+      claimed: z.number(),
+      waiting: z.number(),
+      stuck: z.number(),
+      oldestWaiting: z.iso.datetime().nullable(),
+    }),
+  ),
+  failures: z.array(
+    z.object({
+      target: workRetryTarget,
+      record: z
+        .object({ entity: entitySchema, id: z.string() })
+        .nullable()
+        .default(null),
+      label: z.string(),
+      unknown: z.boolean(),
+      error: z.string(),
+      at: z.iso.datetime(),
+    }),
+  ),
+});

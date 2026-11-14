@@ -5,7 +5,6 @@ import {
 } from "@cubby/schemas/entities/ledgerTransfer";
 import { ledgerTransferRawOut as rawLedgerTransferOut } from "@cubby/schemas/entity-contracts/ledgerTransfer";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
   FinancialTransactionId,
   LedgerPartyId,
@@ -23,10 +22,11 @@ import {
 } from "~/entity/generated/entity-schema-bindings.ledgerTransfer.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { minorToDollarsSql } from "~/server/db/computed/money";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import {
   buildPartialUpdateValues,
   notDeleted,
+  withHouseholdWrite,
   withTransaction,
 } from "~/server/db/helpers";
 import { outer, related } from "~/server/db/helpers/related";
@@ -59,20 +59,6 @@ import {
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-
-const LEDGER_TRANSFER_DELETE_EDGE_POLICY = {
-  "FinancialTransaction.ledgerTransferId": {
-    code: "clear-evidence-link",
-    effect: "detach",
-    description:
-      "Evidence transactions remain after their transfer is removed.",
-  },
-  "LedgerSourceClaim.ledgerTransferId": {
-    code: "soft-delete-source-claims",
-    effect: "soft-delete",
-    description: "Transfer-owned normalized claims are retired.",
-  },
-} as const satisfies IncomingEdgePolicy<"ledgerTransfer", OperationDisposition>;
 
 // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- source, reconciliation and note are JSON property names, not vocabulary values.
 const transferSourceClaimsSql = sql<LedgerSourceClaimRow[]>`COALESCE((
@@ -482,7 +468,8 @@ export const updateLedgerTransfer = defineMutationWriter({
     actor: ActorContext,
   ) => {
     const id = await resolveOrThrow(db, "ledgerTransfer", shortcode);
-    await withTransaction(db, async (tx) => {
+    // The gate before the transfer row: the entity writer below takes it.
+    await withHouseholdWrite(db, async (tx) => {
       const [locked] = await tx
         .select({
           id: ledgerTransfer.id,
@@ -575,7 +562,7 @@ export const updateLedgerTransfer = defineMutationWriter({
 
 export const ledgerTransferRepository = defineRepository("ledgerTransfer", {
   schemas: ledgerTransferSchemaBindings,
-  lifecycle: { delete: LEDGER_TRANSFER_DELETE_EDGE_POLICY },
+  lifecycle: { delete: DECLARED_EDGE_DELETE_POLICIES.ledgerTransfer },
   scaffold: ledgerTransferScaffold,
   create: asActor(createLedgerTransfer),
   update: asActor(updateLedgerTransfer),

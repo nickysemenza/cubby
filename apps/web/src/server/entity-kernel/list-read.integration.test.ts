@@ -5,13 +5,13 @@ import { type LedgerPartyShortcode } from "@cubby/schemas/identifiers";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import { setInventoryOwnership } from "~/server/domains/inventory/repo/ownership-mutations";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import { executeEntity } from "~/server/entity-kernel";
 import { listOperations } from "~/server/entity-kernel/list-operations";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createLocationFixture,

@@ -39,3 +39,4 @@ live contract details in place.
 | [0026](0026-source-occurrence-and-accepted-evidence.md)       | Source occurrence owns accepted bank evidence                                     |
 | [0027](0027-tier-routed-models-on-a-funding-first-ladder.md)  | Tier-routed models on a funding-first ladder                                      |
 | [0028](0028-cubby-acts-first.md)                              | Cubby acts first; members correct                                                 |
+| [0029](0029-evidence-facts-and-reconcilers.md)                | Records are reconciled from evidence, answers and decisions                       |

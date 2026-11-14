@@ -4,12 +4,14 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import {
   imageSighting,
   purchase,
   sourceTransactionRecord,
 } from "~/server/db/schema";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { createOrReuseAttachedImage } from "~/server/domains/image/repo/image";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
 import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
@@ -17,7 +19,6 @@ import { recordSourceTransactionRecords } from "~/server/domains/transaction-imp
 import { listSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import { kernelScaffold } from "~/server/entity-kernel/scaffolds";
 import { previewEntityMerge } from "~/server/generic/merge/repo/merge-preview";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createImageFixture,
   createInventoryFixture,
@@ -417,10 +418,12 @@ describe("entity edge source", () => {
     const removed = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: dropped.id,
     });
-    await getDb(ctx.db)
-      .update(purchase)
-      .set({ deletedAt: new Date() })
-      .where(eq(purchase.id, removed.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { deletedAt: new Date() },
+      eq(purchase.id, removed.id),
+    );
     const orphans = await findOrphanEntities(ctx.db, { limit: 200 });
     const codes = orphans.items.map((entry) => entry.id);
     expect(codes).not.toContain(kept.shortcode);

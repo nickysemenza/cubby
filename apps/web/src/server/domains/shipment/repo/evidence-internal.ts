@@ -33,6 +33,7 @@ import { resolveProductBrand } from "~/server/domains/vendor/repo/product-brand"
 import { resolveEntityIdentity } from "~/server/entity-kernel/repo/entity-identity";
 import { constraintViolation } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { enterHouseholdGate } from "~/server/kernel/gate";
 import {
   canonicalJson,
   jsonSnapshot,
@@ -244,7 +245,9 @@ export async function retainedPackageShipment(
 }
 
 // Intake and explicit corrections share this transaction lock: replay cannot race a package merge.
+// The household gate comes first: these writers append evidence under it.
 export async function lockShipmentWrites(db: Database) {
+  await enterHouseholdGate(db);
   await getDb(db).execute(
     sql`SELECT pg_advisory_xact_lock(hashtextextended('shipment-evidence-intake', 0))`,
   );

@@ -5,12 +5,12 @@ import {
   type AuditStoredChanges,
 } from "@cubby/schemas/audit";
 import { type ActorContext, type AuditChannel } from "@cubby/schemas/context";
-import { fieldAutomationWatches } from "@cubby/schemas/field-suggestion-policy";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
+import { kernelApplyProvenance } from "~/server/db/kernel-apply-context";
 import { auditLog } from "~/server/db/schema";
 import { captureAuditId } from "~/server/generic/audit-log/repo/audit-receipts";
 import { recordChange } from "~/server/generic/changes/repo/change";
@@ -210,13 +210,7 @@ const auditActorColumns = (actor: ActorContext) => ({
   oauthClientId: actor.oauthClientId,
   deviceId: actor.deviceId,
   runId: actor.runId,
-  authority: actor.authority ?? null,
 });
-
-/** Creates and updates of entities with automated fields owe the drain a look. */
-const automationPending = (entry: AuditEntryInput) =>
-  (entry.action === "create" || entry.action === "update") &&
-  fieldAutomationWatches(entry.entityKind);
 
 /**
  * Insert an audit log entry.
@@ -234,7 +228,7 @@ export async function logAuditEntry(
       action: entry.action,
       changes: storedChanges(entry.changes),
       ...auditActorColumns(actor),
-      automationPending: automationPending(entry),
+      provenance: kernelApplyProvenance(entry.entityKind, entry.entityId),
     })
     .returning({ id: auditLog.id });
   if (inserted) {
@@ -256,8 +250,7 @@ const auditRecordKeys = [
   "oauthClientId",
   "deviceId",
   "runId",
-  "authority",
-  "automationPending",
+  "provenance",
 ] as const satisfies readonly (keyof typeof auditLog.$inferInsert)[];
 const auditRecordColumns = sql.join(
   auditRecordKeys.map((key) => sql.identifier(auditLog[key].name)),
@@ -282,13 +275,14 @@ export async function logAuditEntries(
 ): Promise<void> {
   if (entries.length === 0) return;
 
+  // A kernel apply's rows carry its scope, version and inputs.
   const auditRecords = entries.map((entry) => ({
     entityKind: entry.entityKind,
     entityId: entry.entityId,
     action: entry.action,
     changes: storedChanges(entry.changes),
     ...auditActorColumns(actor),
-    automationPending: automationPending(entry),
+    provenance: kernelApplyProvenance(entry.entityKind, entry.entityId),
   }));
 
   // One jsonb parameter however many rows: a layer's audit stays within the

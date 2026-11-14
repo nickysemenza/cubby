@@ -7,6 +7,7 @@ import { seedEmailLinkDecision } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import {
@@ -18,9 +19,9 @@ import {
   importSourceOrder,
   emailClassificationObservation,
 } from "~/server/db/schema";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { activeEmailPurchaseDecision as orderMailCandidateDecision } from "~/server/testing/email-link.fixtures";
 
 import { syntheticMailImportRun } from "../../service/gmail/execution.fixtures";
@@ -300,7 +301,7 @@ describe("Gmail acquisition retention and replay", () => {
     });
     expect(await getDb(ctx.db).select().from(orderMail)).toEqual(originals);
   });
-  it("advances only the canonical checksum when a related original refreshes before research", async () => {
+  it("keeps the first Email observation and fences refreshed original candidates before research", async () => {
     const f = await importedPurchaseFixture(ctx.db, ctx.actor);
     if (!f.association) throw new Error("Synthetic accepted order missing");
     const input = {
@@ -345,25 +346,32 @@ describe("Gmail acquisition retention and replay", () => {
       .where(eq(importSourceOrder.id, f.association.id));
     const gmail = provider();
     const message = await gmail.getMessage(original.messageId);
-    await ingestGmailMessages(
-      ctx.db,
-      provider({
-        getMessage: async () => ({
-          ...message,
-          payload: {
-            ...message.payload,
-            body: {
-              data: Buffer.from(
-                "Refreshed synthetic related original bytes",
-              ).toString("base64url"),
+    await expect(
+      ingestGmailMessages(
+        ctx.db,
+        provider({
+          getMessage: async () => ({
+            ...message,
+            payload: {
+              ...message.payload,
+              body: {
+                data: Buffer.from(
+                  "Refreshed synthetic related original bytes",
+                ).toString("base64url"),
+              },
             },
-          },
+          }),
         }),
-      }),
-      input,
-    );
+        input,
+      ),
+    ).rejects.toThrow("Email candidate original source changed");
     const [refreshed] = await getDb(ctx.db).select().from(orderMail);
     expect(refreshed?.rawChecksum).not.toBe(original.rawChecksum);
+    const [observed] = await getDb(ctx.db)
+      .select()
+      .from(emailTable)
+      .where(eq(emailTable.orderMailId, original.id));
+    expect(observed?.checksum).toBe(original.rawChecksum);
     const [currentRoot] = await getDb(ctx.db)
       .select()
       .from(importSourceClaim)
@@ -723,14 +731,7 @@ describe("Gmail acquisition retention and replay", () => {
         ledgerPartyIds: [party.id],
         orderMailIds: [mail.id],
       }),
-    ).toEqual([
-      {
-        ...mail,
-        sender: "shared@platform.example",
-        subject: "Synthetic notice",
-        receivedAt: new Date("2026-09-01T00:00:00.000Z"),
-      },
-    ]);
+    ).toEqual([mail]);
     expect(await getDb(ctx.db).select().from(orderMailAttachment)).toEqual([
       attachment,
     ]);
@@ -740,7 +741,7 @@ describe("Gmail acquisition retention and replay", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic merchant",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
     });
     const mail = await syntheticRetainedMail(ctx.db, {

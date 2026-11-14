@@ -1,5 +1,5 @@
+import { WORK_NEEDS_ATTENTION_ATTEMPTS } from "@cubby/schemas/execution";
 import { type ImageJobId, parseEntityId } from "@cubby/schemas/identifiers";
-import { JOB_NEEDS_ATTENTION_ATTEMPTS } from "@cubby/schemas/job";
 import { eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -85,10 +85,10 @@ describe("image job retry policy", () => {
   async function failOnce(jobId: ImageJobId, retryable: boolean) {
     await makeDue(jobId);
     const lease = await devicePull();
-    if (lease?.id !== jobId) throw new Error("Expected the job's lease");
+    if (!lease) throw new Error("Expected the job's lease");
     const completion = await completeImageProcessingJob(ctx.db, {
       result: {
-        jobId,
+        jobId: lease.id,
         attemptId: lease.attemptId,
         completedAt: new Date().toISOString(),
         outcome: {
@@ -107,7 +107,7 @@ describe("image job retry policy", () => {
     const { imageId, jobId } = await subjectLiftJob();
     for (
       let failure = 1;
-      failure <= JOB_NEEDS_ATTENTION_ATTEMPTS + 1;
+      failure <= WORK_NEEDS_ATTENTION_ATTEMPTS + 1;
       failure++
     ) {
       const after = await failOnce(jobId, true);
@@ -118,7 +118,7 @@ describe("image job retry policy", () => {
         lastError: "deadline_exceeded",
         coolingDown: true,
         displayed:
-          failure >= JOB_NEEDS_ATTENTION_ATTEMPTS
+          failure >= WORK_NEEDS_ATTENTION_ATTEMPTS
             ? "failed"
             : "waiting_for_device",
       });

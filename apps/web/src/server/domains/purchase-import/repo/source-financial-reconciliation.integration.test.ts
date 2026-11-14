@@ -11,11 +11,11 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, withTransaction } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   expense,
-  expenseAttribution,
   financialAccount,
   financialTransactionAllocation,
   importSourceClaim,
@@ -26,12 +26,18 @@ import {
   purchasePaymentEvidence,
   sourceOrderObservation,
 } from "~/server/db/schema";
+import { seedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
+import {
+  insertPurchaseEventRows,
+  updatePurchaseEventWhere,
+} from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { loadExpenseAllocations } from "~/server/domains/household-contribution/repo/allocation";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { jsonSnapshot } from "~/server/lib/canonical-json";
 import {
   createProductIdentityFixture,
   makeProductInput,
+  dollarExpenseColumns,
 } from "~/server/testing/repo.fixtures";
 import {
   patchRunFindingData,
@@ -117,7 +123,7 @@ describe("accepted source financial reconciliation", () => {
     if (!recorded) throw new Error("Synthetic reward Purchase missing");
     expect(recorded.statedTotal).toBe(19657n);
     const lines = await database
-      .select()
+      .select(dollarExpenseColumns())
       .from(expense)
       .where(eq(expense.purchaseId, recorded.id));
     expect(lines).toHaveLength(2);
@@ -158,7 +164,7 @@ describe("accepted source financial reconciliation", () => {
       identity: { kind: "credit_card", network: "visa" },
       ledgerPartyId: party.id,
     });
-    await insertWithShortcode(ctx.db, "financialTransaction", {
+    await seedBankTransaction(ctx.db, {
       accountId: card.id,
       kind: "purchase",
       status: "posted",
@@ -235,7 +241,7 @@ describe("accepted source financial reconciliation", () => {
       payments: await database.select().from(purchasePaymentEvidence),
       allocations: await database.select().from(financialTransactionAllocation),
       expenses: await database
-        .select()
+        .select(dollarExpenseColumns())
         .from(expense)
         .where(eq(expense.purchaseId, accepted.id)),
     });
@@ -490,19 +496,21 @@ describe("accepted source financial reconciliation", () => {
       },
       ctx.actor,
     );
-    const other = await insertWithShortcode(ctx.db, "purchase", {
+    const other = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: accepted.vendorId,
       date: "2026-09-03",
       orderId: null,
     });
-    await database
-      .update(expense)
-      .set({ purchaseId: other.id })
-      .where(eq(expense.id, initial.expenses[0]!.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { purchaseId: other.id },
+      eq(expense.id, initial.expenses[0]!.id),
+    );
     const snapshot = async () => ({
       state: await state(),
       expenses: await database
-        .select()
+        .select(dollarExpenseColumns())
         .from(expense)
         .where(eq(expense.id, initial.expenses[0]!.id)),
       findings: await database
@@ -739,10 +747,12 @@ describe("accepted source financial reconciliation", () => {
       },
       ctx.actor,
     );
-    await database
-      .update(expense)
-      .set({ cost: 42 })
-      .where(eq(expense.id, initial.expenses[0]!.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { cost: 4200n },
+      eq(expense.id, initial.expenses[0]!.id),
+    );
     const changed = await state();
     await expect(
       resolveRunFinding(
@@ -925,7 +935,7 @@ describe("accepted source financial reconciliation", () => {
       ),
     );
     const original = initial.expenses[0]!;
-    await database.insert(expenseAttribution).values([
+    await insertPurchaseEventRows(ctx.db, "ExpenseAttribution", [
       {
         expenseId: original.id,
         role: "beneficiary",
@@ -1200,7 +1210,7 @@ describe("accepted source financial reconciliation", () => {
   it("refuses a same-total replacement that moves existing party cents", async () => {
     const { submit, state, initial, accepted, database } = await world();
     const owner = initial.source[0]!.ledgerPartyId;
-    await database.insert(expenseAttribution).values([
+    await insertPurchaseEventRows(ctx.db, "ExpenseAttribution", [
       {
         expenseId: initial.expenses[0]!.id,
         role: "beneficiary",
@@ -1335,9 +1345,9 @@ describe("accepted source financial reconciliation", () => {
       makeProductInput({ name: "Synthetic admission pass" }),
       ctx.actor,
     );
-    const unlinked = await insertWithShortcode(ctx.db, "expense", {
+    const unlinked = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Workshop admission",
-      cost: 40,
+      cost: 4000n,
       costType: "materials",
       date: "2026-09-01",
       productId: good.entityId,
@@ -1349,7 +1359,7 @@ describe("accepted source financial reconciliation", () => {
     const seller = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic pass seller",
     });
-    const before = await database.select().from(expense);
+    const before = await database.select(dollarExpenseColumns()).from(expense);
     const imported = await memberImport(ctx.db, ctx.actor, {
       key: "unlinked-pass",
       orders: [
@@ -1377,7 +1387,9 @@ describe("accepted source financial reconciliation", () => {
       outcome: "conflict",
       findingCount: 1,
     });
-    expect(await database.select().from(expense)).toEqual(before);
+    expect(await database.select(dollarExpenseColumns()).from(expense)).toEqual(
+      before,
+    );
     const [finding] = await database.select().from(runFinding);
     const preview = await prepareSourceOrderReconciliation(
       ctx.db,
@@ -1406,7 +1418,7 @@ describe("accepted source financial reconciliation", () => {
       },
       ctx.actor,
     );
-    const after = await database.select().from(expense);
+    const after = await database.select(dollarExpenseColumns()).from(expense);
     expect(after).toHaveLength(before.length);
     expect(after.find((row) => row.id === unlinked.id)).toMatchObject({
       cost: 40,
@@ -1427,7 +1439,7 @@ describe("accepted source financial reconciliation", () => {
       trade: "other",
     });
     const [disposalBefore] = await database
-      .select()
+      .select(dollarExpenseColumns())
       .from(expense)
       .where(eq(expense.shortcode, disposal.id));
     const inventoryBefore = await database.select().from(inventoryEntry);
@@ -1480,13 +1492,13 @@ describe("accepted source financial reconciliation", () => {
     });
     expect(
       await database
-        .select()
+        .select(dollarExpenseColumns())
         .from(expense)
         .where(eq(expense.purchaseId, laterPurchase!.id)),
     ).toMatchObject([{ cost: 40, productId: good.entityId }]);
     expect(
       await database
-        .select()
+        .select(dollarExpenseColumns())
         .from(expense)
         .where(eq(expense.shortcode, disposal.id)),
     ).toEqual([disposalBefore]);

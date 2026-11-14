@@ -6,8 +6,8 @@ import { describe, expect, it } from "vitest";
 import { USDAClient } from "~/server/clients/usda";
 import type { UsdaReleaseRpc } from "~/server/domains/usda-release/operations/rpc";
 import { derivedSink } from "~/server/generic/derived/repo/compute";
-import { rebuildDerived } from "~/server/generic/derived/service/rebuild";
-import { readRebuildObservation as readDerivedRebuildStatus } from "~/server/generic/jobs/repo/observation";
+import { readSnapshotState as readDerivedRebuildStatus } from "~/server/generic/derived/repo/snapshot-state";
+import { runSnapshotPage } from "~/server/generic/derived/snapshot.fixtures";
 import { prepareProductConversionCoverage } from "~/server/generic/problems/service/problems.service";
 import { getSearchDocumentEmbeddingText } from "~/server/generic/search/repo/search-document";
 import { derivedComputes } from "~/server/workflows/derived-computes";
@@ -53,7 +53,7 @@ describe("search repair admission", () => {
     if (first.done) throw new Error("Expected repair progress");
     expect(first.value).toMatchObject({ type: "status" });
     for (let page = 0; page < 1_000; page++) {
-      if (!(await rebuildDerived(ctx.db, computes))) break;
+      if (!(await runSnapshotPage(ctx.db, computes))) break;
       if (page === 999)
         throw new Error("Synthetic search repair exceeded its page bound");
     }

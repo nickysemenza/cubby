@@ -12,7 +12,10 @@ import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 
 import { afterResponse, getSourceRelease } from "~/server/cf-env";
 import type { Database } from "~/server/db";
-import { addJobAiCost } from "~/server/generic/jobs/context";
+import {
+  insideProduce,
+  recordProducedCost,
+} from "~/server/kernel/produce-ledger";
 import { emitTelemetry } from "~/server/observability/telemetry";
 
 import { snapshotAiUsagePrice } from "./pricing";
@@ -164,21 +167,28 @@ async function usageBilling(
   };
 }
 
-/** The answer never waits on its usage row: pricing and the queue send run
- * after the response inside a Worker request. */
+/**
+ * The answer never waits on its usage row: pricing and the queue send run
+ * after the response inside a Worker request. Inside an Ask's producer the
+ * row is priced at once and its charged cost becomes part of the Answer.
+ */
 export async function recordAiUsage(
   db: Database,
   input: RecordAiUsageInput,
   port: AiUsagePort = productionAiUsagePort,
 ): Promise<void> {
-  addJobAiCost(input.chargedCost ?? input.standardCost);
-  await afterResponse(emitAiUsage(db, input, port));
+  const billing = insideProduce()
+    ? usageBilling(input, port.snapshot ?? snapshotAiUsagePrice)
+    : undefined;
+  if (billing) recordProducedCost(billing.then((row) => row.chargedCost));
+  await afterResponse(emitAiUsage(db, input, port, billing));
 }
 
 async function emitAiUsage(
   db: Database,
   input: RecordAiUsageInput,
   port: AiUsagePort,
+  billing?: ReturnType<typeof usageBilling>,
 ): Promise<void> {
   try {
     await port.emit(db, {
@@ -210,7 +220,8 @@ async function emitAiUsage(
       transport: input.transport,
       entityKind: input.entity?.entityKind ?? null,
       entityId: input.entity?.entityId ?? null,
-      ...(await usageBilling(input, port.snapshot ?? snapshotAiUsagePrice)),
+      ...(await (billing ??
+        usageBilling(input, port.snapshot ?? snapshotAiUsagePrice))),
     });
   } catch (error) {
     log.error("failed to record usage", {

@@ -1,9 +1,10 @@
 import { sql } from "drizzle-orm";
 
-import type { DeviceBacklog } from "~/contracts/job.contract";
+import type { DeviceBacklog } from "~/contracts/image-backlog.contract";
 import type { Database } from "~/server/db";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
+import { imageExecutionReceipts } from "~/server/domains/image-processing/repo/execution-receipts";
 
 /** Claims and working devices are counted over this recent window. */
 const WINDOW_MINUTES = 10;
@@ -39,7 +40,7 @@ export async function readDeviceBacklog(
           AND p."runId" IS NOT NULL) AS runs,
       device_attempts.claims, device_attempts.devices,
       (SELECT count(DISTINCT a."jobId")::int
-        FROM "ImageProcessingAttempt" a
+        FROM (SELECT * FROM ${imageExecutionReceipts}) a
         JOIN "ImageProcessingJob" p ON p.id = a."jobId"
         JOIN "Image" i ON i.id = p."imageId"
         WHERE a.executor->>${"kind"} = ${"device"}
@@ -51,7 +52,7 @@ export async function readDeviceBacklog(
           AND i.sha256 = p."sourceContentHash") AS completions
     FROM (SELECT count(*)::int AS claims,
         count(DISTINCT a.executor->>${"deviceId"})::int AS devices
-      FROM "ImageProcessingAttempt" a
+      FROM (SELECT * FROM ${imageExecutionReceipts}) a
       WHERE a.executor->>${"kind"} = ${"device"}
         AND a."startedAt" > ${windowStart}) device_attempts`);
   const row = result.rows[0] ?? {

@@ -28,6 +28,7 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { wrapAiGatewayError } from "~/server/ai/gateway-error";
 import * as s3 from "~/server/clients/s3";
 import { account } from "~/server/db/auth.schema";
@@ -53,13 +54,15 @@ import {
   expense,
   inventoryEntry,
 } from "~/server/db/schema";
+import { seedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   readRetainedMail,
   retainedMailJoin,
 } from "~/server/domains/mail/repo/retained-mail";
 import { deletePurchases } from "~/server/domains/purchase/repo/purchase";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { HouseholdWriteBusyError } from "~/server/kernel/gate";
 import { activeEmailPurchaseDecision as orderMailCandidateDecision } from "~/server/testing/email-link.fixtures";
 
 import { loadMailAttachmentOriginal } from "../repo/gmail/attachment-original";
@@ -108,7 +111,7 @@ describe("public mail tool", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic Package Shop",
     });
-    const target = await insertWithShortcode(ctx.db, "purchase", {
+    const target = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       orderId: "SYN-SPLIT-101",
     });
@@ -361,7 +364,6 @@ describe("public mail tool", () => {
     await getDb(ctx.db)
       .update(emailTable)
       .set({
-        checksum: "b".repeat(64),
         classification: "related",
         classificationStage: "decision",
         orderMailId: mail.id,
@@ -401,7 +403,7 @@ describe("public mail tool", () => {
     const seller = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic marketplace",
     });
-    const target = await insertWithShortcode(ctx.db, "purchase", {
+    const target = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: seller.id,
       orderId: "SYNTHETIC-SALE",
     });
@@ -560,7 +562,7 @@ describe("public mail tool", () => {
     });
     const purchases = await Promise.all(
       ["PARTIAL-1", "PARTIAL-2"].map((orderId) =>
-        insertWithShortcode(ctx.db, "purchase", {
+        createPurchaseEventRecord(ctx.db, "purchase", {
           vendorId: seller.id,
           orderId,
         }),
@@ -579,7 +581,7 @@ describe("public mail tool", () => {
         ledgerPartyId: party.id,
       },
     );
-    const refund = await insertWithShortcode(ctx.db, "financialTransaction", {
+    const refund = await seedBankTransaction(ctx.db, {
       accountId: refundAccount.id,
       amount: moneyToMinor(-4),
       kind: "refund",
@@ -587,13 +589,11 @@ describe("public mail tool", () => {
       transactionDate: "2026-10-08",
       postedDate: "2026-10-08",
     });
-    await getDb(ctx.db)
-      .insert(financialTransactionAllocation)
-      .values({
-        transactionId: refund.id,
-        purchaseId: purchases[0]!.id,
-        amountMinor: moneyToMinor(-4),
-      });
+    await insertPurchaseEventRows(ctx.db, "FinancialTransactionAllocation", {
+      transactionId: refund.id,
+      purchaseId: purchases[0]!.id,
+      amountMinor: moneyToMinor(-4),
+    });
     const settlement = {
       refundAmount: -4,
       associations: [
@@ -688,7 +688,7 @@ describe("public mail tool", () => {
     });
     const purchases = await Promise.all(
       ["FIRST", "SECOND"].map((orderId) =>
-        insertWithShortcode(ctx.db, "purchase", {
+        createPurchaseEventRecord(ctx.db, "purchase", {
           vendorId: seller.id,
           orderId,
         }),
@@ -777,7 +777,7 @@ describe("public mail tool", () => {
     });
     const refunds = await Promise.all(
       purchases.map((_row, i) =>
-        insertWithShortcode(ctx.db, "financialTransaction", {
+        seedBankTransaction(ctx.db, {
           accountId: account.id,
           amount: moneyToMinor(i === 0 ? -3 : -7),
           kind: "refund",
@@ -787,19 +787,19 @@ describe("public mail tool", () => {
         }),
       ),
     );
-    await getDb(ctx.db)
-      .insert(financialTransactionAllocation)
-      .values(
-        refunds.map((row, i) => {
-          const purchased = purchases[i];
-          if (!purchased) throw new Error("Synthetic refund Purchase missing");
-          return {
-            transactionId: row.id,
-            purchaseId: purchased.id,
-            amountMinor: row.amount,
-          };
-        }),
-      );
+    await insertPurchaseEventRows(
+      ctx.db,
+      "FinancialTransactionAllocation",
+      refunds.map((row, i) => {
+        const purchased = purchases[i];
+        if (!purchased) throw new Error("Synthetic refund Purchase missing");
+        return {
+          transactionId: row.id,
+          purchaseId: purchased.id,
+          amountMinor: row.amount,
+        };
+      }),
+    );
     const financialBefore = await getDb(ctx.db)
       .select()
       .from(financialTransaction);
@@ -1217,11 +1217,9 @@ describe("public mail tool", () => {
       const contended = vi
         .spyOn(ingestModule, "ingestGmailMessages")
         .mockImplementation(async (db, provider, input) => {
-          // The evidence write's own retries were exhausted for this message.
+          // The evidence write timed out behind the household gate.
           if (input.messageIds.includes("synthetic-trash"))
-            throw Object.assign(new Error("could not serialize access"), {
-              code: "40001",
-            });
+            throw new HouseholdWriteBusyError();
           return ingest(db, provider, input);
         });
       const first = await searchMail(ctx.db, f.input, f.actor);
@@ -1393,8 +1391,13 @@ describe("public mail tool", () => {
         .from(run)
         .where(eq(run.purpose, "mail_reclassify"));
       expect(classifiers).toHaveLength(2);
-      const classifierJobs = await readJobs(ctx.db, { kind: "run.execute" });
-      expect(classifierJobs.map((item) => item.runId).sort()).toEqual(
+      const classifierPasses = await (
+        await import("~/server/domains/run/repo/run-execution")
+      ).readRunPasses(
+        ctx.db,
+        classifiers.map((item) => item.id),
+      );
+      expect([...classifierPasses.keys()].sort()).toEqual(
         classifiers.map((item) => item.id).sort(),
       );
       await searchMail(ctx.db, f.input, ctx.actor);
@@ -1688,7 +1691,15 @@ describe("public mail tool", () => {
   });
 
   describe("read attachment originals", () => {
-    async function fixture(bytes: Uint8Array = receiptBytes) {
+    async function fixture(
+      bytes: Uint8Array = receiptBytes,
+      headers: Partial<
+        Pick<
+          typeof emailTable.$inferInsert,
+          "sender" | "subject" | "receivedAt" | "threadId"
+        >
+      > = {},
+    ) {
       const party = await member();
       const mail = await retainedMailFixture(ctx.db, {
         ledgerPartyId: party.id,
@@ -1697,6 +1708,7 @@ describe("public mail tool", () => {
         sender: "receipts@example.test",
         subject: "Your original receipt",
         receivedAt: new Date("2026-10-01T12:00:00Z"),
+        ...headers,
         checksum: "a".repeat(64),
         content: {
           snippet: null,
@@ -1735,17 +1747,13 @@ describe("public mail tool", () => {
     }
 
     it("returns an attachment original's bytes", async () => {
-      const f = await fixture();
       const receivedAt = new Date("2026-10-02T15:00:00Z");
-      await getDb(ctx.db)
-        .update(emailTable)
-        .set({
-          sender: "canonical@example.test",
-          subject: "Canonical Email receipt",
-          receivedAt,
-          threadId: "canonical-thread",
-        })
-        .where(eq(emailTable.orderMailId, f.mail.id));
+      const f = await fixture(receiptBytes, {
+        sender: "canonical@example.test",
+        subject: "Canonical Email receipt",
+        receivedAt,
+        threadId: "canonical-thread",
+      });
       const read = await readMail(ctx.db, f.input, ctx.actor);
       expect(read).toMatchObject({
         sender: "canonical@example.test",
@@ -1761,17 +1769,6 @@ describe("public mail tool", () => {
         dataBase64: Buffer.from(f.bytes).toString("base64"),
       });
       expect(JSON.stringify(read)).not.toContain(f.attachment.pendingObjectKey);
-      await getDb(ctx.db)
-        .update(emailTable)
-        .set({ sender: null, subject: null, receivedAt: null, threadId: null })
-        .where(eq(emailTable.orderMailId, f.mail.id));
-      expect(await readMail(ctx.db, f.input, ctx.actor)).toMatchObject({
-        sender: null,
-        subject: null,
-        receivedAt: null,
-        threadId: null,
-        originalAttachment: read.originalAttachment,
-      });
       const otherOwner = await insertWithShortcode(ctx.db, "ledgerParty", {
         name: "Other retained Email owner",
         kind: "guest",
@@ -1899,7 +1896,7 @@ describe("public mail tool", () => {
       const seller = await insertWithShortcode(ctx.db, "vendor", {
         name: "Synthetic protected seller",
       });
-      const positive = await insertWithShortcode(ctx.db, "purchase", {
+      const positive = await createPurchaseEventRecord(ctx.db, "purchase", {
         vendorId: seller.id,
         orderId: "PROTECTED-ORDER",
       });

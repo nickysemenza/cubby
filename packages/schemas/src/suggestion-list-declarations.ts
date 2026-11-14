@@ -3,13 +3,8 @@ import type { z } from "zod";
 import { connectionRelation } from "./entity-connections";
 import { shortcodeEntities } from "./generated/entity-roster.gen";
 import { entityRoster } from "./generated/entity-roster.gen";
-import { generatedFinancialTransactionKindValues } from "./generated/entity-field-schemas.financialTransaction.gen";
-import {
-  defineRelationList,
-  relationGroupChoice,
-  type RelationFilter,
-} from "./relation-list";
-import { statementTransactionAction } from "./statement-suggestion";
+
+import { defineRelationList, type RelationFilter } from "./relation-list";
 
 const options = (values: readonly string[]) =>
   values.map((value) => ({ value, label: humanize(value) }));
@@ -51,13 +46,7 @@ const account = {
   reference: "financialAccount",
   array: true,
 } as const;
-const vendor = {
-  columnId: "vendor",
-  label: "Vendor",
-  kind: "multiselect",
-  reference: "vendor",
-  array: true,
-} as const;
+
 const owner = {
   columnId: "owner",
   label: "Owner",
@@ -107,61 +96,7 @@ const filters = {
     },
     strength,
   ],
-  statement_transaction: [
-    date,
-    account,
-    vendor,
-    owner,
-    merchant,
-    amount,
-    {
-      columnId: "action",
-      label: "Action",
-      kind: "multiselect",
-      options: statementTransactionAction.options.map((value) => ({
-        value,
-        label: {
-          create: "Create",
-          book: "Book spending",
-          attach: "Attach",
-          supersede: "Settle hold",
-          void: "Void hold",
-        }[value],
-      })),
-    },
-    {
-      columnId: "kind",
-      label: "Kind",
-      kind: "multiselect",
-      options: options(generatedFinancialTransactionKindValues),
-    },
-    {
-      columnId: "kindSource",
-      label: "Kind source",
-      kind: "multiselect",
-      options: [
-        { value: "rule", label: "Rule" },
-        { value: "model", label: "Model" },
-        { value: "sign", label: "Amount sign" },
-      ],
-    },
-    clean,
-    { columnId: "providerCategory", label: "Provider category", kind: "text" },
-    {
-      columnId: "providerStatus",
-      label: "Provider status",
-      kind: "multiselect",
-      options: options(["posted", "pending"]),
-    },
-    {
-      columnId: "candidate",
-      label: "Candidate",
-      kind: "multiselect",
-      reference: "financialTransaction",
-      nullable: { label: "Candidate" },
-    },
-    { columnId: "modelLabel", label: "Model label", kind: "text" },
-  ],
+
   recommendation: [
     {
       columnId: "relation",
@@ -209,13 +144,8 @@ const commonSorts = [
   { key: "clean", label: "Clean" },
   { key: "createdAt", label: "Created" },
 ] as const;
-export const suggestionAccountMonthGroup = relationGroupChoice({
-  key: "account_month",
-  label: "Account × month",
-  column: "accountMonth",
-  filter: null,
-});
-const declare = (fields: readonly RelationFilter[], grouping = false) =>
+
+const declare = (fields: readonly RelationFilter[]) =>
   defineRelationList({
     filters: fields,
     sorts: [
@@ -229,7 +159,7 @@ const declare = (fields: readonly RelationFilter[], grouping = false) =>
       { key: "target", label: "Other record" },
     ],
     defaultSort: { orderBy: "ready", direction: "desc" },
-    grouping: grouping ? [suggestionAccountMonthGroup] : [],
+    grouping: [],
     views: [],
     pageSize: { default: 50, max: 200 },
   });
@@ -238,7 +168,7 @@ const declare = (fields: readonly RelationFilter[], grouping = false) =>
 export const suggestionRelationLists = {
   all: declare(filters.all),
   field: declare(filters.field),
-  statement_transaction: declare(filters.statement_transaction, true),
+
   recommendation: declare(filters.recommendation),
   transfer_pair: declare(filters.transfer_pair),
 };
@@ -265,16 +195,7 @@ for (const field of declaredFields) {
       : field,
   );
 }
-// Month also scopes the grouped bulk acceptance action.
-byColumn.set("month", {
-  columnId: "month",
-  label: "Month",
-  kind: "multiselect",
-});
-export const suggestionFilterDeclaration = declare(
-  [...byColumn.values()],
-  true,
-);
+export const suggestionFilterDeclaration = declare([...byColumn.values()]);
 // SAFETY: `filterInput` is built from these same declarations at runtime; the
 // views' union of columns types each search key it accepts.
 export const suggestionDeclaredFilters =
@@ -286,3 +207,46 @@ export const suggestionDeclaredFilters =
     },
     z.core.$strict
   >;
+
+/** The same option label in the filter, row and evidence detail. */
+export function suggestionValueLabel(column: string, value: string): string {
+  const declared = Object.values(suggestionRelationLists)
+    .flatMap((list) =>
+      list.filters.flatMap((filter) =>
+        filter.columnId === column && "options" in filter
+          ? (filter.options ?? [])
+          : [],
+      ),
+    )
+    .find((option) => option.value === value);
+  if (declared) return declared.label;
+  const evidenceLabels = {
+    high: "High",
+    medium: "Medium",
+    low: "Low",
+    yes: "Same",
+    no: "Different",
+    uncertain: "Unsure",
+    account_move: "Account move",
+    payment: "Payment",
+    insufficient_evidence: "Insufficient evidence",
+    explicit: "Explicit",
+    weak: "Weak",
+    none: "None",
+    transaction: "Transaction",
+    statement: "Statement",
+    cash: "Cash",
+    monarch: "Monarch",
+    mint: "Mint",
+    copilot: "Copilot",
+    apple_card: "Apple Card",
+    manual: "Manual",
+    completed: "Done",
+    pending: "Waiting",
+    posted: "Done",
+    voided: "Ended",
+  };
+  return (
+    Object.entries(evidenceLabels).find(([key]) => key === value)?.[1] ?? value
+  );
+}

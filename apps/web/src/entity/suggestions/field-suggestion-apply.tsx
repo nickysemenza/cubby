@@ -212,13 +212,6 @@ export function DraftFieldSuggestion({
       onApply={
         suggestion
           ? async () => {
-              if (suggestion.suggestionId)
-                await suggestionApi.review.call({
-                  suggestionId: suggestion.suggestionId,
-                  operationId: crypto.randomUUID(),
-                  verdict: "correct",
-                  intent: "draft",
-                });
               onApply(suggestion);
             }
           : undefined

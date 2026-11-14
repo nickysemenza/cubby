@@ -34,8 +34,7 @@ import {
 } from "~/server/domains/purchase-import/repo/gmail/types";
 import { readEmailMailKeys } from "~/server/domains/purchase-import/repo/mail-rule-evidence";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
-import { withJobPhase } from "~/server/generic/jobs/context";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
+import { WorkDeferredError } from "~/server/kernel/work-errors";
 
 import {
   deferClassificationRefresh,
@@ -48,6 +47,7 @@ import {
 import { gmailExecutionPolicy } from "../../repo/gmail/execution-policy";
 import {
   confirmEmailClassification,
+  hasStoredClassificationForChecksum,
   hasRetainedOrderMailContent,
   readMemberClassification,
   restoreOrderMailContent,
@@ -160,15 +160,24 @@ const retainOriginal = async (
   return orderMailId;
 };
 
-const unchangedClassification = (
+async function unchangedClassification(
+  db: Database,
   prior: Awaited<ReturnType<typeof readEmail>>,
   checksum: string,
-) =>
-  prior?.checksum === checksum &&
-  prior.classification !== null &&
-  prior.classificationVersion === MAILBOX_RESEARCH_VERSION &&
-  prior.status !== "excluded" &&
-  prior.status !== "deleted";
+): Promise<boolean> {
+  if (
+    !prior ||
+    prior.classification === null ||
+    prior.classificationVersion !== MAILBOX_RESEARCH_VERSION ||
+    prior.status === "excluded" ||
+    prior.status === "deleted"
+  )
+    return false;
+  return (
+    prior.checksum === checksum ||
+    hasStoredClassificationForChecksum(db, prior, checksum)
+  );
+}
 
 // Uncertainty is research work when source content is available; absent bytes
 // remain an explicit gap rather than an invented retained original.
@@ -279,8 +288,8 @@ async function observeClassification(
   const { dependencyStamps } =
     await import("~/server/ai/policy/refresh-manifest");
   const manifest = await (
-    await import("~/server/ai/repo/ai-refresh")
-  ).producingAiManifest(db);
+    await import("~/server/ai/policy/refresh-manifest")
+  ).compiledRefreshManifest();
   const dependencies = dependencyStamps(manifest, [
     ...(input.refreshDependencies ?? []).map((stamp) => stamp.feature),
     ...calls.flatMap((entry) => (entry?.operation ? [entry.operation] : [])),
@@ -303,7 +312,6 @@ async function observeClassification(
       promptVersion: call?.promptVersion ?? null,
       operation: call?.operation ?? null,
       conflict,
-      evaluationId: input.evaluation?.id ?? null,
       provenance: {
         dependencies,
         inputFingerprint: checksum,
@@ -416,7 +424,10 @@ async function fetchObservedMessage(
       missing: null,
     };
   } catch (error) {
-    if (isGmailAuthorizationFailure(error) || error instanceof JobDeferredError)
+    if (
+      isGmailAuthorizationFailure(error) ||
+      error instanceof WorkDeferredError
+    )
       throw error;
     // A first 404 must mint its diagnostic owner inside fenced publication.
     // Creating it before the optimistic check would invalidate our own snapshot.
@@ -598,7 +609,6 @@ async function acquireEligible(
         runId: input.runId,
         executionPolicy,
         expected: prior,
-        evaluation: input.evaluation,
       },
       async () => {
         throw new Error("Email eligibility changed; retrying");
@@ -607,16 +617,13 @@ async function acquireEligible(
     return { kind: "skipped" };
   }
   const unchanged =
-    !input.reclassify && unchangedClassification(prior, checksum);
+    !input.reclassify && (await unchangedClassification(db, prior, checksum));
   const search = memberSearchOwnership(input, prior, executionPolicy);
   const publication: Parameters<typeof publishGmailEvidence>[1] = {
     ...identity,
     runId: input.runId,
     executionPolicy,
     expected: prior,
-    evaluation: input.evaluation
-      ? { ...input.evaluation, sourceChecksum: checksum, observationId: null }
-      : undefined,
     observationId: null,
   };
   const metadata = {
@@ -653,50 +660,48 @@ async function acquireEligible(
     else if (call.operation === "mailbox-relevance") relevanceCall = call;
   });
   const transientAttachments = new Map<string, string>();
-  const classification = await withJobPhase("mail.classify", () =>
-    withAiInputs(
-      preparingAiInputs(),
-      () =>
-        classifyMessage(
-          unchanged ||
-            (input.refreshStage === "mailbox-relevance" &&
-              prior?.checksum === checksum)
-            ? prior
-            : null,
-          input.searchActor
-            ? async () => ({
-                classification: "uncertain",
-                stage: "rule",
-                reason: "Awaiting classification",
-              })
-            : async () =>
-                (
-                  await routeGmailMessage(
-                    message,
-                    normalized,
-                    ports.triage,
-                    undefined,
-                    (address) =>
-                      readSenderHistory(db, {
-                        ledgerPartyId: input.ledgerPartyId,
-                        address,
-                      }),
-                  )
-                ).decision,
-          input.searchActor
-            ? null
-            : () =>
-                interpretMailRelevance(
-                  provider,
+  const classification = await withAiInputs(
+    preparingAiInputs(),
+    () =>
+      classifyMessage(
+        unchanged ||
+          (input.refreshStage === "mailbox-relevance" &&
+            prior?.checksum === checksum)
+          ? prior
+          : null,
+        input.searchActor
+          ? async () => ({
+              classification: "uncertain",
+              stage: "rule",
+              reason: "Awaiting classification",
+            })
+          : async () =>
+              (
+                await routeGmailMessage(
+                  message,
                   normalized,
-                  ports.relevance,
-                  gmailOriginalComplete(message, normalized),
-                  (sourceKey, encoded) =>
-                    transientAttachments.set(sourceKey, encoded),
-                ),
-        ),
-      { providerFree: preparingWithoutProviders() },
-    ),
+                  ports.triage,
+                  undefined,
+                  (address) =>
+                    readSenderHistory(db, {
+                      ledgerPartyId: input.ledgerPartyId,
+                      address,
+                    }),
+                )
+              ).decision,
+        input.searchActor
+          ? null
+          : () =>
+              interpretMailRelevance(
+                provider,
+                normalized,
+                ports.relevance,
+                gmailOriginalComplete(message, normalized),
+                (sourceKey, encoded) =>
+                  transientAttachments.set(sourceKey, encoded),
+              ),
+      ),
+    { providerFree: preparingWithoutProviders() },
   );
   const decision = classification.result;
   if (
@@ -717,16 +722,14 @@ async function acquireEligible(
     transientAttachments,
   );
   const staged = retain
-    ? await withJobPhase("mail.attachments", () =>
-        stageGmailAttachments(
-          db,
-          provider,
-          identity,
-          normalized,
-          prior?.orderMailId ?? null,
-          transientAttachments,
-          storage,
-        ),
+    ? await stageGmailAttachments(
+        db,
+        provider,
+        identity,
+        normalized,
+        prior?.orderMailId ?? null,
+        transientAttachments,
+        storage,
       )
     : {
         prepared: new Map<string, PreparedOrderMailAttachment>(),
@@ -961,7 +964,7 @@ async function relatedEmailPreview(
 
 /** Sequential transient routing precedes all original-content and attachment writes. */
 async function reportAcquisitionProgress(input: IngestInput, handled: number) {
-  await withJobPhase("mail.progress", async () => input.onMessage?.(handled));
+  await input.onMessage?.(handled);
 }
 
 export async function ingestGmailMessages(
@@ -987,7 +990,6 @@ export async function ingestGmailMessages(
     reclassify?: boolean;
     refreshStage?: "mailbox-triage" | "mailbox-relevance";
     refreshDependencies?: AiProvenance["dependencies"];
-    evaluation?: { id: string; token: string; reclassification?: boolean };
     storage?: OrderMailAttachmentStorage;
     onMessage?: (handled: number) => Promise<void>;
   },
@@ -1031,7 +1033,6 @@ export async function ingestGmailMessages(
             runId: input.runId,
             executionPolicy,
             expected: beforeFetch,
-            evaluation: input.evaluation,
           },
           async () => {
             throw new Error(
@@ -1043,8 +1044,11 @@ export async function ingestGmailMessages(
       await reportAcquisitionProgress(input, handled);
       continue;
     }
-    const fetched = await withJobPhase("mail.fetch", () =>
-      fetchObservedMessage(db, provider, identity, input.runId),
+    const fetched = await fetchObservedMessage(
+      db,
+      provider,
+      identity,
+      input.runId,
     );
     const message = fetched.message;
     if (message && message.id !== messageId)
@@ -1062,9 +1066,7 @@ export async function ingestGmailMessages(
           runId: input.runId,
           executionPolicy,
           expected: beforeFetch,
-          evaluation: input.evaluation
-            ? { ...input.evaluation, removed: true }
-            : undefined,
+          removed: true,
         },
         async (tx) => {
           if (fetched.missing)
@@ -1095,21 +1097,22 @@ export async function ingestGmailMessages(
       );
       if (published) outcome[removed].push(messageId);
     } else if (message) {
-      const result = await withJobPhase("mail.acquire", () =>
-        acquireEligible(
-          db,
-          provider,
-          input,
-          message,
-          identity,
-          storage,
-          executionPolicy,
-          beforeFetch,
-        ),
+      const result = await acquireEligible(
+        db,
+        provider,
+        input,
+        message,
+        identity,
+        storage,
+        executionPolicy,
+        beforeFetch,
       );
       if (result.kind === "saved") {
-        const preview = await withJobPhase("mail.preview", () =>
-          relatedEmailPreview(db, input, messageId, executionPolicy),
+        const preview = await relatedEmailPreview(
+          db,
+          input,
+          messageId,
+          executionPolicy,
         );
         if (
           !(await deferClassificationRefresh(

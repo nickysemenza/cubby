@@ -24,6 +24,7 @@ import type {
 } from "@cubby/schemas/project";
 import { isLiveProjectStatus } from "@cubby/schemas/project";
 import type { rawToolProductIdentity } from "@cubby/schemas/project-tool-raw-read";
+import { wholeCentToMinor } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import {
   and,
@@ -56,7 +57,10 @@ import {
 } from "~/lib/tool-timeline";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
-import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
+import {
+  actualExpense,
+  expenseCostDollarsSql,
+} from "~/server/db/computed/expense-aggregate-sql";
 import {
   productBrandNameSql,
   productBrandCodeSql,
@@ -177,11 +181,12 @@ export async function loadResourceMetrics(
     dbc
       .select({
         productId: expense.productId,
-        netLifetimeCost: sql<number>`coalesce(sum(${expense.cost}), 0)`.mapWith(
-          Number,
-        ),
+        netLifetimeCost:
+          sql<number>`(coalesce(sum(${expense.cost}), 0) / 100.0)`.mapWith(
+            Number,
+          ),
         grossLifetimeAcquisitionCost:
-          sql<number>`coalesce(sum(CASE WHEN ${expense.costType} = 'tools' AND ${expense.cost} > 0 THEN ${expense.cost} ELSE 0 END), 0)`.mapWith(
+          sql<number>`(coalesce(sum(CASE WHEN ${expense.costType} = 'tools' AND ${expense.cost} > 0 THEN ${expense.cost} ELSE 0 END), 0) / 100.0)`.mapWith(
             Number,
           ),
       })
@@ -316,7 +321,9 @@ async function loadProjectSoftwareWindowCosts(
   const rows = await dbc
     .select({
       productId: expense.productId,
-      netCost: sql<number>`coalesce(sum(${expense.cost}), 0)`.mapWith(Number),
+      netCost: sql<number>`(coalesce(sum(${expense.cost}), 0) / 100.0)`.mapWith(
+        Number,
+      ),
     })
     .from(expense)
     .where(
@@ -354,7 +361,9 @@ export async function loadProjectToolPurchaseCosts(
     .select({
       projectId: effectiveExpenseProject,
       productId: expense.productId,
-      cost: sql<number>`coalesce(sum(${expense.cost}), 0)`.mapWith(Number),
+      cost: sql<number>`(coalesce(sum(${expense.cost}), 0) / 100.0)`.mapWith(
+        Number,
+      ),
     })
     .from(expense)
     .where(
@@ -364,7 +373,7 @@ export async function loadProjectToolPurchaseCosts(
         actualExpense(),
         eq(expense.lineKind, "principal"),
         eq(expense.costType, "tools"),
-        gt(expense.cost, 0),
+        gt(expense.cost, 0n),
         notDeleted(expense),
       ),
     )
@@ -1371,9 +1380,10 @@ export async function suggestProjectTools(
       .select({
         trade: effectiveExpenseTrade,
         expenseCount: count(),
-        grossSpend: sql<number>`coalesce(sum(${expense.cost}), 0)`.mapWith(
-          Number,
-        ),
+        grossSpend:
+          sql<number>`(coalesce(sum(${expense.cost}), 0) / 100.0)`.mapWith(
+            Number,
+          ),
       })
       .from(expense)
       .where(
@@ -1381,7 +1391,7 @@ export async function suggestProjectTools(
           eq(effectiveExpenseProject, projectId),
           eq(expense.lineKind, "principal"),
           actualExpense(),
-          gt(expense.cost, 0),
+          gt(expense.cost, 0n),
           ne(effectiveExpenseTrade, "planning"),
           ne(effectiveExpenseTrade, "other"),
           notDeleted(expense),
@@ -1395,7 +1405,9 @@ export async function suggestProjectTools(
         productName: product.name,
         brandName: productBrandNameSql(product.brandId),
         projectPurchaseCost:
-          sql<number>`coalesce(sum(${expense.cost}), 0)`.mapWith(Number),
+          sql<number>`(coalesce(sum(${expense.cost}), 0) / 100.0)`.mapWith(
+            Number,
+          ),
       })
       .from(expense)
       .innerJoin(
@@ -1408,7 +1420,7 @@ export async function suggestProjectTools(
           eq(expense.lineKind, "principal"),
           actualExpense(),
           eq(expense.costType, "tools"),
-          gt(expense.cost, 0),
+          gt(expense.cost, 0n),
           categoryFeatureSql(sql`${product.categoryId}`, "tools"),
           notDeleted(expense),
         ),
@@ -1506,7 +1518,7 @@ export async function suggestProjectTools(
               actualExpense(),
               eq(expense.lineKind, "principal"),
               eq(expense.costType, "tools"),
-              gt(expense.cost, 0),
+              gt(expense.cost, 0n),
               categoryFeatureSql(sql`${product.categoryId}`, "tools"),
               notDeleted(expense),
             ),
@@ -1656,7 +1668,10 @@ export async function suggestProjectTools(
   const [unlinked] = await dbc
     .select({
       count: count(),
-      grossCost: sql<number>`coalesce(sum(${expense.cost}), 0)`.mapWith(Number),
+      grossCost:
+        sql<number>`(coalesce(sum(${expense.cost}), 0) / 100.0)`.mapWith(
+          Number,
+        ),
     })
     .from(expense)
     .where(
@@ -1666,7 +1681,7 @@ export async function suggestProjectTools(
         eq(expense.lineKind, "principal"),
         actualExpense(),
         eq(expense.costType, "tools"),
-        gte(expense.cost, EXPENSIVE_TOOL_THRESHOLD),
+        gte(expense.cost, wholeCentToMinor(EXPENSIVE_TOOL_THRESHOLD)),
         notDeleted(expense),
       ),
     );
@@ -1726,7 +1741,7 @@ async function loadSoftwareExpenseRows(
     .select({
       projectId: effectiveExpenseProject,
       date: expense.date,
-      cost: expense.cost,
+      cost: expenseCostDollarsSql(),
     })
     .from(expense)
     .where(

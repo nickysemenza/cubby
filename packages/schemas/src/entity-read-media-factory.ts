@@ -1,3 +1,4 @@
+import { machineryListFields } from "./kernel/machinery";
 import { z } from "zod";
 
 import { displayCoverField, displayImagesField } from "./display-images";
@@ -19,6 +20,7 @@ export function createEntityReadMedia<ImageFields extends z.ZodRawShape>(
   const listMediaFields = z.object({
     displayImages: displayImagesField,
     displayCover: displayCoverField.optional(),
+    machinery: machineryListFields.nullable().optional(),
     pendingSuggestionCount: z.number().int().nonnegative().optional(),
   });
   const detailMediaFields = z.object({

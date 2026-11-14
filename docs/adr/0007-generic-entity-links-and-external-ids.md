@@ -30,10 +30,10 @@ pairings of two entities with no payload of their own.
 
 `EntityLink(id, kind, fromEntityId, fromKind, toEntityId, toKind, quantity,
 createdAt, updatedAt, deletedAt)` holds every many-to-many pairing of two
-entities. The link kinds are the keys of `ENTITY_LINK_KINDS` in
-`packages/schemas/src/entity-links.ts`: `wishCandidate`, `purchaseProduct`,
+entities. Link kinds are `defineEdge` declarations in
+`packages/schemas/src/entity-definitions/link-edges.ts`: `purchasePaymentAccount`, `purchaseProduct`,
 `projectTool`, `gardenEntryPlanting`, `productComponent`, `taskDependency`,
-`projectDependency`. `from` is the owning side: the wish, the order, the
+`projectDependency`. `from` is the owning side: the purchase, the order, the
 project, the garden entry, the kit, the blocked task or project.
 
 Each kind declares its two endpoint entity kinds, whether it carries a

@@ -16,8 +16,8 @@ import {
   extractImageMetadata,
   type ImageEmbeddedMetadata,
 } from "~/server/domains/image/service/image-metadata";
-import { outsideJob } from "~/server/generic/jobs/outside-job";
-import type { Fenced } from "~/server/generic/jobs/types";
+import { publishTransaction } from "~/server/kernel/publication";
+import type { Publication } from "~/server/kernel/publication";
 
 /** A container's leading bytes hold every tag this parser reads; never worth
  * fetching more than a few MiB even for a multi-hundred-megabyte original. */
@@ -77,23 +77,85 @@ export async function extractAndStoreImageMetadata(
   imageId: ImageId,
   ports: ExtractImageMetadataPorts = productionExtractImageMetadataPorts,
   /** The executing Job's fence; member and maintenance callers own no Job. */
-  fenced: Fenced = outsideJob(db),
+  fenced: Publication = publishTransaction(db),
 ): Promise<"succeeded" | "skipped" | { missing: string }> {
   const row = await ports.getRow(db, imageId);
   if (!row) return "skipped";
-  const bytes = await ports.getBytes(row.key, MAX_METADATA_FETCH_BYTES);
+  const { withAsk, append, evidenceRow } = await import("~/server/kernel/api");
+  const { imageMetadataAsk, imageObservationEvidence } =
+    await import("~/server/domains/image-processing/module");
+  const input = {
+    imageId,
+    key: row.key,
+    contentType: row.contentType,
+    sourceRevision: row.sourceRevision,
+  };
+  const result = await withAsk(
+    db,
+    {
+      ...imageMetadataAsk,
+      produce: async () => ({
+        output: await produceImageMetadata(input, ports),
+      }),
+    },
+    input,
+    {
+      record: { entity: "image", id: imageId },
+      pass: { name: "image.metadata", key: `${imageId}:${row.key}` },
+    },
+  );
+  const { askEnvelope, inputHashOf } = await import("~/server/kernel/envelope");
+  const inputHash = await inputHashOf(askEnvelope(imageMetadataAsk, input));
   const publish = (write: (tx: Database) => Promise<void>) =>
-    publishExtractedImageMetadata(fenced, imageId, row, ports.getRow, write);
-  // No retry can recover a missing original: the row leaves the backlog as
-  // `original_missing` instead of being re-selected forever.
-  if (bytes === null) {
+    publishExtractedImageMetadata(
+      fenced,
+      imageId,
+      row,
+      ports.getRow,
+      async (tx) => {
+        await append(tx, [
+          evidenceRow(imageObservationEvidence, {
+            entityKind: "image",
+            entityId: imageId,
+            inputHash,
+            kind: "embedded-metadata",
+            value: result,
+          }),
+        ]);
+        await write(tx);
+      },
+    );
+  if (result.missing) {
     const missing = `R2 object not found: ${row.key} (404)`;
     await publish(async (tx) => {
       await markImageMetadataOutcome(tx, imageId, "original_missing", missing);
     });
     return { missing };
   }
-  const parsed = ports.extract(bytes, row.contentType);
-  await publish((tx) => ports.apply(tx, imageId, toStoredMetadata(parsed)));
+  await publish((tx) => ports.apply(tx, imageId, result.metadata));
   return "succeeded";
+}
+
+/** The producer sees only the declared immutable original identity. */
+export async function produceImageMetadata(
+  input: { key: string; contentType: string },
+  ports: Pick<
+    ExtractImageMetadataPorts,
+    "getBytes" | "extract"
+  > = productionExtractImageMetadataPorts,
+): Promise<{ missing: boolean; metadata: StoredImageEmbeddedMetadata | null }> {
+  // Keep bounded storage retries inside one Ask; repeated admission observes its backoff.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const bytes = await ports.getBytes(input.key, MAX_METADATA_FETCH_BYTES);
+      return bytes === null
+        ? { missing: true, metadata: null }
+        : {
+            missing: false,
+            metadata: toStoredMetadata(ports.extract(bytes, input.contentType)),
+          };
+    } catch (error) {
+      if (attempt >= 3) throw error;
+    }
+  }
 }

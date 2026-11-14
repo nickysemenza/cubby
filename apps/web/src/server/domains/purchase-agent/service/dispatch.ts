@@ -7,12 +7,7 @@ import type { PurchaseDispatchEnvironment } from "./environment";
 export async function deliverPurchaseDispatch(
   event: PurchaseAgentEvent,
   env: PurchaseDispatchEnvironment,
-): Promise<
-  | "dispatched"
-  | "fenced"
-  | "acknowledged_by_peer"
-  | { waiting: { holders: number; unavailable?: true } }
-> {
+): Promise<"dispatched" | "fenced" | "acknowledged_by_peer"> {
   const services = env.run(event.runId);
   if (await services.coordinatorRetired()) return "fenced";
   // Only run-start deliveries participate in the dispatch generation fence.
@@ -27,13 +22,12 @@ export async function deliverPurchaseDispatch(
   if (scope.agentId !== importRunAgentIdentity(event.runId, scope.purpose)) {
     throw new Error("Import run agent identity does not match its purpose");
   }
-  const { accepted, waiting } = await env
+  const { accepted } = await env
     .coordinator(scope.agentId)
     .dispatch(
       dispatchInputForEvent(event, scope.purpose, scope.coordinatorModel),
+      env.claimToken,
     );
-  // Every coordinator turn is taken: nothing ran, so nothing is acknowledged.
-  if (waiting) return { waiting };
   if (accepted && event.type === "start_or_resume")
     await services.updateAgentProgress({
       eventId: `coordinator-started:${event.eventId}`,
@@ -47,7 +41,7 @@ export async function deliverPurchaseDispatch(
     !(await services.acknowledgeCoordinator(event.eventId))
   ) {
     // A crash or competing redelivery won the DB acknowledgement. The
-    // operation id still makes this submission safe; complete this Job
+    // operation id still makes this submission safe; complete this Pass
     // so it cannot re-open a terminal generation.
     return "acknowledged_by_peer";
   }

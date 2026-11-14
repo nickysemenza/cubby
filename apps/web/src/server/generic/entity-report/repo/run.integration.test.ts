@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import {
   suggestionTable,
@@ -13,7 +14,6 @@ import {
 } from "~/server/db/schema";
 import { startPhotoInventoryRun } from "~/server/domains/photo-import/repo/run/photo-run";
 import { startImportRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { recordFeedback } from "~/server/generic/suggestions/repo/suggestion";
 import { publishExactSuggestion } from "~/server/generic/suggestions/repo/suggestion-publication";
 import { seedRunFinding } from "~/server/testing/run-finding.fixtures";

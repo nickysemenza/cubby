@@ -8,6 +8,7 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import * as choices from "~/server/ai/decision-model";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { withConnection } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
 import {
@@ -32,7 +33,6 @@ import {
 import { readEmailProtectingIntent } from "~/server/domains/purchase-import/repo/email-review-intent";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 
 import { withEmailEvidenceWrite } from "../email-evidence-write-scope";
@@ -57,7 +57,7 @@ const pdf = Buffer.from("Synthetic reviewed attachment bytes");
 describe("member-only exact original relevance correction", () => {
   const ctx = withTestDb();
   afterEach(() => vi.restoreAllMocks());
-  async function fixture() {
+  async function fixture(sameChecksum = false) {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic correction member",
       kind: "member",
@@ -69,20 +69,6 @@ describe("member-only exact original relevance correction", () => {
       providerId: "google",
       userId: ctx.actor.userId,
       updatedAt: new Date(),
-    });
-    const email = await insertWithShortcode(ctx.db, "email", {
-      ledgerPartyId: party.id,
-      provider: "gmail",
-      mailboxId,
-      messageId,
-      checksum: "a".repeat(64),
-      classification: "unrelated",
-      classificationStage: null,
-      classificationReason: null,
-      classificationVersion: "synthetic-history",
-      status: "completed",
-      contentClearedAt: new Date(),
-      executionPolicy: "classification_only",
     });
     let message: GmailMessage = {
       id: messageId,
@@ -107,6 +93,22 @@ describe("member-only exact original relevance correction", () => {
         ],
       },
     };
+    const email = await insertWithShortcode(ctx.db, "email", {
+      ledgerPartyId: party.id,
+      provider: "gmail",
+      mailboxId,
+      messageId,
+      checksum: sameChecksum
+        ? await originalChecksum(normalizeMessage(mailboxId, message))
+        : "a".repeat(64),
+      classification: "unrelated",
+      classificationStage: null,
+      classificationReason: null,
+      classificationVersion: "synthetic-history",
+      status: "completed",
+      contentClearedAt: new Date(),
+      executionPolicy: "classification_only",
+    });
     const getMessage = vi.fn<GmailProvider["getMessage"]>(async () => message);
     const getAttachment = vi.fn<GmailProvider["getAttachment"]>(async () => ({
       data: pdf.toString("base64url"),
@@ -186,11 +188,8 @@ describe("member-only exact original relevance correction", () => {
     expect(f.getAttachment).toHaveBeenCalledTimes(1);
   });
   async function sharedReviewFixture() {
-    const f = await fixture();
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({ checksum: f.input.reviewedChecksum })
-      .where(eq(emailTable.id, f.email.id));
+    const f = await fixture(true);
+
     const observation = await recordEmailClassificationObservation(ctx.db, {
       emailId: f.email.id,
       checksum: f.input.reviewedChecksum,
@@ -280,11 +279,8 @@ describe("member-only exact original relevance correction", () => {
     expect(f.getMessage).toHaveBeenCalledTimes(1);
   });
   it("refuses routing changed during retrieval before staging another upload", async () => {
-    const f = await fixture();
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({ checksum: f.input.reviewedChecksum })
-      .where(eq(emailTable.id, f.email.id));
+    const f = await fixture(true);
+
     const input = { ...f.input, expectedChecksum: f.input.reviewedChecksum };
     f.getMessage.mockImplementationOnce(async () => {
       await correctEmailRelevance(
@@ -318,12 +314,9 @@ describe("member-only exact original relevance correction", () => {
     });
   });
   it("refuses older prepared routing after a newer same-original correction publishes", async () => {
-    const f = await fixture();
+    const f = await fixture(true);
     // Both corrections review the same retained bytes; checksum equality cannot order them.
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({ checksum: f.input.reviewedChecksum })
-      .where(eq(emailTable.id, f.email.id));
+
     const input = { ...f.input, expectedChecksum: f.input.reviewedChecksum };
     const prepared = await prepareEmailRelevanceCorrection(
       ctx.db,
@@ -707,11 +700,8 @@ describe("member-only exact original relevance correction", () => {
     expect(f.objects.size).toBe(0);
   });
   it("applies a domain-supported relevance correction through shared review", async () => {
-    const f = await fixture();
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({ checksum: f.input.reviewedChecksum })
-      .where(eq(emailTable.id, f.email.id));
+    const f = await fixture(true);
+
     const observation = await recordEmailClassificationObservation(ctx.db, {
       emailId: f.email.id,
       checksum: f.input.reviewedChecksum,
@@ -828,19 +818,6 @@ describe("member-only exact original relevance correction", () => {
         data: Buffer.from("wrong").toString("base64url"),
         size: pdf.length,
       });
-    if (failure === "checksum_changes_during_fetch") {
-      f.expectedChanges.checksum = "c".repeat(64);
-      f.getMessage.mockImplementation(async () => {
-        const [changed] = await getDb(ctx.db)
-          .update(emailTable)
-          .set({ checksum: "c".repeat(64) })
-          .where(eq(emailTable.id, f.email.id))
-          .returning({ updatedAt: emailTable.updatedAt });
-        if (!changed) throw new Error("Synthetic checksum race Email missing");
-        f.expectedChanges.updatedAt = changed.updatedAt;
-        return f.message();
-      });
-    }
     if (failure === "owner_transfers_during_fetch") {
       const foreign = await insertWithShortcode(ctx.db, "ledgerParty", {
         name: "Synthetic transferred member",
@@ -885,25 +862,36 @@ describe("member-only exact original relevance correction", () => {
     "retains the reviewed discarded original with %s resolution without admission",
     async (classification) => {
       const f = await fixture();
-      expect(
-        await correctEmailRelevance(
-          ctx.db,
-          { ...f.input, classification },
-          ctx.actor,
-        ),
-      ).toEqual({
+      const corrected = await correctEmailRelevance(
+        ctx.db,
+        { ...f.input, classification },
+        ctx.actor,
+      );
+      expect(corrected).toEqual({
         id: f.email.shortcode,
-        checksum: f.input.reviewedChecksum,
+        checksum: f.email.checksum,
         classification,
         originalAvailable: true,
       });
+      // The returned identity remains usable for another correction of the same bytes.
+      expect(
+        await correctEmailRelevance(
+          ctx.db,
+          {
+            ...f.input,
+            classification,
+            expectedChecksum: corrected.checksum,
+          },
+          ctx.actor,
+        ),
+      ).toEqual(corrected);
       const after = await evidence();
       expect(after.emails).toHaveLength(1);
       expect(after.emails[0]).toMatchObject({
         classification,
         classificationStage: "resolution",
         classificationReason: f.input.reason,
-        checksum: f.input.reviewedChecksum,
+        checksum: f.email.checksum,
         status: "completed",
         runId: null,
         contentClearedAt: null,
@@ -979,7 +967,6 @@ describe("member-only exact original relevance correction", () => {
     "oversize_attachment",
     "aggregate_attachments",
     "changed_attachment_size",
-    "checksum_changes_during_fetch",
     "owner_transfers_during_fetch",
     "account_removed_during_fetch",
   ] as const)(

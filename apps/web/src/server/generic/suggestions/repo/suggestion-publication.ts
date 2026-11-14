@@ -8,8 +8,7 @@ import {
   type SuggestionProducer,
 } from "@cubby/schemas/suggestion";
 import { createLogger } from "@cubby/worker-tracing";
-import { and, count, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { and, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
 import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
@@ -20,6 +19,7 @@ import { suggestionTable } from "~/server/db/schema";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import type { SuggestionPublication } from "~/server/generic/suggestions/repo/suggestion";
 import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
+import { enterHouseholdGate } from "~/server/kernel/gate";
 import {
   assertWorkflowEffect,
   isWorkflowInterrupted,
@@ -672,6 +672,10 @@ export async function publishSuggestionSet<
 > {
   if (!candidates.length) return [];
   return withTransactionDatabase(db, async (tx) => {
+    // The gate before the Pass row: publication writes evidence and decisions
+    // that take the gate, and holding the Pass row while waiting deadlocks a
+    // Run cancel or a member review.
+    await enterHouseholdGate(tx);
     await assertWorkflowEffect(tx);
     const outcomes = await publishLocked(
       tx,
@@ -862,6 +866,7 @@ export async function publishSuggestionBatches<
       )[] = [];
       if (!admitted.length) return outcomes;
       const published = await withTransactionDatabase(db, async (tx) => {
+        await enterHouseholdGate(tx);
         await assertWorkflowEffect(tx);
         return publishLocked(
           tx,
@@ -881,24 +886,4 @@ export async function publishSuggestionBatches<
     onOutcome: input.onOutcome,
     onFailure: input.onFailure,
   });
-}
-
-/** Family label predicates read the backlog as `Suggestion s`. */
-const backlogState = alias(suggestionTable, "s");
-const backlogWhere = (
-  family: Pick<SuggestionFamily<unknown>, "family" | "labelBacklog">,
-  ...more: (SQL | undefined)[]
-) => and(eq(backlogState.family, family.family), family.labelBacklog, ...more);
-
-/** Remaining label backlog, for a Sweep's estimate. */
-export async function countSuggestionLabelBacklog(
-  db: Database,
-  family: Pick<SuggestionFamily<unknown>, "family" | "labelBacklog">,
-  where?: SQL,
-) {
-  const [row] = await getDb(db)
-    .select({ count: count() })
-    .from(backlogState)
-    .where(backlogWhere(family, where));
-  return row?.count ?? 0;
 }

@@ -6,7 +6,7 @@ import {
   type ShortcodeFor,
   type VendorId,
 } from "@cubby/schemas/identifiers";
-import { minorToMoney } from "@cubby/shared";
+import { minorToMoney, moneyToMinor } from "@cubby/shared";
 import {
   and,
   between,
@@ -23,6 +23,7 @@ import { alias } from "drizzle-orm/pg-core";
 
 import { householdLocalDate, shiftPlainDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { uuidArrayParam } from "~/server/db/helpers/query";
 import {
@@ -146,7 +147,7 @@ export async function readExistingOrderCandidates(
             orderId: purchase.orderId,
             date: purchase.date,
             amount: sql<number | null>`(${database
-              .select({ cost: line.cost })
+              .select({ cost: minorToDollarsSql(line.cost, "float8") })
               .from(line)
               .where(liveLines)
               .limit(1)})`,
@@ -220,7 +221,7 @@ export async function readExistingOrderCandidates(
                       eq(line.future, false),
                       lumpAmount === undefined
                         ? undefined
-                        : sql`round(${line.cost}::numeric, 2) = ${lumpAmount}::numeric`,
+                        : eq(line.cost, moneyToMinor(lumpAmount)),
                     ),
                   ),
               ),

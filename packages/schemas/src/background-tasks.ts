@@ -1,14 +1,6 @@
 import { z } from "zod";
 import { searchableEntities } from "./generated/entity-roster.gen";
-import { imageId, locationId, parseEntityRef } from "./identifiers";
-
-/** A record has one key per kind of single-item work, so re-admission replaces its Job. */
-export const imageMetadataJobKey = (imageId: string) =>
-  `image-metadata:${imageId}`;
-export const locationAiJobKey = (
-  kind: "location-ai.description.refresh" | "location-ai.inventory.refresh",
-  locationId: string,
-) => `${kind}:${locationId}`;
+import { locationId, parseEntityRef } from "./identifiers";
 
 const taskEnvelopeFields = {
   /** Timestamp retained with the durable admission input. */
@@ -35,51 +27,17 @@ const entityEmbeddingRefreshTaskSchema = z
     return { ...task, entityKind: ref.entity, entityId: ref.id, ref };
   });
 
-export const locationAiDescriptionRefreshTaskSchema = z.object({
-  kind: z.literal("location-ai.description.refresh"),
-  ...taskEnvelopeFields,
-  locationId,
-});
-
-export const locationAiInventoryRefreshTaskSchema = z.object({
+const locationAiInventoryRefreshTaskSchema = z.object({
   kind: z.literal("location-ai.inventory.refresh"),
   ...taskEnvelopeFields,
   locationId,
 });
 
-/**
- * A wakeup to (re-)extract an uploaded image's embedded EXIF/GPS metadata.
- * The handler re-reads `Image.metadataRevision` against
- * `IMAGE_METADATA_REVISION` before doing any work, so a duplicate or
- * out-of-order delivery after the image already advanced is a no-op.
- */
-export const imageMetadataExtractTaskSchema = z.object({
-  kind: z.literal("image-metadata.extract"),
-  ...taskEnvelopeFields,
-  imageId,
-});
-
-/**
- * Write the AI summary of one ended Run's end generation. The summarized Run
- * is `subjectRunId`, never the envelope's `runId`: the Job must not count as
- * the Run's own work (its wait, stall or progress).
- */
-export const runAiSummaryWriteTaskSchema = z.object({
-  kind: z.literal("run-ai.summary.write"),
-  ...taskEnvelopeFields,
-  subjectRunId: z.uuid(),
-  /** The `endedAt` this summary describes; a re-ended Run is a new key. */
-  endedAt: z.iso.datetime(),
-});
-/** One summary Job per Run end generation; an exhausted one is never re-owed. */
-export const runAiSummaryJobKey = (runId: string, endedAt: string) =>
-  `run-summary:${runId}:${Date.parse(endedAt)}`;
-
-export const maintenancePurchaseDiscoveryTaskSchema = z.object({
+const maintenancePurchaseDiscoveryTaskSchema = z.object({
   kind: z.literal("maintenance.purchase-discovery"),
   ...taskEnvelopeFields,
   /**
-   * Keyset cursor for the sender scan. A full page republishes the same Job
+   * Keyset cursor for the sender scan. A full page resumes the same Pass
    * with the last admitted Email id so the next pass does not reread it.
    */
   senderAfter: z
@@ -95,26 +53,22 @@ export const maintenancePurchaseDiscoveryTaskSchema = z.object({
  * only sets a flag on the origin's calendar Durable Object, so replay is
  * harmless; the handler throws on failure so the queue keeps retrying.
  */
-export const calendarFeedMarkDirtyTaskSchema = z.object({
+const calendarFeedMarkDirtyTaskSchema = z.object({
   kind: z.literal("calendar-feed.mark-dirty"),
   ...taskEnvelopeFields,
   origin: z.url(),
   reason: z.string().min(1),
 });
 
-/** Domain admission inputs. Publishers persist Job intent; transport carries only a wake. */
+/** Domain admission inputs. Publishers persist kernel intent; transport carries only a wake. */
 export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   entityEmbeddingRefreshTaskSchema,
-  locationAiDescriptionRefreshTaskSchema,
   locationAiInventoryRefreshTaskSchema,
-  imageMetadataExtractTaskSchema,
   maintenancePurchaseDiscoveryTaskSchema,
   calendarFeedMarkDirtyTaskSchema,
-  runAiSummaryWriteTaskSchema,
 ]);
 
 /** The parsed (branded) task a handler receives. */
-export type BackgroundTask = z.infer<typeof backgroundTaskSchema>;
 /** The task a publisher constructs, before ingress parsing. */
 export type BackgroundTaskInput = z.input<typeof backgroundTaskSchema>;
 

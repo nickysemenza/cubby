@@ -1,8 +1,8 @@
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { email as emailTable, orderMail } from "~/server/db/schema";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 type RetainedMailFixtureInput = typeof orderMail.$inferInsert &
   Pick<

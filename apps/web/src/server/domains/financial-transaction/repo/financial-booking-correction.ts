@@ -16,7 +16,7 @@ import type { Database } from "~/server/db";
 import {
   getDb,
   notDeleted,
-  withSnapshotWrite,
+  withHouseholdWrite,
   databaseForTransaction,
 } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
@@ -25,7 +25,9 @@ import {
   deleteExpenses,
   updateExpense,
 } from "~/server/domains/expense/repo/crud";
+import { digestValue } from "~/server/domains/financial-transaction/policy/booking-fingerprint";
 import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
+import { loadFinancialBookingLineage } from "~/server/domains/financial-transaction/repo/financial-booking";
 import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import {
@@ -35,7 +37,6 @@ import {
 import { constraintViolation } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-import { digestValue, loadFinancialBookingLineage } from "./financial-booking";
 import { updateFinancialTransaction } from "./financial-transaction";
 
 async function reimbursementDestination(
@@ -249,131 +250,87 @@ export async function commitFinancialBookingCorrection(
   review: FinancialBookingCorrectionPreview,
   actor: ActorContext,
 ) {
-  return withSnapshotWrite(
-    db,
-    async (tx) => {
-      const txDb = databaseForTransaction(tx);
-      const decisionDigest = await digestValue(
-        financialBookingCorrectionPreview.parse(review),
-      );
-      const transactionId = await resolveOrThrow(
-        txDb,
-        "financialTransaction",
-        review.transactionId,
-      );
-      const current = await getDb(txDb)
-        .query.financialTransaction.findFirst({
-          where: {
-            RAW: (table: PgTable) =>
-              relationalSql(
-                table,
-                and(
-                  eq(financialTransaction.id, transactionId),
-                  notDeleted(financialTransaction),
-                ),
+  return withHouseholdWrite(db, async (tx) => {
+    const txDb = databaseForTransaction(tx);
+    const decisionDigest = await digestValue(
+      financialBookingCorrectionPreview.parse(review),
+    );
+    const transactionId = await resolveOrThrow(
+      txDb,
+      "financialTransaction",
+      review.transactionId,
+    );
+    const current = await getDb(txDb)
+      .query.financialTransaction.findFirst({
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(
+                eq(financialTransaction.id, transactionId),
+                notDeleted(financialTransaction),
               ),
-          },
+            ),
+        },
+      })
+      .then((row) => (row ? transactionDollars(row) : row));
+    if (current?.bookingCorrectionReceipt) {
+      const receipt = z
+        .object({
+          digest: z.string(),
+          result: financialBookingCorrectionResult,
         })
-        .then((row) => (row ? transactionDollars(row) : row));
-      if (current?.bookingCorrectionReceipt) {
-        const receipt = z
-          .object({
-            digest: z.string(),
-            result: financialBookingCorrectionResult,
-          })
-          .parse(current.bookingCorrectionReceipt);
-        if (receipt.digest === decisionDigest) return receipt.result;
-        return constraintViolation(
-          "This booking already has a different reviewed correction. Refresh its financial record.",
-        );
-      }
-      await lockFinancialTransactionSources(tx, [review.transactionId]);
-      const fresh = await previewFinancialBookingCorrection(txDb, review);
-      if (
-        JSON.stringify(fresh) !==
-        JSON.stringify(financialBookingCorrectionPreview.parse(review))
-      )
-        return constraintViolation(
-          "The correction changed after review. Preview it again.",
-        );
-      const id = await resolveOrThrow(
-        txDb,
-        "financialTransaction",
-        review.transactionId,
+        .parse(current.bookingCorrectionReceipt);
+      if (receipt.digest === decisionDigest) return receipt.result;
+      return constraintViolation(
+        "This booking already has a different reviewed correction. Refresh its financial record.",
       );
-      if (review.action.kind === "attach_reimbursement") {
-        for (const line of review.lines)
-          await updateExpense(
-            txDb,
-            line.expenseId,
-            { purchaseId: review.action.purchaseId },
-            actor,
-          );
-        await updateFinancialTransaction(
+    }
+    await lockFinancialTransactionSources(tx, [review.transactionId]);
+    const fresh = await previewFinancialBookingCorrection(txDb, review);
+    if (
+      JSON.stringify(fresh) !==
+      JSON.stringify(financialBookingCorrectionPreview.parse(review))
+    )
+      return constraintViolation(
+        "The correction changed after review. Preview it again.",
+      );
+    const id = await resolveOrThrow(
+      txDb,
+      "financialTransaction",
+      review.transactionId,
+    );
+    if (review.action.kind === "attach_reimbursement") {
+      for (const line of review.lines)
+        await updateExpense(
           txDb,
-          review.transactionId,
-          {
-            allocations: [
-              { purchaseId: review.action.purchaseId, amount: review.amount },
-            ],
-          },
+          line.expenseId,
+          { purchaseId: review.action.purchaseId },
           actor,
         );
-        await getDb(txDb)
-          .update(financialTransaction)
-          .set({
-            bookingExpenseFingerprint: await digestValue(
-              await loadFinancialBookingLineage(txDb, review.transactionId),
-            ),
-          })
-          .where(eq(financialTransaction.id, id));
-        const result = financialBookingCorrectionResult.parse({
-          transactionId: review.transactionId,
-          purchaseId: review.action.purchaseId,
-          transferId: null,
-          retiredExpenseIds: [],
-        });
-        await getDb(txDb)
-          .update(financialTransaction)
-          .set({
-            bookingDecisionFingerprint: `corrected:${decisionDigest}`,
-            bookingCorrectionReceipt: { digest: decisionDigest, result },
-          })
-          .where(eq(financialTransaction.id, id));
-        return result;
-      }
-      const target = await readLedgerTransfer(txDb, review.action.transferId);
-      if (!target)
-        return constraintViolation("The selected transfer is no longer live.");
-      await deleteExpenses(
-        txDb,
-        review.lines.map((line) => line.expenseId),
-        actor,
-      );
       await updateFinancialTransaction(
         txDb,
         review.transactionId,
-        { allocations: [], kind: "account_transfer" },
-        actor,
-      );
-      await updateLedgerTransfer(
-        txDb,
-        review.action.transferId,
         {
-          evidenceTransactionIds: [
-            ...target.evidenceTransactionIds.filter(
-              (code) => code !== review.transactionId,
-            ),
-            review.transactionId,
+          allocations: [
+            { purchaseId: review.action.purchaseId, amount: review.amount },
           ],
         },
         actor,
       );
+      await getDb(txDb)
+        .update(financialTransaction)
+        .set({
+          bookingExpenseFingerprint: await digestValue(
+            await loadFinancialBookingLineage(txDb, review.transactionId),
+          ),
+        })
+        .where(eq(financialTransaction.id, id));
       const result = financialBookingCorrectionResult.parse({
         transactionId: review.transactionId,
-        purchaseId: null,
-        transferId: review.action.transferId,
-        retiredExpenseIds: review.lines.map((line) => line.expenseId),
+        purchaseId: review.action.purchaseId,
+        transferId: null,
+        retiredExpenseIds: [],
       });
       await getDb(txDb)
         .update(financialTransaction)
@@ -383,7 +340,47 @@ export async function commitFinancialBookingCorrection(
         })
         .where(eq(financialTransaction.id, id));
       return result;
-    },
-    { isolationLevel: "serializable" },
-  );
+    }
+    const target = await readLedgerTransfer(txDb, review.action.transferId);
+    if (!target)
+      return constraintViolation("The selected transfer is no longer live.");
+    await deleteExpenses(
+      txDb,
+      review.lines.map((line) => line.expenseId),
+      actor,
+    );
+    await updateFinancialTransaction(
+      txDb,
+      review.transactionId,
+      { allocations: [], kind: "account_transfer" },
+      actor,
+    );
+    await updateLedgerTransfer(
+      txDb,
+      review.action.transferId,
+      {
+        evidenceTransactionIds: [
+          ...target.evidenceTransactionIds.filter(
+            (code) => code !== review.transactionId,
+          ),
+          review.transactionId,
+        ],
+      },
+      actor,
+    );
+    const result = financialBookingCorrectionResult.parse({
+      transactionId: review.transactionId,
+      purchaseId: null,
+      transferId: review.action.transferId,
+      retiredExpenseIds: review.lines.map((line) => line.expenseId),
+    });
+    await getDb(txDb)
+      .update(financialTransaction)
+      .set({
+        bookingDecisionFingerprint: `corrected:${decisionDigest}`,
+        bookingCorrectionReceipt: { digest: decisionDigest, result },
+      })
+      .where(eq(financialTransaction.id, id));
+    return result;
+  });
 }

@@ -1,15 +1,18 @@
 import { runEntityId, vendorShortcode } from "@cubby/schemas/identifiers";
 import { coordinatorModelFor } from "@cubby/schemas/import-run-agent";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
+import { kernelWaitCause } from "@cubby/schemas/kernel/machinery";
 import { runFindingProblemSchema } from "@cubby/schemas/problems";
 import { purchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import { account } from "~/server/db/auth.schema";
 import { getDb, withTransaction } from "~/server/db/helpers";
+import { kernelPass } from "~/server/db/kernel-schema";
 import { run as runTable } from "~/server/db/schema";
 import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
 import type {
@@ -33,17 +36,12 @@ import {
 } from "~/server/domains/run/repo/run-control";
 import { loadRunDetail } from "~/server/domains/run/repo/run-detail";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { bringRunWaitingJobForward } from "~/server/generic/jobs/repo/operator";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { findOpenRunFindings } from "~/server/generic/problems/repo/detectors-import";
 import {
   runFinding,
   seedRunFindings,
 } from "~/server/testing/run-finding.fixtures";
-import { purchaseDispatchHandler } from "~/server/workflows/jobs";
 
-import { CoordinatorGateQueue } from "../operations/coordinator-gate";
 import { startControlledMailImport } from "../operations/gmail/controlled-import";
 import { waitForActiveMailboxImports } from "./controlled-mail-import";
 import { resolveRunFinding } from "./findings";
@@ -116,9 +114,16 @@ describe("purchase import run admission", () => {
 
   it("retries the same operation after a lost submission and never resubmits a started coordinator", async () => {
     const subject = await startAgentRun(await createMember());
-    const [intent] = await readJobs(ctx.db, { runId: subject.id });
+    const [intent] = await getDb(ctx.db)
+      .select()
+      .from(kernelPass)
+      .where(eq(kernelPass.key, subject.id));
     if (!intent) throw new Error("Expected transactional dispatch intent");
-    const event = purchaseAgentEvent.parse(intent.input);
+    const event = z
+      .object({
+        events: z.tuple([purchaseAgentEvent]).rest(purchaseAgentEvent),
+      })
+      .parse(intent.cursor).events[0];
     const dispatch = vi
       .fn<PurchaseImportRunAgentRpc["dispatch"]>()
       .mockRejectedValueOnce(new Error("Synthetic lost RPC reply"))
@@ -142,6 +147,7 @@ describe("purchase import run admission", () => {
       ) => updateAgentProgress(ctx.db, { ...progress, runId: subject.id }),
     });
     const env = {
+      claimToken: crypto.randomUUID(),
       run: () => services,
       coordinator: () => fromPartial<PurchaseImportRunAgentRpc>({ dispatch }),
     };
@@ -161,94 +167,6 @@ describe("purchase import run admission", () => {
       }),
     ).toBe(false);
   });
-  it("defers a dispatch while every coordinator turn is held and runs it once one is reserved", async () => {
-    const gate = new CoordinatorGateQueue(undefined, 1);
-    const ask = (runId: string, token: string) =>
-      gate.acquire({ runId, agent: `agent:${runId}`, token }, Date.now());
-    expect(ask("synthetic-holder", "holder-token").grant.held).toBe(true);
-
-    // A dispatch while every turn is held waits without spending an attempt.
-    const subject = await startAgentRun(await createMember());
-    const [intent] = await readJobs(ctx.db, { runId: subject.id });
-    if (!intent) throw new Error("Expected transactional dispatch intent");
-    const dispatch = vi.fn<PurchaseImportRunAgentRpc["dispatch"]>(async () => {
-      const { grant } = ask(subject.id, "subject-token");
-      return grant.held
-        ? { accepted: true }
-        : { accepted: false, waiting: { holders: grant.holders } };
-    });
-    const services = fromPartial<RunServices>({
-      coordinatorRetired: () => coordinatorRetired(ctx.db, subject.id),
-      canDispatchCoordinator: (eventId: string) =>
-        canDispatchRunCoordinator(ctx.db, { runId: subject.id, eventId }),
-      acknowledgeCoordinator: (eventId: string) =>
-        acknowledgeRunCoordinator(ctx.db, { runId: subject.id, eventId }),
-      loadScope: async () => {
-        const { public: scope } = await loadRunScope(ctx.db, subject.id);
-        return {
-          purpose: agentImportRunPurpose.parse(scope.purpose),
-          agentId: scope.agentId,
-          generation: scope.dispatchEventId,
-        };
-      },
-      updateAgentProgress: (
-        progress: Parameters<RunServices["updateAgentProgress"]>[0],
-      ) => updateAgentProgress(ctx.db, { ...progress, runId: subject.id }),
-    });
-    const handlers = {
-      "purchase.dispatch": purchaseDispatchHandler(async () => ({
-        run: () => services,
-        coordinator: () => fromPartial<PurchaseImportRunAgentRpc>({ dispatch }),
-      })),
-    };
-    // A gate that cannot answer is the same wait: no attempt is spent.
-    dispatch.mockResolvedValueOnce({
-      accepted: false,
-      waiting: { holders: 0, unavailable: true },
-    });
-    expect(await advanceJob(ctx.db, intent.id, handlers)).toBe("deferred");
-    const [unanswered] = await readJobs(ctx.db, { runId: subject.id });
-    expect(unanswered).toMatchObject({
-      state: "queued",
-      attempts: 0,
-      waitReason: "provider_capacity",
-    });
-    await bringRunWaitingJobForward(ctx.db, {
-      runId: subject.id,
-      kind: "purchase.dispatch",
-      waitReason: "provider_capacity",
-    });
-    expect(await advanceJob(ctx.db, intent.id, handlers)).toBe("deferred");
-    const [deferred] = await readJobs(ctx.db, { runId: subject.id });
-    expect(deferred).toMatchObject({
-      state: "queued",
-      attempts: 0,
-      waitReason: "provider_capacity",
-    });
-    expect(deferred!.availableAt.getTime()).toBeGreaterThan(Date.now());
-
-    // The released turn is reserved for this coordinator, which brings its
-    // waiting dispatch forward (the host's `wakeWaitingDispatch`).
-    expect(
-      gate.release(
-        { runId: "synthetic-holder", token: "holder-token" },
-        Date.now(),
-      ).notify,
-    ).toEqual([`agent:${subject.id}`]);
-    expect(
-      await bringRunWaitingJobForward(ctx.db, {
-        runId: subject.id,
-        kind: "purchase.dispatch",
-        waitReason: "provider_capacity",
-      }),
-    ).toBe(true);
-    const [woken] = await readJobs(ctx.db, { runId: subject.id });
-    expect(woken).toMatchObject({ state: "queued", waitReason: null });
-    expect(woken!.availableAt.getTime()).toBeLessThanOrEqual(Date.now());
-    expect(await advanceJob(ctx.db, intent.id, handlers)).toBe("succeeded");
-    expect(dispatch).toHaveBeenCalledTimes(3);
-  });
-
   it("retains queued automatic imports while a controlled Vendor waits for active work, until manual resume", async () => {
     const party = await createMember();
     const queued = await startAgentRun(party);
@@ -844,13 +762,11 @@ describe("purchase import run admission", () => {
         },
         fundingUnavailable,
       });
-    const resumes = async () => {
-      const { job } = await import("~/server/db/schema");
-      return getDb(ctx.db)
-        .select({ key: job.key })
-        .from(job)
-        .where(eq(job.kind, "run.funding-resume"));
-    };
+    const resumes = () =>
+      getDb(ctx.db)
+        .select({ key: kernelPass.key })
+        .from(kernelPass)
+        .where(eq(kernelPass.waitCause, kernelWaitCause.enum.funding));
 
     // Regression: the pause read "AI budget reached: $0 of $5" although the
     // gateway, not the budget, refused.

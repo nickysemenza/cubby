@@ -257,9 +257,20 @@ async function createIntegresql(postgresHost: string): Promise<void> {
   if (previousUrl) retireFixtureRunRecords(previousUrl);
   const stale = await integresqlDatabases();
   if (stale.length > 0) {
+    // Interrupted clones can be invalid: PostgreSQL permits DROP but refuses
+    // ALTER on them. Only actual templates need their template flag cleared.
+    const templates = new Set(
+      (
+        await psql(
+          "SELECT datname FROM pg_database WHERE datistemplate AND datconnlimit <> -2",
+        )
+      ).split("\n"),
+    );
     await psql(
       stale.flatMap((name) => [
-        `ALTER DATABASE "${name}" WITH IS_TEMPLATE false`,
+        ...(templates.has(name)
+          ? [`ALTER DATABASE "${name}" WITH IS_TEMPLATE false`]
+          : []),
         `DROP DATABASE "${name}" WITH (FORCE)`,
       ]),
     );

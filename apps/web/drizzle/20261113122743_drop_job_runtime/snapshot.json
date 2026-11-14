@@ -1,0 +1,163 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "72ccc498-6d2c-42b0-8a00-475d0765e1f7",
+  "prevIds": [
+    "f6302065-2a77-480c-8f11-6e3dc4c5fe77"
+  ],
+  "footprints": [
+    {
+      "statementType": "drop_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "Job"
+      ],
+      "writes": [
+        "s|tbl|public.Job",
+        "n|tbl|public.Job",
+        "e|tbl|public.Job",
+        "n|rel|public.Job",
+        "n|type|public.Job"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "drop",
+      "key": "tables\u0000[\"public\",\"Job\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Job\",\"id\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Job\",\"key\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Job\",\"kind\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Job\",\"state\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Job\",\"runId\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Job\",\"waitReason\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Job\",\"input\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Job\",\"cursor\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Job\",\"generation\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Job\",\"priority\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Job\",\"attempts\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Job\",\"maxAttempts\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Job\",\"availableAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Job\",\"leaseToken\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Job\",\"leaseExpiresAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Job\",\"lastClaimedAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Job\",\"error\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Job\",\"createdAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Job\",\"updatedAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Job\",\"failingSince\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Job\",\"lastExecution\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"Job_key_unique\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"Job_due_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"Job_run_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"Job_kind_claimed_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"Job_kind_state_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "fks\u0000[\"public\",\"Job\",\"Job_runId_Run_id_fk\"]"
+    },
+    {
+      "op": "drop",
+      "key": "pks\u0000[\"public\",\"Job\",\"Job_pkey\"]"
+    },
+    {
+      "op": "drop",
+      "key": "checks\u0000[\"public\",\"Job\",\"Job_state_check\"]"
+    },
+    {
+      "op": "drop",
+      "key": "checks\u0000[\"public\",\"Job\",\"Job_kind_retired_check\"]"
+    },
+    {
+      "op": "drop",
+      "key": "checks\u0000[\"public\",\"Job\",\"Job_waitReason_check\"]"
+    },
+    {
+      "op": "drop",
+      "key": "checks\u0000[\"public\",\"Job\",\"Job_attempts_check\"]"
+    }
+  ]
+}

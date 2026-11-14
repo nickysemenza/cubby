@@ -5,11 +5,13 @@ import type {
   PurchaseId,
 } from "@cubby/schemas/identifiers";
 import { productCategoryFeature } from "@cubby/schemas/product-category-fields";
+import { nullableWholeCentToMinor } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { unwrapDb } from "~/server/db/helpers";
 import { expense, project } from "~/server/db/schema";
 import {
@@ -18,9 +20,9 @@ import {
   expenseDerivedValueSql,
   prepareExpenseDerivedRead,
 } from "~/server/domains/expense/repo/expense-derived-read";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { loadRelatedSummary } from "~/server/generic/entity-links/repo/related-view";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 
 import { expenseDerivedCostsSql } from "./expense-derived-read";
@@ -59,11 +61,11 @@ describe("expense project allocation", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic no-project supplier",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
     });
     for (let index = 0; index < 16; index++)
-      await insertWithShortcode(ctx.db, "expense", {
+      await createPurchaseEventRecord(ctx.db, "expense", {
         name: `Synthetic unassigned line ${index}`,
         costType: "materials",
         lineKind: "principal",
@@ -107,13 +109,13 @@ describe("expense project allocation", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Unclassified allocation fixture vendor",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-20",
     });
-    await insertWithShortcode(ctx.db, "expense", {
+    await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Known receipt item",
-      cost: 10,
+      cost: 1000n,
       date: "2026-09-20",
       lineKind: "principal",
       costType: "materials",
@@ -121,9 +123,9 @@ describe("expense project allocation", () => {
       future: false,
       purchaseId: purchase.id,
     });
-    const unresolved = await insertWithShortcode(ctx.db, "expense", {
+    const unresolved = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Unresolved receipt row",
-      cost: -1.25,
+      cost: -125n,
       date: "2026-09-20",
       lineKind: "unclassified",
       costType: "services",
@@ -131,9 +133,9 @@ describe("expense project allocation", () => {
       future: false,
       purchaseId: purchase.id,
     });
-    const tax = await insertWithShortcode(ctx.db, "expense", {
+    const tax = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Known receipt tax",
-      cost: 0.25,
+      cost: 25n,
       date: "2026-09-20",
       lineKind: "tax",
       costType: "services",
@@ -176,14 +178,14 @@ describe("expense project allocation", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Allocation fixture vendor",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-20",
     });
     await Promise.all([
-      insertWithShortcode(ctx.db, "expense", {
+      createPurchaseEventRecord(ctx.db, "expense", {
         name: "Small principal",
-        cost: 10,
+        cost: 1000n,
         date: "2026-09-20",
         lineKind: "principal",
         costType: "materials",
@@ -192,9 +194,9 @@ describe("expense project allocation", () => {
         projectId: smallProject.id,
         purchaseId: purchase.id,
       }),
-      insertWithShortcode(ctx.db, "expense", {
+      createPurchaseEventRecord(ctx.db, "expense", {
         name: "Large principal",
-        cost: 20,
+        cost: 2000n,
         date: "2026-09-20",
         lineKind: "principal",
         costType: "materials",
@@ -203,9 +205,9 @@ describe("expense project allocation", () => {
         projectId: largeProject.id,
         purchaseId: purchase.id,
       }),
-      insertWithShortcode(ctx.db, "expense", {
+      createPurchaseEventRecord(ctx.db, "expense", {
         name: "Known zero principal",
-        cost: 0,
+        cost: 0n,
         date: "2026-09-20",
         lineKind: "principal",
         costType: "materials",
@@ -215,9 +217,9 @@ describe("expense project allocation", () => {
         purchaseId: purchase.id,
       }),
     ]);
-    const tax = await insertWithShortcode(ctx.db, "expense", {
+    const tax = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Tax",
-      cost: 0.05,
+      cost: 5n,
       date: "2026-09-20",
       lineKind: "tax",
       costType: "services",
@@ -226,13 +228,17 @@ describe("expense project allocation", () => {
       purchaseId: purchase.id,
     });
 
-    const unrelatedPurchase = await insertWithShortcode(ctx.db, "purchase", {
-      vendorId: vendor.id,
-      date: "2026-09-20",
-    });
-    const unrelated = await insertWithShortcode(ctx.db, "expense", {
+    const unrelatedPurchase = await createPurchaseEventRecord(
+      ctx.db,
+      "purchase",
+      {
+        vendorId: vendor.id,
+        date: "2026-09-20",
+      },
+    );
+    const unrelated = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Unrelated principal",
-      cost: 100,
+      cost: 10000n,
       date: "2026-09-20",
       lineKind: "principal",
       costType: "materials",
@@ -240,9 +246,9 @@ describe("expense project allocation", () => {
       future: false,
       purchaseId: unrelatedPurchase.id,
     });
-    const standalone = await insertWithShortcode(ctx.db, "expense", {
+    const standalone = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Standalone credit",
-      cost: -5,
+      cost: -500n,
       date: "2026-09-20",
       lineKind: "principal",
       costType: "materials",
@@ -443,14 +449,14 @@ describe("expense project allocation", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Partial coverage vendor",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-20",
     });
     await Promise.all([
-      insertWithShortcode(ctx.db, "expense", {
+      createPurchaseEventRecord(ctx.db, "expense", {
         name: "Priced principal",
-        cost: 10,
+        cost: 1000n,
         date: "2026-09-20",
         lineKind: "principal",
         costType: "materials",
@@ -459,7 +465,7 @@ describe("expense project allocation", () => {
         projectId: pricedProject.id,
         purchaseId: purchase.id,
       }),
-      insertWithShortcode(ctx.db, "expense", {
+      createPurchaseEventRecord(ctx.db, "expense", {
         name: "Unpriced principal",
         cost: null,
         date: "2026-09-20",
@@ -471,9 +477,9 @@ describe("expense project allocation", () => {
         purchaseId: purchase.id,
       }),
     ]);
-    const fee = await insertWithShortcode(ctx.db, "expense", {
+    const fee = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Partially covered fee",
-      cost: 1,
+      cost: 100n,
       date: "2026-09-20",
       lineKind: "fee",
       costType: "services",
@@ -535,15 +541,15 @@ describe("expense project allocation", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Refund allocation vendor",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-20",
     });
     await Promise.all(
       [-10, -20].map((cost, index) =>
-        insertWithShortcode(ctx.db, "expense", {
+        createPurchaseEventRecord(ctx.db, "expense", {
           name: `Refund principal ${index}`,
-          cost,
+          cost: nullableWholeCentToMinor(cost),
           date: "2026-09-20",
           lineKind: "principal",
           costType: "materials",
@@ -554,9 +560,9 @@ describe("expense project allocation", () => {
         }),
       ),
     );
-    const discount = await insertWithShortcode(ctx.db, "expense", {
+    const discount = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Refund adjustment",
-      cost: -0.05,
+      cost: -5n,
       date: "2026-09-20",
       lineKind: "discount",
       costType: "materials",
@@ -577,13 +583,13 @@ describe("expense project allocation", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Incomplete allocation vendor",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-20",
     });
-    const fee = await insertWithShortcode(ctx.db, "expense", {
+    const fee = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Unweighted shared fee",
-      cost: 2.5,
+      cost: 250n,
       date: "2026-09-20",
       lineKind: "fee",
       costType: "services",
@@ -626,15 +632,15 @@ describe("expense project allocation", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "One-cent allocation vendor",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-20",
     });
     await Promise.all(
       [60, 40].map((cost, index) =>
-        insertWithShortcode(ctx.db, "expense", {
+        createPurchaseEventRecord(ctx.db, "expense", {
           name: `Weighted principal ${cost}`,
-          cost,
+          cost: nullableWholeCentToMinor(cost),
           date: "2026-09-20",
           lineKind: "principal",
           costType: "materials",
@@ -645,9 +651,9 @@ describe("expense project allocation", () => {
         }),
       ),
     );
-    const fee = await insertWithShortcode(ctx.db, "expense", {
+    const fee = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "One-cent fee",
-      cost: 0.01,
+      cost: 1n,
       date: "2026-09-20",
       lineKind: "fee",
       costType: "services",
@@ -690,16 +696,16 @@ describe("expense project allocation", () => {
       name: "Synthetic inheritance supplier",
     });
     const [withDefault, removedDefault, deleted] = await Promise.all([
-      insertWithShortcode(ctx.db, "purchase", {
+      createPurchaseEventRecord(ctx.db, "purchase", {
         vendorId: vendor.id,
         defaultProjectId: fallback.id,
         defaultTrade: "plumbing",
       }),
-      insertWithShortcode(ctx.db, "purchase", {
+      createPurchaseEventRecord(ctx.db, "purchase", {
         vendorId: vendor.id,
         defaultProjectId: gone.id,
       }),
-      insertWithShortcode(ctx.db, "purchase", {
+      createPurchaseEventRecord(ctx.db, "purchase", {
         vendorId: vendor.id,
         defaultProjectId: fallback.id,
         defaultTrade: "plumbing",
@@ -716,9 +722,9 @@ describe("expense project allocation", () => {
       categoryId: foodCategory!.id,
     });
     const principal = (extra: Partial<typeof expense.$inferInsert>) =>
-      insertWithShortcode(ctx.db, "expense", {
+      createPurchaseEventRecord(ctx.db, "expense", {
         name: "Synthetic inherited line",
-        cost: 1,
+        cost: 100n,
         date: "2026-09-20",
         lineKind: "principal",
         costType: "materials",
@@ -785,7 +791,7 @@ describe("expense project allocation", () => {
       name: "Synthetic split supplier",
     });
     const order = (defaultProjectId?: ProjectId) =>
-      insertWithShortcode(ctx.db, "purchase", {
+      createPurchaseEventRecord(ctx.db, "purchase", {
         vendorId: vendor.id,
         date: "2026-09-20",
         defaultProjectId,
@@ -796,9 +802,9 @@ describe("expense project allocation", () => {
       cost: number | null,
       extra: Partial<typeof expense.$inferInsert> = {},
     ) =>
-      insertWithShortcode(ctx.db, "expense", {
+      createPurchaseEventRecord(ctx.db, "expense", {
         name: `Synthetic ${lineKind} ${cost}`,
-        cost,
+        cost: nullableWholeCentToMinor(cost),
         date: "2026-09-20",
         lineKind,
         costType: lineKind === "principal" ? "materials" : "services",
@@ -954,15 +960,15 @@ describe("expense project allocation", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Mixed assignment vendor",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-20",
     });
     await Promise.all(
       [project.id, null].map((projectId, index) =>
-        insertWithShortcode(ctx.db, "expense", {
+        createPurchaseEventRecord(ctx.db, "expense", {
           name: `Mixed principal ${index}`,
-          cost: 50,
+          cost: 5000n,
           date: "2026-09-20",
           lineKind: "principal",
           costType: "materials",
@@ -973,9 +979,9 @@ describe("expense project allocation", () => {
         }),
       ),
     );
-    const fee = await insertWithShortcode(ctx.db, "expense", {
+    const fee = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Mixed assignment fee",
-      cost: 0.03,
+      cost: 3n,
       date: "2026-09-20",
       lineKind: "fee",
       costType: "services",

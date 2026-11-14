@@ -4,12 +4,33 @@ import { describe, expect, it, vi } from "vitest";
 import * as cfEnv from "~/server/cf-env";
 import { runWithExecutionCtx } from "~/server/cf-env";
 
-import { wakeAt, wakeJobs } from "./publish";
+import { coalesceBackgroundWakes, wakeAt, wakeKernel } from "./publish";
 
 describe("Job wake transport", () => {
+  it("collapses a page's dirty, recovery and successor wakes into one permit", async () => {
+    const sendBatch = vi.fn().mockResolvedValue(undefined);
+    const getQueue = vi
+      .spyOn(cfEnv, "getBackgroundQueue")
+      .mockReturnValue({ sendBatch });
+    try {
+      await coalesceBackgroundWakes(async () => {
+        for (let i = 0; i < 256; i++) {
+          await wakeKernel({ source: "synthetic.dirty" });
+          await wakeAt(new Date(Date.now() + 90_000), {
+            source: "synthetic.recovery",
+          });
+        }
+        await wakeAt(new Date(), { source: "synthetic.successor" });
+        expect(sendBatch).not.toHaveBeenCalled();
+      });
+      expect(sendBatch).toHaveBeenCalledTimes(1);
+    } finally {
+      getQueue.mockRestore();
+    }
+  });
   it("sends only a versioned permit, with no domain payload", async () => {
     const sendBatch = vi.fn().mockResolvedValue(undefined);
-    await wakeJobs({ source: "synthetic-test", queue: { sendBatch } });
+    await wakeKernel({ source: "synthetic-test", queue: { sendBatch } });
     expect(sendBatch).toHaveBeenCalledWith([
       { body: { version: 3, queueType: "background" } },
     ]);
@@ -21,7 +42,7 @@ describe("Job wake transport", () => {
     const request = runWithExecutionCtx(
       { waitUntil: (task) => retained.push(task) },
       async () => {
-        await wakeJobs({
+        await wakeKernel({
           source: "synthetic-save",
           queue: { sendBatch: () => sent.promise },
         });
@@ -41,7 +62,7 @@ describe("Job wake transport", () => {
   it("awaits the transport when no request owns its lifetime", async () => {
     const sent = Promise.withResolvers<void>();
     let settled = false;
-    const wake = wakeJobs({
+    const wake = wakeKernel({
       source: "synthetic-cron",
       queue: { sendBatch: () => sent.promise },
     }).then(() => {
@@ -67,7 +88,7 @@ describe("Job wake transport", () => {
         .mockRejectedValueOnce(new Error("Synthetic queue outage"))
         .mockRejectedValueOnce(new Error("Synthetic queue outage"))
         .mockResolvedValue(undefined);
-      const wake = wakeJobs({ source: "run-launch", queue: { sendBatch } });
+      const wake = wakeKernel({ source: "run-launch", queue: { sendBatch } });
       await vi.runAllTimersAsync();
       await wake;
       expect(sendBatch).toHaveBeenCalledTimes(3);
@@ -82,7 +103,7 @@ describe("Job wake transport", () => {
       const sendBatch = vi
         .fn()
         .mockRejectedValue(new Error("Synthetic outage"));
-      const wake = wakeJobs({ source: "run-launch", queue: { sendBatch } });
+      const wake = wakeKernel({ source: "run-launch", queue: { sendBatch } });
       await vi.runAllTimersAsync();
       await expect(wake).resolves.toBeUndefined();
       expect(sendBatch).toHaveBeenCalledTimes(4);

@@ -1,0 +1,1124 @@
+/**
+ * Load and compute for one batch of scopes of one kind (ADR 0029 sections 2
+ * and 3). `load` runs first; `reconcile` then runs as a pure function. When
+ * it asks for answers or decisions the batch has not loaded, the kernel loads
+ * them for the whole batch in one statement each and runs `reconcile` again,
+ * so a batch issues a bounded number of statements however many scopes it has.
+ */
+import type { KernelActor, KernelGap } from "@cubby/schemas/kernel/stage";
+import { sourceActor } from "@cubby/schemas/kernel/stage";
+import { and, sql } from "drizzle-orm";
+
+import { withDatabaseOperationPhase } from "~/server/db/db-observability";
+import { entityIdentity } from "~/server/db/entity-identity-schema";
+import {
+  textArrayParam,
+  columnArrayParam,
+} from "~/server/db/helpers/array-param";
+import { answer, evidenceBinding, recordKey } from "~/server/db/kernel-schema";
+import type { RepositoryQueryClient } from "~/server/db/repository-access.boundary";
+import { isShortcodeEntity } from "~/server/entity-kernel/repo/entity-identity";
+
+import type {
+  AskKind,
+  Binding,
+  ColumnRef,
+  ColumnValues,
+  DecisionInForce,
+  Desired,
+  DesiredRecord,
+  FactRef,
+  Json,
+  Key,
+  Pure,
+  Reconciler,
+  ScopeRef,
+} from "./define";
+import {
+  askEnvelope,
+  envelopeText,
+  inputHashOf,
+  type AskEnvelope,
+} from "./envelope";
+import {
+  answerKey,
+  decisionKey,
+  hashCanonical,
+  recordIdentity,
+  recordShortcode,
+  VETO_SEPARATOR,
+} from "./keys";
+import {
+  createReads,
+  idColumn,
+  KernelContractError,
+  LockedReadChangedError,
+  KeyLedger,
+  parseRevisions,
+  revisionsSource,
+  type AnswerLoader,
+  type ReadMode,
+} from "./reads";
+import {
+  bindingWrites,
+  validateKernelReadKeys,
+  type KernelRegistry,
+} from "./registry";
+import { isoText } from "./sql-time";
+
+type Q = Pick<RepositoryQueryClient, "select" | "execute">;
+
+type EntityReference = Pick<
+  typeof entityIdentity.$inferSelect,
+  "id" | "kind" | "mergedIntoId" | "deletedAt"
+>;
+
+/** Rounds of demand-driven loading before a scope is failed as unstable. */
+const MAX_ROUNDS = 8;
+
+type OwnedRecord = {
+  target: ColumnRef;
+  naturalKey: string;
+  entityId: string;
+  minted: boolean;
+  rejected: boolean;
+  /** The stored row the load saw; the apply compares against it. */
+  stored: ColumnValues | null;
+};
+
+type MissingAnswer = {
+  kind: AskKind;
+  envelope: AskEnvelope;
+  inputHash: string;
+  /** Every read of this envelope fills a value no accepted record holds. */
+  fill: boolean;
+};
+
+type UsedAnswer = {
+  kind: AskKind;
+  inputHash: string;
+};
+
+export type Computed = {
+  scope: ScopeRef;
+  reconciler: Reconciler;
+  /** Every key the scope read, with the revision each saw. */
+  keys: ReadonlyMap<Key, number>;
+  desired: Desired | null;
+  error: unknown;
+  owned: readonly OwnedRecord[];
+  storedBindings: readonly Binding[];
+  /** Evidence facts the load read, in read order. */
+  facts: readonly FactRef[];
+  /** Stored rows of records the scope patches, by table name then id. */
+  patched: ReadonlyMap<string, ReadonlyMap<string, ColumnValues>>;
+  missing: readonly MissingAnswer[];
+  answers: readonly UsedAnswer[];
+  decisions: readonly { subject: string; id: string }[];
+  inputsHash: string;
+  durationMs: number;
+};
+
+export type ComputeMode = ReadMode & {
+  /** Assignments treated as released, for a reset preview that writes nothing. */
+  released?: readonly { subject: string; field: string }[];
+};
+
+/** The record key's entity column: the manifest entity, or the table name. */
+export const recordEntity = (target: ColumnRef) => target.entity ?? target.name;
+
+type DecisionRow = {
+  id: string;
+  channel: string;
+  subject: string;
+  slot: string;
+  kind: string;
+  value: Json | null;
+  at: string;
+};
+
+type Tracked = {
+  answers: Map<
+    string,
+    { kind: AskKind; envelope: AskEnvelope; request: boolean; fill: boolean }
+  >;
+  subjects: Set<string>;
+  references: Set<string>;
+};
+
+async function computeBatchInPhase(
+  q: Q,
+  registry: KernelRegistry,
+  reconciler: Reconciler,
+  scopes: readonly ScopeRef[],
+  mode: ComputeMode,
+): Promise<Computed[]> {
+  const started = performance.now();
+  const ledger = new KeyLedger();
+  const scopeKeys = scopes.map((scope) => scope.key);
+  const loadedRevisions = new Map<Key, number>();
+  const revisions: Revisions = {
+    held(keys) {
+      if (!mode.lockedRevisions) return null;
+      if (keys.some((key) => !mode.lockedRevisions!.has(key)))
+        throw new LockedReadChangedError();
+      return new Map(keys.map((key) => [key, mode.lockedRevisions!.get(key)!]));
+    },
+    observe(revs) {
+      for (const [key, rev] of revs)
+        if (!loadedRevisions.has(key)) loadedRevisions.set(key, rev);
+      return revs;
+    },
+  };
+  /** Answers by envelope text: the row's output, or null once known missing. */
+  const answers = new Map<string, { inputHash: string; output: Json | null }>();
+  // Load-time answer reads of one tick share a statement.
+  let queuedAnswers = new Map<
+    string,
+    { kind: AskKind; envelope: AskEnvelope; scopes: Set<string> }
+  >();
+  let answerFlush: Promise<void> | null = null;
+  const readAnswers: AnswerLoader = async (asking, requested) => {
+    const texts = requested.map(({ kind, input }) => {
+      const envelope = askEnvelope(kind, input);
+      const text = envelopeText(envelope);
+      const entry = queuedAnswers.get(text) ?? {
+        kind,
+        envelope,
+        scopes: new Set<string>(),
+      };
+      for (const scope of asking) entry.scopes.add(scope);
+      queuedAnswers.set(text, entry);
+      return text;
+    });
+    answerFlush ??= Promise.resolve().then(() => {
+      const wanted = queuedAnswers;
+      queuedAnswers = new Map();
+      answerFlush = null;
+      return loadAnswers(q, wanted, answers, ledger, revisions);
+    });
+    await answerFlush;
+    return texts.map((text) => answers.get(text)?.output ?? null);
+  };
+  const reads = createReads(
+    q,
+    reconciler,
+    scopeKeys,
+    ledger,
+    mode,
+    readAnswers,
+  );
+  const released = new Set(
+    (mode.released ?? []).map(
+      (entry) => `${entry.subject}\u0000${entry.field}`,
+    ),
+  );
+
+  let inputs: Map<string, unknown>;
+  let owned: Map<string, OwnedRecord[]>;
+  let storedBindings: Map<string, Binding[]>;
+  try {
+    [inputs, owned, storedBindings] = await Promise.all([
+      reconciler.load(reads, scopeKeys),
+      loadOwned(q, reconciler, scopes),
+      loadStoredBindings(q, reconciler, scopes),
+    ]);
+  } catch (error) {
+    // A keyed loader can reject one scope's malformed evidence. Retry smaller
+    // batches before attributing that failure to otherwise healthy scopes.
+    if (scopes.length > 1 && !mode.locked) {
+      const middle = Math.ceil(scopes.length / 2);
+      const results: Computed[] = [];
+      for (const group of [scopes.slice(0, middle), scopes.slice(middle)])
+        results.push(
+          ...(await computeBatchInPhase(q, registry, reconciler, group, mode)),
+        );
+      return results;
+    }
+    return scopes.map((scope) =>
+      failed(scope, reconciler, error, performance.now() - started),
+    );
+  }
+
+  const decisions = new Map<string, DecisionRow[]>();
+  const loadedSubjects = new Set<string>();
+  const usedBy = new Map<string, Tracked>(
+    scopes.map((scope) => [
+      scope.key,
+      {
+        answers: new Map(),
+        subjects: new Set<string>(),
+        references: new Set<string>(),
+      },
+    ]),
+  );
+
+  const shortcodeOwners = new Map<string, string>();
+  const entityReferences = new Map<string, EntityReference>();
+  const loadedReferences = new Set<string>();
+
+  let results = new Map<string, { desired: Desired | null; error: unknown }>();
+  for (let round = 0; ; round++) {
+    results = new Map();
+    const wantedAnswers = new Map<
+      string,
+      { kind: AskKind; envelope: AskEnvelope; scopes: Set<string> }
+    >();
+    const wantedSubjects = new Map<string, Set<string>>();
+    const wantedReferences = new Set<string>();
+    const creations = new Map<
+      string,
+      { id: string; shortcode: string | null }
+    >();
+    const creationValues = new Map<
+      string,
+      { inputs: ColumnValues[]; value: ColumnValues }
+    >();
+    for (const scope of [...scopes].sort((a, b) =>
+      a.key < b.key ? -1 : a.key > b.key ? 1 : 0,
+    )) {
+      const tracked = usedBy.get(scope.key)!;
+      tracked.answers.clear();
+      tracked.subjects.clear();
+      tracked.references.clear();
+      if (!inputs.has(scope.key)) {
+        results.set(scope.key, {
+          desired: null,
+          error: new KernelContractError(
+            `Reconciler ${reconciler.scope} loaded no input for scope ${scope.key}`,
+          ),
+        });
+        continue;
+      }
+      const pure = createPure(registry, reconciler, {
+        scope,
+        shortcodeOwners,
+        entityReferences,
+        owned: owned.get(scope.key) ?? [],
+        answers,
+        decisions,
+        tracked,
+        released,
+        creations,
+        creationValues,
+      });
+      try {
+        results.set(scope.key, {
+          desired: reconciler.reconcile(inputs.get(scope.key), pure),
+          error: null,
+        });
+      } catch (error) {
+        results.set(scope.key, { desired: null, error });
+      }
+      for (const ref of tracked.references)
+        if (!loadedReferences.has(ref)) wantedReferences.add(ref);
+      for (const [text, request] of tracked.answers)
+        if (!answers.has(text)) {
+          const wanted = wantedAnswers.get(text) ?? {
+            ...request,
+            scopes: new Set<string>(),
+          };
+          wanted.scopes.add(scope.key);
+          wantedAnswers.set(text, wanted);
+        }
+      for (const subject of tracked.subjects)
+        if (!loadedSubjects.has(subject)) {
+          const wanted = wantedSubjects.get(subject) ?? new Set<string>();
+          wanted.add(scope.key);
+          wantedSubjects.set(subject, wanted);
+        }
+    }
+    for (const code of shortcodeOwners.keys())
+      if (!loadedReferences.has(code)) wantedReferences.add(code);
+    if (!wantedAnswers.size && !wantedSubjects.size && !wantedReferences.size)
+      break;
+    if (round + 1 >= MAX_ROUNDS) {
+      for (const scope of scopes)
+        results.set(scope.key, {
+          desired: null,
+          error: new KernelContractError(
+            `Reconciler ${reconciler.scope} kept requesting new inputs after ${MAX_ROUNDS} rounds`,
+          ),
+        });
+      break;
+    }
+    await Promise.all([
+      (async () => {
+        if (!wantedReferences.size) return;
+        let pending = [...wantedReferences];
+        while (pending.length) {
+          for (const ref of pending) loadedReferences.add(ref);
+          const ids = pending.filter((ref) =>
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+              ref,
+            ),
+          );
+          const codes = pending
+            .filter((ref) => !ids.includes(ref))
+            .map((ref) => ref.toUpperCase());
+          const rows = await q
+            .select()
+            .from(entityIdentity)
+            .where(
+              sql`${entityIdentity.id} = ANY(${columnArrayParam(ids)}) OR ${entityIdentity.shortcode} = ANY(${textArrayParam(codes)})`,
+            );
+          pending = [];
+          for (const row of rows) {
+            entityReferences.set(row.id, row);
+            if (row.shortcode) {
+              shortcodeOwners.set(row.shortcode, row.id);
+              entityReferences.set(row.shortcode, row);
+            }
+            if (row.mergedIntoId && !loadedReferences.has(row.mergedIntoId))
+              pending.push(row.mergedIntoId);
+          }
+        }
+      })(),
+      loadAnswers(q, wantedAnswers, answers, ledger, revisions),
+      loadDecisions(
+        q,
+        wantedSubjects,
+        decisions,
+        loadedSubjects,
+        ledger,
+        revisions,
+      ),
+    ]);
+  }
+
+  const patched = await loadPatched(q, [...results.values()]);
+  const durationMs = performance.now() - started;
+  return Promise.all(
+    scopes.map(async (scope): Promise<Computed> => {
+      const result = results.get(scope.key)!;
+      const tracked = usedBy.get(scope.key)!;
+      ledger.record(scope.key, loadedRevisions, [
+        ...[...tracked.subjects].map(decisionKey),
+        ...[...tracked.answers.keys()].flatMap((text) => {
+          const known = answers.get(text);
+          return known ? [answerKey(known.inputHash)] : [];
+        }),
+      ]);
+      const keys = ledger.of(scope.key);
+      validateKernelReadKeys([...registry.reconcilers.values()], keys.keys());
+      const missing: MissingAnswer[] = [];
+      const used: UsedAnswer[] = [];
+      for (const [text, request] of tracked.answers) {
+        const known = answers.get(text);
+        if (!known) continue;
+        if (known.output === null && request.request)
+          missing.push({ ...request, inputHash: known.inputHash });
+        else if (known.output !== null)
+          used.push({ kind: request.kind, inputHash: known.inputHash });
+      }
+      const decided = [...tracked.subjects].flatMap((subject) =>
+        (decisions.get(subject) ?? []).map((row) => ({ subject, id: row.id })),
+      );
+      return {
+        scope,
+        reconciler,
+        keys,
+        desired: result.desired,
+        error: result.error,
+        owned: owned.get(scope.key) ?? [],
+        storedBindings: storedBindings.get(scope.key) ?? [],
+        facts: ledger.factsOf(scope.key),
+        patched,
+        missing,
+        answers: used,
+        decisions: decided,
+        inputsHash: await hashCanonical(
+          [...keys].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+        ),
+        durationMs,
+      };
+    }),
+  );
+}
+
+function failed(
+  scope: ScopeRef,
+  reconciler: Reconciler,
+  error: unknown,
+  durationMs: number,
+): Computed {
+  return {
+    scope,
+    reconciler,
+    keys: new Map(),
+    desired: null,
+    error,
+    owned: [],
+    storedBindings: [],
+    facts: [],
+    patched: new Map(),
+    missing: [],
+    answers: [],
+    decisions: [],
+    inputsHash: "",
+    durationMs,
+  };
+}
+
+/** The stored rows a batch's patches target, read before the apply compares them. */
+async function loadPatched(
+  q: Q,
+  results: readonly { desired: Desired | null }[],
+): Promise<Map<string, Map<string, ColumnValues>>> {
+  const byTable = new Map<string, { target: ColumnRef; ids: Set<string> }>();
+  for (const result of results)
+    for (const patch of result.desired?.patches ?? []) {
+      const entry = byTable.get(patch.target.name) ?? {
+        target: patch.target,
+        ids: new Set<string>(),
+      };
+      entry.ids.add(patch.id);
+      byTable.set(patch.target.name, entry);
+    }
+  const patched = new Map<string, Map<string, ColumnValues>>();
+  await Promise.all(
+    [...byTable].map(async ([name, { target, ids }]) => {
+      const rows: ColumnValues[] = await q
+        .select()
+        .from(target.table)
+        .where(
+          sql`${idColumn(target.table)} = ANY(${columnArrayParam([...ids])})`,
+        );
+      patched.set(name, new Map(rows.map((row) => [String(row.id), row])));
+    }),
+  );
+  return patched;
+}
+
+/** Locked runs reuse the held revisions; unlocked reads return their own. */
+type Revisions = {
+  held(keys: readonly Key[]): Map<Key, number> | null;
+  observe(revs: Map<Key, number>): Map<Key, number>;
+};
+
+async function loadAnswers(
+  q: Q,
+  wanted: ReadonlyMap<
+    string,
+    { kind: AskKind; envelope: AskEnvelope; scopes: Set<string> }
+  >,
+  answers: Map<string, { inputHash: string; output: Json | null }>,
+  ledger: KeyLedger,
+  revisions: Revisions,
+) {
+  if (!wanted.size) return;
+  const hashed = await Promise.all(
+    [...wanted].map(async ([text, request]) => ({
+      text,
+      request,
+      inputHash: await inputHashOf(request.envelope),
+    })),
+  );
+  const keys = hashed.map((entry) => answerKey(entry.inputHash));
+  const where = sql`${answer.inputHash} = ANY(${textArrayParam(hashed.map((entry) => entry.inputHash))})`;
+  const held = revisions.held(keys);
+  const fields = { inputHash: answer.inputHash, output: answer.output };
+  let rows: { inputHash: string | null; output: Json | null }[];
+  let revs: Map<Key, number>;
+  if (held) {
+    revs = held;
+    rows = await q.select(fields).from(answer).where(where);
+  } else {
+    // One statement for the revisions and the answers; see `selectWithRevisions`.
+    const result = await q
+      .select({
+        revs: sql<Record<string, number | string>>`revisions.revs`,
+        ...fields,
+      })
+      .from(revisionsSource(keys))
+      .leftJoin(answer, where);
+    revs = parseRevisions(keys, result[0]?.revs);
+    rows = result;
+  }
+  revisions.observe(revs);
+  const found = new Map(
+    rows.flatMap((row) => (row.inputHash ? [[row.inputHash, row.output]] : [])),
+  );
+  for (const entry of hashed) {
+    answers.set(entry.text, {
+      inputHash: entry.inputHash,
+      output: found.get(entry.inputHash) ?? null,
+    });
+    for (const scope of entry.request.scopes)
+      ledger.record(scope, revs, [answerKey(entry.inputHash)]);
+  }
+}
+
+async function loadDecisions(
+  q: Q,
+  wanted: ReadonlyMap<string, Set<string>>,
+  decisions: Map<string, DecisionRow[]>,
+  loaded: Set<string>,
+  ledger: KeyLedger,
+  revisions: Revisions,
+) {
+  if (!wanted.size) return;
+  const subjects = [...wanted.keys()];
+  const keys = subjects.map(decisionKey);
+  const held = revisions.held(keys);
+  // The newest row per (subject, channel, slot) is in force; an identity
+  // decision is stored once under its first subject and read from both.
+  // The text column is not named `at`: ORDER BY would sort by it instead of
+  // the microsecond column.
+  const inForce = sql`
+    SELECT DISTINCT ON (d.subject, d.channel, d.slot)
+      d.id, d.channel, d.subject, d.slot, d.other, d.kind, d.value,
+      ${isoText(sql`d.at`)} AS "atText"
+    FROM "Decision" d
+    WHERE d.subject = ANY(${textArrayParam(subjects)}) OR d.other = ANY(${textArrayParam(subjects)})
+    ORDER BY d.subject, d.channel, d.slot, d.at DESC, d.id DESC`;
+  type Row = Omit<DecisionRow, "at"> & { other: string | null; atText: string };
+  // Unlocked, one statement reads the revisions and the decisions; see `selectWithRevisions`.
+  const result = await q.execute<
+    Row & { revs?: Record<string, number | string> }
+  >(
+    held
+      ? inForce
+      : sql`SELECT revisions.revs, decided.* FROM ${revisionsSource(keys)} LEFT JOIN LATERAL (${inForce}) decided ON true`,
+  );
+  const revs = revisions.observe(
+    held ?? parseRevisions(keys, result.rows[0]?.revs),
+  );
+  for (const subject of subjects) {
+    loaded.add(subject);
+    decisions.set(subject, []);
+  }
+  for (const { atText, revs: _revs, ...rest } of result.rows) {
+    if (rest.id === null) continue;
+    const row = { ...rest, at: atText };
+    if (decisions.has(row.subject)) decisions.get(row.subject)!.push(row);
+    if (row.other && decisions.has(row.other))
+      decisions
+        .get(row.other)!
+        .push({ ...row, subject: row.other, slot: row.subject });
+  }
+  for (const [subject, scopes] of wanted)
+    for (const scope of scopes)
+      ledger.record(scope, revs, [decisionKey(subject)]);
+}
+
+async function loadOwned(
+  q: Q,
+  reconciler: Reconciler,
+  scopes: readonly ScopeRef[],
+): Promise<Map<string, OwnedRecord[]>> {
+  const owned = new Map<string, OwnedRecord[]>();
+  const targets = reconciler.writes.filter(
+    (ref) => ref.name !== bindingWrites.name,
+  );
+  if (!targets.length || !scopes.length) return owned;
+  const byEntity = new Map(
+    targets.map((target) => [recordEntity(target), target]),
+  );
+  const keys = await q
+    .select()
+    .from(recordKey)
+    .where(
+      and(
+        sql`${recordKey.scopeKind} = ${reconciler.scope}`,
+        sql`${recordKey.scopeKey} = ANY(${textArrayParam(scopes.map((scope) => scope.key))})`,
+        sql`${recordKey.entity} = ANY(${textArrayParam([...byEntity.keys()])})`,
+      ),
+    );
+  const storedByTable = new Map<string, Map<string, ColumnValues>>();
+  await Promise.all(
+    targets.map(async (target) => {
+      const ids = keys
+        .filter((row) => row.entity === recordEntity(target))
+        .map((row) => row.entityId);
+      const rows: ColumnValues[] = ids.length
+        ? await q
+            .select()
+            .from(target.table)
+            .where(
+              sql`${idColumn(target.table)} = ANY(${columnArrayParam(ids)})`,
+            )
+        : [];
+      storedByTable.set(
+        target.name,
+        new Map(rows.map((row) => [String(row.id), row])),
+      );
+    }),
+  );
+  for (const row of keys) {
+    const target = byEntity.get(row.entity)!;
+    const list = owned.get(row.scopeKey) ?? [];
+    list.push({
+      target,
+      naturalKey: row.naturalKey,
+      entityId: row.entityId,
+      minted: row.minted,
+      // A record merged into another scope's survivor is no longer this scope's to write.
+      rejected: row.rejectedAt !== null || row.mergedAt !== null,
+      stored: storedByTable.get(target.name)?.get(row.entityId) ?? null,
+    });
+    owned.set(row.scopeKey, list);
+  }
+  return owned;
+}
+
+async function loadStoredBindings(
+  q: Q,
+  reconciler: Reconciler,
+  scopes: readonly ScopeRef[],
+): Promise<Map<string, Binding[]>> {
+  const stored = new Map<string, Binding[]>();
+  const rows = await q
+    .select()
+    .from(evidenceBinding)
+    .where(
+      and(
+        sql`${evidenceBinding.scopeKind} = ${reconciler.scope}`,
+        sql`${evidenceBinding.scopeKey} = ANY(${textArrayParam(scopes.map((scope) => scope.key))})`,
+      ),
+    );
+  for (const row of rows) {
+    const list = stored.get(row.scopeKey) ?? [];
+    list.push({
+      fact: { kind: row.factKind, id: row.factId },
+      eventKey: row.eventKey,
+      basis: row.basis,
+      scope: { kind: row.scopeKind, key: row.scopeKey },
+    });
+    stored.set(row.scopeKey, list);
+  }
+  return stored;
+}
+
+const askActor = (kind: AskKind): KernelActor =>
+  kind.producer === "source" ? sourceActor(kind.label) : "cubby";
+
+/** The pure context for one scope's reconcile run. */
+function createPure(
+  registry: KernelRegistry,
+  reconciler: Reconciler,
+  state: {
+    scope: ScopeRef;
+    creations: Map<string, { id: string; shortcode: string | null }>;
+    creationValues: Map<
+      string,
+      { inputs: ColumnValues[]; value: ColumnValues }
+    >;
+    shortcodeOwners: Map<string, string>;
+    entityReferences: Map<string, EntityReference>;
+    owned: readonly OwnedRecord[];
+    answers: ReadonlyMap<string, { inputHash: string; output: Json | null }>;
+    decisions: ReadonlyMap<string, readonly DecisionRow[]>;
+    tracked: Tracked;
+    released: ReadonlySet<string>;
+  },
+): Pure {
+  const records: DesiredRecord[] = [];
+  const attachments: { target: ColumnRef; naturalKey: string; id: string }[] =
+    [];
+  const disagreements: string[] = [];
+  const patches: Desired["patches"][number][] = [];
+  const retired: Desired["retired"][number][] = [];
+  const bindings: Desired["bindings"][number][] = [];
+  const merges: Desired["merges"][number][] = [];
+  const emits: ScopeRef[] = [];
+  const gaps: KernelGap[] = [];
+  const asks: Desired["asks"][number][] = [];
+  const declaredAsks = new Set(reconciler.asks.map((kind) => kind.feature));
+  const declaredWrites = new Map(
+    reconciler.writes.map((ref) => [ref.name, ref]),
+  );
+  const writesBindings = declaredWrites.has(bindingWrites.name);
+  const rejected = new Set(
+    state.owned
+      .filter((record) => record.rejected)
+      .map((record) => `${record.target.name}\u0000${record.naturalKey}`),
+  );
+
+  const requireTarget = (target: ColumnRef) => {
+    const declared = declaredWrites.get(target.name);
+    if (!declared)
+      throw new KernelContractError(
+        `Reconciler ${reconciler.scope} writes undeclared table ${target.name}`,
+      );
+    return declared;
+  };
+  const identityOf = (target: ColumnRef, naturalKey: string) => {
+    const declared = requireTarget(target);
+    const owned = state.owned.find(
+      (record) =>
+        record.target.name === declared.name &&
+        record.naturalKey === naturalKey,
+    );
+    const slot = `${declared.name}\u0000${naturalKey}`;
+    if (!owned && declared.coalesceCreation) {
+      if (declared.columns.length || !declared.createOnly?.length)
+        throw new KernelContractError(
+          "Only authored Catalog creations may coalesce",
+        );
+      const shared = state.creations.get(slot);
+      if (shared) return shared;
+    }
+    const id =
+      owned?.entityId ?? recordIdentity(state.scope, declared.name, naturalKey);
+    const existingCode =
+      typeof owned?.stored?.shortcode === "string"
+        ? owned.stored.shortcode
+        : null;
+    const code =
+      existingCode ??
+      (declared.entity && isShortcodeEntity(declared.entity)
+        ? recordShortcode(declared.entity, id, state.shortcodeOwners)
+        : null);
+    if (code) {
+      state.shortcodeOwners.set(code, id);
+      if (
+        !state.entityReferences.has(id) &&
+        declared.entity &&
+        isShortcodeEntity(declared.entity)
+      ) {
+        const reference = {
+          id,
+          kind: declared.entity,
+          mergedIntoId: null,
+          deletedAt: null,
+        };
+        state.entityReferences.set(id, reference);
+        state.entityReferences.set(code, reference);
+      }
+    }
+    const result = { id, shortcode: code };
+    if (!owned && declared.coalesceCreation) state.creations.set(slot, result);
+    return result;
+  };
+  const gap = (
+    kind: KernelGap["kind"],
+    input: string,
+    actor: KernelActor,
+    options: {
+      since?: Date | null;
+      until?: Date | null;
+      actions?: readonly KernelGap["actions"][number][];
+      inputHash?: string | null;
+    } = {},
+  ) =>
+    gaps.push({
+      kind,
+      input,
+      actor,
+      since: options.since?.toISOString() ?? null,
+      until: options.until?.toISOString() ?? null,
+      actions: [...(options.actions ?? [])],
+      inputHash: options.inputHash ?? null,
+    });
+
+  const inForce = (
+    rows: readonly DecisionRow[],
+    channel: string,
+    slot: string | null,
+  ): DecisionInForce | null => {
+    if (channel === "veto") {
+      const prefix = `${slot ?? ""}${VETO_SEPARATOR}`;
+      const vetoes = rows.filter(
+        (row) =>
+          row.channel === "veto" &&
+          row.slot.startsWith(prefix) &&
+          row.kind === "veto",
+      );
+      if (!vetoes.length) return null;
+      const newest = vetoes.reduce((a, b) => (a.at >= b.at ? a : b));
+      return {
+        id: newest.id,
+        kind: "veto",
+        value: null,
+        values: vetoes.map((row) => row.value),
+        at: new Date(newest.at),
+      };
+    }
+    const row = rows.find(
+      (candidate) =>
+        candidate.channel === channel && candidate.slot === (slot ?? ""),
+    );
+    if (!row || row.kind === "release") return null;
+    return {
+      id: row.id,
+      // SAFETY: the column's CHECK holds this value to the decision kinds.
+      kind: row.kind as DecisionInForce["kind"],
+      value: row.value,
+      values: [],
+      at: new Date(row.at),
+    };
+  };
+
+  return {
+    identity: identityOf,
+    disagree(input) {
+      disagreements.push(input);
+      gap("decision", input, "you");
+    },
+    reference(entity, ref) {
+      state.tracked.references.add(ref);
+      let row =
+        state.entityReferences.get(ref) ??
+        state.entityReferences.get(ref.toLowerCase()) ??
+        state.entityReferences.get(ref.toUpperCase());
+      const visited = new Set<string>();
+      while (row?.mergedIntoId) {
+        if (visited.has(row.id))
+          throw new KernelContractError(
+            "Entity identity redirects contain a cycle",
+          );
+        visited.add(row.id);
+        row = state.entityReferences.get(row.mergedIntoId);
+      }
+      return row && row.kind === entity && !row.deletedAt ? row.id : null;
+    },
+    assignments(subject) {
+      state.tracked.subjects.add(subject);
+      return new Map(
+        (state.decisions.get(subject) ?? []).flatMap((row) => {
+          if (
+            row.channel !== "assignment" ||
+            (row.kind !== "set" && row.kind !== "none") ||
+            state.released.has(`${subject}\u0000${row.slot}`)
+          )
+            return [];
+          return [
+            [
+              row.slot,
+              {
+                id: row.id,
+                kind: row.kind,
+                value: row.value,
+                values: [],
+                at: new Date(row.at),
+              },
+            ] as const,
+          ];
+        }),
+      );
+    },
+    answer(kind, input, options) {
+      if (!declaredAsks.has(kind.feature))
+        throw new KernelContractError(
+          `Reconciler ${reconciler.scope} reads undeclared ask ${kind.feature}`,
+        );
+      const untyped: AskKind = kind;
+      const envelope = askEnvelope(untyped, input);
+      const text = envelopeText(envelope);
+      const request = options?.request !== false;
+      const previous = state.tracked.answers.get(text);
+      state.tracked.answers.set(text, {
+        kind: untyped,
+        envelope,
+        request: request || previous?.request === true,
+        fill: options?.fill === true && (previous?.fill ?? true),
+      });
+      const known = state.answers.get(text);
+      if (known && known.output !== null)
+        return {
+          status: "answered",
+          output: kind.output.parse(known.output),
+          inputHash: known.inputHash,
+        };
+      if (known && request)
+        gap("answer", untyped.label, askActor(untyped), {
+          inputHash: known.inputHash,
+        });
+      if (request) asks.push({ kind: untyped, input });
+      return { status: "missing", inputHash: null };
+    },
+    decision(channel, subject, slot) {
+      state.tracked.subjects.add(subject);
+      if (
+        channel === "assignment" &&
+        state.released.has(`${subject}\u0000${slot ?? ""}`)
+      )
+        return null;
+      return inForce(state.decisions.get(subject) ?? [], channel, slot ?? null);
+    },
+    existing(target) {
+      const declared = requireTarget(target);
+      return state.owned
+        .filter(
+          (record) => record.target.name === declared.name && !record.rejected,
+        )
+        .map((record) => record.naturalKey);
+    },
+    recordId(target, naturalKey) {
+      const declared = requireTarget(target);
+      return (
+        state.owned.find(
+          (record) =>
+            record.target.name === declared.name &&
+            record.naturalKey === naturalKey,
+        )?.entityId ?? null
+      );
+    },
+    stored(target, naturalKey) {
+      const declared = requireTarget(target);
+      return (
+        state.owned.find(
+          (record) =>
+            record.target.name === declared.name &&
+            record.naturalKey === naturalKey,
+        )?.stored ?? null
+      );
+    },
+    attach(target, naturalKey, id) {
+      const declared = requireTarget(target);
+      state.tracked.references.add(id);
+      if (!state.entityReferences.has(id)) return;
+      const reference = state.entityReferences.get(id)!;
+      if (
+        !declared.entity ||
+        reference.kind !== declared.entity ||
+        reference.deletedAt ||
+        reference.mergedIntoId
+      )
+        throw new KernelContractError(
+          "Attach requires a live canonical entity identity",
+        );
+      attachments.push({ target: declared, naturalKey, id });
+    },
+    patch(target, id, values) {
+      const declared = requireTarget(target);
+      for (const column of Object.keys(values))
+        if (!declared.columns.includes(column))
+          throw new KernelContractError(
+            `Reconciler ${reconciler.scope} writes undeclared column ${declared.name}.${column}`,
+          );
+      patches.push({ target: declared, id, values: { ...values } });
+    },
+    record(target, naturalKey, values, options) {
+      const declared = requireTarget(target);
+      const { id, shortcode } = identityOf(declared, naturalKey);
+      for (const column of Object.keys(values))
+        if (
+          !declared.columns.includes(column) &&
+          !declared.createOnly?.includes(column)
+        )
+          throw new KernelContractError(
+            `Reconciler ${reconciler.scope} writes undeclared column ${declared.name}.${column}`,
+          );
+      // A rejected record is not created again when its evidence returns.
+      if (rejected.has(`${declared.name}\u0000${naturalKey}`)) return id;
+      let proposed = { ...values };
+      if (
+        declared.coalesceCreation &&
+        !state.owned.some(
+          (row) =>
+            row.target.name === declared.name && row.naturalKey === naturalKey,
+        )
+      ) {
+        const slot = `${declared.name}:${id}`;
+        const shared = state.creationValues.get(slot) ?? {
+          inputs: [],
+          value: {},
+        };
+        shared.inputs.push(proposed);
+        const combined = declared.coalesceCreation(shared.inputs);
+        for (const column of Object.keys(combined))
+          if (!declared.createOnly?.includes(column))
+            throw new KernelContractError(
+              `Undeclared Catalog creation column ${column}`,
+            );
+        for (const column of Object.keys(shared.value))
+          delete shared.value[column];
+        Object.assign(shared.value, combined);
+        state.creationValues.set(slot, shared);
+        proposed = shared.value;
+      }
+      records.push({
+        id,
+        shortcode,
+        target: declared,
+        naturalKey,
+        values: proposed,
+        provenance: { ...options?.provenance },
+      });
+      return id;
+    },
+    retire(target, naturalKey, disposition, options) {
+      retired.push({
+        target: requireTarget(target),
+        naturalKey,
+        disposition,
+        ...(options?.decision ? { decision: options.decision } : {}),
+      });
+    },
+    bind(fact, eventKey, basis = "proven") {
+      if (!writesBindings)
+        throw new KernelContractError(
+          `Reconciler ${reconciler.scope} binds evidence without declaring bindingWrites`,
+        );
+      bindings.push({ fact, eventKey, basis });
+    },
+    merge(target, survivor, absorbed, basis) {
+      const declared = requireTarget(target);
+      if (!declared.merge)
+        throw new KernelContractError(
+          `${declared.name} declares no merge policy for reconciler ${reconciler.scope}`,
+        );
+      merges.push({ target: declared, survivor, absorbed, basis });
+    },
+    emit(scope) {
+      registry.laneOf(scope.kind);
+      emits.push(scope);
+    },
+    gap: {
+      evidence: (input, actor, options) =>
+        gap("evidence", input, actor, options),
+      answer: (input, actor, options) => gap("answer", input, actor, options),
+      decision: (input, options) => gap("decision", input, "you", options),
+      time: (input, until, options) =>
+        gap("time", input, "time", { ...options, until }),
+      unsupported: (input, options) =>
+        gap("unsupported", input, "you", options),
+    },
+    done: () => ({
+      attachments,
+      disagreements,
+      records,
+      patches,
+      retired,
+      bindings,
+      merges,
+      emits,
+      gaps,
+      asks,
+    }),
+  };
+}
+
+/** The inputs the scope used, in the order it used them, for the machinery read. */
+export const usedInputs = (computed: Computed) => [
+  ...computed.facts.map((fact) => ({ kind: "evidence" as const, fact })),
+  ...computed.decisions.map((decision) => ({
+    kind: "decision" as const,
+    id: decision.id,
+    subject: decision.subject,
+  })),
+  ...computed.answers.map((answer) => ({
+    kind: "answer" as const,
+    inputHash: answer.inputHash,
+  })),
+  ...computed.missing.map((missing) => ({
+    kind: "answer" as const,
+    inputHash: missing.inputHash,
+    missing: true,
+  })),
+];
+
+/** One fixed-statement load for all keys claimed together. */
+export function computeBatch(
+  q: Q,
+  registry: KernelRegistry,
+  reconciler: Reconciler,
+  scopes: readonly ScopeRef[],
+  mode: ComputeMode,
+): Promise<Computed[]> {
+  return withDatabaseOperationPhase("load", () =>
+    computeBatchInPhase(q, registry, reconciler, scopes, mode),
+  );
+}

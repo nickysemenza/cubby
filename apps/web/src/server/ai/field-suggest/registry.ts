@@ -1,5 +1,3 @@
-import { AsyncLocalStorage } from "node:async_hooks";
-
 import type { OptionalAiUnavailable } from "@cubby/schemas/ai";
 import {
   spendingCategoryFiltersSchema,
@@ -59,10 +57,10 @@ import {
   type LocationPutAwayCandidate,
 } from "~/server/domains/location/repo/lookup";
 import {
-  listBoundCategoryFeatures as loadBoundCategoryFeatures,
-  listProductCategoryTreeOptions as loadProductCategoryTreeOptions,
+  listBoundCategoryFeatures,
+  listProductCategoryTreeOptions,
 } from "~/server/domains/product-category/repo/product-category";
-import { projectNameOptions as loadProjectNameOptions } from "~/server/domains/project/repo/lookup";
+import { projectNameOptions } from "~/server/domains/project/repo/lookup";
 import { spendingCategoryScaffold } from "~/server/domains/spending-category/repo/spending-category";
 import { vendorOptions } from "~/server/domains/vendor/repo/vendor";
 import { semanticEntityCandidates } from "~/server/generic/embedding/service/semantic-search.service";
@@ -73,42 +71,6 @@ import {
 
 import { hasCreditCardIdentity } from "./account-evidence";
 import { rankCategoryCandidates } from "./category-ranking";
-
-const preparation = new AsyncLocalStorage<{
-  categories?: ReturnType<typeof loadProductCategoryTreeOptions>;
-  projects?: ReturnType<typeof loadProjectNameOptions>;
-  spending?: ReturnType<typeof loadSpendingCategoryRoster>;
-  features?: ReturnType<typeof loadBoundCategoryFeatures>;
-}>();
-
-/** Share saved vocabularies only inside one finite, authoritative list read. */
-export const withFieldSuggestionPreparation = <T>(work: () => Promise<T>) =>
-  preparation.run({}, work);
-
-/** Read fresh vocabularies, e.g. a publication's revalidation in its own transaction. */
-export const withoutFieldSuggestionPreparation = <T>(work: () => Promise<T>) =>
-  preparation.exit(work);
-
-function listProductCategoryTreeOptions(db: Database) {
-  const current = preparation.getStore();
-  return current
-    ? (current.categories ??= loadProductCategoryTreeOptions(db))
-    : loadProductCategoryTreeOptions(db);
-}
-
-function projectNameOptions(db: Database) {
-  const current = preparation.getStore();
-  return current
-    ? (current.projects ??= loadProjectNameOptions(db))
-    : loadProjectNameOptions(db);
-}
-
-function listBoundCategoryFeatures(db: Database) {
-  const current = preparation.getStore();
-  return current
-    ? (current.features ??= loadBoundCategoryFeatures(db))
-    : loadBoundCategoryFeatures(db);
-}
 
 /**
  * `V`/`C`-typed members use method shorthand on purpose: TypeScript checks a
@@ -364,15 +326,6 @@ type SpendingCategoryCandidate = z.infer<typeof spendingRosterRow> & {
 };
 
 async function spendingCategoryRoster(
-  db: Database,
-): Promise<SpendingCategoryCandidate[]> {
-  const current = preparation.getStore();
-  return current
-    ? (current.spending ??= loadSpendingCategoryRoster(db))
-    : loadSpendingCategoryRoster(db);
-}
-
-async function loadSpendingCategoryRoster(
   db: Database,
 ): Promise<SpendingCategoryCandidate[]> {
   const rows: z.infer<typeof spendingRosterRow>[] = [];

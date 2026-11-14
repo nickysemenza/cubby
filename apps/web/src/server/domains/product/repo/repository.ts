@@ -11,6 +11,8 @@ import { z } from "zod";
 
 import { productSchemaBindings } from "~/entity/generated/entity-schema-bindings.product.gen";
 import type { Database } from "~/server/db";
+import { DECLARED_EDGE_MERGE_POLICIES } from "~/server/db/generated/declared-edges.gen";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import {
   createProductWithSideEffects,
   updateProductWithSideEffects,
@@ -29,12 +31,7 @@ import {
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { deleteProducts, productScaffold, readProduct } from "./crud";
-import { PRODUCT_DELETE_EDGE_POLICY } from "./edge-roles";
-import {
-  mergeProducts,
-  PRODUCT_MERGE_EDGE_POLICY,
-  previewMergeProducts,
-} from "./merge";
+import { mergeProducts, previewMergeProducts } from "./merge";
 
 const productShortcodes = bindShortcodeResolver("product");
 
@@ -61,8 +58,8 @@ export const productRepository = defineRepository("product", {
   schemas: productSchemaBindings,
   updatePolicy: { recordFields: ["price", "fdc_id", "labelNutrition", "kind"] },
   lifecycle: {
-    delete: PRODUCT_DELETE_EDGE_POLICY,
-    merge: PRODUCT_MERGE_EDGE_POLICY,
+    delete: DECLARED_EDGE_DELETE_POLICIES.product,
+    merge: DECLARED_EDGE_MERGE_POLICIES.product,
   },
   scaffold: productScaffold,
   create: async (ctx, data) => {

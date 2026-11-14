@@ -6,6 +6,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import {
   email,
@@ -22,7 +23,6 @@ import {
 } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   storedQuality,

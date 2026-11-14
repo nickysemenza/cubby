@@ -1,5 +1,6 @@
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { fieldExplanationOutput } from "@cubby/schemas/field-explanation";
+import { machinery as machinerySchema } from "@cubby/schemas/kernel/machinery";
 import { testShortcode } from "@cubby/schemas/testing";
 import { TIER1_NUTRIENT_KEYS } from "@cubby/usda";
 import {
@@ -20,6 +21,7 @@ import { entityList } from "~/integrations/tanstack-query/generated/domains/enti
 import { entityMedia } from "~/integrations/tanstack-query/generated/domains/entityMedia.gen";
 import { entityTimeline } from "~/integrations/tanstack-query/generated/domains/entityTimeline.gen";
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/domains/fieldExplanation.gen";
+import { machinery } from "~/integrations/tanstack-query/generated/domains/machinery.gen";
 import { mock } from "~/lib/test/mock-schema";
 import { getEntityDetailOutputSchema } from "~/server/entity-reads/detail-contracts";
 import { getEntityListItemSchema } from "~/server/entity-reads/list-contracts";
@@ -187,8 +189,19 @@ describe("GenericEntityDetail", () => {
     expect(titles).not.toContain("Photos");
   });
 
-  it("keeps a gated Run quality check visible with a working issue anchor", async () => {
+  it("keeps a gated Run quality check visible in Record quality", async () => {
     const record = { ...recordFor("run"), purpose: "photo_inventory" as const };
+    const machineryQuery = machinery.read.queryOptions({
+      entity: "run",
+      id: record.id,
+    });
+    harness.queryClient.setQueryDefaults(machineryQuery.queryKey, {
+      staleTime: Infinity,
+    });
+    harness.queryClient.setQueryData(machineryQuery.queryKey, {
+      machinery: mock(machinerySchema),
+      absorbed: null,
+    });
     const query = fieldExplanation.explain.queryOptions({
       entityKind: "run",
       entityId: record.id,
@@ -219,18 +232,9 @@ describe("GenericEntityDetail", () => {
       { wrapper: harness.wrapper },
     );
     expect(container.querySelector("section#import-targets")).toBeNull();
-    // The unplaced check sits in the Record quality section on its tab; Needs
-    // you links to it from the side column.
     expect(
       await screen.findByText(/Target outcomes · Defect/),
     ).toBeInTheDocument();
-    const jump = within(
-      screen.getByRole("heading", { name: /Needs you/u }).closest("section")!,
-    ).getByRole("link", { name: /Target outcomes/u });
-    expect(jump).toBeVisible();
-    expect(
-      document.getElementById(jump.getAttribute("href")!.slice(1)),
-    ).not.toBeNull();
   });
 
   // Regression: `externalIds` is a `text-array` field whose read shape is an

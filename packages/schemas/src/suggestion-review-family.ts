@@ -13,7 +13,7 @@ export const suggestionReviewFamilies = {
     kind: "proposal",
     label: "Connections and recommendations",
   },
-  statement_transaction: { kind: "proposal", label: "Statements" },
+
   transfer_pair: { kind: "proposal", label: "Transfer pairs" },
 } as const satisfies Record<
   SuggestionFamily,

@@ -103,7 +103,7 @@ describe("discardFromInventoryEntries", () => {
       expect(lines).toHaveLength(2);
       for (const line of lines) {
         expect(line).toMatchObject({
-          cost: 0,
+          cost: 0n,
           date,
           productQuantity: -2,
           purchaseId: null,

@@ -1,21 +1,19 @@
 import type { EntityRef } from "@cubby/schemas/entity";
 import { createLogger } from "@cubby/worker-tracing";
+import { z } from "zod";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
 import { retrieveEmailConnectionCandidates } from "~/server/domains/connection/repo/email-connections";
 import {
   EMAIL_PURCHASE_PAGE,
-  emailPurchaseDiscoveryDue,
-  emailPurchaseDiscoveryNext,
-  emailPurchaseDiscoveryPage,
   emailsWithSuggestedPurchases,
 } from "~/server/domains/connection/repo/email-purchase-cursor";
 import {
   prepareEntityConnectionEvidence,
   publishPreparedEntityConnections,
 } from "~/server/domains/connection/repo/entity-connections";
-import type { BackgroundDrain } from "~/server/generic/background/drains";
+import { definePass } from "~/server/kernel/api";
 
 const log = createLogger("email-purchase-discovery");
 
@@ -44,42 +42,33 @@ export async function discoverEmailPurchaseConnections(
   );
 }
 
-/** The routine pass over Emails whose retained evidence suggests a purchase link. */
-export const emailPurchaseDiscoveryDrain: BackgroundDrain = {
-  name: "email-purchase-discovery",
-  label: (unit) =>
-    unit === "email-purchase-discovery" ? "Email purchase links" : undefined,
-  due: () => emailPurchaseDiscoveryDue("email-purchase-discovery"),
-  next: emailPurchaseDiscoveryNext,
-  page: (db) =>
-    emailPurchaseDiscoveryPage(db, async (tx, cursor) => {
-      if (cursor.nextAt && Date.parse(cursor.nextAt) > Date.now())
-        return {
-          result: { claimed: 0, nextAt: new Date(cursor.nextAt) },
-          next: cursor.after,
-        };
-      const emails = await emailsWithSuggestedPurchases(tx, cursor.after);
-      for (const email of emails)
-        try {
-          await discoverEmailPurchaseConnections(tx, {
-            entityKind: "email",
-            entityId: email.shortcode,
-          });
-        } catch (error) {
-          // One changed Email must not wedge the pass; the next pass retries it.
-          log.warn("Email purchase discovery skipped an Email", {
-            error: scrubErrorMessage(String(error)),
-          });
-        }
-      const next =
-        emails.length === EMAIL_PURCHASE_PAGE ? emails.at(-1)!.id : null;
-      return {
-        // The page ran even when it found nothing: its successor waits for the hour.
-        result: {
-          claimed: Math.max(1, emails.length),
-          nextAt: next ? null : nextUtcHour(),
-        },
-        next,
-      };
-    }),
-};
+/** One resumable deterministic census over retained Email evidence. */
+export const emailPurchaseDiscoveryPass = definePass({
+  name: "email.purchase-discovery",
+  async run(db, raw) {
+    const cursor = z
+      .object({ after: z.uuid().nullable().default(null) })
+      .parse(raw ?? {});
+    const emails = await emailsWithSuggestedPurchases(db, cursor.after);
+    const next =
+      emails.length === EMAIL_PURCHASE_PAGE ? emails.at(-1)!.id : null;
+    return {
+      cursor: { after: next },
+      done: false,
+      availableAt: next ? new Date() : nextUtcHour(),
+      async publish(tx) {
+        for (const email of emails)
+          try {
+            await discoverEmailPurchaseConnections(tx, {
+              entityKind: "email",
+              entityId: email.shortcode,
+            });
+          } catch (error) {
+            log.warn("Email purchase discovery skipped an Email", {
+              error: scrubErrorMessage(String(error)),
+            });
+          }
+      },
+    };
+  },
+});

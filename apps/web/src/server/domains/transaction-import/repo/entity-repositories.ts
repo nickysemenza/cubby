@@ -12,9 +12,10 @@ import {
 } from "~/entity/generated/entity-schema-bindings.sourceTransactionRecord.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { sourceTransactionSettlements } from "~/server/db/computed/source-transaction-settlement-sql";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
+import { DECLARED_EDGE_DELETE_HOOKS } from "~/server/db/generated/declared-edges.gen";
 import { unwrapDb, withTransactionOn } from "~/server/db/helpers";
 import { sourceTransactionRecord } from "~/server/db/schema";
-import { runStepInputListRows } from "~/server/domains/run/repo/run-step-input";
 import { sourceTransactionRecordSearch } from "~/server/domains/transaction-import/repo/search-read-source-transaction-record";
 import {
   sourceObservations,
@@ -39,11 +40,7 @@ import { type ListReadOptions } from "~/server/generic/list/repo/list-projection
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { updateSourceObservationJudgments } from "./source-occurrence";
-import {
-  retireDeletedLegacyOwners,
-  lockSourceObservationRemoval,
-  assertSourceTransactionRecordDeletionAllowed,
-} from "./source-transaction-record-lifecycle";
+import { retireDeletedLegacyOwners } from "./source-transaction-record-lifecycle";
 
 type ReaderDb = Database | DrizzleTransaction;
 type SourceRow = Pick<
@@ -198,7 +195,6 @@ export const sourceTransactionRecordScaffold = listScaffold<
 >("sourceTransactionRecord", sourceTransactionRecord, {
   readSchema: sourceTransactionRecordRepositoryReadSchema,
   rows: {
-    runStepInputs: runStepInputListRows("sourceTransactionRecord"),
     reconciliation: sql`SELECT r.id AS owner, r."accountId" AS account, r."withdrawalImportId" AS withdrawal, r."supersededByRowId" AS successor FROM ${sourceObservationFacts} r`,
     acceptedTransactions: sql`SELECT "record" AS "owner", "transaction" FROM (${sourceTransactionSettlements}) accepted`,
   },
@@ -301,15 +297,7 @@ const updateSource = defineMutationWriter({
       if (data.identityResolution) {
         const { resolveSourceIdentity } =
           await import("~/server/domains/transaction-import/repo/source-identity-resolution");
-        const charge = await resolveSourceIdentity(
-          tx,
-          id,
-          data.identityResolution,
-          actor,
-        );
-        const { regenerateChargesAfterCommit } =
-          await import("~/server/domains/transaction-import/repo/statement-suggestions");
-        await regenerateChargesAfterCommit(tx, [charge]);
+        await resolveSourceIdentity(tx, id, data.identityResolution, actor);
       }
       await updateSourceObservationJudgments(
         tx,
@@ -343,52 +331,14 @@ const updateSource = defineMutationWriter({
   },
 });
 
-const SOURCE_TRANSACTION_RECORD_DELETE_POLICY = {
-  "SourceOccurrence.currentObservationId": {
-    code: "retain-occurrence-head",
-    effect: "preserve",
-    description:
-      "Occurrence head evidence remains reserved through an observation tombstone.",
-  },
-  "SourceOccurrence.replacementObservationId": {
-    code: "retain-replacement-proof",
-    effect: "block",
-    description:
-      "A live explicit replacement decision requires its exact observation evidence.",
-  },
-  "SourceObservationAnnotation.observationId": {
-    code: "retain-observation-judgments",
-    effect: "preserve",
-    description:
-      "Observation annotations and unresolved decisions remain retained.",
-  },
-  "SourceObservationAnnotation.supersededByObservationId": {
-    code: "retain-replacement-history",
-    effect: "block",
-    description:
-      "A live predecessor retains its exact reviewed replacement observation.",
-  },
-  "FinancialEvidenceAlias.observationId": {
-    code: "retain-source-aliases",
-    effect: "preserve",
-    description:
-      "Original aliases remain explainable through observation tombstones.",
-  },
-  "TransactionImportRecord.statementRowId": {
-    code: "retain-import-membership",
-    effect: "preserve",
-    description: "Imports retain original and subsequent memberships.",
-  },
-} as const;
 export const sourceTransactionRecordRepository = defineRepository(
   "sourceTransactionRecord",
   {
     schemas: sourceTransactionRecordSchemaBindings,
-    lifecycle: { delete: SOURCE_TRANSACTION_RECORD_DELETE_POLICY },
-    deleteHooks: {
-      beforeLock: lockSourceObservationRemoval,
-      beforeDelete: assertSourceTransactionRecordDeletionAllowed,
+    lifecycle: {
+      delete: DECLARED_EDGE_DELETE_POLICIES.sourceTransactionRecord,
     },
+    deleteHooks: DECLARED_EDGE_DELETE_HOOKS.sourceTransactionRecord,
     afterDelete: (ctx, ids) =>
       retireDeletedLegacyOwners(ctx.db, ids, ctx.actorContext),
     scaffold: sourceTransactionRecordScaffold,

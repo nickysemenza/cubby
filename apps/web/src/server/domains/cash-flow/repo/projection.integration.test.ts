@@ -4,13 +4,14 @@ import {
 } from "@cubby/schemas/cash-flow";
 import type { ProjectId, SpendingCategoryId } from "@cubby/schemas/identifiers";
 import { testShortcode } from "@cubby/schemas/testing";
+import { nullableWholeCentToMinor } from "@cubby/shared";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { project } from "~/server/db/schema";
 import { insertPayloadWithIdentity } from "~/server/entity-kernel/repo/entity-identity-writer";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { cashFlowProjection } from "./projection";
 
@@ -30,7 +31,7 @@ const spend = (
 ) =>
   insertWithShortcode(ctx.db, "expense", {
     name: `synthetic cash flow ${name}`,
-    cost,
+    cost: nullableWholeCentToMinor(cost),
     date,
     lineKind: "principal",
     costType: "materials",

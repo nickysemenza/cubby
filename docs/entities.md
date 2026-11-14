@@ -244,7 +244,7 @@ validation, tree extensions and list outputs. Explicit list-item schema ids pres
 `<Entity>ListItem` names. HTTP and MCP project one kernel capability owner; MCP is an explicit
 subset. The generated summary lists read dependents from reference fields, derived paths and image
 fallback paths (including transitive media inputs); notifications add those consumers' cache roots
-without recursively applying mutation ripples or scheduling Jobs. List responses share one metadata
+without recursively applying mutation ripples or scheduling kernel work. List responses share one metadata
 schema across entities and clients.
 
 ### Rosters and routes
@@ -336,13 +336,13 @@ explicit choices.
 `current` carries authoritative assignment intent and controls; `result` couples the effective
 outcome with its matching provenance. Inherit,
 explicit value and explicit None are distinct intents. A successful empty outcome is not a missing
-computation: a missing result renders Updating…, never the
-successful empty state. Who set an own value is not part of the envelope: `fieldAuthority` reads it
-from the audit trail when Why this value or the automatic gate asks.
+computation: a missing result renders Waiting for Cubby, never the
+successful empty state. Who set an own value comes from kernel provenance: an Answer is Cubby's value and an assignment Decision is a person's. Why this value reads that provenance
+and the independent veto channel.
 
 `packages/schemas/src/field-envelope-presentation.ts` and CubbyKit's
 `FieldEnvelopePresentation.swift` are the twin owners of empty and missing labels and
-assignment-action rules. Surfaces ask them for an absent value's words rather than writing Updating…
+assignment-action rules, and of the machinery panel's stage, actor and row-status words. Surfaces ask them for an absent value's words rather than writing Waiting for Cubby
 or Unavailable; a native read that carried no envelope reads Unavailable through the same owner.
 Query loading, mutation progress and list totals keep their own wording.
 
@@ -571,7 +571,7 @@ and VendorAccounts belong to Purchases.
 
 `nativeBrowse` (default `true`) declares whether the root appears in native Browse and the native
 sidebar (`EntityCatalog.browsable`). Set it to `false` only for operator plumbing whose list serves
-no member task on a phone or Mac (Jobs, Image jobs, source transaction records, transaction
+no member task on a phone or Mac (Image processing receipts, source transaction records, transaction
 imports), with the reason beside the flag; records still open natively from links, and web
 navigation ignores it. The summary also carries the resolved `primarySearch` (declared, else
 `searchQuery` for a searchable entity) and the `bulkUpdate` roster, from the same helpers the
@@ -609,7 +609,9 @@ Three optional roles name the fields a record's state, progress and kind come fr
 
 - `presentation.state: { field, reason?, wait?, stalled?, recentBy?, recentDays? }`. `field` is a
   status roster with a single-valued group key (a stored column or a `model.derived` value); the
-  generator refuses any other. Each option declares `phase` (`needs`, `active` or `finished`);
+  generator refuses any other. Each option declares `phase` (`needs`, `active` or `finished`) and
+  `stage`, the stage word `StateBadge` draws (Needs you, Waiting, Working, Stuck, Done, Ended);
+  colour never stands in for either;
   without one, a `closed` option is `finished` and the rest `active`, so `needs` is always explicit.
   `reason` is muted text after the label, `wait` the Run-wait value, and a true `stalled` places
   the record in `needs`. `recentBy` and `recentDays` bound the finished phase; older finished
@@ -768,7 +770,7 @@ distinct. Preserve declaration order rather than ranking cells.
 
 Every `chart` path must end at Expense. `entity.monthlyExpenseSpend` returns the current household
 calendar month and eleven predecessors, oldest first, zero-filled; it sums distinct live actual
-Expense costs (credits included), rounds to cents after summing, and excludes planned lines.
+Expense costs (credits included) in exact cents and excludes planned lines.
 Location charts describe stored products' expense history, not expenses incurred there. Product
 seller rankings count distinct actual Purchases containing the Product through its Expense evidence,
 keeping purchase count and last-purchased date. Product purchase-project context follows its own
@@ -1165,6 +1167,24 @@ update route or multi-select delete UI.
 
 ## Images and display sources
 
+Cloud image work, device work and metadata extraction are kernel Asks. Their
+Answers and insert-only `ImageEvidence` observations retain source revisions,
+results and cost independently of the mutable Image display fields. Completion
+appends the evidence and applies a still-current result in one transaction.
+Metadata input includes the original key, content type, Image row revision and
+parser revision; an explicit retry cannot reuse a missing-original observation
+from an earlier row revision.
+
+`ImageProcessingJob` remains a stable request receipt for its source, processor,
+submissions and displayed outcome. `ImageProcessingEvent` retains append-only
+execution receipts and diagnostics read by member reports, devices and rendition
+cleanup. The Ask owns the claim: the device wire's `jobId` names the Ask and
+`attemptId` names its token. Renewal, release, cancellation and replay share the
+kernel lifecycle. A paid cloud Ask with an unknown outcome waits for its existing
+executor or a member. A device image pull may explicitly replace an expired
+claim: each token owns a distinct output key, and only the current token can
+adopt a result. Reclaiming spends an attempt and invalidates the prior token.
+
 `capabilities.images` is `false`, `"gallery"` (ordered `EntityAttachment` rows, bound by
 `galleryBinding(entity)` in `server/db/helpers/crud.ts`), `"cover"` (one `coverImageId`, Cookbook) or
 `"logo"` (one direct logo FK, Vendor). Bootstrap generation reads that literal into
@@ -1472,7 +1492,7 @@ active-view matching. Native saved views compile column filters into operation J
 expanding nullable sentinels into presence filters and static range presets into their patches;
 generation refuses an unsupported expansion rather than dropping scope. Applying a native saved view
 replaces filters and sort in one refresh. Native manual reference selection applies the
-declaration's explicit-intent patch before its value, so choosing after Use inherited replaces the
+declaration's explicit-intent patch before its value, so choosing after Let Cubby decide replaces the
 staged reset. Every filtered task presentation (Next, charts, board, timeline) resolves `@me` before
 reading.
 
@@ -1697,7 +1717,7 @@ A retention-managed read-only entity may omit `deletedAt`; readers apply livenes
 table declares it. `listScaffold.population` receives the same request filters for rows, facets and
 selection. Explicit Run ids bypass the default automatic-purpose suppression, keeping historical Runs
 readable; internal-id readers resolve public codes first. `populationFilters` names request options
-consumed by that predicate (Job's internal-kinds toggle).
+consumed by that predicate.
 
 Repository `read.title` owns computed SQL labels; otherwise the scaffold resolves the stored title
 field. Shortcode lookups, pickers and record graphs share that title. Generated kernel bindings
@@ -2374,21 +2394,23 @@ reports keep every rule.
 
 ### Hourly pass
 
-`DerivedRebuild` holds one coarse pass cursor (target and last committed UUID), a single-writer
-lease, cursor attempts, pass failures and the last three wall-clock durations. Each background
-permit publishes pages until a 20-second wall budget: at most 50 identities each, with adapters declaring a smaller
-`preparationBatchSize` (default 20; the recipe ingredient graph stays at 20). Cursor-attempt
-shrinking bounds a retry independently. Publication, cursor advancement, page counters and movement
-time commit together. Reading ids and recording the page attempt share one CTE that commits before
-compute; an enumeration error retries the unchanged cursor. Claims record attempts before compute, so
-isolate terminations count: after three attempts the page halves, down to one record; three failed
-attempts at one record skip it, keep its prior output and record a failure. A thrown compute or
-publication fails only its page, keeps prior output and advances. A transient connection drop — a
-killed statement, SQLSTATE 57P01, or a pool-slot timeout — retries that same cursor instead: the
-release keeps incrementing cursor attempts and records the error, without incrementing failures, so
-one drop does not mark the pass as failing. Repeated drops on that page reach the same shrinking
-bound, which skips or fails the page with the error still visible. A provider outage costs one failed
-call per bounded page.
+`derived.snapshot`, keyed `default`, holds one ordered cursor: target, last
+committed UUID, cursor attempts, pass failures, counters and the last three
+summaries and durations. Views and typed snapshots remain the publication
+sources, with up to an hour of lag. The hourly cron admits one bulk Pass;
+manual repair joins an active cursor. Each kernel page prepares at most 50
+identities, with adapters declaring a smaller `preparationBatchSize` (default
+20; the recipe ingredient graph stays at 20). The shared 90-second claim owns
+publication and cursor advancement in one transaction.
+
+A page records its cursor attempt before compute, so isolate termination
+shrinks the next attempt after three tries, down to one identity. Repeated
+singleton termination skips that identity, keeps its prior output and records
+a failure. A non-transient compute or publication error fails its page, keeps
+prior output and advances to later populations. A transient connection drop
+retries the same cursor without spending a failure attempt. Its recorded
+cursor attempts retain the same shrinking bound. Publication uses a savepoint
+so a failed page cannot leave partial values or effects.
 
 The last three pass summaries keep processed-record and failed-page counts and duration.
 `finishedAt` records completion even with errors; `cleanAt` advances only for a pass with no
@@ -2396,11 +2418,14 @@ failures. Interrupted passes resume their committed cursor across hour boundarie
 retries resume running passes); completed passes, failed ones included, wait for the next hourly
 slot, and only a healthy pass clears failures. A requested new pass clears the previous error first;
 a manual request never resets an active cursor. Queue continuations and the hourly timer enter the
-shared background drain; an interrupted isolate's duplicate delivery waits out the lease. Worker logs
-record each claimed invocation's target and yield or completion, without record ids or values. Drain
-errors go to Sentry and schedule a retry without blocking purchase dispatch reconciliation. Search
+kernel; an interrupted isolate's duplicate delivery waits out the shared claim.
+Pass errors schedule a retry without blocking purchase dispatch reconciliation. Search
 publication uses a sorted upsert, retires missing documents in the same transaction, and re-marks
-embeddings only for changed embeddable documents, keeping unchanged documents' failure backoff.
+a revision-keyed `vectorize.sync` Pass only for changed embeddable documents. Each revision
+uses an embedding Ask, so repeated admission reuses its Answer. `EntityEmbedding` keeps source
+text, vector identity and upload, visibility and deletion receipts; the kernel owns scheduling,
+claims and retry state. Selection checks the current source revision and visible payload before
+semantic search or Related records can use the vector.
 Recipe invalidation only marks totals stale; USDA release activation, selected image descriptions,
 explicit search repair and image-search backfill converge through the same pass (backfill reports
 zero publications until the pass writes output).
@@ -2792,10 +2817,10 @@ The Research queue ([terminology](guide/terminology.md#purchase-research)) is no
 checks research can close, sorted by `dataQuality` ascending. A `DataException` closes a gap until
 cleared.
 
-Needs you holds only member decisions (`memberDecision` in `work-queue.ts`: merge, delete, money,
-stock, contradiction, personal); every work reason declares its decision (`PROBLEM_DECISION`,
-`RUN_FINDING_ROUTING`, `MAIL_IMPORT_GAP_EXECUTOR`) and `decisionExecutor(null)` is `agent`. The
-Agent saved view is the agent backlog.
+Needs you reads member-supplied kernel gaps. The broader browser work list routes
+merge, delete, money, stock, contradiction and personal decisions to a member; every
+work reason declares its decision. Reasons without a member decision are agent work.
+The Agent saved view is the agent backlog.
 
 The `/work-queue` page composes those predicates with Problems, Email attention, findings,
 Suggestions and account work as Work sources ([work queue](guide/work-queue.md)). Each domain exports
@@ -2804,28 +2829,23 @@ explicitly (ADR 0019 forbids a registry), and `server/generic/work-queue` import
 source's candidate select projects the shared row shape through `selectWorkCandidates` (`source`,
 `entity`, `id`, `name`, `key`, `family`, `executor`, `reason`, `reason_keys`, `owners`, `shared`,
 `amount`, `date`), deduplicating shared CTEs by name. This is a read projection, not an entity or
-assignment ledger. An MCP read fences to shared work and work owned only by the connected member
-before counts and paging; the household UI's Owner filter grants no private access.
+assignment ledger. The browser Owner filter grants no private-source access; source
+operations still enforce current ownership.
 
-Household web reads (`workQueue.queue`) read the published `WorkItem` rows: the full source union
-with deferrals applied and owners routed (member codes, section key and label). `publishWorkItems`
-reconciles the complete population in one transaction: remove absent keys, insert new keys and update
-changed values; equal rows keep their stored versions. Filters, search, sorts, Group by, view counts, summaries and
-hydration run over that relation. `WorkPublication` records the snapshot instant, the last unread
-member write (`dirtyAt`, set after commit by `recordChange` in a request or member-awaited background
-write), and the last failed attempt with its raw error, which holds off the next attempt for a
-minute. Publishers take a transaction try-lock, so one runs at a time; readers never wait and keep
-the previous rows until a publication commits. The insert runs in a savepoint so the lock holder
-records its own failure. A published read returns `meta.publication` (`publishedAt`, and the latest
-failed attempt's raw error); the last good rows keep serving. A missing publication is written before
-the first read; a first read that cannot publish fails with the raw publication error (SQLSTATE and
-Postgres message first) rather than serving unpublished zero work. A stale publication (dirty, or
-older than two minutes) is replaced after the response, and its commit rings `workQueue` readers.
-MCP reads and `workQueue.forRecord` stay live. Publication captures coverage messages and incomplete
-Project/diagnostic inputs with the rows. A source declared `admittedReasonsOnly` (pending suggestion
-families) stores each record's full membership; the read keeps only admitted reasons and drops a
-record with none, so a Product with a field suggestion and a product-pair review stays in Needs you
-as the pair.
+The Work page, Home, navigation and MCP share `machinery.needsYou`: the union of
+public records with a kernel member gap and the member's human-executor Work
+sources. Shared scope gaps and records count once. Kernel gaps carry their stage,
+first gap and offered actions; other member work links to its owning record. `machinery.needsYou` pages this population with `limit` and `offset`; the MCP
+adapter exposes `pageSize` and an opaque continuation `cursor`.
+Record machinery holds the complete inputs and actions. A record with no scope
+memberships reads null and retains its declared state badge. Declared needs, header
+facts and open quality checks remain visible alongside machinery.
+
+The browser's separate `/work-queue` list evaluates the composed source union live.
+Filters, search, sorting, groups, counts, summaries and hydration operate over that
+read projection. `workQueue.forRecord` scopes the same sources to one record.
+No queue publication or stored Work rows carry member decisions; source evidence,
+quality snapshots, findings and kernel decisions remain their authorities.
 
 `workQueueList` is the queue's [relation list](#declared-lists-over-a-relation): Type, Owner,
 Family, Executor and Reason filter and group it; Date and Amount carry unsupported reasons. Group
@@ -2893,9 +2913,37 @@ keeps its paged contract. Run rows open passive Problems.
 
 ### Relationship authorship
 
+Each relationship has one declaration using `defineEdge` from `entity-definitions/edges.ts`.
+Entity and domain module inputs accept the same `EdgeDefinition` values. A physical edge states
+its endpoints, forward and inverse cardinality, FK column or link kind, ownership, per-end meaning
+and liveness, and separate delete/merge policies. Polymorphic FKs name their entity-kind partition;
+the storage claim includes that partition.
+
+Each executable policy declares its disposition and order. A custom policy names an exported
+function through `handler`; null selects the ordinary disposition executor. Delete policies also name
+the `beforeLock`, `before`, `after` and `expand` phases. Named factory members receive typed
+transaction, plan, actor and result state. Unsupported operations carry an explicit reason.
+
+Relationship callbacks return `{ edges }`. `r.declare(handle.named(...), inverseKey)` builds a
+composition from a typed handle. Its named local paths, queries, derived filters and external
+references emit navigation metadata and inherit physical ownership and policies without claiming
+storage. Link declarations own both endpoint meanings and merge collision rules.
+
+TypeScript and generation check inverse endpoints. Generation rejects duplicate keys, overlapping
+physical storage claims and invalid composition paths. Schema introspection checks every entity-targeting
+FK and verifies each declared column and constraint. The server compiler checks policy exports for
+existence and callability; policy functions retain their branded identifier types.
+
+Generation emits the link bootstrap catalog in
+`packages/schemas/src/entity-link-catalog.gen.ts` and the physical override, ownership and
+lifecycle bindings in `apps/web/src/server/db/generated/declared-edges.gen.ts`.
+`entity-edges.gen.ts` projects the complete incoming catalog from those declarations;
+foreign-key storage does not supply implicit lifecycle entries. Plain child-to-child FK hops
+provide composition topology through schema introspection, without granting entity deletion authority.
+
 Relationship authorship uses `entity-definitions/relationships.ts`. A stored singular identifier
-reference uses `r.field(key)`; its field owns the target used by storage, validation and the graph,
-and ordinary storage entries inherit it (explicit null opts out). `r.link(kind, direction)` and
+reference uses `r.field(key)`; its field supplies the typed target used by storage and validation, and its edge declaration owns
+the physical graph meaning and lifecycle policy. `r.link(kind, direction)` and
 `r.query(key, cardinality, reverse?)` inherit endpoints from their kind/query owners. `.named(key,
 label, options)` supplies presentation and explicit mutation policy; `.source(key, label)` adds a
 named evidence source. Traversable handles derive inverses mechanically, and `.through(next)`
@@ -2947,26 +2995,25 @@ to 50 rows. Query relationships render in Connected records rather than another 
 public local reference fields must have a connected target group, and physical FK coverage requires a
 graph path or a justified internal classification.
 
-Shared AI Jobs expose every requesting Run; their optional owning Run is separate. Job subjects
-exclude non-entity origins. Image processing links use the exact execution key. Lease-device links
+Shared Asks expose every requesting Run through AskScope; Passes retain their Run provenance. Image processing links use the exact execution key. Lease-device links
 keep an expired holder until release or reclamation. Photo membership and library sightings never
 imply inventory ownership. Reviewed Email financial evidence keeps the account at review. Historical
 leaves may name tombstones, labelled `(deleted)`; ordinary references require live targets.
 
 ### Deletion and merge
 
-Lifecycle is separate from logical relationships. Physical edges carry stable domain meaning, and each
-delete or merge operation declares its own disposition for every incoming edge. The integrity catalog
-records whether the generic kernel or a specialized workflow owns execution. There is no logical
-`deletionPolicy` and no inferred database cascade. Generic deletion blocks incoming references; domain
-detach, cascade and merge policies stay explicit.
+An edge declaration owns its stable domain meaning and its separate delete and merge dispositions.
+The operation owns execution: the generic disposition executor or an explicitly named policy function
+runs inside the operation's transaction. The integrity catalog records whether the generic kernel or a
+specialized workflow owns execution. There is no inferred database cascade. Generic deletion blocks
+incoming references; domain detach, cascade and merge policies stay explicit.
 
 Deletion is one command. Soft versus hard deletion is a capability; the result names the deleted
 public references and a non-null changed-row count for every affected-edge disposition. There is no
 restore. Delete and merge confirmations show an advisory impact list (`entity.connections` with an
 `operation`): each incoming edge group with its count and disposition. The mutation rechecks in its
 own transaction and its structured refusal is authoritative. Domain command and identity reservations
-that must precede the root row locks belong in the repository's `deleteHooks.beforeLock`;
+that must precede the root row locks are named by the edge's `beforeLock` policy reference;
 `beforeDelete` runs after them and owns guards and effects before edge dispositions. Financial deletion
 takes command keys and sorted occurrence locks in `beforeLock`; taking them in `beforeDelete` would
 invert the financial writer lock order.
@@ -3148,10 +3195,11 @@ their target, so an empty child location stays a cleanup candidate.
 Two generic tables carry pure pairings and identifiers (ADR 0007):
 
 - `EntityLink(kind, fromEntityId/fromKind, toEntityId/toKind, quantity)` holds every pure pairing of
-  two entities: `purchaseProduct`, `projectTool`, `gardenEntryPlanting`, `productComponent`,
+  two entities: `purchaseProduct`, `purchasePaymentAccount`, `projectTool`, `gardenEntryPlanting`, `productComponent`,
   `taskDependency`, `projectDependency`. Link kinds are declared in
-  `packages/schemas/src/entity-links.ts` (endpoint kinds, quantity, self-link and cycle rules,
-  per-end role, label, liveness, merge collision rule); the table's CHECKs and edge-source branches
+  `packages/schemas/src/entity-definitions/link-edges.ts` (endpoint kinds, quantity, self-link and cycle rules,
+  per-end role, label, liveness, merge collision rule and lifecycle policies). Generation emits
+  `entity-link-catalog.gen.ts`; the table's CHECKs and edge-source branches
   derive from that declaration, and write helpers live in `generic/entity-links/repo/entity-links.ts`.
   Every query names its `kind` and filters `deletedAt`. Dependency reads and writes resolve the kind
   from the entity's `blocked-by` relationship path.
@@ -3381,7 +3429,7 @@ same transaction (ADR 0005 owns precedence).
 
 ## Suggestions
 
-Suggestion families are `field`, `recommendation`, `statement_transaction`, `transfer_pair` and
+Suggestion families are `field`, `recommendation`, `transfer_pair` and
 `product_pair` (`server/generic/suggestions/repo/suggestion-family-declarations.ts`). The generic
 owner is `generic/suggestions`; field-resolution evidence belongs to `generic/field-explanation`.
 Product pairs merge only through `suggestions.review` with a `product_merge` application.
@@ -3408,8 +3456,10 @@ judges its own entries, so it is an implicit self-basis: naming it in `basis` is
 and server fold its current value (JSON-encoded) into the basis. The `FieldSuggestion` carries
 `operation: "remove"` and `removals[]`; review surfaces render a removal proposal, never an auto-apply;
 a form-mode `FieldSuggestionProvider` skips prune targets by default (list and detail request them).
-Prune acceptance verifies the saved remaining array and records the same saved-field receipt as a set
-proposal.
+The fields scope retains a prune Answer as the proposed remaining array and exposes
+a decision gap, including for a person-held array. Acceptance verifies and writes that array through the authored
+field writer, recording the assignment Decision. A prune proposal never applies
+automatically.
 
 Suggestion inference selects only the union of its declared basis and target read paths through the
 canonical detail reader, keeping envelopes and reading effective values through those paths
@@ -3452,112 +3502,48 @@ order; a type check requires them to list every declared entity and field.
 
 ### Suggestion storage and review
 
-A Suggestion stores immutable typed subjects, judgments, evidence and nullable original producer
-metadata. Suggestion and decision child handles accept the full PostgreSQL GUID shape, including
-hash-derived identifiers with arbitrary version/variant bits, preserved exactly by readers, review
-commands and receipts. The row's mutable columns hold current targets, field supersession and exactly
-scoped suppression; merges and deletes change those columns, never subjects. Runs are nullable
-provenance references, not history owners. The family registry validates current targets. Mail
-decisions and findings live with their
-[domain owners](adr/0011-email-as-a-first-class-entity.md#decisions-and-reviews-have-email-owners),
-never on a Suggestion. Review families using this storage are fields, Product pairs, statement and
-transfer pairs, and generic recommendations; statement and transfer-pair Suggestions share the
-canonical charge preview mapping and charge identity parsing. Non-actionable Product pairs stay
-ordinary history.
+Field proposals are retained Answers. The `fields` reconciler exposes an undecided proposal as a
+ScopeState decision gap; assignments and vetoes are independent append-only Decisions.
+Field review reads the current gap and evidence, fences the source, and appends intent in the same transaction
+as any authored domain write. It never grades an Answer into operational authority. A corrected null
+is an explicit None. Exact command replay returns the original result; conflicting operation-id reuse
+is refused. Replayed Answers acquire an AskScope link for every requesting Run.
+Connection candidates retain their evidence; Link and Dismiss use the existing suggestion and import writers.
 
-Live field inference shares one immutable publication per subject, full evidence, exact proposal and
-served model/prompt policy, keeping the first actual producer and proposal across requesting Runs;
-publication identity excludes requesting Run and execution ids. Live and stored inference share an
-internal review identity over the captured feature, prompt, model, policy dependencies, field subject,
-exact proposed value and operation kind; an exact wrong review stays resolved across either entry
-point until evidence, policy or candidate changes, and unknown evidence receives no invented identity.
-Live inference stays inactive; only stored sweep advice enters the queue. A pending field Suggestion stores the snapshot of its target, declared basis, direct
-reference rows and latest audited write of that field; reads hide it and apply refuses it once the
-snapshot differs (a no-change save keeps it pending; a restore after an intermediate write does not).
-Pending Product pairs are hidden the same way once either Product's identity snapshot changes, while
-their history remains. Suggestion context fingerprints keep assignment, outcome and provenance kind,
-excluding refresh timing and presentation controls. A changed target, basis or backing field makes
-older pending Suggestions ineligible on reads; a later sweep supersedes prior pending rows for the
-same record and field. Historical hashes, model versions, provenance and actor intent are never
-reconstructed.
+A form prediction changes only its draft. Saving uses the ordinary entity writer, which records the
+chosen assignment. Saved field guesses are accepted through their Decision action; rejecting a saved
+guess records a veto. Finance Apply uses its fingerprint-fenced domain writer and preserves newer
+unsaved edits when the response arrives.
 
-A statement transaction Suggestion stores each paid model answer under `data.answers` (kind,
-counterparty, per-candidate labels, escrow, merchant) as `{value, input, versions, models}`; the
-shared schema is `packages/schemas/src/statement-answers.ts`. An answer is reusable when its exact
-input and versions equal the current question's, read across the charge's slot rows and prior
-publications, newest first; it never enters a fingerprint. The rule evidence hash keeps a frozen
-hash-scheme tag, the labelled output hash excludes the spending judgment, and a revision-scoped
-dismissal holds while both hashes are equal, so a policy-only change restamps the row in place and
-keeps the dismissal. A "Never suggest" suppression holds independently. The
-[statement Sweep contract](import-evidence-convergence.md#statement-sweeps) owns reuse, scope and
-settlement.
+Product pairs, statement transactions and transfer pairs retain their domain Suggestion storage and
+review contracts. Their typed subjects, judgments, evidence and original producer metadata are
+immutable; current targets and scoped suppression are projections. Merges and deletes preserve
+subjects. Handles accept the PostgreSQL GUID shape. Runs attribute requests and writes without owning
+history. Mail reviews and findings live with their domain owners.
 
-`suggestion.review` and `suggestion.reviewBatch` (MCP `suggestions.review` with `items`) record
-immutable review; each batch item has its own outcome. Draft and
-history verdicts settle on their own; an applying review commits with its application, so a stale
-or refused application records nothing and the same operation id may retry with a corrected review.
-Every applying review sends `expectedFingerprint`, the listed row's `fingerprint`, naming the
-version it reviewed; a family whose list computes that fingerprint live declares `applicationKey`.
-A mismatch refuses, naming each part of the family's `applicationTerms` (what its apply writes) that
-moved. Statement applications compare only the chosen action's terms inside their apply, so drift in
-evidence the application does not write never blocks.
-A decision records correct, wrong, uncertain and presentation-only dismissal
-separately, with an explicit correction-presence discriminator so a corrected JSON null survives.
-Draft acceptance records history; saved application commits a separate immutable command-bound
-receipt in `decisions` with the domain write. Explicit single and batch finance Apply acknowledge each
-Suggestion only after the finance writer saves; recording the saved default preserves a newer draft.
-An identical command replays its receipt before current status checks; conflicting operation-id reuse
-is refused and another command cannot inherit a resolved application. Public operation ids reserve
-internal receipt namespaces; replay validates the receipt kind, command decision binding and recorded
-outcome. Current-evidence and domain-authority checks fence field writes, Email corrections and pair
-merges. Email link application revalidates its expected active Suggestion and current target after
-Purchase, Original and Email locks, so a waiting review cannot replace newer authority. Relevance
-application requires an explicit related or uncertain correction before recording feedback;
-unrelated grading stays history-only. Unserved model trials stay outside member review.
+Statement questions retain their producer input and paid results as kernel Asks and Answers.
+Input changes dirty the owning scopes; unchanged input reuses its Answer. A member's assignment
+or veto is an independent Decision. Scope stages and gaps expose unresolved statement work,
+and Work retries an exhausted scope or Ask without a bulk statement pass.
 
-A bare wrong verdict is a Miss without suppressing future evidence: it resolves the current Problem,
-and canonical publication of the same evidence and policy keeps that review, while relevant evidence
-or policy revisions may publish a fresh Suggestion. Older ambiguous reject/dismiss outcomes stay
-ungraded with their original field-value, pair, recommendation-group, relatedness or tag-preference
-suppression; existing corrected values and explicit labels keep their semantics. Field applications
-keep AuditLog receipts and distinguish automatic from explicit member acceptance. Evaluation-only
-Email grades never change routing; frozen sample rosters keep original predictions, strata and
-inclusion probabilities.
+`suggestion.review` and `suggestion.reviewBatch` commit each applying review with its domain
+application. A refused or stale application records nothing. Every applying command carries the
+listed fingerprint; the owning domain compares the terms that application writes. An identical
+command replays its receipt, and another command cannot inherit a resolved application. Email
+corrections retain their member, source-lock and exact-evidence guards. Evaluation-only Email grades
+never change routing. Pair merges retain survivor confirmation and identity-conflict checks.
 
-Suggestion review identity and admission reads select only their identity or served-status fields;
-immutable evidence loads only in the family action that consumes it, so generic history and review
-plumbing never transfer large snapshots. Canonical fingerprint serialization traverses validated JSON
-directly, sorting object keys and keeping array order and scalar encoding, without revalidating
-subtrees; normalize dates and optional values at the input boundary. Stored-family outcome counts use
-one status query scoped by family and optional Run. Suggestion lists resolve record scope once through family discovery and pass matched ids to family readers. Families declare primary records and subject JSON reference paths, with guards for the stored field or scope; recordIds matches subjects, while account and vendor filters select related statement suggestions. The touching reader binds requested records and owns reverse discovery. Paths that store shortcodes can declare live-record resolution before matching. Statement settlement graph discovery is the only graph exception. Review uses family subject and projection
-schemas, the common verdict set and transaction-bound application by default; families keep explicit
-exceptions.
+Stored-family lists select identity and status before loading immutable evidence. Scoped reads
+resolve subjects once and pass matched identities to family readers. Field gaps are scoped to their
+subject; connection gaps belong to both endpoints. Account and Vendor filters select related statement
+advice. Canonical serialization sorts object keys and preserves array order, scalar encoding and
+explicit nulls. Outcome counts for field review read Decision history.
 
-Correction serialization uses the affected domain rows: Suggestion review locks its Suggestion row;
-Image review locks its Image first. Email evidence writers keep serializable retries and their Email,
-Original and Purchase locks, with no household-wide lock key; sender address reservation protects a
-new address with no owning Vendor yet. New decisions use member, automatic or system authority;
-retained historical decisions keep their recorded authority. The uncertain member verdict is written
-by Apple connection review; ungraded is an internal receipt. Draft intent is supported. The native
-editor shares `ai.suggestFields` with web. Email review keeps its transaction and intent checks
-without a frontier receipt. Transfer movement labels run only when weak movement is the sole blocker;
-structural conflicts stay for review without a model call.
-
-Product pairs come from deterministic import-time matching and the `product_enrichment` propose
-action. Exact identifier retrieval is independent of name/model gates; semantic similarity is
-candidate evidence. Reads use stored pair Suggestions. Current nonnull model disagreements and
-retained historical identity conflicts block pair application, including weak recommendations; equal
-current model strings or research notes neither verify identity nor clear conflicts; uncertain
-variant matches stay pending. An explicit merge can supersede historical advice only after identity
-inputs differ from every retained conflicting comparison, with current conflicts rechecked
-transactionally; automatic matching stays blocked and notes never unlock it. With exact identifier
-admission they become identity-conflict Problems. Raw receipt SKUs keep unknown variant granularity
-and stay ranking evidence even with matching size, color and pack; explicit ASINs can establish exact
-identity; uncorroborated title text and partial variants stay ranking evidence. Connected pairs may
-share one Problem presentation, but each merge names one independently assessed pair and rechecks its
-evidence. Merging and survivor image ordering commit together; stock combines, and duplicate
-receiving is a separate reviewed inventory correction. A merge requires explicit survivor and impact
-confirmation, and identity conflicts cannot merge.
+Product pairs use deterministic import matching and Product enrichment proposals. Exact identifiers
+are independent of name/model gates; semantic similarity supplies candidates. Conflicting identity
+history and current model disagreements block application. Research notes cannot establish identity.
+Merging and survivor image ordering commit together; combining stock and correcting duplicate
+receiving remain separate domain decisions.
 
 ### Shared proposal queue and automatic decisions
 
@@ -3586,14 +3572,10 @@ readers compose the same static declarations. The registry exposes live accessor
 implementations depend on generic review, and eager values could capture an unfinished circular
 import. Reference resolution, touching-record queries and Work tokens have separate runtimes.
 
-Every Suggestion is published through one module, `suggestion-publication.ts`; its immutable insert
-and pruning have no other caller. Statement transactions, transfer pairs, connections,
-recommendations, Product pairs and field sweeps each declare a `SuggestionFamily` slot and its
-suppression, unchanged and replacement policy. A candidate its family declares `unapplicable` (a
-transfer pair that cannot apply, a connection relation without an apply path) retires the slot's
-pending rows instead of publishing, so no pending row exists without an apply path. Run-scoped photo
-drafts and live field answers publish as exact immutable evidence keyed by publication, which never
-suppresses, matches or settles a queue row.
+Stored money-family Suggestions publish through `suggestion-publication.ts`, with family-owned
+suppression, unchanged and replacement policies. Field and connection families read kernel gaps and
+Decisions. Field review commits the Decision and any authored-field write, then returns `waiting` while the dirty scope reworks its gaps. The row says "Cubby is reworking this"; preparing model questions belongs to the background runner. Photo-import review stays with its Run and uses Decisions for approved fields and rejected
+candidates.
 
 The page's `family`, `record` (`<kind>:<CODE>`) and `runId` params scope the queue. Every
 multiselect, including Clean, offers **is / is not** through the shared filter editor with `__not__:`
@@ -3610,7 +3592,7 @@ inflates totals; family freshness and derived facts run through their eligibilit
 
 Every entity list batches the queue's pending counts and opens its inline review; detail pages show a
 scoped Suggestions section. Family declarations expand every affected record: both endpoints of
-connections and pairs, reference values of fields, and a statement row's account and candidate
+connections and pairs, the subject of a field gap, and a statement row's account and candidate
 Transactions. Scoped reads resolve the record scope before joining immutable evidence, so unrelated
 pending families never enter the evidence join and overlapping branches count each Suggestion once;
 Suggestions and Automatic decisions share the statement settlement predicate and its deletion rules.
@@ -3643,15 +3625,14 @@ the page, and a Sweep Run's detail links to its own.
 Run **Results** separates direct record changes, published Suggestions and processed inputs. Direct
 changes come only from `AuditLog.runId`, counted as distinct records per action with a bounded linked
 list (repeated edits count once; a record created and edited appears in both counts); Changes keeps
-the full paged field history. Publication totals come from `Suggestion.producer.runId` with current
-statuses from the same row; a replaced undecided row is deleted and leaves the total, except in the
-field family. Later manual or automatic applications become Run-owned only when their writes carried
-that Run; attribution is never reconstructed from review status. Processed RunStep counts are work
+the full paged field history. Field work comes from AskScope links to the requesting Run, including reused Answers. Stored-family
+publication totals read their producer attribution. Later applications belong to a Run only when their
+writes carry that Run; review status never reconstructs attribution. Processed RunStep counts are work
 units, not distinct entities. Order counts and target review stay in the import journeys; photo
 review stays in its own section.
 
 Automatic field writes use the high-confidence boundary shown to members (85% or above) with
-current-evidence checks, and follow [field authority](#field-authority-and-automatic-writes). Only
+current-evidence checks, and follow [field resolution](#field-resolution-and-overrides). Only
 declared `mode: "fill"` fields with `apply: "auto"` qualify. Preview and persisted application share
 the threshold, which does not change financial acceptance rules. Eligibility reads only the target and
 its declared policy basis with their assignment and result envelopes, and acceptance repeats the
@@ -3672,23 +3653,14 @@ authority disappears with the Image.
 
 Cells and fact rows show one saved state: a value looks the same whoever set it, and lists ask no
 model. A below-bar answer for an empty or Cubby-held field is a guess: `suggestion.fieldGuess` returns
-the active pending Suggestion whose live input fingerprint still matches, and the field's picker shows
-it as a pinned "Cubby's guess" group (with the runner-up when stored), never selected; Enter with an
-empty search picks it. Choosing the guess accepts that Suggestion; choosing another value is an ordinary edit,
-recorded as the correction. A person-held field has no guess.
+the Answer used by the record's current fields scope. The picker shows it as a pinned "Cubby's guess"
+group with its runner-up, never selected. Choosing the guess records an assignment Decision; choosing
+another value is an ordinary edit and records the correction. A person-held field has no guess.
 
-Edit forms ask live on their unsaved basis. A live decline (`none`) or `no_signal` answer is remembered
-per basis and the field's decision-policy stamps, with a signature of the inputs it read; a later
-decline of the same question replaces it. Each remembered question's inputs are re-prepared from
-saved data without the model or paid providers, so a changed roster, linked record or stock tally
-reopens it like a basis edit; inputs needing a provider (a cold query embedding) cannot be verified
-and are asked live under a fresh revision on every read. A reopened question's live ask carries the
-read's input revision (prefixed by the member review that marked the decline a miss, if any), so
-answers cached for old inputs are not reused. Replacements are serialized per question; the newest
-memory row wins. Outcome variants keep optional `reviewStatus: "rejected"` when a member rejection
-withholds a proposal. First reads return known skipped states (`no_signal`, `no_candidates`,
-`resolved`) without inventing history. Questions with saved finance context (`entityId`),
-pinned-model replays and member-marked misses are always asked again.
+Edit forms ask on their unsaved basis. Each actual model call is keyed by its complete request and
+choices, model policy, parameters, prompt version and output schema. Equal questions reuse an Answer;
+changed rosters or context produce a different envelope. Draft acceptance makes no extra server write.
+Known skipped states (`no_signal`, `no_candidates`, `resolved`) do not invent history.
 
 Every field-suggestion review surface opens the same body (`entity/suggestions/suggestion-body.tsx`):
 Accept / Reject (with "Use a different value…"), confidence as "92% · high" (`formatConfidence`), the
@@ -3696,7 +3668,7 @@ runner-up and its probability, the basis fields read, and a provenance caption (
 usage). Jev and Clef return no prose, so those facts are the reasoning. A tree suggestion keeps the
 model's selected category and confidence; ancestor probability never substitutes for a leaf decision,
 and ancestors of the current category stay suppressed as corrections. Percentages describe model
-confidence, not correctness. Suggestions stay available to evaluation after review.
+confidence, not correctness. Answers and Decisions remain available for calibration after review.
 
 Classification suggestions choose existing taxonomy references from metadata and retained
 original-image evidence; confirmed description corrections outrank model text. Taxonomy contents are
@@ -3713,90 +3685,72 @@ probability, so outcome summaries never count them as proposed changes.
 
 ### Sweeps
 
-Entity lists expose a generic pending-suggestion filter (any, Addition or Correction) and can start a
-Sweep across every declared target using the list's active filters. A Sweep freezes matching
-record/field membership and its selected model at launch and returns a Run immediately. Background
-Workflows resume from durable target receipts, rechecking current values and member field writes
-before publication. Pause and resume use Run status; transient failures retry within a bound and
-terminal failures stay visible. Paired trials and finance acceptance rules stay part of the workload.
-Identical pending targets can share execution while each requesting Run inspects the published
-Suggestions and keeps its own receipt. No-proposal evaluations count as completed work without
-increasing the queued count. Field publication builds an entry for `publishSuggestionSet`, whose
-immutable-key replay check also owns the field Sweep write.
+A member-started field Sweep is a Run. Its roster step reconciles the matching
+records' `fields` scopes, and every Ask it requests carries that Run through
+AskScope. Replayed Answers also acquire the requesting Run's link. The evaluate
+step reads the Run's Asks until each is answered, abandoned or needs attention.
+Pause, cancellation and explicit retry retain the Run's checkpoint and paid
+Answers. Cancelling one requester withdraws only that Run's demand.
 
 ### AI field refresh
 
-The deployed AI refresh manifest compares exact per-feature prompt/policy versions, including
-rollbacks; [Jobs](jobs.md#ai-evaluation-drains) owns activation, admission and the drain. Its Run-backed `AiEvaluation` ledger targets
-fields and Emails and admits one queued slot per feature, entity, record and field. Changing evidence
-updates queued input and its Job in place; executing input stays frozen with at most one queued
-successor; settled reverts create a new attempt served by the AI response cache. Declined attempts
-are bounded per input, and member cancellation vetoes automatic readmission
-([Jobs](jobs.md#producers)). The ledger fences publication against the active generation, Workflow
-attempt and target-field audit revision; a member edit returning a field to its earlier value still
-invalidates the outstanding result. Discovery revisits uncertain unresolved Emails, pending
-Suggestions and input-invalidated or no-proposal field work when the fingerprint changes; settled
-confident Emails and member resolutions keep their domain authority. Applied field targets,
-including inactive saved-form applications and rejected corrections with application receipts, are
-reevaluated when evidence or policy changes.
+Authored writes, immutable evidence, Answers and Decisions dirty keyed scopes.
+The `fields` reconciler reads the declared basis, field history and precedents,
+then uses the Answer whose complete producer envelope matches those inputs.
+An absent Answer owes an Ask; an unchanged input reuses its Answer. A prompt,
+model or output-schema revision changes the envelope. Reconciler rule changes
+use the kernel's version sweep and exact Drift proposals.
 
-#### Field authority and automatic writes
+#### Field decisions and automatic writes
 
-`AuditLog.authority` records who holds a field after a write: `automatic` for an Automatic rule's
-field write, `released` for a member's Let Cubby decide, null for a member, import or agent write.
-`fieldAuthority` reads the newest update audit row naming the field: no row and an empty stored value
-is `open`; `released` is `open` or `cubby`; `automatic` whose `to` equals the stored value and whose
-applied Suggestion no member kept (a member `correct` decision) is `cubby`; anything else, including a
-value set at creation, a timestamp tie or an out-of-band write, is `person`.
+The newest assignment Decision per record and field holds a person's explicit value (`set`),
+explicit None (`none`), or hand-back (`release`). A veto is independent of that assignment:
+changing an assignment never removes a value the member ruled out. Authority comes from the
+Decision or Answer in the kernel's provenance, not an audit flag.
 
-The automatic gate saves an answer at 85% or more for an `apply: "auto"` fill field with supporting
-basis evidence, complete current dependency stamps and a current input fingerprint, when the holder is
-`open` and the effective value is empty, or the holder is `cubby`. Cubby never writes a `person`
-field, an explicit None, a value rejected for that record and field, or a `fillOnly` field it already
-filled. A replacement of a Cubby value needs a 0.20 lead over the runner-up, and a value Cubby already
-replaced is never applied again. `apply: "review"` answers wait for a member; `apply: "offer"` answers
-wait as the field's picker guess. Fields are asked only where their classification admits them: an
-unclassified record is not asked a field its classification refuses by default.
+The `fields` reconciler owns eligible `apply: "auto"` columns. Entity writers hold these columns
+out of their SQL, record decisions in the writer's transaction and reconcile the scope before
+returning. Other columns stay with their ordinary writer. Money-lane entities, spending reviews,
+inheritance-mode assignments and required columns without defaults keep their owning writers.
+Reference fields follow their declared apply policy. Why this value and reset preview read the same assignment
+and provenance as the field actions.
 
-An edit of a Cubby-set value is the correction: the field-automation drain records a `wrong` decision
-with the right value on the applied Suggestion and rejects it. An import or cron replacing it records
-nothing. `suggestion.fieldAuthority` keeps a Cubby value (it becomes the member's), clears a wrong
-one (the field empties as `released`, the value is ruled out) or releases a person's value.
+Cubby fills an open field at 85% confidence, never overwrites an assignment or explicit None,
+never reapplies a vetoed value, and fills `fillOnly` fields only once. Revising Cubby's own value
+requires a 0.20 lead over the runner-up and cannot restore a value already replaced.
+`apply: "review"` files an Ask and exposes the proposal as a member gap on the record and Suggestions. Dismiss vetoes the proposed value while leaving an empty field open. `apply: "offer"` reads an existing picker guess without filing a background Ask. Classification must
+admit the field before it is asked.
+
+An edit over Cubby's value records the chosen assignment and vetoes the replaced value. Keep
+records the displayed value as an assignment. "Wrong, clear it" records a veto and releases the assignment; the reconciler
+clears the value. "Let Cubby decide" releases the assignment. System imports record assignments
+without grading the model. Corrections recheck at most 25 similar Cubby-held records.
 
 #### Field automation triggers
 
-Field evaluation follows events only. Every create and update audit row of an entity with automated
-fields is written with `automationPending`; the `field-automation` drain reads them oldest first,
-records corrections, rechecks up to 25 similar Cubby-held values after a signed-in member's
-correction (records holding the value Cubby got wrong first), and schedules evaluation of open or
-Cubby-held fields whose basis or backing keys changed, every such field of a created record, and a
-released field. A row Cubby wrote never re-triggers its own field. A full automatic backlog leaves the
-remaining rows pending. After an activation revision the drain's policy unit re-asks every pending
-guess and Cubby-held value once, paging by record and field. Page views schedule nothing and there is
-no periodic pass. Records nobody writes are evaluated by a member-started Sweep.
+Authored writes, Decisions and Answers dirty keyed `fields` scopes in the transaction that makes
+them. The kernel loads stored basis columns, replaced values and up to eight person-held precedents
+on records sharing a reference-valued basis key, corrections first. Its pure reconciliation reads
+Answers and Decisions and applies the owned-column diff. Preparation records the complete model questions and their keyed roster dependencies. Model Asks own
+the response-cache claim; their transports disable the application cache. Page views schedule nothing.
 
-Saved-record evaluations prepare evidence from the saved entity and carry up to eight precedents:
-values a person set for the same field on records sharing a reference-valued basis key, corrections
-of Cubby first. Cubby-set values are never precedents. Interactive form predictions ask live on the
-unsaved basis, stay inactive and never schedule automatic writes.
+A prompt or policy version change alone never dirties a scope or places a producer call.
+`version.sweep` computes from retained Answers and records exact Drift proposals when approval
+is needed. Member-started Sweeps remain Runs. Interactive form predictions use unsaved basis and
+never schedule automatic writes.
 
-A Suggestion's mutable columns keep the latest evaluation's input and policy beside its application
-metadata whenever nothing replaces it, including when an exact wrong review or value suppression
-filters every proposal. Reconciliation may advance a revision once after application; settling the
-current basis lets discovery skip preparation. Deleted subjects are skipped. Write and input fences
-reject edits during inference and later writes in the same application transaction, including ABA
-edits, before capturing the settled post-application fingerprint. Rejected proposals without receipts
-stay resolved; eligible unknown provenance is evaluated once. Successful ambiguity or missing evidence
-is terminal for that fingerprint; transient or interrupted inference gets three attempts. Two
-independent refresh targets may run globally, with dependent calls sequential. An execution claim
-defers immediately when global admission is busy, keeping queued work and its attempt count for the
-Workflow retry instead of holding an origin connection in a lock wait. Publication locks Runs before
-evaluation items and takes the activation share lock only at its final commit fence; a deactivation
-or generation change refuses or rolls back the write. Prepared evidence never replaces the
-transaction's current Run authorization or activation checks. Email Runs freeze at most 200 items and
-run only while Mail import is on for that mailbox; reused Email stages require the current source
-checksum and feature provenance. Independent model grading and member labels follow the
-[decision-grading skill](../.agents/skills/decision-grading/SKILL.md).
+Field and connection review lists read undecided gaps from ScopeState, with
+Answers and source evidence providing their proposals. Review appends an
+assignment or veto Decision. The two channels remain independent. Their decided
+history reads Decisions rather than mutable Suggestion rows. Stored money
+Suggestions retain their domain review paths.
+
+Location descriptions and ended Run summaries are Answers used by their
+`fields` scopes. Current scope inputs determine which Answer is displayed;
+a restarted Run's end generation therefore cannot show the earlier summary.
+Location inventory detection appends an immutable photo observation, preserving
+its source snapshot and Run attribution. It never treats a detection as a member
+inventory decision.
 
 ### Automatic semantic classification
 
@@ -3950,7 +3904,8 @@ PostgreSQL reserves `OVERLAPS`.
 
 The semantic reader shares source readiness, current-vector validation and hit hydration with explicit
 similarity search. Unavailable, uncomputed and stale indexes stay visible rather than masquerading as
-empty; an explicit Index now action uses the embedding refresh operation and a bounded readiness poll.
+empty; an explicit Index now action starts the document revision's Vectorize sync Pass and uses a bounded
+readiness poll.
 Related records never publish suggestions, merge identities or mutate records. Scalar-only candidates
 stay visible with zero score; semantic weights decide ranking. Evidence merges once per public record,
 ranks deterministically, and batch-resolves images for visible rows. The rail is a shared indexed

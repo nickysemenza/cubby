@@ -1,9 +1,11 @@
 import { parseShortcodeFor, userId } from "@cubby/schemas/identifiers";
+import { nullableWholeCentToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { decideProductVariantComparisons } from "~/server/ai/semantic-decisions";
 import { getDb } from "~/server/db/helpers";
 import {
@@ -21,7 +23,6 @@ import {
   mergeVendors,
 } from "~/server/domains/vendor/repo/vendor";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -176,7 +177,7 @@ describe("photo product candidates", () => {
       productId: item.entityId,
       name: "Synthetic ordered line",
       date: "2026-09-04",
-      cost: 42,
+      cost: 4200n,
       productQuantity: 1,
       costType: "materials",
       trade: "other",
@@ -187,7 +188,7 @@ describe("photo product candidates", () => {
       productId: item.entityId,
       name: "Synthetic paid line",
       date: "2026-08-02",
-      cost: 21,
+      cost: 2100n,
       productQuantity: 1,
       costType: "materials",
       trade: "other",
@@ -598,7 +599,7 @@ describe("photo product candidates", () => {
     ] as const) {
       await insertWithShortcode(ctx.db, "expense", {
         name,
-        cost,
+        cost: nullableWholeCentToMinor(cost),
         productQuantity,
         productId: item.entityId,
         date: "2026-01-05",

@@ -6,7 +6,7 @@ import {
   purchaseReconciliation,
   RECONCILIATION_TOLERANCE,
 } from "@cubby/schemas/purchase";
-import { moneyToMinor } from "@cubby/shared";
+import { moneyToMinor, nullableWholeCentToMinor } from "@cubby/shared";
 import { cents } from "@cubby/shared";
 import { fromAny } from "@total-typescript/shoehorn";
 import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
@@ -14,20 +14,17 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { outer } from "~/server/db/helpers/related";
-import {
-  financialTransactionAllocation,
-  inventoryEntry,
-  product,
-  purchase,
-} from "~/server/db/schema";
+import { inventoryEntry, product, purchase } from "~/server/db/schema";
 import {
   postedRefundTotal,
   vendorExpenseCount,
   vendorExpenseTotal,
   vendorUnpricedExpenseCount,
 } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { effectiveProductPriceSql } from "~/server/domains/product/repo/pricing";
 import {
   expectedQuantitySql,
@@ -44,7 +41,6 @@ import { setDataException } from "~/server/generic/data-quality/repo/exceptions"
 import { gapCondition } from "~/server/generic/data-quality/repo/sql";
 import { storedDerivedSql } from "~/server/generic/derived/repo/read";
 import { withListGroupBy } from "~/server/generic/list/repo/list";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createInventoryFixture,
@@ -333,7 +329,7 @@ describe("state predicates re-declared as values", () => {
           lineKind: "principal",
           purchaseId: row.id,
           name: `Verdict ${label} ${index}`,
-          cost,
+          cost: nullableWholeCentToMinor(cost),
           date: "2026-09-01",
           costType: "services",
           trade: "other",
@@ -350,13 +346,15 @@ describe("state predicates re-declared as values", () => {
             postedDate: "2026-09-02",
           },
         );
-        await getDb(ctx.db)
-          .insert(financialTransactionAllocation)
-          .values({
+        await insertPurchaseEventRows(
+          ctx.db,
+          "FinancialTransactionAllocation",
+          {
             transactionId: transaction.id,
             purchaseId: row.id,
             amountMinor: moneyToMinor(refund),
-          });
+          },
+        );
       }
       return row;
     };

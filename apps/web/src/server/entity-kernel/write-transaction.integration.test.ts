@@ -68,8 +68,6 @@ describe("entity kernel write transaction", () => {
       if (!entityId) throw new Error("created recipe did not resolve");
       // A fresh recipe is the case whose stale mark actually rewrites the row.
       await drainDerivedRefreshFrontier(ctx.db);
-      await context().services.recipeCosting.recomputeQueued([entityId]);
-      await drainRecipeRefreshJobs(ctx.db, context().services.recipeCosting);
       expect(await selectStaleRecipeIds(ctx.db, [entityId])).toEqual([]);
       published.length = 0;
 

@@ -51,20 +51,16 @@ const trackerStatusSchema = z.union([projectStatusSchema, taskStatusSchema]);
  * Project/task status -> chart fill color, using the warm chart tokens.
  * Single source of truth for SVG/nivo charts (which can't use Tailwind classes).
  */
-const projectStatusChartColor = new Map([
-  ["done", "var(--chart-positive)"],
-  ["in_progress", "var(--chart-1)"],
-  ["blocked", "var(--chart-negative)"],
-  ["planning", "var(--chart-5)"],
-  ["not_started", "var(--chart-neutral)"],
-  ["later", "var(--chart-2)"],
-] as const);
-
 export function getStatusChartColor(value: string | null | undefined): string {
-  const parsed = trackerStatusSchema.safeParse(value);
-  return parsed.success
-    ? (projectStatusChartColor.get(parsed.data) ?? "var(--chart-neutral)")
-    : "var(--chart-neutral)";
+  const tone = statusTone(
+    taskStatusSchema.safeParse(value).success ? "task" : "project",
+    value,
+  );
+  return tone === "destructive"
+    ? "var(--chart-negative)"
+    : tone === "warning"
+      ? "var(--warning)"
+      : "var(--chart-neutral)";
 }
 
 const statusLookups = {

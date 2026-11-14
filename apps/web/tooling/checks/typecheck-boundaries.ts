@@ -21,12 +21,10 @@ const sharedServerModules = new Set([
   "ai/response-cache-rpc.ts",
   "ai/chatgpt/rpc.ts",
   "db/freshness/rpc.ts",
-  "generic/jobs/scheduler/rpc.ts",
   "domains/calendar/operations/rpc.ts",
   "domains/image-processing/operations/rpc.ts",
   "domains/purchase-agent/service/signals.ts",
   "domains/purchase-agent/service/environment.ts",
-  "domains/purchase-import/operations/coordinator-gate-rpc.ts",
   "domains/usda-release/operations/rpc.ts",
   "workflows/runs/contract.ts",
   "ai/gateway-egress-contract.ts",
@@ -105,6 +103,8 @@ export async function checkTypecheckBoundaries(
   const owned = new Set(repositoryOwners.map((file) => resolve(app, file)));
   const shared = new Set(
     [
+      "kernel/context.ts",
+      "db/db-observability.ts",
       "db/database.ts",
       "db/external-id-schema.ts",
       "errors/app-error.ts",

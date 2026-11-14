@@ -5,6 +5,7 @@ import { eq, getTableName, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import {
   email as emailTable,
@@ -12,7 +13,6 @@ import {
   run,
   emailClassificationObservation,
 } from "~/server/db/schema";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { GmailApiError, type GmailProvider } from "../../repo/gmail/types";
 import { syntheticMailImportRun } from "../../service/gmail/execution.fixtures";

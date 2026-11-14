@@ -5,7 +5,7 @@ using the same JSON wire projections as the shared operation handler. There is n
 hand-kept operation allowlist or SwiftPM code-generation plugin.
 
 Typed methods and models cover what handwritten Swift, including tests, references
-by name (`swift-callers.ts`), plus `job.deviceBacklog` and `run.reportDeviceWork`.
+by name (`swift-callers.ts`), plus `imageBacklog.deviceBacklog` and `run.reportDeviceWork`.
 Calling a new operation means naming it in Swift and running `pnpm generate`.
 Removing a client's last reference removes only its typed code; the operation and
 its wire stay on the server.

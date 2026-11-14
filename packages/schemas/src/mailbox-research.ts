@@ -217,7 +217,7 @@ export const mailboxDiscoveryProgress = z.object({
   /** Stable across page removal; the frozen query roster remains in Run input. */
   discoveryScope: mailboxDiscoveryScope.optional(),
   admissionClass: z.enum(["automatic", "recovery"]).optional(),
-  /** FIFO demand exists only with the admission-wait failure code and live Job. */
+  /** FIFO demand exists only with the admission-wait failure code and live Run Pass. */
   admissionRequestedAt: z.iso.datetime().optional(),
   /** An explicit budget raise releases admission, never the next funding check. */
   fundingReleasedAt: z.iso.datetime().optional(),

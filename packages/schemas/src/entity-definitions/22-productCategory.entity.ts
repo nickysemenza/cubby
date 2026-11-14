@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { attachedImageInputs } from "./image-description-inputs";
 import { aliasList, idField, readOnly, timestampField } from "./field-policy";
 import { categoryMappingSchema } from "../spending-classification";
@@ -16,6 +17,214 @@ import { labelField } from "./label-field.js";
 
 export const { definition, readSchemas } = defineEntityModel({
   key: "productCategory",
+  edges: [
+    defineEdge({
+      key: "Product.categoryId",
+      from: "product",
+      to: "productCategory",
+      cardinality: "one",
+      inverse: {
+        key: "productCategory.incoming.Product.categoryId",
+        from: "productCategory",
+        to: "product",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "Product.categoryId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "product",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "reference",
+        label: "products",
+        description:
+          "A product retains its chosen most-specific category until it is explicitly reassigned.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-products",
+              effect: "block",
+              description:
+                "Products retain their selected category until reassigned.",
+            },
+            handler: null,
+            order: 0,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "ProductCategory.parentId",
+      from: "productCategory",
+      to: "productCategory",
+      cardinality: "one",
+      inverse: {
+        key: "productCategory.incoming.ProductCategory.parentId",
+        from: "productCategory",
+        to: "productCategory",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "ProductCategory.parentId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "productCategory",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "hierarchy",
+        label: "child categories",
+        description:
+          "A child category is classified beneath this parent in the bounded product taxonomy.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-child-categories",
+              effect: "block",
+              description:
+                "Move or delete child categories before deleting their parent.",
+            },
+            handler: null,
+            before: {
+              module: "~/server/domains/product-category/repo/product-category",
+              export: "refuseBoundCategories",
+            },
+            order: 1,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "PhotoGroupProposal.productCreateCategoryId",
+      from: "row:PhotoGroupProposal",
+      to: "productCategory",
+      cardinality: "one",
+      inverse: {
+        key: "productCategory.incoming.PhotoGroupProposal.productCreateCategoryId",
+        from: "productCategory",
+        to: "row:PhotoGroupProposal",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "PhotoGroupProposal.productCreateCategoryId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "column",
+        column: "PhotoGroupProposal.runId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "metadata",
+        label: "photo group proposals",
+        description:
+          "The category a proposed photo group's new Product will be filed under.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "clear-proposal-category",
+              effect: "detach",
+              description:
+                "Deleting a category clears it from a proposed photo group's new Product, which is then created unclassified.",
+            },
+            handler: null,
+            order: 2,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+  ],
+
   names: { singular: "Product Category", plural: "Product Categories" },
   route: {
     basePath: "product-categories",
@@ -957,21 +1166,35 @@ Rules:
 
 export default defineEntity(
   definition,
-  (r) => [
-    r
-      .field("spendingCategoryId")
-      .named("spendingCategory", "Mapped spending category"),
-    r.field("parentId").named("parent", "Parent category"),
-    r
-      .path("product", "many", [
-        { edge: "Product.categoryId", direction: "incoming" },
-      ])
-      .named("products", "Products", { view: { defaultVisible: true } }),
-    r
-      .path("productCategory", "many", [
-        { edge: "ProductCategory.parentId", direction: "incoming" },
-      ])
-      .named("children", "Subcategories"),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r
+          .field("spendingCategoryId")
+          .named("spendingCategory", "Mapped spending category"),
+        "spendingCategory.product-categories",
+      ),
+      r.declare(
+        r.field("parentId").named("parent", "Parent category"),
+        "productCategory.children",
+      ),
+      r.declare(
+        r
+          .path("product", "many", [
+            { edge: "Product.categoryId", direction: "incoming" },
+          ])
+          .named("products", "Products", { view: { defaultVisible: true } }),
+        "product.category",
+      ),
+      r.declare(
+        r
+          .path("productCategory", "many", [
+            { edge: "ProductCategory.parentId", direction: "incoming" },
+          ])
+          .named("children", "Subcategories"),
+        "productCategory.parent",
+      ),
+    ],
+  }),
   readSchemas,
 );

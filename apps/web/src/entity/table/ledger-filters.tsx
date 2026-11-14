@@ -1,5 +1,4 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { humanize } from "@cubby/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import type { RowData } from "@tanstack/react-table";
 import { useCallback, useMemo, useState } from "react";
@@ -13,6 +12,7 @@ import {
   useViewCounts,
   withFacets,
 } from "~/entity/table/list-query-context";
+import { mobileColumnLabel } from "~/ui/data-table/table-meta";
 import { Popover, PopoverContent } from "~/ui/primitives/popover";
 
 import {
@@ -51,7 +51,8 @@ function getLedgerFields<TData extends RowData>(
     if (!config) return [];
     const header = column.columnDef.header;
     const label =
-      config.label ?? (isColumnLabel(header) ? header : humanize(column.id));
+      config.label ??
+      (isColumnLabel(header) ? header : mobileColumnLabel(column));
     let hints = optionHints?.[column.id];
     if (!hints && config.facetCount && table.options.meta?.completeLocalData) {
       // Only complete bounded lists may count locally. A server page is not

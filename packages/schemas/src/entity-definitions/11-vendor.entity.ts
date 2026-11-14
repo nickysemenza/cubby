@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { historicalDateRangePresets } from "../date-range";
 import { aliasList, idField, readOnly, timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
@@ -25,6 +26,923 @@ import {
 /** @public The shortcode registry generator parses this module's `definition` and `readSchemas`. */
 export const { definition, readSchemas } = defineEntityModel({
   key: "vendor",
+  edges: [
+    defineEdge({
+      key: "Product.brandId",
+      from: "product",
+      to: "vendor",
+      cardinality: "one",
+      inverse: {
+        key: "vendor.incoming.Product.brandId",
+        from: "vendor",
+        to: "product",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "Product.brandId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "product",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "reference",
+        label: "branded products",
+        description:
+          "The marketed brand identity, independently of purchased-from sellers and commodity status.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-branded-products",
+              effect: "block",
+              description:
+                "Products retain their Brand until explicitly reassigned.",
+            },
+            handler: null,
+            order: 2,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "repoint-product-brands",
+              effect: "repoint",
+              description: "Products name the surviving Brand identity.",
+            },
+            handler: null,
+            order: 2,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "Purchase.vendorId",
+      from: "purchase",
+      to: "vendor",
+      cardinality: "one",
+      inverse: {
+        key: "vendor.incoming.Purchase.vendorId",
+        from: "vendor",
+        to: "purchase",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "Purchase.vendorId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "purchase",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "transaction",
+        label: "purchases",
+        description:
+          "A vendor order/receipt event recorded against this vendor (identified by orderId when one is issued), not the spend ledger or a card charge — the Vendor ──< Purchase ──< Expense chain.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-live-purchase",
+              effect: "block",
+              description:
+                "A vendor with purchases still pointing at it can't be deleted — those purchases are load-bearing history.",
+            },
+            handler: null,
+            order: 8,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "repoint-or-fold-by-order",
+              effect: "move-dedupe",
+              description:
+                "A merged vendor's purchases re-point onto the surviving vendor; purchases that collide on the same order id are folded into one instead.",
+            },
+            handler: {
+              module: "~/server/domains/vendor/repo/vendor",
+              export: "vendorMergeEdgeHandlers",
+              member: "foldPurchases",
+            },
+            order: 8,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "FinancialAccount.providerVendorId",
+      from: "financialAccount",
+      to: "vendor",
+      cardinality: "one",
+      inverse: {
+        key: "vendor.incoming.FinancialAccount.providerVendorId",
+        from: "vendor",
+        to: "financialAccount",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "FinancialAccount.providerVendorId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "financialAccount",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "reference",
+        label: "stored-value accounts",
+        description:
+          "A gift card or store-credit balance this vendor owes a member or the household.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-financial-accounts",
+              effect: "block",
+              description:
+                "A financial account retains its provider organization.",
+            },
+            handler: null,
+            order: 4,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "block-financial-accounts",
+              effect: "block",
+              description:
+                "Financial accounts must be reassigned explicitly before merging their provider vendors.",
+            },
+            handler: null,
+            order: 4,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "VendorAccount.vendorId",
+      from: "vendorAccount",
+      to: "vendor",
+      cardinality: "one",
+      inverse: {
+        key: "vendor.incoming.VendorAccount.vendorId",
+        from: "vendor",
+        to: "vendorAccount",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "VendorAccount.vendorId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "vendorAccount",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "reference",
+        label: "vendor accounts",
+        description: "A member-owned login for this vendor.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-vendor-accounts",
+              effect: "block",
+              description: "Vendor accounts retain their configured vendor.",
+            },
+            handler: null,
+            order: 6,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "fold-member-accounts",
+              effect: "move-dedupe",
+              description:
+                "A merged vendor's member account moves to the survivor; when the survivor already has one for that member, its purchases, runs and source claims re-point there, the later sync cursor is kept, and the duplicate account is retired.",
+            },
+            handler: {
+              module: "~/server/domains/vendor/repo/vendor",
+              export: "vendorMergeEdgeHandlers",
+              member: "foldAccounts",
+            },
+            order: 6,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "Run.vendorId",
+      from: "run",
+      to: "vendor",
+      cardinality: "one",
+      inverse: {
+        key: "vendor.incoming.Run.vendorId",
+        from: "vendor",
+        to: "run",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "Run.vendorId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "run",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "import runs",
+        description:
+          "A durable import run tied directly to its vendor when no vendor account supplies that scope.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-runs",
+              effect: "block",
+              description: "Import history retains the vendor it processed.",
+            },
+            handler: null,
+            order: 5,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "repoint-runs",
+              effect: "repoint",
+              description:
+                "A merged vendor's import runs name the surviving vendor.",
+            },
+            handler: null,
+            order: 5,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "Shipment.carrierId",
+      from: "shipment",
+      to: "vendor",
+      cardinality: "one",
+      inverse: {
+        key: "vendor.incoming.Shipment.carrierId",
+        from: "vendor",
+        to: "shipment",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "Shipment.carrierId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "shipment",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "reference",
+        label: "carried shipments",
+        description: "The carrier's existing Vendor identity.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-carried-shipments",
+              effect: "block",
+              description:
+                "Shipments retain their carrier identity until explicitly reassigned.",
+            },
+            handler: null,
+            order: 0,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "repoint-shipment-carrier",
+              effect: "repoint",
+              description: "Shipments name the surviving carrier Vendor.",
+            },
+            handler: null,
+            order: 0,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "PhotoGroupProposal.productCreateBrandId",
+      from: "row:PhotoGroupProposal",
+      to: "vendor",
+      cardinality: "one",
+      inverse: {
+        key: "vendor.incoming.PhotoGroupProposal.productCreateBrandId",
+        from: "vendor",
+        to: "row:PhotoGroupProposal",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "PhotoGroupProposal.productCreateBrandId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "column",
+        column: "PhotoGroupProposal.runId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "metadata",
+        label: "photo Brand proposals",
+        description:
+          "The Brand selected for a proposed Product creation or Brand update.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-photo-brand-proposals",
+              effect: "block",
+              description:
+                "Pending photo proposals retain their selected Brand.",
+            },
+            handler: null,
+            order: 1,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "repoint-photo-brand-proposals",
+              effect: "repoint",
+              description:
+                "Pending photo proposals follow the surviving Brand.",
+            },
+            handler: null,
+            order: 1,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "SourceOrderObservation.vendorId",
+      from: "row:SourceOrderObservation",
+      to: "vendor",
+      cardinality: "one",
+      inverse: {
+        key: "vendor.incoming.SourceOrderObservation.vendorId",
+        from: "vendor",
+        to: "row:SourceOrderObservation",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "SourceOrderObservation.vendorId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "Immutable source extraction history.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "observed Vendors",
+        description:
+          "The original Vendor named by an immutable source extraction.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Immutable observation history retains its original subject UUID through deletion and merge.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "preserve-source-observation",
+              effect: "preserve",
+              description:
+                "Immutable extraction history retains its original subject UUID and tombstone without being repointed.",
+            },
+            handler: null,
+            order: 3,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "preserve-source-observation",
+              effect: "preserve",
+              description:
+                "Immutable extraction history retains its original subject UUID and tombstone without being repointed.",
+            },
+            handler: null,
+            order: 3,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "vendor/EntityAttachment.entityId",
+      from: "row:EntityAttachment",
+      to: "vendor",
+      cardinality: "one",
+      inverse: {
+        key: "vendor.incoming.EntityAttachment.entityId",
+        from: "vendor",
+        to: "row:EntityAttachment",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "EntityAttachment.entityId",
+        constrained: true,
+        partition: {
+          column: "EntityAttachment.entityKind",
+          value: "vendor",
+        },
+      },
+      ownership: {
+        kind: "identity",
+        column: "EntityAttachment.entityId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "media",
+        label: "vendor logos",
+        description:
+          "An optional brand mark for this vendor; absence falls back to the vendor monogram.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "cascade-delete-attachment",
+              effect: "soft-delete",
+              description:
+                "The logo association is soft-deleted with the vendor; the image is reaped when nothing else uses it.",
+            },
+            handler: null,
+            order: 9,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "carry-logo",
+              effect: "repoint",
+              description:
+                "A loser's logo becomes the survivor's when the survivor has none; any other loser logo is detached and reaped unless shared.",
+            },
+            handler: {
+              module: "~/server/domains/vendor/repo/vendor",
+              export: "vendorMergeEdgeHandlers",
+              member: "carryLogo",
+            },
+            order: 9,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "ExternalSource.vendorId",
+      from: "row:ExternalSource",
+      to: "vendor",
+      cardinality: "one",
+      inverse: {
+        key: "vendor.incoming.ExternalSource.vendorId",
+        from: "vendor",
+        to: "row:ExternalSource",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "ExternalSource.vendorId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "Registry metadata naming the vendor a source slug is.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "metadata",
+        label: "identifier sources",
+        description:
+          "A registered identifier source (a catalog, an export) that is this vendor; it names the vendor, it does not depend on it.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "clear-source-vendor",
+              effect: "detach",
+              description:
+                "Identifier sources that named this vendor stay registered and simply stop naming it; an unowned source issues no Product identifiers.",
+            },
+            handler: {
+              module: "~/server/domains/product/repo/product-identifier-source",
+              export: "detachVendorIdentifierSources",
+            },
+            before: {
+              module: "~/server/domains/shipment/repo/carrier-references",
+              export: "assertShipmentCarrierDeletionAllowed",
+            },
+            order: 11,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "repoint-source-vendor",
+              effect: "repoint",
+              description:
+                "Identifier sources that named a merged vendor name the survivor; merging two Vendors that each issue Product identifiers is refused until one issuer is reconciled.",
+            },
+            handler: {
+              module: "~/server/domains/vendor/repo/vendor",
+              export: "vendorMergeEdgeHandlers",
+              member: "moveIdentifierSources",
+            },
+            order: 11,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "ImportPreparedOrder.vendorId",
+      from: "row:ImportPreparedOrder",
+      to: "vendor",
+      cardinality: "one",
+      inverse: {
+        key: "vendor.incoming.ImportPreparedOrder.vendorId",
+        from: "vendor",
+        to: "row:ImportPreparedOrder",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "ImportPreparedOrder.vendorId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason:
+          "Workflow evidence about entities, not a relationship between them.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "prepared import orders",
+        description:
+          "The Vendor a purchase import named while preparing an order.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Preparation is an immutable capture; commit refuses a deleted or merged Vendor and the order must be prepared again.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "preserve-prepared-vendor",
+              effect: "preserve",
+              description:
+                "An import preparation keeps the Vendor it named; its commit refuses a deleted Vendor.",
+            },
+            handler: null,
+            order: 10,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "preserve-prepared-vendor",
+              effect: "preserve",
+              description:
+                "An import preparation keeps the Vendor it named; its commit refuses a merged-away Vendor, which is prepared again.",
+            },
+            handler: null,
+            order: 10,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "OrderMail.vendorId",
+      from: "row:OrderMail",
+      to: "vendor",
+      cardinality: "one",
+      inverse: {
+        key: "vendor.incoming.OrderMail.vendorId",
+        from: "vendor",
+        to: "row:OrderMail",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "OrderMail.vendorId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason:
+          "Workflow evidence about entities, not a relationship between them.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "order mail",
+        description: "Normalized mailbox evidence classified to this vendor.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-order-mail",
+              effect: "block",
+              description:
+                "Normalized order mail retains its classified vendor.",
+            },
+            handler: null,
+            order: 7,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "repoint-order-mail",
+              effect: "repoint",
+              description:
+                "A merged vendor's classified order mail names the survivor.",
+            },
+            handler: null,
+            order: 7,
+          },
+        },
+      },
+    }),
+  ],
+
   names: { singular: "Vendor", plural: "Vendors" },
   route: { basePath: "vendors" },
   table: "Vendor",
@@ -1492,7 +2410,7 @@ export const { definition, readSchemas } = defineEntityModel({
 
   search: { mode: "semantic", inputs: [...imageDescriptionInputs("vendor")] },
   capabilities: {
-    suggestions: ["statement_transaction"],
+    suggestions: [],
     images: {
       storage: "logo",
       ingress: [
@@ -1594,94 +2512,123 @@ export const { definition, readSchemas } = defineEntityModel({
 
 export default defineEntity(
   definition,
-  (r) => [
-    r
-      .path("product", "many", [
-        { edge: "Product.brandId", direction: "incoming" },
-      ])
-      .named("branded-products", "Branded products", {
-        view: {
-          key: "brandedProducts",
-          columnGroup: "Brand / catalog",
-          filterPrefix: "brandedProduct",
-          defaultVisible: true,
-        },
-      }),
-    // Its Purchases' Emails plus its sender-proof mail (ADR 0011).
-    r
-      .derived("email", "many", "vendorId", [
-        "ImportSourceOrder",
-        "EmailPurchaseDecision",
-        "OrderMailEvent",
-      ])
-      .named("emails", "Emails", {
-        sources: [
-          r
-            .query("vendorEmails", "many")
-            .source("accepted", "Accepted or sender-proof Emails"),
-        ],
-      }),
-    r
-      .field("defaultSpendingCategoryId")
-      .named("defaultSpendingCategory", "Default spending category"),
-    r
-      .path("image", "one", [
-        { edge: "EntityAttachment.entityId", direction: "incoming" },
-        { edge: "EntityAttachment.imageId", direction: "outgoing" },
-      ])
-      .named("logo", "Logo image"),
-    r
-      .path("expense", "many", [
-        { edge: "Purchase.vendorId", direction: "incoming" },
-        { edge: "Expense.purchaseId", direction: "incoming" },
-      ])
-      .named("expenses", "Recent expenses", {
-        view: {
-          columnGroup: "Purchasing",
-          order: "newest",
-          defaultVisible: true,
-        },
-      }),
-    r
-      .path("purchase", "many", [
-        { edge: "Purchase.vendorId", direction: "incoming" },
-      ])
-      .named("purchases", "Purchases", {
-        view: { columnGroup: "Purchasing", order: "newest" },
-      }),
-    r
-      .path("product", "many", [
-        { edge: "Purchase.vendorId", direction: "incoming" },
-        { edge: "Expense.purchaseId", direction: "incoming" },
-        { edge: "Expense.productId", direction: "outgoing" },
-      ])
-      .named("products", "Products", {
-        view: { columnGroup: "Purchasing", inverseKey: "product.vendors" },
-      }),
-    r
-      .path("project", "many", [
-        { edge: "Purchase.vendorId", direction: "incoming" },
-        { edge: "Expense.purchaseId", direction: "incoming" },
-        { edge: "Expense.projectId", direction: "outgoing" },
-      ])
-      .named("projects", "Projects", {
-        view: { columnGroup: "Purchasing", inverseKey: "project.vendors" },
-      }),
-    r
-      .path("financialTransaction", "many", [
-        { edge: "Purchase.vendorId", direction: "incoming" },
-        {
-          edge: "FinancialTransactionAllocation.purchaseId",
-          direction: "incoming",
-        },
-        {
-          edge: "FinancialTransactionAllocation.transactionId",
-          direction: "outgoing",
-        },
-      ])
-      .named("transactions", "Financial transactions", {
-        view: { columnGroup: "Purchasing", order: "newest" },
-      }),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r
+          .path("product", "many", [
+            { edge: "Product.brandId", direction: "incoming" },
+          ])
+          .named("branded-products", "Branded products", {
+            view: {
+              key: "brandedProducts",
+              columnGroup: "Brand / catalog",
+              filterPrefix: "brandedProduct",
+              defaultVisible: true,
+            },
+          }),
+        "product.brand",
+      ),
+      // Its Purchases' Emails plus its sender-proof mail (ADR 0011).
+      r.declare(
+        r
+          .derived("email", "many", "vendorId", [
+            "ImportSourceOrder",
+            "EmailPurchaseDecision",
+            "OrderMailEvent",
+          ])
+          .named("emails", "Emails", {
+            sources: [
+              r
+                .query("vendorEmails", "many")
+                .source("accepted", "Accepted or sender-proof Emails"),
+            ],
+          }),
+        "email.vendor.emails",
+      ),
+      r.declare(
+        r
+          .field("defaultSpendingCategoryId")
+          .named("defaultSpendingCategory", "Default spending category"),
+        "spendingCategory.vendors",
+      ),
+      r.declare(
+        r
+          .path("image", "one", [
+            { edge: "EntityAttachment.entityId", direction: "incoming" },
+            { edge: "EntityAttachment.imageId", direction: "outgoing" },
+          ])
+          .named("logo", "Logo image"),
+        "image.vendor.logo",
+      ),
+      r.declare(
+        r
+          .path("expense", "many", [
+            { edge: "Purchase.vendorId", direction: "incoming" },
+            { edge: "Expense.purchaseId", direction: "incoming" },
+          ])
+          .named("expenses", "Recent expenses", {
+            view: {
+              columnGroup: "Purchasing",
+              order: "newest",
+              defaultVisible: true,
+            },
+          }),
+        "expense.vendor.expenses",
+      ),
+      r.declare(
+        r
+          .path("purchase", "many", [
+            { edge: "Purchase.vendorId", direction: "incoming" },
+          ])
+          .named("purchases", "Purchases", {
+            view: { columnGroup: "Purchasing", order: "newest" },
+          }),
+        "purchase.vendor",
+      ),
+      r.declare(
+        r
+          .path("product", "many", [
+            { edge: "Purchase.vendorId", direction: "incoming" },
+            { edge: "Expense.purchaseId", direction: "incoming" },
+            { edge: "Expense.productId", direction: "outgoing" },
+          ])
+          .named("products", "Products", {
+            view: { columnGroup: "Purchasing", inverseKey: "product.vendors" },
+          }),
+        "product.vendors",
+      ),
+      r.declare(
+        r
+          .path("project", "many", [
+            { edge: "Purchase.vendorId", direction: "incoming" },
+            { edge: "Expense.purchaseId", direction: "incoming" },
+            { edge: "Expense.projectId", direction: "outgoing" },
+          ])
+          .named("projects", "Projects", {
+            view: { columnGroup: "Purchasing", inverseKey: "project.vendors" },
+          }),
+        "project.vendors",
+      ),
+      r.declare(
+        r
+          .path("financialTransaction", "many", [
+            { edge: "Purchase.vendorId", direction: "incoming" },
+            {
+              edge: "FinancialTransactionAllocation.purchaseId",
+              direction: "incoming",
+            },
+            {
+              edge: "FinancialTransactionAllocation.transactionId",
+              direction: "outgoing",
+            },
+          ])
+          .named("transactions", "Financial transactions", {
+            view: { columnGroup: "Purchasing", order: "newest" },
+          }),
+        "financialTransaction.vendor",
+      ),
+    ],
+  }),
   readSchemas,
 );

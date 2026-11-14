@@ -1,3 +1,5 @@
+import { seedPass } from "~/server/kernel/pass.fixtures";
+import { kernelPass } from "~/server/db/kernel-schema";
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { RunTrigger } from "@cubby/schemas/purchase-import";
 import type { RunCause, RunPurpose } from "@cubby/schemas/run-fields";
@@ -7,15 +9,12 @@ import { asc, eq, isNotNull, isNull } from "drizzle-orm";
 import { getDb } from "~/server/db/helpers";
 import { email as emailTable } from "~/server/db/retained-tables";
 import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
-import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { sampleRunWork } from "~/server/domains/run/repo/work-progress";
 
 import type { KernelContext } from "./context";
 
 /** Synthetic Job kind: no handler, so only the fixture's own rows exist. */
-const QUEUE_KIND = "fixture.run-queue";
 const MINUTE = 60_000;
 
 type SeededRun = {
@@ -131,36 +130,13 @@ export async function seedRunPatterns(context: KernelContext): Promise<void> {
     return id;
   };
 
-  // A waiting Job places the Run in its kind's claim order; a live lease on
-  // a second Job keeps a queued Run from reading as stalled.
   const queue = async (runId: RunId, position: number) => {
-    const waiting = await enqueueJob(db, {
-      key: `${QUEUE_KIND}:${runId}:waiting`,
-      kind: QUEUE_KIND,
-      input: {},
+    await seedPass(db, {
+      name: "run.execute",
+      key: runId,
       runId,
+      availableAt: new Date(now - (30 - position) * MINUTE),
     });
-    await updateJobs(
-      db,
-      { id: waiting.id },
-      { availableAt: new Date(now - (30 - position) * MINUTE) },
-    );
-    const leased = await enqueueJob(db, {
-      key: `${QUEUE_KIND}:${runId}:leased`,
-      kind: QUEUE_KIND,
-      input: {},
-      runId,
-    });
-    await updateJobs(
-      db,
-      { id: leased.id },
-      {
-        state: "running",
-        leaseToken: crypto.randomUUID(),
-        leaseExpiresAt: new Date(now + 365 * 24 * 60 * MINUTE),
-        lastClaimedAt: new Date(now),
-      },
-    );
   };
 
   const scan = await seed({
@@ -213,20 +189,15 @@ export async function seedRunPatterns(context: KernelContext): Promise<void> {
     });
     await queue(queued, position);
   }
-  // Recent completions pace the kind, so the queued Runs carry an estimate.
-  for (const index of [0, 1]) {
-    const done = await enqueueJob(db, {
-      key: `${QUEUE_KIND}:${scan}:done-${index}`,
-      kind: QUEUE_KIND,
-      input: {},
-      runId: scan,
-    });
-    await updateJobs(
-      db,
-      { id: done.id },
-      { state: "completed", updatedAt: new Date(now) },
-    );
-  }
+  await getDb(db)
+    .update(kernelPass)
+    .set({
+      durationHistory: [0, 1, 2].map((i) => ({
+        ms: 30_000,
+        at: new Date(now - i * MINUTE).toISOString(),
+      })),
+    })
+    .where(eq(kernelPass.name, "run.execute"));
   await seed({
     ...found,
     status: "completed",
@@ -321,11 +292,12 @@ export async function seedRunPatterns(context: KernelContext): Promise<void> {
       total: 9,
     },
   });
-  await enqueueJob(db, {
-    key: `${QUEUE_KIND}:${stalled}:stalled`,
-    kind: QUEUE_KIND,
-    input: {},
+  await seedPass(db, {
+    name: "run.execute",
+    key: stalled,
     runId: stalled,
+    attempts: 5,
+    lastError: "Synthetic exhausted work",
   });
 
   await seed({

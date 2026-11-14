@@ -122,6 +122,8 @@ type Presentation = {
   closed?: true;
   /** The state phase; unset derives it from `closed` (`optionPhase`). */
   phase?: import("./definition").EntityPhase;
+  /** The stage word a state option draws as. */
+  stage?: import("../kernel/stage").KernelStage;
 };
 /**
  * Marks `value` as the roster's quiet option. Controls carry it; filter presets share the
@@ -273,10 +275,15 @@ export const selectControlOptions = {
     glyph: g("Users", "person.2"),
   }),
   projectStatus: labeled(projectStatusValues, PROJECT_STATUS_LABELS, {
-    planning: { role: "status", color: "neutral-status" },
-    not_started: { role: "status", color: "neutral-status" },
-    in_progress: { role: "status", color: "info", quiet: true },
-    done: { role: "status", color: "positive", closed: true },
+    planning: { stage: "waiting", role: "status", color: "neutral-status" },
+    not_started: { stage: "waiting", role: "status", color: "neutral-status" },
+    in_progress: {
+      stage: "working",
+      role: "status",
+      color: "info",
+      quiet: true,
+    },
+    done: { stage: "done", role: "status", color: "positive", closed: true },
   }),
   projectKind: labeled(
     projectKindValues,
@@ -292,11 +299,16 @@ export const selectControlOptions = {
     project_kindDescriptions,
   ),
   taskStatus: labeled(taskStatusValues, TASK_STATUS_LABELS, {
-    not_started: { role: "status", color: "neutral-status", quiet: true },
-    later: { role: "status", color: "warning" },
-    in_progress: { role: "status", color: "info" },
-    blocked: { role: "status", color: "destructive" },
-    done: { role: "status", color: "positive", closed: true },
+    not_started: {
+      stage: "waiting",
+      role: "status",
+      color: "neutral-status",
+      quiet: true,
+    },
+    later: { stage: "waiting", role: "status", color: "warning" },
+    in_progress: { stage: "working", role: "status", color: "info" },
+    blocked: { stage: "stuck", role: "status", color: "destructive" },
+    done: { stage: "done", role: "status", color: "positive", closed: true },
   }),
   trade: withGlyphs(
     labeled(

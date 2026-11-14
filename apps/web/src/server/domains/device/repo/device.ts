@@ -2,21 +2,19 @@ import type { ActorContext } from "@cubby/schemas/context";
 import { type DeviceCreateInput } from "@cubby/schemas/entities/device";
 import { deviceRawOut as rawDeviceOut } from "@cubby/schemas/entity-contracts/device";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
-import type { DeviceId } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { inArray } from "drizzle-orm";
-import { uniq } from "es-toolkit";
 
 import {
   deviceRepositoryReadSchema,
   deviceSchemaBindings,
 } from "~/entity/generated/entity-schema-bindings.device.gen";
-import type { Database, DrizzleTransaction } from "~/server/db";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import type { Database } from "~/server/db";
+import {
+  DECLARED_EDGE_DELETE_POLICIES,
+  DECLARED_EDGE_DELETE_HOOKS,
+} from "~/server/db/generated/declared-edges.gen";
 import { buildPartialUpdateValues, withTransaction } from "~/server/db/helpers";
-import { device, imageSighting, runPushRegistration } from "~/server/db/schema";
-import { deriveAndStoreImageCapture } from "~/server/domains/image/repo/image-capture-derivation";
+import { device } from "~/server/db/schema";
 import { currentMemberLedgerParty } from "~/server/domains/ledger-party/repo/current-member-party";
 import {
   type MutationReceipt,
@@ -33,29 +31,6 @@ import { listScaffold } from "~/server/generic/list/repo/list";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { appleAppVersionTooOld } from "~/server/lib/apple-app-version";
-
-/** `ImageSighting.deviceId` cascades: a sighting reported by a device is
- * meaningless once that device is gone. `AuditLog.deviceId` is cleared. */
-const DEVICE_DELETE_EDGE_POLICY = {
-  "AuditLog.deviceId": {
-    code: "clearFk",
-    effect: "detach",
-    description:
-      "Audit entries outlive the install; they keep their other attribution.",
-  },
-  "ImageSighting.deviceId": {
-    code: "cascade-sightings",
-    effect: "hard-delete",
-    description:
-      "A device's reported sightings are removed with it; affected images are re-derived in the same transaction.",
-  },
-  "RunPushRegistration.deviceId": {
-    code: "cascade-push-registrations",
-    effect: "hard-delete",
-    description:
-      "A removed install receives no more Run pushes; its registrations go with it.",
-  },
-} as const satisfies IncomingEdgePolicy<"device", OperationDisposition>;
 
 /** An install not seen for this long is inactive and leaves Apple lane counts. */
 const DEVICE_INACTIVE_AFTER_MS = 7 * 24 * 60 * 60_000;
@@ -156,43 +131,11 @@ export const updateDevice = deviceCrud.updateWriter(
   (output, entityId) => ({ output, entityId }),
 );
 
-/**
- * A device's reported sightings go with it, and every affected image is
- * re-derived in the same transaction so its capture fields never reflect a
- * sighting that no longer exists.
- */
-const deleteDeviceSightings = async (
-  tx: DrizzleTransaction,
-  ids: DeviceId[],
-) => {
-  const removed = await tx
-    .delete(imageSighting)
-    .where(inArray(imageSighting.deviceId, ids))
-    .returning({ imageId: imageSighting.imageId });
-  for (const imageId of uniq(removed.map((row) => row.imageId)))
-    await deriveAndStoreImageCapture(tx, parseEntityId("image", imageId));
-};
-
-/** A removed install's Run push registrations go with it. */
-const deleteDevicePushRegistrations = async (
-  tx: DrizzleTransaction,
-  ids: DeviceId[],
-) => {
-  await tx
-    .delete(runPushRegistration)
-    .where(inArray(runPushRegistration.deviceId, ids));
-};
-
 export const deviceRepository = defineRepository("device", {
   schemas: deviceSchemaBindings,
-  lifecycle: { delete: DEVICE_DELETE_EDGE_POLICY },
+  lifecycle: { delete: DECLARED_EDGE_DELETE_POLICIES.device },
   scaffold: deviceScaffold,
   create: asActor(createDevice),
   update: asActor(updateDevice),
-  deleteHooks: {
-    overrides: {
-      "ImageSighting.deviceId": deleteDeviceSightings,
-      "RunPushRegistration.deviceId": deleteDevicePushRegistrations,
-    },
-  },
+  deleteHooks: DECLARED_EDGE_DELETE_HOOKS.device,
 });

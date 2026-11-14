@@ -7,6 +7,7 @@ import type {
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import { user } from "~/server/db/schema";
@@ -16,7 +17,6 @@ import { checkpointMailboxCoverage } from "~/server/domains/purchase-import/repo
 import { vendorSearchTerms } from "~/server/domains/purchase-import/repo/gmail/vendor-identity";
 import { vendorMailQueries } from "~/server/domains/purchase-import/repo/gmail/vendor-mail-scope";
 import { vendorMailSearchReport } from "~/server/domains/vendor/repo/report-vendor";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { vendorScaffold } from "./vendor";
 

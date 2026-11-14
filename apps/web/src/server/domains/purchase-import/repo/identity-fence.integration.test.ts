@@ -5,10 +5,10 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
   auditLog,
-  email,
   entityExternalId,
   externalSource,
   expense,
@@ -19,9 +19,9 @@ import {
   purchase,
   vendor as vendorTable,
 } from "~/server/db/schema";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture,
   createProductIdentityFixture,
@@ -78,7 +78,7 @@ describe("member prepare and commit identity fences", () => {
 
   it("converges a fresh no-ID original on the existing Purchase without erasing its order identity", async () => {
     const { vendor } = await memberImportWorld(ctx.db, ctx.actor);
-    const existing = await insertWithShortcode(ctx.db, "purchase", {
+    const existing = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       orderId: "ORDER-ONE",
     });
@@ -228,7 +228,7 @@ describe("member prepare and commit identity fences", () => {
       name: "Synthetic Hardware",
       orderEmailSenders: ["orders@hardware.example"],
     });
-    const existing = await insertWithShortcode(ctx.db, "purchase", {
+    const existing = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       orderId: "ORDER-ONE",
     });
@@ -459,7 +459,7 @@ describe("member prepare and commit identity fences", () => {
       const second = "store+200002@t.shopifyemail.com";
       const importReceipt = async (
         key: string,
-        sender: string,
+        sender: string | null,
         vendorId: string,
       ) => {
         const mail = await retainedMailFixture(ctx.db, {
@@ -482,29 +482,22 @@ describe("member prepare and commit identity fences", () => {
       };
       await importReceipt("first-store", first, alpha.shortcode);
       await importReceipt("second-store", second, beta.id);
-      // Accepted originals may have no usable From address; discovery still reads all others.
-      await getDb(ctx.db)
-        .update(email)
-        .set({ sender: null })
-        .where(eq(email.sender, first));
+      await importReceipt("missing-sender", null, alpha.shortcode);
       expect(
         (await readSenderAttributions(ctx.db)).every(
           (row) => typeof row.sender === "string",
         ),
       ).toBe(true);
-      await getDb(ctx.db)
-        .update(email)
-        .set({ sender: "malformed sender" })
-        .where(isNull(email.sender));
+      await importReceipt(
+        "malformed-sender",
+        "malformed sender",
+        alpha.shortcode,
+      );
       expect(
         (await readSenderAttributions(ctx.db)).some(
           (row) => row.sender === "malformed sender",
         ),
       ).toBe(false);
-      await getDb(ctx.db)
-        .update(email)
-        .set({ sender: first })
-        .where(eq(email.sender, "malformed sender"));
 
       expect((await senderProofVendor(ctx.db, first))?.vendor.id).toBe(
         alpha.id,

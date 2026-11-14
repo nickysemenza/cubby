@@ -1,13 +1,13 @@
 import {
+  WORK_NEEDS_ATTENTION_ATTEMPTS,
+  executionWaitReason,
+  type WorkWaitingOn,
+} from "@cubby/schemas/execution";
+import {
   imageJobDisplayState,
   imageProcessingJobState,
   type ImageProcessingJobState,
 } from "@cubby/schemas/image-processing";
-import {
-  JOB_NEEDS_ATTENTION_ATTEMPTS,
-  jobWaitReason,
-  type JobWaitingOn,
-} from "@cubby/schemas/job";
 import { and, eq, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -16,7 +16,7 @@ import { appleFailureCoveredByCloudDescriptionSql } from "~/server/domains/image
 import {
   classifyWaiting,
   classifyWaitingSql,
-} from "~/server/generic/jobs/repo/waiting-classifier";
+} from "~/server/domains/image-processing/repo/waiting-classifier";
 
 const STATE = imageProcessingJobState.enum;
 
@@ -32,7 +32,7 @@ const at = (now: Date) => sql`${now.toISOString()}::timestamp`;
  * (`pending` while open, `ready`, `skipped`, or deterministic `failed`) and its execution columns:
  *
  * - `leased`: an attempt holds a live lease;
- * - `failed`: open work that failed `JOB_NEEDS_ATTENTION_ATTEMPTS` times in a
+ * - `failed`: open work that failed `WORK_NEEDS_ATTENTION_ATTEMPTS` times in a
  *   row; it needs attention but keeps retrying;
  * - `waiting_for_device`: parked for an Apple device;
  * - `pending`: queued for the server, or backing off.
@@ -44,7 +44,7 @@ export const imageJobDisplayStateSql = (alias = "ImageProcessingJob") => {
   return sql<ImageProcessingJobState>`(CASE
   WHEN ${c("state")} <> ${STATE.pending} THEN ${c("state")}
   WHEN ${c("leaseUntil")} > ${at(new Date())} THEN ${STATE.leased}
-  WHEN ${c("failures")} >= ${JOB_NEEDS_ATTENTION_ATTEMPTS} THEN ${STATE.failed}
+  WHEN ${c("failures")} >= ${WORK_NEEDS_ATTENTION_ATTEMPTS} THEN ${STATE.failed}
   WHEN ${c("lane")} = ${"device"} THEN ${STATE.waiting_for_device}
   ELSE ${STATE.pending} END)`;
 };
@@ -81,7 +81,7 @@ export function imageJobWaitingOn(
   >,
   now: Date,
   executor: { name: string | null; deviceId: string | null } | null = null,
-): JobWaitingOn {
+): WorkWaitingOn {
   const lane = row.lane === "device" ? "apple_device" : "frontier_ai";
   const device = { reason: "waiting_device", lane: "apple_device" } as const;
   const reason = classifyWaiting({
@@ -118,8 +118,8 @@ export function imageJobWaitingOn(
         attempts: row.failures,
         lastError: row.lastError,
         cause:
-          row.waitReason === jobWaitReason.enum.rate_limit ||
-          row.waitReason === jobWaitReason.enum.provider_capacity
+          row.waitReason === executionWaitReason.enum.rate_limit ||
+          row.waitReason === executionWaitReason.enum.provider_capacity
             ? row.waitReason
             : null,
       };

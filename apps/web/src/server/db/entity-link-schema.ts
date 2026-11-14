@@ -2,7 +2,7 @@ import {
   ENTITY_LINK_KINDS,
   entityLinkKinds,
   type EntityLinkKind,
-} from "@cubby/schemas/entity-links";
+} from "@cubby/schemas/entity-link-catalog";
 
 /**
  * The `EntityLink` CHECK bodies, rendered from `ENTITY_LINK_KINDS` so a new

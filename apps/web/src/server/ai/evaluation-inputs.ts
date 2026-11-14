@@ -4,8 +4,18 @@ import { capturedFieldInput } from "@cubby/schemas/ai-evaluation";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { z } from "zod";
 
+import { WorkEvidenceObsoleteError } from "~/server/kernel/work-errors";
+
 import type { AiFeature } from "./policy/features";
 
+export const preparedQuestion = z.object({
+  feature: z.string(),
+  promptVersion: z.string(),
+  model: z.string(),
+  operation: z.string(),
+  policy: z.record(z.string(), z.json()).optional(),
+  input: z.json(),
+});
 const capturedInput = capturedFieldInput;
 export type CapturedInput = z.infer<typeof capturedInput>;
 const scope = new AsyncLocalStorage<{
@@ -14,6 +24,8 @@ const scope = new AsyncLocalStorage<{
   /** Set when a provider-free preparation skipped an input it needed. */
   incomplete: boolean;
   inputs: CapturedInput[];
+  questions: z.infer<typeof preparedQuestion>[];
+  expected?: readonly z.infer<typeof preparedQuestion>[];
 }>();
 
 /** Preparation uses the live roster/rendering path, but makes no transport or usage call. */
@@ -32,12 +44,40 @@ export const markPreparationIncomplete = () => {
   if (current?.providerFree) current.incomplete = true;
 };
 export async function captureAiInput(
-  feature: Pick<AiFeature, "feature" | "promptVersion" | "model">,
+  feature: Pick<AiFeature, "feature" | "promptVersion" | "model"> &
+    Partial<Pick<AiFeature, "tier">> & {
+      maxTokens?: number;
+      effort?: string;
+      schema?: z.ZodType;
+    },
   operation: string,
   input: unknown,
 ) {
   const current = scope.getStore();
   if (!current) return;
+  const question = preparedQuestion.parse({
+    ...feature,
+    operation,
+    policy: {
+      tier: feature.tier ?? null,
+      maxTokens: feature.maxTokens ?? null,
+      effort: feature.effort ?? null,
+      outputRevision: feature.schema
+        ? z.record(z.string(), z.json()).parse(z.toJSONSchema(feature.schema))
+        : "decision-choice.v1",
+    },
+    input: z.json().parse(input),
+  });
+  if (
+    current.expected &&
+    !current.expected.some(
+      (expected) => JSON.stringify(expected) === JSON.stringify(question),
+    )
+  )
+    throw new WorkEvidenceObsoleteError(
+      "The prepared field question changed before send",
+    );
+  current.questions.push(question);
   current.inputs.push({
     feature: feature.feature,
     promptVersion: feature.promptVersion,
@@ -49,16 +89,27 @@ export async function captureAiInput(
 export async function withAiInputs<T>(
   prepareOnly: boolean,
   work: () => Promise<T>,
-  options: { providerFree?: boolean; captureToParent?: boolean } = {},
+  options: {
+    providerFree?: boolean;
+    captureToParent?: boolean;
+    expected?: readonly z.infer<typeof preparedQuestion>[];
+  } = {},
 ) {
   const parent = scope.getStore();
   const store = {
     prepareOnly,
-    providerFree: prepareOnly && options.providerFree === true,
+    providerFree: options.providerFree === true,
     incomplete: false,
     inputs: new Array<CapturedInput>(),
+    questions: new Array<z.infer<typeof preparedQuestion>>(),
+    expected: options.expected,
   };
   const result = await scope.run(store, work);
   if (options.captureToParent !== false) parent?.inputs.push(...store.inputs);
-  return { result, inputs: store.inputs, incomplete: store.incomplete };
+  return {
+    result,
+    inputs: store.inputs,
+    questions: store.questions,
+    incomplete: store.incomplete,
+  };
 }

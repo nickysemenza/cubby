@@ -1,6 +1,6 @@
 # ADR 0026: Source occurrence owns accepted bank evidence
 
-Status: Accepted; implemented. Implements ADR 0025 decision 6; amends only the
+Status: Superseded in part by [ADR 0029](0029-evidence-facts-and-reconcilers.md). Accepted; implemented. Implements ADR 0025 decision 6; amends only the
 bank-evidence ownership seam of ADR 0012.
 
 ## Decision

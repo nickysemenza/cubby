@@ -56,3 +56,50 @@ export async function reclassificationReceipt(
     sourceChecksum: after?.checksum ?? before.checksum,
   };
 }
+
+/** The publication receipt commits with the source write, ahead of the Run checkpoint. */
+export async function saveReclassificationReceipt(
+  db: Database,
+  runId: string,
+  before: typeof email.$inferSelect,
+  receipt: ReturnType<typeof reclassificationReceipt> extends Promise<infer R>
+    ? R
+    : never,
+) {
+  const { mailHandlingReceipt } = await import("~/server/db/retained-tables");
+  const { sql } = await import("drizzle-orm");
+  await getDb(db)
+    .insert(mailHandlingReceipt)
+    .values({
+      runId,
+      emailId: before.id,
+      key: `${runId}:reclassification:${before.id}:${before.checksum}`,
+      receipt: z.json().parse(receipt),
+    })
+    .onConflictDoNothing();
+  await getDb(db)
+    .execute(sql`UPDATE "AskScope" s SET receipt=${JSON.stringify(receipt)}::jsonb
+    WHERE s."runId"=${runId}::uuid AND EXISTS (SELECT 1 FROM "AskScope" record
+      WHERE record."askId"=s."askId" AND record."scopeKind"=${"record"} AND record."scopeKey"=${`email:${before.id}`})`);
+}
+
+/** Durable per-source publication receipts, independent of a Run checkpoint. */
+export async function readReclassificationReceipts(
+  db: Database,
+  runId: string,
+) {
+  const { mailHandlingReceipt } = await import("~/server/db/retained-tables");
+  const rows = await getDb(db)
+    .select()
+    .from(mailHandlingReceipt)
+    .where(eq(mailHandlingReceipt.runId, runId));
+  return rows.flatMap((row) => {
+    if (!row.key.startsWith(`${runId}:reclassification:`)) return [];
+    const parsed = z
+      .object({ result: emailReclassifyResult })
+      .safeParse(row.receipt);
+    return parsed.success
+      ? [{ emailId: row.emailId, key: row.key, result: parsed.data.result }]
+      : [];
+  });
+}

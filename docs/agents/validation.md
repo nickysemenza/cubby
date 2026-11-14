@@ -414,22 +414,11 @@ import dependencies, and predicate/index alignment. Extend existing projection,
 report-dependency, transport, and measurement tools. Keep workload-specific
 query decisions with their owning domain; share evidence collection and parsing.
 
-The statement-label benchmark runs real preparation, publication and receipt
-settlement against synthetic PostgreSQL fixtures and deterministic Decision
-ports:
-`pnpm --dir apps/web exec vitest run --config tooling/checks/statement-label-benchmark.config.ts`.
-It needs the local PostgreSQL service on port 55432 and generated
-declarations/WASM, creates and retains fresh uniquely named databases, and
-never resets databases, starts services or calls providers. Results go under
-ignored `artifacts/statement-label-benchmark/`. Tune it with `CUBBY_BENCH_SIZES`,
-`CUBBY_BENCH_CANDIDATES`, `CUBBY_BENCH_BYTES`, `CUBBY_BENCH_KIND=purchase` with
-`CUBBY_BENCH_ADVICE=decision-port`, `CUBBY_BENCH_ACCOUNT=loan` (adds the
-loan-escrow question), and `CUBBY_BENCH_PROFILE=1` (see
-`statement-label.benchmark.ts`); `modelRounds` counts sequential model waves. Heap samples are Node phase observations, not
-Worker heap; query-active intervals are not PostgreSQL server CPU. The same
-directory's `statement-label-regressions.config.ts` runs existing statement
-service regressions against fresh retained databases; the ordinary integration
-suite owns those cases.
+Statement settlement budgets use the existing statement-budget utility and the
+synthetic 1, 8 and 32 charge cases in
+`domains/transaction-import/repo/statement-spending.integration.test.ts`.
+They measure kernel load, fence, apply, dependency and audit phases, with a
+150-statement bound for the whole page. Stored answers keep the proof offline.
 
 ## Explicit local diagnostics
 

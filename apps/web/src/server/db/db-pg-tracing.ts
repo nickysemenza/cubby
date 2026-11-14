@@ -2,7 +2,6 @@ import { createLogger } from "@cubby/worker-tracing";
 import pg from "pg";
 
 import { databaseStatementForTrace } from "~/server/db/db-query-telemetry";
-import { currentJobExecution } from "~/server/generic/jobs/context";
 
 import {
   databaseTraceCaller,
@@ -16,6 +15,7 @@ import {
   nextDatabaseAcquireOrdinal,
 } from "./db-observability";
 import { databaseClientOrdinal } from "./db-pg-client";
+import { guardOwnedWrites } from "./owned-columns";
 
 const log = createLogger("db-acquire");
 
@@ -232,10 +232,7 @@ const traceQuery = (
 
     const sql = databaseStatementForTrace(args[0]);
     const operation = extractOperation(sql);
-    const job = currentJobExecution();
-    const caller = job
-      ? ["job", job.claim.kind, job.details.stepKey].filter(Boolean).join(".")
-      : databaseTraceCaller();
+    const caller = databaseTraceCaller();
     const parameterCount =
       (args[1] ?? (typeof args[0] === "string" ? undefined : args[0].values))
         ?.length ?? 0;
@@ -265,7 +262,11 @@ const traceQuery = (
           finishQuery();
         }
       });
-    return execute();
+    // Every statement passes the owned-column boundary first (ADR 0029).
+    const text = typeof args[0] === "string" ? args[0] : args[0].text;
+    const params =
+      args[1] ?? (typeof args[0] === "string" ? undefined : args[0].values);
+    return guardOwnedWrites(text, params ?? []).then(execute);
   };
   return queryBridge(implementation);
 };

@@ -5,6 +5,11 @@ import type { QueryClient } from "@tanstack/react-query";
 import { entityMetadata } from "~/entity/metadata";
 
 export const DEFAULT_LIST_COLUMN_VISIBILITY = {
+  machineryGap: false,
+  machineryActor: false,
+  machineryAttempts: false,
+  machineryCost: false,
+  machineryEta: false,
   createdAt: false,
   updatedAt: false,
 } as const;
@@ -99,6 +104,7 @@ export const declaredListReadProjection: ListReadProjection = (
     metadata.summary.titleField,
     "displayCover",
     "pendingSuggestionCount",
+    "machinery",
   ]);
   const readable = new Set<string>([
     ...metadata.fields.output,

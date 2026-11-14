@@ -76,7 +76,7 @@ export async function loadReconciliationExpenseValidation(
   await validateProductPolicy(tx, { purchaseId });
   const [sum] = await tx
     .select({
-      amount: sql<number>`sum(${expense.cost})::double precision`,
+      amount: sql<number>`(sum(${expense.cost}) / 100.0)::double precision`,
       unknown: sql<number>`count(*) FILTER (WHERE ${expense.cost} IS NULL AND NOT ${unpricedForeignExpenseSql({ id: outer(expense.id), purchaseId: outer(expense.purchaseId), lineKind: outer(expense.lineKind), cost: outer(expense.cost) })})::int`,
     })
     .from(expense)

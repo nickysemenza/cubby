@@ -27,11 +27,11 @@ const fixture = <const Path extends string>(labelPath: Path) => ({
   },
 });
 
-defineEntity(fixture("fixture.name"), () => []);
+defineEntity(fixture("fixture.name"), () => ({ edges: [] }));
 // @ts-expect-error A misspelled read-projection path must fail at declaration time.
-defineEntity(fixture("vendorAccountLabl"), () => []);
+defineEntity(fixture("vendorAccountLabl"), () => ({ edges: [] }));
 // @ts-expect-error A valid root cannot hide a misspelled nested property.
-defineEntity(fixture("fixture.missing"), () => []);
+defineEntity(fixture("fixture.missing"), () => ({ edges: [] }));
 
 // A broad storage-only spread must not contaminate concrete or union-keyed schemas.
 const groupedKeys: readonly ["first", "second"] = ["first", "second"];

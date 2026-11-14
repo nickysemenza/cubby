@@ -5,6 +5,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import {
   databaseForTransaction,
@@ -158,7 +159,7 @@ export async function loadProductExpenseEvidence(
     .select({
       shortcode: expense.shortcode,
       name: expense.name,
-      cost: expense.cost,
+      cost: expenseCostDollarsSql(),
       date: expense.date,
       lineKind: expense.lineKind,
       future: expense.future,
@@ -400,7 +401,7 @@ export async function loadPurchaseExpenseEvidence(
     .select({
       shortcode: expense.shortcode,
       name: expense.name,
-      cost: expense.cost,
+      cost: expenseCostDollarsSql(),
       date: expense.date,
       lineKind: expense.lineKind,
       future: expense.future,

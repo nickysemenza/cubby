@@ -1,4 +1,3 @@
-import { aiExecutionKind } from "@cubby/schemas/ai-evaluation";
 import { runEntityId, parseEntityId } from "@cubby/schemas/identifiers";
 import {
   discoveryEmailReceipt,
@@ -7,12 +6,12 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { enqueueAiEvaluation } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import { type Database } from "~/server/db/database";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import {
   email,
   emailClassificationObservation,
+  mailHandlingReceipt,
   run,
 } from "~/server/db/retained-tables";
 
@@ -91,33 +90,15 @@ export async function recordDiscoveryEmailReceipt(
       mailboxId: input.mailboxId,
     },
   });
-  await enqueueAiEvaluation(db, {
-    runId: owner.id,
-    executionKind: "mail_discovery",
-    shareKey: null,
-    workKey: `discovery-handled:${owner.id}:${handled.id}:${handled.checksum ?? "missing"}:${receipt.outcome}`,
-    feature: "mailbox-relevance",
-    target: {
-      kind: "email",
-      entity: "email",
-      recordId: handled.id,
-      field: null,
-      suggestionIds: [],
-    },
-    provenance: {
-      dependencies: [],
-      inputFingerprint: handled.checksum ?? "",
-      optionFingerprint: "",
-      model: observation?.model ?? null,
-    },
-    snapshot: {
-      ledgerPartyId: input.ledgerPartyId,
-      actorUserId: owner.actorUserId,
-      mailboxId: input.mailboxId,
-    },
-    state: "completed",
-    receipt,
-  });
+  await getDb(db)
+    .insert(mailHandlingReceipt)
+    .values({
+      runId: owner.id,
+      emailId: handled.id,
+      key: `${owner.id}:${handled.id}:${handled.checksum ?? "missing"}:${receipt.outcome}`,
+      receipt,
+    })
+    .onConflictDoNothing();
 }
 
 /** Historical observations prove only their own membership; Run/Email processing links prove none. */
@@ -129,28 +110,12 @@ export async function readDiscoveryEmailAudit(
   page: { cursor: number; limit: number },
 ) {
   const evidence = sql`(
-    SELECT item.id AS key, item.receipt AS evidence FROM "AiEvaluationRequest" AS request
-      JOIN "AiEvaluation" AS item ON item.id = request."evaluationId"
-      WHERE request."runId" = ${owner.id} AND item."executionKind" = ${aiExecutionKind.enum.mail_discovery} AND item.receipt IS NOT NULL
-    UNION ALL
-    SELECT observation.id AS key, jsonb_build_object(
-      'id', original.shortcode, 'emailId', observation."emailId", 'sourceChecksum', observation.checksum,
-      'handledAt', to_char(observation."createdAt" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
-      'observationId', observation.id, 'outcome', ${discoveryEmailReceipt.shape.outcome.enum.classified}::text, 'classification', observation.classification, 'stage', observation.stage,
-      'ownershipAtExecution', jsonb_build_object('memberId', ${owner.actorLedgerPartyShortcode}::text, 'mailboxId', ${mailboxId}::text)
-    ) AS evidence FROM "EmailClassificationObservation" AS observation JOIN "Email" AS original ON original.id = observation."emailId"
-      WHERE observation."runId" = ${owner.id} AND NOT EXISTS (
-        SELECT 1 FROM "AiEvaluationRequest" AS request JOIN "AiEvaluation" AS item ON item.id = request."evaluationId"
-          WHERE request."runId" = ${owner.id} AND item."executionKind" = ${aiExecutionKind.enum.mail_discovery} AND item.receipt->>'observationId' = observation.id::text
-      )
+    SELECT id AS key, receipt AS evidence FROM "MailHandlingReceipt" WHERE "runId" = ${owner.id}::uuid
   ) AS audit`;
   const [counted, selected] = await Promise.all([
-    getDb(db).execute(sql`SELECT count(*)::int AS count, NOT EXISTS (
-      SELECT 1 FROM "AiEvaluationRequest" AS request
-      JOIN "AiEvaluation" AS item ON item.id = request."evaluationId"
-      WHERE request."runId" = ${owner.id}
-        AND (item."executionKind" <> ${aiExecutionKind.enum.mail_discovery} OR item.receipt IS NULL)
-    ) AS intact FROM ${evidence}`),
+    getDb(db).execute(
+      sql`SELECT count(*)::int AS count, true AS intact FROM ${evidence}`,
+    ),
     getDb(db).execute(
       sql`SELECT evidence FROM ${evidence} ORDER BY evidence->>'handledAt', key LIMIT ${page.limit} OFFSET ${page.cursor}`,
     ),
@@ -177,7 +142,7 @@ export async function readDiscoveryEmailAudit(
         )
     : [];
   return discoveryEmailAuditPage.parse({
-    // A pre-partition admission could lose its receipt into another execution frame.
+    // Only the completed owning Run establishes full roster coverage.
     coverage: complete && summary?.intact ? "complete" : "incomplete",
     total: count,
     nextCursor:

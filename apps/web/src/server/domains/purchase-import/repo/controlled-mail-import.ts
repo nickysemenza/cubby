@@ -33,8 +33,8 @@ import { email, orderMail, run, vendor } from "~/server/db/retained-tables";
 import { vendorSearchTerms } from "~/server/domains/purchase-import/repo/gmail/vendor-identity";
 import { readMailImportSettings } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
-import { runJobLeaseLive } from "~/server/generic/jobs/repo/job-reads";
+import { runPassWorking } from "~/server/domains/run/repo/run-execution";
+import { WorkDeferredError } from "~/server/kernel/work-errors";
 
 type ControlledMailScope = z.infer<typeof mailboxDiscoveryInput> & {
   vendorId: VendorId;
@@ -265,10 +265,7 @@ export async function waitForActiveMailboxImports(
         eq(run.ledgerPartyId, parseEntityId("ledgerParty", input.memberId)),
         or(isNull(run.parentRunId), ne(run.parentRunId, input.controlRunId)),
         eq(run.status, "running"),
-        or(
-          isNotNull(run.coordinatorStartedAt),
-          runJobLeaseLive(run.id, "purchase.dispatch"),
-        ),
+        or(isNotNull(run.coordinatorStartedAt), runPassWorking(sql`${run.id}`)),
         notDeleted(run),
         exists(
           getDb(db)
@@ -286,7 +283,7 @@ export async function waitForActiveMailboxImports(
     )
     .limit(1);
   if (active)
-    throw new JobDeferredError(
+    throw new WorkDeferredError(
       "Waiting for this mailbox's active Mail import to finish",
       new Date(Date.now() + 15_000),
       "provider_capacity",
@@ -338,7 +335,7 @@ export async function waitForMailImportPermission(
       )
     )
       continue;
-    throw new JobDeferredError(
+    throw new WorkDeferredError(
       "Automatic Mail import is paused for this mailbox",
       new Date(Date.now() + 60_000),
       "provider_capacity",

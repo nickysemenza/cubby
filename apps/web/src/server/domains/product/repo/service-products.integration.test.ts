@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import { productRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.product.gen";
 import { getDb } from "~/server/db/helpers";
 import { expense, product } from "~/server/db/schema";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { updateProductCategory } from "~/server/domains/product-category/repo/product-category";
 import {
   entityKernelContextSchema,
@@ -306,15 +307,22 @@ describe("category-based service Products", () => {
         JSON.stringify(await productStockSummary(ctx.db, service.id)),
       ).toContain("Stock is not applicable");
       const originals = await getDb(ctx.db)
-        .select({ cost: expense.cost, quantity: expense.productQuantity })
+        .select({
+          cost: expenseCostDollarsSql(),
+          quantity: expense.productQuantity,
+        })
         .from(expense)
         .where(eq(expense.productId, service.entityId));
       expect(originals).toHaveLength(3);
       expect(originals).toContainEqual({ cost: 90, quantity: 30 });
 
       // A service charge edit is reflected by the view without any background page.
-      await getDb(ctx.db).execute(sql`UPDATE "Expense" SET cost = 190
-        WHERE "productId" = ${service.entityId} AND cost = 90`);
+      await updatePurchaseEventWhere(
+        ctx.db,
+        "expense",
+        { cost: 19000n },
+        sql`"productId" = ${service.entityId} AND "costMinor" = 9000`,
+      );
       const readCanonical = async () =>
         entityFieldEnvelopeSchemas.product.detail.parse(
           (
@@ -377,8 +385,12 @@ describe("category-based service Products", () => {
       ]);
 
       // A date edit changes latest-charge evidence even when the average is unchanged.
-      await getDb(ctx.db).execute(sql`UPDATE "Expense" SET date = '2026-04-01'
-        WHERE "productId" = ${service.entityId} AND cost = 40`);
+      await updatePurchaseEventWhere(
+        ctx.db,
+        "expense",
+        { date: "2026-04-01" },
+        sql`"productId" = ${service.entityId} AND "costMinor" = 4000`,
+      );
       expect((await readCanonical()).fields.cost.result).toMatchObject({
         kind: "cached",
         freshness: "fresh",
@@ -688,10 +700,12 @@ describe("category-based service Products", () => {
         cost: 700,
       }),
     );
-    await getDb(ctx.db)
-      .update(expense)
-      .set({ deletedAt: new Date() })
-      .where(eq(expense.id, removed.entityId));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { deletedAt: new Date() },
+      eq(expense.id, removed.entityId),
+    );
     const report = await productPricingSummary(ctx.db, service.id);
     const figures = report.flatMap((block) =>
       block.kind === "stats" ? block.figures : [],
@@ -776,3 +790,5 @@ describe("category-based service Products", () => {
   });
 });
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";

@@ -35,6 +35,8 @@ export async function loadCandidateSource(
     throw new Error(
       "Email candidate original is unavailable or outside its owner",
     );
+  if (row.original.rawChecksum !== row.email.checksum)
+    throw new Error("Email candidate original source changed");
   return {
     sourceKey: `${row.email.provider}:${row.email.mailboxId}:${row.email.messageId}`,
     checksum: row.email.checksum,

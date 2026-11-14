@@ -11,6 +11,7 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { imageProcessingJob } from "~/server/db/image-processing-schema";
 import {
@@ -32,7 +33,6 @@ import {
 } from "~/server/domains/run/repo/run-control";
 import { loadRunDetail } from "~/server/domains/run/repo/run-detail";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createMcpServer } from "~/server/mcp/server";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {

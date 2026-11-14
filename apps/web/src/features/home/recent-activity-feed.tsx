@@ -1,5 +1,4 @@
 import type { AuditLogListOut } from "@cubby/schemas/audit";
-import { humanize } from "@cubby/shared";
 import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { differenceInCalendarDays, parseISO } from "date-fns";
@@ -8,6 +7,7 @@ import { Fragment, useMemo } from "react";
 
 import {
   AuditActor,
+  auditChangeFieldLabel,
   auditVia,
   summarizeChanges,
 } from "~/entity/audit-log/audit-log-entry";
@@ -207,7 +207,9 @@ function ChangeLine({ group }: { group: AuditEntry[] }) {
         )
       : entry.changes;
   const summary = entry.action === "update" ? summarizeChanges(changes) : null;
-  const fields = summary?.shown.map((field) => humanize(field.field));
+  const fields = summary?.shown.map((field) =>
+    auditChangeFieldLabel(field.field),
+  );
   return (
     <li className="flex min-w-0 items-baseline justify-between gap-3 text-sm/4.5">
       <span className="grid min-w-0 flex-1 grid-cols-1 items-center gap-x-3 sm:grid-cols-[minmax(0,1fr)_8rem_7rem]">

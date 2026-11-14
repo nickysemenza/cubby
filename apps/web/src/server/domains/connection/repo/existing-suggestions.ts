@@ -16,14 +16,15 @@ import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { getDb, notDeleted, uuidArrayParam } from "~/server/db/helpers";
-import { outer } from "~/server/db/helpers/related";
+import { getDb, notDeleted } from "~/server/db/helpers";
 import { suggestionTable, entityIdentity } from "~/server/db/schema";
 import {
   currentProductPairPolicy,
   productPairApplicationKey,
 } from "~/server/domains/product/repo/match/product-match-candidate";
 import { readStoredProductPair } from "~/server/domains/product/repo/match/product-pair-signals";
+import { resolveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { readFieldSuggestions } from "~/server/generic/suggestions/repo/field-gaps";
 import { memberRejectedSql } from "~/server/generic/suggestions/repo/suggestion-decisions";
 
 import {
@@ -100,12 +101,6 @@ function existingConnectionSuggestionIds(
     ),
     sql`, `,
   );
-  const codeHashes = sql.join(
-    [...new Set(sources.map((source) => source.entityId))].map(
-      (code) => sql`md5(${code})`,
-    ),
-    sql`, `,
-  );
   const sourceIds = sql`SELECT source_entity."id" FROM "Entity" source_entity
     WHERE source_entity."shortcode" IN (${codes})
       AND ${inArray(sql`source_entity."kind" || ':' || source_entity."shortcode"`, keys)}`;
@@ -114,35 +109,17 @@ function existingConnectionSuggestionIds(
     suggestionTable.active,
     eq(suggestionTable.status, "pending"),
   );
-  const idsFor = (families: "all" | "pair", match: SQL) =>
+  const idsFor = (_families: "all" | "pair", match: SQL) =>
     getDb(db)
       .select({ id: suggestionTable.id })
       .from(suggestionTable)
       .where(
         and(
           pendingState,
-          inArray(
-            suggestionTable.family,
-            families === "all"
-              ? ["field", ...entityPairSuggestionFamilies]
-              : entityPairSuggestionFamilies,
-          ),
+          inArray(suggestionTable.family, entityPairSuggestionFamilies),
           match,
         ),
       );
-  const fieldIds = getDb(db)
-    .select({ id: suggestionTable.id })
-    .from(suggestionTable)
-    .where(
-      and(
-        pendingState,
-
-        eq(suggestionTable.family, "field"),
-        // Exact equality remains authoritative for arbitrary historical text.
-        sql`md5(${suggestionTable.suggestedValue} #>> '{}') IN (${codeHashes})
-          AND ${suggestionTable.suggestedValue} #>> '{}' IN (${codes})`,
-      ),
-    );
   const requestedPairs = sql.identifier("existing_pair_requested");
   const pairMembership = sql.identifier("existing_pair_membership");
   const requestedPairId = sql`${requestedPairs}.${sql.identifier("id")}`;
@@ -171,55 +148,7 @@ function existingConnectionSuggestionIds(
     sql`
     ${inArray(suggestionTable.entity, [...new Set(sources.map((source) => source.entityKind))])}
     AND ${suggestionTable.recordId} IN (${sourceIds})`,
-  )
-    .union(fieldIds)
-    .union(pairIds);
-}
-
-/** Source-first barrier shared by selected retrieval and publication grouping. */
-function connectionSourcePeers(db: Database, sourceKind: SQL, sourceCode: SQL) {
-  const indexed = alias(suggestionTable, "connection_peer_indexed");
-  return getDb(db)
-    .select({ id: indexed.id, evidence: indexed.evidence })
-    .from(indexed)
-    .where(
-      and(
-        sql`${indexed.subject}->>'scope' LIKE 'connection.%'`,
-        sql`${indexed.evidence} #>> '{candidate,source,entityKind}' = ${sourceKind}`,
-        sql`${indexed.evidence} #>> '{candidate,source,entityId}' = ${sourceCode}`,
-      ),
-    );
-}
-
-/** Preserve raw selected tuples even when the selected publication is ineligible. */
-export async function readSelectedConnectionSuggestionIds(
-  db: Database,
-  reviewIds: readonly string[],
-): Promise<string[]> {
-  if (!reviewIds.length) return [];
-  const selected = alias(suggestionTable, "selected_connection");
-  const matched = sql.identifier("connection_edge");
-  const evidence = sql`${matched}.${sql.identifier("evidence")}`;
-  const point = connectionSourcePeers(
-    db,
-    sql`${outer(selected.evidence)} #>> '{candidate,source,entityKind}'`,
-    sql`${outer(selected.evidence)} #>> '{candidate,source,entityId}'`,
-  );
-  const rows = await getDb(db)
-    .selectDistinct({ id: sql<string>`${matched}.${sql.identifier("id")}` })
-    .from(selected)
-    .innerJoinLateral(
-      sql`(${point.getSQL()} OFFSET 0) AS ${matched}`,
-      sql`true`,
-    )
-    .where(
-      and(
-        sql`${selected.id} = ANY(${uuidArrayParam(reviewIds)})`,
-        sql`(${evidence}#>>'{candidate,relation}', ${evidence}#>>'{candidate,target,entityKind}', ${evidence}#>>'{candidate,target,entityId}') =
-        (${selected.evidence}#>>'{candidate,relation}', ${selected.evidence}#>>'{candidate,target,entityKind}', ${selected.evidence}#>>'{candidate,target,entityId}')`,
-      ),
-    );
-  return rows.map((row) => row.id);
+  ).union(pairIds);
 }
 
 /** Exact current edge identities across families, before evidence admission. */
@@ -242,7 +171,7 @@ export async function readExistingConnectionSuggestions(
   const pairTargetId = canonicalPairTargetId(
     sql`${suggestionTable.subject}->>'otherId'`,
   );
-  const rowsFor = (family: "field" | "pair") =>
+  const rowsFor = () =>
     getDb(db)
       .select({
         prediction: {
@@ -291,27 +220,21 @@ export async function readExistingConnectionSuggestions(
         and(
           notDeleted(to),
           sql`${to.mergedIntoId} IS NULL`,
-          family === "field"
-            ? eq(to.shortcode, sql`${suggestionTable.suggestedValue} #>> '{}'`)
-            : eq(to.id, pairTargetId),
+          eq(to.id, pairTargetId),
         ),
       )
       .where(
         and(
           eq(suggestionTable.active, true),
           eq(suggestionTable.status, "pending"),
-          family === "field"
-            ? eq(suggestionTable.family, "field")
-            : inArray(suggestionTable.family, entityPairSuggestionFamilies),
+          inArray(suggestionTable.family, entityPairSuggestionFamilies),
           sql`${suggestionTable.id} = ANY(ARRAY(${getDb(db).select({ id: matched.id }).from(matched)}))`,
           sql`(${inArray(sql`${from.kind} || ':' || ${from.shortcode}`, keys)} OR ${inArray(sql`${to.kind} || ':' || ${to.shortcode}`, keys)})`,
           sql`NOT ${memberRejectedSql(sql`${suggestionTable.decisions}`)}`,
           sql`NOT EXISTS (SELECT 1 FROM "Suggestion" suppressed WHERE suppressed.active AND suppressed.entity=${suggestionTable.entity} AND suppressed."recordId"=${suggestionTable.recordId} AND suppressed.suppression IS NOT NULL AND suppressed.suppression->>'candidateKey'=CASE WHEN ${suggestionTable.family} IN (${pairFamilyList}) THEN (${suggestionTable.subject}->>'recordId') || '|' || (${suggestionTable.subject}->>'otherId') ELSE '' END)`,
         ),
       );
-  const candidates = rowsFor("field")
-    .unionAll(rowsFor("pair"))
-    .as("existing_connections");
+  const candidates = rowsFor().as("existing_connections");
   const rows = await getDb(db)
     .with(matched)
     .select()
@@ -334,10 +257,7 @@ export async function readExistingConnectionSuggestions(
             "Review the original Suggestion evidence before accepting",
           ],
         };
-        if (prediction.family === "field") {
-          relation = fieldRelations.get(`${state.entity}.${state.field}`);
-          integration = { kind: "field-review", field: state.field };
-        } else if (isEntityPairSuggestionFamily(prediction.family)) {
+        if (isEntityPairSuggestionFamily(prediction.family)) {
           const family = pairFamilies[prediction.family];
           const judgment = z
             .object({ actionable: z.boolean(), conflict: z.boolean() })
@@ -380,14 +300,8 @@ export async function readExistingConnectionSuggestions(
         if (!relation || !fingerprint) return [];
         const result = connectionProposal.safeParse({
           relation,
-          source:
-            relation === "product-expense"
-              ? { entityKind: row.targetKind, entityId: row.targetCode }
-              : { entityKind: row.sourceKind, entityId: row.sourceCode },
-          target:
-            relation === "product-expense"
-              ? { entityKind: row.sourceKind, entityId: row.sourceCode }
-              : { entityKind: row.targetKind, entityId: row.targetCode },
+          source: { entityKind: row.sourceKind, entityId: row.sourceCode },
+          target: { entityKind: row.targetKind, entityId: row.targetCode },
           label: `Review ${relation.replaceAll("-", " ")}`,
           evidence,
           fingerprint,
@@ -422,6 +336,31 @@ export async function readExistingConnectionSuggestions(
     if (await connectionBasisIsCurrent(db, proposal.review.suggestionId, basis))
       fresh.add(proposal);
   });
+  for (const row of await readFieldSuggestions(db)) {
+    const relation = fieldRelations.get(`${row.entity}.${row.field}`);
+    if (!relation || typeof row.suggestedValue !== "string") continue;
+    const refs = await resolveShortcodes(db, [
+      row.recordId,
+      row.suggestedValue,
+    ]);
+    const target = refs.get(row.suggestedValue);
+    if (!target) continue;
+    const parsed = connectionProposal.safeParse({
+      relation,
+      source: { entityKind: row.entity, entityId: row.recordId },
+      target: { entityKind: target.entity, entityId: row.suggestedValue },
+      label: `Review ${row.field}`,
+      evidence: { reasons: ["Field Answer"], contradictions: [], unknowns: [] },
+      fingerprint: row.id,
+      review: { suggestionId: row.id, suppression: null },
+      integration: { kind: "field-review", field: row.field },
+    });
+    if (parsed.success) {
+      proposals.push(parsed.data);
+      fresh.add(parsed.data);
+    }
+  }
+
   return sources.map((source) =>
     proposals
       .filter(

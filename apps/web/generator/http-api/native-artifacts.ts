@@ -23,7 +23,7 @@ type EntityOutputs = ReadonlyMap<string, string | null>;
 
 // Device callers depend on these exact wire names, so the scan cannot drop them.
 const ALWAYS_TYPED_OPERATIONS = new Set([
-  "job.deviceBacklog",
+  "imageBacklog.deviceBacklog",
   "run.reportDeviceWork",
 ]);
 
@@ -98,6 +98,7 @@ export async function renderDirectNativeArtifacts(
   const typedOperations = contract.operations.filter(
     ({ id }) =>
       ALWAYS_TYPED_OPERATIONS.has(id) ||
+      id.startsWith("machinery.") ||
       callers.operationIds.has(id) ||
       callers.tokens.has(`native_${swiftId(id)}`) ||
       (passthrough[id] !== undefined &&

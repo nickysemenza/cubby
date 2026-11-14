@@ -1,15 +1,13 @@
-import { NEEDS_YOU_INPUT } from "@cubby/schemas/work-queue";
 import {
   useSuspenseQuery,
   useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
 
-import { hasIncompleteWorkInputs } from "~/features/work-queue/work-input-status";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { entityReport } from "~/integrations/tanstack-query/generated/domains/entityReport.gen";
 import { expense } from "~/integrations/tanstack-query/generated/domains/expense.gen";
 import { location } from "~/integrations/tanstack-query/generated/domains/location.gen";
-import { workQueue } from "~/integrations/tanstack-query/generated/domains/workQueue.gen";
+import { machinery } from "~/integrations/tanstack-query/generated/domains/machinery.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatCount, formatCurrency } from "~/lib/number-format";
 import { Skeleton } from "~/ui/primitives/skeleton";
@@ -41,7 +39,7 @@ export function HomeKeyNumbers({ asOf }: { asOf: HomeAsOfWindow }) {
   useSuspenseInfiniteQuery(
     cursorQueryOptions(entityReport.get, taskBriefingReportInput),
   );
-  useSuspenseQuery(workQueue.queue.queryOptions(NEEDS_YOU_INPUT));
+  useSuspenseQuery(machinery.needsYou.queryOptions({}));
   useSuspenseQuery(expense.monthlySummary.queryOptions(asOf.spend.filters));
   useSuspenseQuery(location.valuationSummary.queryOptions());
   const briefing = useTaskBriefing();
@@ -77,18 +75,10 @@ export function HomeKeyNumbers({ asOf }: { asOf: HomeAsOfWindow }) {
       label: "Needs you",
       change: {
         identity: "home:needs-you",
-        value: hasIncompleteWorkInputs(needsYou.data?.meta)
-          ? undefined
-          : needsYou.data?.meta.totalCount,
+        value: needsYou.data?.count,
       },
-      value: figure(needsYou, (data) =>
-        hasIncompleteWorkInputs(data.meta)
-          ? "—"
-          : formatCount(data.meta.totalCount),
-      ),
-      context: hasIncompleteWorkInputs(needsYou.data?.meta)
-        ? "Checks incomplete"
-        : "To review",
+      value: figure(needsYou, (data) => formatCount(data.count)),
+      context: "To review",
     },
     {
       id: "spent",

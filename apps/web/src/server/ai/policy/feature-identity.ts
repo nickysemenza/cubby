@@ -74,9 +74,9 @@ export const MODEL_FOR_TIER = {
 export interface AiFeatureShared {
   /** False retains usage metadata without archiving source prompts or replies. */
   collectPayload?: boolean;
-  /** AI Gateway dashboard label, and the `AiUsage`/`AiAnalysis` feature key. */
+  /** AI Gateway dashboard label, and the `AiUsage`/`Answer` feature key. */
   feature: string;
-  /** Bumped when the prompt changes, to invalidate stored AiAnalysis rows. */
+  /** Bumped when the prompt changes, to change the model Ask envelope. */
   promptVersion: string;
   /**
    * Whether the gateway may serve this call from its response cache (and the

@@ -54,7 +54,6 @@ import {
   type TableStateReturn,
 } from "~/entity/table/use-table-state";
 import { WorkActions } from "~/entity/work-queue/work-actions";
-import { WorkPublicationStatus } from "~/entity/work-queue/work-publication-status";
 import { ownerLabel, OwnerPill } from "~/entity/work-queue/work-queue-display";
 import {
   hasIncompleteWorkInputs,
@@ -122,7 +121,6 @@ type QueueTablePage = Omit<WorkQueueOut, "items" | "meta"> & {
       | "incompleteSources"
       | "incompleteProjectIds"
       | "incompleteDiagnosticSources"
-      | "publication"
     > & {
       totalCount: number;
       /** Each section's declared group actions, by its raw key. */
@@ -480,9 +478,9 @@ function WorkQueueRoute() {
 }
 
 /** Embedded attention groups use the same queries and canonical actions as the full queue. */
-export type WorkQueueMeta = WorkInputMeta & { totalCount?: number };
+type WorkQueueMeta = WorkInputMeta & { totalCount?: number };
 
-export function WorkQueue({
+function WorkQueue({
   scope: fixedScope,
   groupBy,
   layout: routeLayout,
@@ -825,11 +823,6 @@ export function WorkQueue({
   return (
     <>
       <WorkInputStatus meta={firstPage?.meta} />
-      <WorkPublicationStatus
-        subject={label}
-        publication={firstPage?.meta.publication}
-        onRetry={() => void list.refreshControls.onRefresh()}
-      />
       {tabsTarget &&
         createPortal(
           <ViewTabs

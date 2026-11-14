@@ -2,16 +2,17 @@ import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import {
   databaseForTransaction,
   getDb,
   withTransaction,
 } from "~/server/db/helpers";
 import { auditLog, expense } from "~/server/db/schema";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { resolveRunFinding } from "~/server/domains/purchase-import/repo/findings";
 import { findOpenRunFindings } from "~/server/generic/problems/repo/detectors-import";
 import { runDiagnostic } from "~/server/generic/problems/service/problem-diagnostics.service";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductIdentityFixture,
   makeProductInput,
@@ -114,14 +115,14 @@ describe("finding expiry", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic finding vendor",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       displayLabel: "Synthetic finding order",
     });
-    const line = await insertWithShortcode(ctx.db, "expense", {
+    const line = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Synthetic unlinked line",
       purchaseId: purchase.id,
-      cost: 10,
+      cost: 1000n,
       date: "2026-09-19",
       lineKind: "principal",
       lineBasis: "item_line",

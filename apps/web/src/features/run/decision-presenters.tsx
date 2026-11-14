@@ -22,8 +22,8 @@ import { Disclosure } from "~/ui/layout";
 import { Panel } from "~/ui/layout";
 import { SidePanelSection } from "~/ui/overlays/side-panel";
 
-import type { StatusTone } from "../job/job-status";
 import { DECISION_STATUS_LABEL, humanizeKey } from "./run-view-model";
+import type { StatusTone } from "./work-status";
 
 /** One ledger facet: a status, or a family's finer reading of one. */
 type DecisionFacetDef = {

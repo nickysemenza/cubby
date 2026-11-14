@@ -1,3 +1,4 @@
+import { systemActor, type ActorContext } from "@cubby/schemas/context";
 import type { ExpenseId } from "@cubby/schemas/identifiers";
 import type { LedgerAttributionInput } from "@cubby/schemas/ledger-party";
 import { and, eq, inArray } from "drizzle-orm";
@@ -5,6 +6,8 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { expenseAttribution, ledgerParty } from "~/server/db/schema";
+import { rejectPurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { lockLedgerPartiesForReference } from "~/server/domains/ledger-party/repo/ledger-party-reference";
 import { createAppError } from "~/server/errors/app-error";
 
@@ -41,6 +44,7 @@ export async function replaceExpenseAttributionRole(
   expenseId: ExpenseId,
   role: "beneficiary" | "funder",
   values: readonly LedgerAttributionInput[],
+  actor: ActorContext = systemActor(),
 ) {
   const referenced = values.filter(
     (
@@ -57,18 +61,21 @@ export async function replaceExpenseAttributionRole(
     ledgerPartyId: value.partyId ? parties[partyIndex++]!.id : null,
     weight: value.weight,
   }));
-  await tx
-    .update(expenseAttribution)
-    .set({ deletedAt: new Date() })
-    .where(
-      and(
-        eq(expenseAttribution.expenseId, expenseId),
-        eq(expenseAttribution.role, role),
-        notDeleted(expenseAttribution),
-      ),
-    );
+  await rejectPurchaseEventWhere(
+    tx,
+    "ExpenseAttribution",
+    and(
+      eq(expenseAttribution.expenseId, expenseId),
+      eq(expenseAttribution.role, role),
+      notDeleted(expenseAttribution),
+    ),
+    actor,
+  );
   if (resolved.length)
-    await tx
-      .insert(expenseAttribution)
-      .values(resolved.map((row) => ({ expenseId, role, ...row })));
+    await insertPurchaseEventRows(
+      tx,
+      "ExpenseAttribution",
+      resolved.map((row) => ({ expenseId, role, ...row })),
+      actor,
+    );
 }

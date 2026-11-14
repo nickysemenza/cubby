@@ -198,7 +198,7 @@ describe("default entity timeline", () => {
     expect(desc.stats).toEqual(
       expect.arrayContaining([
         { key: "records", label: "Records", value: "2" },
-        { key: "audit", label: "Audit entries", value: "3" },
+        { key: "audit", label: "Audit entries", value: "5" },
       ]),
     );
     expect(desc.notes).toEqual([]);
@@ -231,7 +231,7 @@ describe("default entity timeline", () => {
     const narrowed = await timeline({ order: "desc", ids: [second] });
     expect(
       narrowed.groups.flatMap((group) => group.events.map((e) => e.link?.id)),
-    ).toEqual([second, second]);
+    ).toEqual([second, second, second]);
     expect(narrowed.stats).toEqual(
       expect.arrayContaining([
         { key: "records", label: "Records", value: "1" },

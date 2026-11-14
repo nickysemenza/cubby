@@ -11,6 +11,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db";
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
@@ -22,9 +23,7 @@ import {
   entityExternalId,
   entityIdentity,
   entityLink,
-  expenseAttribution,
   externalSource,
-  financialTransactionAllocation,
   imageDerivative,
   imageSighting,
   importPreparedOrder,
@@ -35,6 +34,8 @@ import {
   ledgerSourceClaim,
   mailboxCursor,
   photoRunImage,
+  photoInventoryEvidence,
+  mailHandlingReceipt,
   mealFoodEntry,
   mealRecipe,
   mealRecipePortion,
@@ -52,7 +53,6 @@ import {
   runControlEvent,
   runOperation,
   runStep,
-  sourceTransactionRecord,
   sourceOccurrence,
   transactionImport,
   shipmentObservation,
@@ -60,6 +60,7 @@ import {
   shipmentSourcePackage,
   user,
 } from "~/server/db/schema";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   retainedMailFixture,
   sourceOrderObservationFixture,
@@ -69,7 +70,6 @@ import { createFinancialEvidenceFixture } from "~/server/domains/transaction-imp
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { publishExactSuggestion } from "~/server/generic/suggestions/repo/suggestion-publication";
 import { makeCookbookExtraction } from "~/server/testing/repo.fixtures";
 import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
@@ -633,14 +633,12 @@ const SOURCE_FACTORIES = {
     }),
   "SourceTransactionRecord.batchId": async (db: Database, targetId: string) => {
     const { record } = await createFinancialEvidenceFixture(db);
-    await getDb(db)
-      .update(sourceTransactionRecord)
-      .set({
-        batchId: parseEntityId("transactionImport", targetId),
-        rowPosition: null,
-      })
-      .where(eq(sourceTransactionRecord.id, record.id));
-    return record;
+    const { id: _id, shortcode: _shortcode, ...observation } = record;
+    return insertWithShortcode(db, "sourceTransactionRecord", {
+      ...observation,
+      batchId: parseEntityId("transactionImport", targetId),
+      rowPosition: null,
+    });
   },
   "ExternalSource.vendorId": async (db, targetId) => {
     const slug = uniq("synthetic-source")
@@ -909,7 +907,7 @@ const SOURCE_FACTORIES = {
 
   "ExpenseAttribution.expenseId": async (db, targetId) => {
     const party = await mkLedgerParty(db);
-    return insertAndReturn(db, expenseAttribution, {
+    return createPurchaseEventRecord(db, "ExpenseAttribution", {
       expenseId: parseEntityId("expense", targetId),
       role: "funder",
       ledgerPartyId: party.id,
@@ -970,7 +968,7 @@ const SOURCE_FACTORIES = {
       trade: "other",
       date: "2024-01-15",
     });
-    return insertAndReturn(db, expenseAttribution, {
+    return createPurchaseEventRecord(db, "ExpenseAttribution", {
       expenseId: expense.id,
       role: "funder",
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
@@ -1601,7 +1599,7 @@ const SOURCE_FACTORIES = {
       status: "pending",
       amount: moneyToMinor(1),
     });
-    return insertAndReturn(db, financialTransactionAllocation, {
+    return createPurchaseEventRecord(db, "FinancialTransactionAllocation", {
       transactionId: txn.id,
       purchaseId: parseEntityId("purchase", targetId),
       amountMinor: moneyToMinor(1),
@@ -1610,7 +1608,7 @@ const SOURCE_FACTORIES = {
 
   "FinancialTransactionAllocation.transactionId": async (db, targetId) => {
     const purch = await mkPurchase(db);
-    return insertAndReturn(db, financialTransactionAllocation, {
+    return createPurchaseEventRecord(db, "FinancialTransactionAllocation", {
       transactionId: parseEntityId("financialTransaction", targetId),
       purchaseId: purch.id,
       amountMinor: moneyToMinor(1),
@@ -1713,6 +1711,27 @@ const SOURCE_FACTORIES = {
       kind: "liveness-fixture",
       inputFingerprint: uniq("input-fingerprint"),
     }),
+
+  "PhotoInventoryEvidence.runId": async (db, targetId) => {
+    const location = await mkLocation(db);
+    return insertAndReturn(db, photoInventoryEvidence, {
+      locationId: location.id,
+      runId: targetId,
+      fingerprint: uniq("photo-observation"),
+      sourceSnapshot: {},
+      result: {},
+    });
+  },
+
+  "MailHandlingReceipt.runId": async (db, targetId) => {
+    const email = await mkEmail(db);
+    return insertAndReturn(db, mailHandlingReceipt, {
+      runId: targetId,
+      emailId: email.id,
+      key: uniq("mail-handling"),
+      receipt: {},
+    });
+  },
 
   "RunStep.runId": (db, targetId) =>
     insertAndReturn(db, runStep, {

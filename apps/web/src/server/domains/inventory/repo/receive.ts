@@ -5,15 +5,12 @@ import type { RawInventoryDetail } from "@cubby/schemas/inventory-raw-read";
 import { and, eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import {
-  getDb,
-  notDeleted,
-  withTransactionDatabase,
-} from "~/server/db/helpers";
+import { getDb, notDeleted } from "~/server/db/helpers";
 import { expense, inventoryEntry, product } from "~/server/db/schema";
 import { resolveArrivedFindingsForPurchase } from "~/server/domains/purchase-import/repo/findings";
 import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { householdWrite } from "~/server/kernel/gate";
 
 import {
   addInventoryEntries,
@@ -81,7 +78,7 @@ export const receiveExpenseInventory = async (
   input: InventoryReceiveExpenseInput,
   actor: ActorContext,
 ) =>
-  withTransactionDatabase(db, async (transactionDb) => {
+  householdWrite(db, async (transactionDb) => {
     const transaction = getDb(transactionDb);
     const expenseId = await resolveOrThrow(
       transactionDb,

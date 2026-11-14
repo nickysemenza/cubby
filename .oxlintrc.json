@@ -443,7 +443,7 @@
       "files": [
         "packages/schemas/src/entity-definitions/**/*.ts",
         "packages/schemas/src/relationship-query-definitions.ts",
-        "packages/schemas/src/entity-links.ts",
+        "packages/schemas/src/entity-link-catalog.gen.ts",
         "packages/schemas/src/entity-attachment.ts",
         "packages/schemas/src/automatic-rule.ts",
         "packages/schemas/src/entity-integrity.ts",
@@ -475,6 +475,7 @@
         "packages/schemas/src/group-keys.ts",
         "packages/schemas/src/data-quality-facets.ts",
         "packages/schemas/src/data-quality-shape.ts",
+        "packages/schemas/src/kernel/stage.ts",
         "packages/schemas/src/expense-line-kind.ts",
         "packages/schemas/src/external-id.ts",
         "packages/schemas/src/entity-collection.ts",

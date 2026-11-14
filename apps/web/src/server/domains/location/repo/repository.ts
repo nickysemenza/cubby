@@ -1,4 +1,5 @@
 import { locationSchemaBindings } from "~/entity/generated/entity-schema-bindings.location.gen";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import { withTransactionDatabase } from "~/server/db/helpers";
 import { registerLocationImageChange } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { defineRepository } from "~/server/entity-kernel/repo/repository";
@@ -8,7 +9,6 @@ import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode
 import {
   createLocationRecord,
   deleteLocations,
-  LOCATION_DELETE_EDGE_POLICY,
   locationScaffold,
   updateLocation,
 } from "./crud";
@@ -20,7 +20,7 @@ const locationShortcodes = bindShortcodeResolver("location");
  */
 export const locationRepository = defineRepository("location", {
   schemas: locationSchemaBindings,
-  lifecycle: { delete: LOCATION_DELETE_EDGE_POLICY },
+  lifecycle: { delete: DECLARED_EDGE_DELETE_POLICIES.location },
   scaffold: locationScaffold,
   create: (ctx, data) =>
     withTransactionDatabase(ctx.db, async (db) => {

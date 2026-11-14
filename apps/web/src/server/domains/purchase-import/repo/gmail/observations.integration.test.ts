@@ -11,6 +11,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import {
   emailClassificationObservation,
@@ -24,7 +25,6 @@ import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { productionMailTriage } from "~/server/domains/purchase-import/service/gmail/triage-model";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { listAutomaticDecisions } from "~/server/generic/suggestions/repo/automatic-decisions";
 import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
 import { runFinding } from "~/server/testing/run-finding.fixtures";

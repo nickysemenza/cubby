@@ -9,7 +9,7 @@ import {
   type plantingUpdateData,
 } from "@cubby/schemas/entities/planting";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { EntityLinkKind } from "@cubby/schemas/entity-links";
+import type { EntityLinkKind } from "@cubby/schemas/entity-link-catalog";
 import {
   rawGardenEntryOut,
   rawGardenEntryListItemOut,
@@ -33,6 +33,7 @@ import type { z } from "zod";
 
 import { gardenEntryRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.gardenEntry.gen";
 import { plantingRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.planting.gen";
+import { holdFieldsValues } from "~/server/ai/fields/repo/field-decisions";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   associatePendingImages,
@@ -458,20 +459,26 @@ export const createPlanting = defineMutationWriter({
       const taskId = data.taskId
         ? await required(tx, data.taskId, "task")
         : null;
-      const row = await insertWithShortcode(tx, "planting", {
-        plantId,
-        sourceProductId,
-        locationId,
-        taskId,
-        status: data.status ?? "planned",
-        outcome: data.outcome ?? null,
-        quantity: data.quantity ?? null,
-        notes: data.notes ?? null,
-        plannedWindow: data.plannedWindow ?? null,
-        sowedOn: data.season?.start ?? null,
-        transplantedOn: data.transplantedOn ?? null,
-        finishedOn: data.season?.end ?? null,
-      });
+      const fields = holdFieldsValues(
+        "planting",
+        {
+          plantId,
+          sourceProductId,
+          locationId,
+          taskId,
+          status: data.status ?? "planned",
+          outcome: data.outcome ?? null,
+          quantity: data.quantity ?? null,
+          notes: data.notes ?? null,
+          plannedWindow: data.plannedWindow ?? null,
+          sowedOn: data.season?.start ?? null,
+          transplantedOn: data.transplantedOn ?? null,
+          finishedOn: data.season?.end ?? null,
+        },
+        "create",
+      );
+      const row = await insertWithShortcode(tx, "planting", fields.values);
+      await fields.settle(tx, actor, row.id);
       await logAuditEntry(tx, actor, {
         entityKind: "planting",
         entityId: row.id,
@@ -503,13 +510,19 @@ export const createGardenEntry = defineMutationWriter({
   ) =>
     withTransaction(db, async (tx) => {
       const locationId = await required(tx, data.locationId, "location");
-      const row = await insertWithShortcode(tx, "gardenEntry", {
-        locationId,
-        kind: data.kind ?? "note",
-        observedOn: data.observedOn,
-        notes: data.notes ?? null,
-        harvestAmount: data.harvestAmount ?? null,
-      });
+      const fields = holdFieldsValues(
+        "gardenEntry",
+        {
+          locationId,
+          kind: data.kind ?? "note",
+          observedOn: data.observedOn,
+          notes: data.notes ?? null,
+          harvestAmount: data.harvestAmount ?? null,
+        },
+        "create",
+      );
+      const row = await insertWithShortcode(tx, "gardenEntry", fields.values);
+      await fields.settle(tx, actor, row.id);
       if (data.plantingIds !== undefined) {
         await replaceGardenEntryPlantings(
           tx,
@@ -632,7 +645,15 @@ export const updatePlanting = defineMutationWriter({
         finishedOn:
           data.season === undefined ? undefined : (data.season?.end ?? null),
       });
-      const updated = await updateLiveAndReturn(tx, planting, values, id);
+      const fields = holdFieldsValues("planting", values);
+      await fields.lock(tx, id);
+      const updated = await updateLiveAndReturn(
+        tx,
+        planting,
+        fields.values,
+        id,
+      );
+      await fields.settle(tx, actor, id, before);
       const changes = computeChanges(
         {
           ...before,
@@ -753,7 +774,15 @@ export const updateGardenEntry = defineMutationWriter({
         // scalar fields were omitted.
         updatedAt: plantingIdsChanged ? new Date() : undefined,
       });
-      const updated = await updateLiveAndReturn(tx, gardenEntry, values, id);
+      const fields = holdFieldsValues("gardenEntry", values);
+      await fields.lock(tx, id);
+      const updated = await updateLiveAndReturn(
+        tx,
+        gardenEntry,
+        fields.values,
+        id,
+      );
+      await fields.settle(tx, actor, id, before);
       let afterPlantingIds: string[] | undefined;
       if (data.plantingIds !== undefined) {
         afterPlantingIds = await replaceGardenEntryPlantings(

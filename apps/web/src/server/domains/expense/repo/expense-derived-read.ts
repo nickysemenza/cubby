@@ -6,7 +6,7 @@ import type { SelectedFields } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { expenseAggregateFields } from "~/server/db/computed/expense-aggregate-sql";
-import { dollarsToMinorSql } from "~/server/db/computed/money";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { expense } from "~/server/db/schema";
@@ -55,8 +55,8 @@ export function expenseDerivedReadSql(
   { scope, expenseIds, draft, source: preparedSource }: DerivedReadOptions = {},
 ): SQL {
   if (read === "costs" && !scope)
-    return sql`SELECT source."id" AS "expenseId", source."cost" AS cost,
-      ${dollarsToMinorSql(sql`source."cost"`)} AS "costCents", source."projectId"
+    return sql`SELECT source."id" AS "expenseId", source."costMinor"::float8 / 100 AS cost,
+      source."costMinor" AS "costCents", source."projectId"
       FROM "Expense" source WHERE ${notDeleted("source")}
       ${expenseIds ? sql`AND ${expenseSelectionConditionSql(sql`source."id"`, expenseIds)}` : sql``}`;
   const categories =
@@ -112,8 +112,8 @@ export function expenseDerivedReadSql(
         ORDER BY a."expenseId", a."spendingCategoryId" NULLS LAST`;
     case "costs":
       if (!condition)
-        return sql`SELECT DISTINCT source."id" AS "expenseId", source.cost,
-        ${dollarsToMinorSql(sql`source.cost`)} AS "costCents", source."projectId"
+        return sql`SELECT DISTINCT source."id" AS "expenseId", source."costMinor"::float8 / 100 AS cost,
+        source."costMinor" AS "costCents", source."projectId"
         FROM (${allocations}) derived_share JOIN "Expense" source ON source.id = derived_share."expenseId"`;
       return sql`SELECT "expenseId", (sum("attributedCents"::bigint) / 100.0)::float8 AS cost,
         sum("attributedCents"::bigint) AS "costCents", min("projectId"::text)::uuid AS "projectId"
@@ -145,7 +145,7 @@ export function expenseProjectMembershipSql(): SQL {
   const kind = expenseLineKindSchema.enum;
   return sql`WITH principal AS MATERIALIZED (
     SELECT e."id", e."purchaseId", ${inherited.projectId} AS "projectId",
-      ${dollarsToMinorSql(sql`e."cost"`)} AS cost_cents, live_purchase."id" IS NOT NULL AS live_purchase
+      e."costMinor" AS cost_cents, live_purchase."id" IS NOT NULL AS live_purchase
     FROM "Expense" e
     LEFT JOIN "Purchase" live_purchase
       ON live_purchase."id" = e."purchaseId" AND ${notDeleted("live_purchase")}
@@ -192,7 +192,7 @@ export const expenseDerivedMembershipSql = (
 ): SQL =>
   sql`${expenseId} IN (${expenseDerivedReadSql("membership", { scope, expenseIds })})`;
 
-type DerivedValues = Pick<typeof expense.$inferSelect, "cost"> & {
+type DerivedValues = { cost: number | null } & {
   projectNames: ExpenseJointAllocationRow["projectName"];
   spendingCategoryNames: ExpenseJointAllocationRow["spendingCategoryName"];
 };
@@ -235,7 +235,7 @@ export function expenseDerivedCostRead(
     sql`(${expenseDerivedCostsSql(scope, expenseIds)}) derived_cost`;
   const cost = scope
     ? sql<number | null>`derived_cost.cost`
-    : sql<number | null>`${expense.cost}`;
+    : sql<number | null>`${minorToDollarsSql(expense.cost, "float8")}`;
   const select = <Fields extends SelectedFields>(fields: Fields) => {
     const query = unwrapDb(db).select(fields).from(expense);
     return scope

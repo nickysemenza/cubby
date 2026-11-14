@@ -30,17 +30,15 @@ import {
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { financialSourceRefsFor } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import {
+  sourceTransactionRecordExternalId,
+  sourceTransactionRecordOccurrenceId,
+} from "~/server/domains/transaction-import/policy/source-transaction-record-identity";
+import { statementLoanInput } from "~/server/domains/transaction-import/policy/statement-effective-movement";
+import {
   sourceObservationColumns,
   sourceObservationIdentities,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
-import {
-  sourceTransactionRecordExternalId,
-  sourceTransactionRecordOccurrenceId,
-} from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
-import {
-  statementEffectiveMovement,
-  statementLoanInput,
-} from "~/server/domains/transaction-import/repo/statement-effective-movement";
+import { statementEffectiveMovement } from "~/server/domains/transaction-import/repo/statement-policy-wire";
 import { merchantVendorInferences } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 
 import {

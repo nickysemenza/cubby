@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   sourceTransactionRecordExternalId,
   sourceTransactionRecordOccurrenceId,
-} from "./source-transaction-record-identity";
+} from "~/server/domains/transaction-import/policy/source-transaction-record-identity";
 
 /**
  * Frozen input/output pairs. The values are synthetic on purpose — these
@@ -49,9 +49,7 @@ describe("sourceTransactionRecordExternalId", () => {
   it.each(STORED)(
     "reproduces the frozen ref for $row.originalStatement",
     async ({ row, externalId }) => {
-      await expect(sourceTransactionRecordExternalId(row)).resolves.toBe(
-        externalId,
-      );
+      await expect(sourceTransactionRecordExternalId(row)).toBe(externalId);
     },
   );
 
@@ -59,7 +57,7 @@ describe("sourceTransactionRecordExternalId", () => {
     const [{ row, externalId }] = STORED;
     await expect(
       sourceTransactionRecordExternalId({ ...row, source: "copilot" }),
-    ).resolves.not.toBe(externalId);
+    ).not.toBe(externalId);
   });
 
   it.each([
@@ -77,7 +75,7 @@ describe("sourceTransactionRecordExternalId", () => {
     const [, fixture] = STORED;
     await expect(
       sourceTransactionRecordExternalId({ ...fixture.row, ...patch }),
-    ).resolves.toBe(fixture.externalId);
+    ).toBe(fixture.externalId);
   });
 });
 

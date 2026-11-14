@@ -1,16 +1,12 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import {
-  allocationSumViolation,
-  type FinancialTransactionKind,
-  financialTransactionSettlementViolation,
-} from "@cubby/schemas/financial-transaction";
+import { type FinancialTransactionKind } from "@cubby/schemas/financial-transaction";
 import {
   type FinancialTransactionId,
   type PurchaseId,
   type PurchaseShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import { cents, moneyToMinor } from "@cubby/shared";
+import { moneyToMinor } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
@@ -18,6 +14,10 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import { notDeleted, touchUpdatedAt } from "~/server/db/helpers";
 import { financialTransactionAllocation, purchase } from "~/server/db/schema";
+import { allocationSetViolation } from "~/server/domains/financial-transaction/policy/allocation-set";
+import { rejectPurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { createAppError } from "~/server/errors/app-error";
 import {
   type AuditEntryInput,
@@ -197,45 +197,15 @@ export function assertAllocationSetValid(value: {
   kind: FinancialTransactionKind;
   next: readonly AllocationInput[];
 }): void {
-  const { next, transactionAmount } = value;
-  if (uniq(next.map((row) => row.purchaseId)).length !== next.length)
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "A transaction cannot allocate to the same Purchase twice; combine them into one slice.",
-    );
-
-  for (const row of next) {
-    if (cents(row.amount) === 0)
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "An allocation of zero says nothing — remove it instead.",
-      );
-    // Mixed signs are unsupported on purpose. Same-sign is what makes "sums to
-    // the amount" a decomposition rather than an arbitrary set of numbers that
-    // happens to add up: a +1000/-995 pair netting 5 would assert 1000 of
-    // settlement against one purchase. A genuinely two-directional event is two
-    // transactions, which is how the statement shows it anyway.
-    if (Math.sign(row.amount) !== Math.sign(transactionAmount))
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "Every allocation must carry the same sign as its transaction. A charge and a credit are two settlement events; record them as two transactions.",
-      );
-  }
-
-  if (next.length === 0) return;
-  const sumViolation = allocationSumViolation(
-    next.map((row) => row.amount),
-    transactionAmount,
-  );
-  if (sumViolation) throw createAppError("CONSTRAINT_VIOLATION", sumViolation);
-
-  const violation = financialTransactionSettlementViolation({
-    linked: next.length > 0,
+  const violation = allocationSetViolation({
+    transactionAmountMinor: moneyToMinor(value.transactionAmount),
     kind: value.kind,
-    amount: transactionAmount,
+    next: value.next.map((row) => ({
+      purchaseId: row.purchaseId,
+      amountMinor: moneyToMinor(row.amount),
+    })),
   });
-  if (violation)
-    throw createAppError("CONSTRAINT_VIOLATION", violation.message);
+  if (violation) throw createAppError("CONSTRAINT_VIOLATION", violation);
 }
 
 /**
@@ -299,7 +269,12 @@ export async function writeAllocationSets(
       )),
     );
   if (inserts.length)
-    await tx.insert(financialTransactionAllocation).values(inserts);
+    await insertPurchaseEventRows(
+      tx,
+      "FinancialTransactionAllocation",
+      inserts,
+      actor,
+    );
 }
 
 /** Applies removals and changed slices; returns the new slices to insert. */
@@ -316,19 +291,19 @@ async function writeChangedAllocations(
   const removed = existing.filter((row) => !nextByPurchase.has(row.purchaseId));
 
   if (removed.length > 0)
-    await tx
-      .update(financialTransactionAllocation)
-      .set({ deletedAt: new Date() })
-      .where(
-        and(
-          eq(financialTransactionAllocation.transactionId, transactionId),
-          inArray(
-            financialTransactionAllocation.purchaseId,
-            removed.map((row) => row.purchaseId),
-          ),
-          notDeleted(financialTransactionAllocation),
+    await rejectPurchaseEventWhere(
+      tx,
+      "FinancialTransactionAllocation",
+      and(
+        eq(financialTransactionAllocation.transactionId, transactionId),
+        inArray(
+          financialTransactionAllocation.purchaseId,
+          removed.map((row) => row.purchaseId),
         ),
-      );
+        notDeleted(financialTransactionAllocation),
+      ),
+      actor,
+    );
 
   const existingByPurchase = new Map(
     existing.map((row) => [row.purchaseId, row]),
@@ -349,20 +324,21 @@ async function writeChangedAllocations(
       moneyToMinor(prior.amount) !== moneyToMinor(row.amount) ||
       prior.confirmsMerchant !== confirmsMerchant
     )
-      await tx
-        .update(financialTransactionAllocation)
-        .set({
+      await updatePurchaseEventWhere(
+        tx,
+        "FinancialTransactionAllocation",
+        {
           amountMinor: moneyToMinor(row.amount),
           confirmsMerchant,
           updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(financialTransactionAllocation.transactionId, transactionId),
-            eq(financialTransactionAllocation.purchaseId, row.purchaseId),
-            notDeleted(financialTransactionAllocation),
-          ),
-        );
+        },
+        and(
+          eq(financialTransactionAllocation.transactionId, transactionId),
+          eq(financialTransactionAllocation.purchaseId, row.purchaseId),
+          notDeleted(financialTransactionAllocation),
+        ),
+        actor,
+      );
   }
   return inserts;
 }

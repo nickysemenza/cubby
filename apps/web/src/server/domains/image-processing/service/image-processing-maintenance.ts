@@ -6,7 +6,6 @@ import { createImageProcessingSubmission } from "~/server/domains/image-processi
 import {
   ALL_IMAGE_PROCESSING_KINDS,
   imagesMissingCurrentProcessing,
-  pruneExecutorlessWaitingAttempts,
   publishImageProcessingWakeups,
   type ImageProcessingBacklogCursor,
 } from "~/server/domains/image-processing/repo/image-processing-maintenance";
@@ -65,12 +64,10 @@ export async function backfillImageProcessing(
 /** Direct bounded cleanup; Job claims recover interrupted execution without scanners. */
 export async function repairImageProcessingWork(db: Database) {
   const orphans = await cleanupExpiredImageProcessingOrphans(db, 100);
-  const executorless = await pruneExecutorlessWaitingAttempts(db, 500);
   return {
     orphans,
-    executorless,
     // Only deletions shrink their own selection; republished wakeups leave
     // their jobs selectable until the queue lands them.
-    more: orphans >= 100 || executorless >= 500,
+    more: orphans >= 100,
   };
 }

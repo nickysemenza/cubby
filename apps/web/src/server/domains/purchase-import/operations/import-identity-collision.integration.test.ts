@@ -6,7 +6,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { advisoryLockKey } from "~/server/db/advisory-lock";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, withTransaction } from "~/server/db/helpers";
 import {
   entityExternalId,
@@ -22,11 +22,11 @@ import {
 import { listProductMatchRows } from "~/server/domains/product/repo/match/product-match-candidate";
 import { syncProductExternalIds } from "~/server/domains/product/repo/update-helpers";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture,
   createProductIdentityFixture,
   makeProductInput,
+  dollarExpenseColumns,
 } from "~/server/testing/repo.fixtures";
 
 import { lockPartySettlement } from "../repo/retained-settlement";
@@ -212,7 +212,7 @@ describe("purchase import identifier collisions", () => {
 
   // Concurrent imports must neither duplicate spend nor deadlock: a canonical
   // identifier written while an import waits must survive it, and two sources
-  // naming the same Products in opposite order must both commit.
+  // naming the same Products in opposite order must serialize and converge after re-preparation.
   async function reuseScope() {
     const { party, vendor: seller } = await memberImportWorld(
       ctx.db,
@@ -309,7 +309,9 @@ describe("purchase import identifier collisions", () => {
     });
     const [existing] = await getDb(ctx.db).select().from(purchase);
     if (!existing) throw new Error("Imported Purchase missing.");
-    const beforeExpenses = await getDb(ctx.db).select().from(expense);
+    const beforeExpenses = await getDb(ctx.db)
+      .select(dollarExpenseColumns())
+      .from(expense);
     let imported: ReturnType<typeof second.commit> | undefined;
     let changed: Promise<void> | undefined;
     let changeSettled = false;
@@ -369,7 +371,9 @@ describe("purchase import identifier collisions", () => {
       if (imported) await imported;
       if (changed) await changed;
     }
-    expect(await getDb(ctx.db).select().from(expense)).toEqual(beforeExpenses);
+    expect(
+      await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+    ).toEqual(beforeExpenses);
     expect(await getDb(ctx.db).select().from(purchase)).toHaveLength(1);
     expect(await getDb(ctx.db).select().from(importSourceOrder)).toHaveLength(
       2,
@@ -411,12 +415,12 @@ describe("purchase import identifier collisions", () => {
           PromiseSettledResult<Awaited<ReturnType<typeof first.commit>>>[]
         >
       | undefined;
-    let statuses: string[] = [];
+    let results: Awaited<NonNullable<typeof commits>> = [];
     try {
       await withTransaction(ctx.db, async (tx) => {
         await lockPartySettlement(tx, f.party.id);
         commits = Promise.allSettled([first.commit(), second.commit()]);
-        const key = sql`hashtextextended(${advisoryLockKey("purchase-settlement", f.party.id)}, 0)`;
+        const key = sql`hashtextextended('cubby:household-write', 0)`;
         await expect
           .poll(
             () =>
@@ -429,11 +433,32 @@ describe("purchase import identifier collisions", () => {
           .toBe(2);
       });
     } finally {
-      if (commits) statuses = (await commits).map(({ status }) => status);
+      if (commits) results = await commits;
     }
-    expect(statuses).toEqual(["fulfilled", "fulfilled"]);
+    expect(results.map((result) => result.status).sort()).toEqual([
+      "fulfilled",
+      "rejected",
+    ]);
+    expect(
+      results.find((result) => result.status === "rejected"),
+    ).toMatchObject({
+      reason: { message: "Prepared target or evidence changed before commit" },
+    });
+    // The winner created the reviewed target: the other source must prepare
+    // against that accepted Purchase before it can add its evidence.
+    const sourceKey = results[0]?.status === "rejected" ? "first" : "second";
+    await memberImport(ctx.db, ctx.actor, {
+      key: "reprepare-concurrent-source",
+      orders: [
+        await f.order(sourceKey, "SYNTHETIC-REUSE-A", f.copper),
+        await f.order(sourceKey, "SYNTHETIC-REUSE-B", f.blue),
+      ],
+      defaultTrade: "other",
+    });
     expect(await getDb(ctx.db).select().from(purchase)).toHaveLength(2);
-    expect(await getDb(ctx.db).select().from(expense)).toHaveLength(2);
+    expect(
+      await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+    ).toHaveLength(2);
     expect(await getDb(ctx.db).select().from(importSourceOrder)).toHaveLength(
       4,
     );
@@ -445,7 +470,9 @@ describe("purchase import identifier collisions", () => {
     expect(
       await getDb(ctx.db).select().from(sourceOrderObservation),
     ).toHaveLength(4);
-    const lines = await getDb(ctx.db).select().from(expense);
+    const lines = await getDb(ctx.db)
+      .select(dollarExpenseColumns())
+      .from(expense);
     expect(lines.map((row) => row.productId).sort()).toEqual(
       [f.copper.entityId, f.blue.entityId].sort(),
     );

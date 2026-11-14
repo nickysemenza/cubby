@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { historicalDateRangePresets } from "../date-range";
 import { idField, readOnly, timestampField } from "./field-policy";
 import { imageReadSchemas } from "../image-processing";
@@ -36,6 +37,721 @@ const imageSourceValues = ["own", "catalog", "unknown", "screenshot"] as const;
 export const { definition, readSchemas } = defineEntityModel(
   {
     key: "image",
+    edges: [
+      defineEdge({
+        key: "ImageProcessingJob.imageId",
+        from: "imageJob",
+        to: "image",
+        cardinality: "one",
+        inverse: {
+          key: "image.incoming.ImageProcessingJob.imageId",
+          from: "image",
+          to: "imageJob",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "ImageProcessingJob.imageId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "entity",
+          entity: "imageJob",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "metadata",
+          label: "image processing jobs",
+          description:
+            "Durable processing state for this original image; queue delivery is only a wakeup for this record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "deleteRow",
+                effect: "hard-delete",
+                description:
+                  "The original image's durable processing attempts are removed before the original row.",
+              },
+              handler: {
+                module: "~/server/domains/image/repo/image",
+                export: "clearImageEdge",
+                argument: "ImageProcessingJob.imageId",
+              },
+              order: 0,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "SourceOrderObservation.primaryDocumentImageId",
+        from: "row:SourceOrderObservation",
+        to: "image",
+        cardinality: "one",
+        inverse: {
+          key: "image.incoming.SourceOrderObservation.primaryDocumentImageId",
+          from: "image",
+          to: "row:SourceOrderObservation",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "SourceOrderObservation.primaryDocumentImageId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "excluded",
+          reason: "Immutable source extraction history.",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "media",
+          label: "observed primary documents",
+          description:
+            "Optional source media for an immutable extraction; explicit Image deletion clears only this pointer.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "clearFk",
+                effect: "detach",
+                description:
+                  "Explicit Image deletion clears optional media only; extraction, bindings, checksum and captured fingerprint remain immutable.",
+              },
+              handler: {
+                module: "~/server/domains/image/repo/image",
+                export: "clearImageEdge",
+                argument: "SourceOrderObservation.primaryDocumentImageId",
+              },
+              order: 1,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "SourceOrderObservation.screenshotImageId",
+        from: "row:SourceOrderObservation",
+        to: "image",
+        cardinality: "one",
+        inverse: {
+          key: "image.incoming.SourceOrderObservation.screenshotImageId",
+          from: "image",
+          to: "row:SourceOrderObservation",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "SourceOrderObservation.screenshotImageId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "excluded",
+          reason: "Immutable source extraction history.",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "media",
+          label: "observed screenshots",
+          description:
+            "Optional source media for an immutable extraction; explicit Image deletion clears only this pointer.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "clearFk",
+                effect: "detach",
+                description:
+                  "Explicit Image deletion clears optional media only; extraction, bindings, checksum and captured fingerprint remain immutable.",
+              },
+              handler: {
+                module: "~/server/domains/image/repo/image",
+                export: "clearImageEdge",
+                argument: "SourceOrderObservation.screenshotImageId",
+              },
+              order: 2,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "EntityAttachment.imageId",
+        from: "row:EntityAttachment",
+        to: "image",
+        cardinality: "one",
+        inverse: {
+          key: "image.incoming.EntityAttachment.imageId",
+          from: "image",
+          to: "row:EntityAttachment",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "EntityAttachment.imageId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "identity",
+          column: "EntityAttachment.entityId",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "media",
+          label: "attachments",
+          description:
+            "A file attached to an entity: a gallery photo, a document, a cookbook cover, or a vendor logo. Says nothing about ownership.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "deleteRow",
+                effect: "hard-delete",
+                description:
+                  "Every entity's association with the image — gallery photo, document, cookbook cover, or vendor logo — is removed along with the image; the subjects survive.",
+              },
+              handler: {
+                module: "~/server/domains/image/repo/image",
+                export: "clearImageEdge",
+                argument: "EntityAttachment.imageId",
+              },
+              order: 3,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "PhotoRunImage.imageId",
+        from: "row:PhotoRunImage",
+        to: "image",
+        cardinality: "one",
+        inverse: {
+          key: "image.incoming.PhotoRunImage.imageId",
+          from: "image",
+          to: "row:PhotoRunImage",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "PhotoRunImage.imageId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "column",
+          column: "PhotoRunImage.runId",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "history",
+          label: "photo import runs",
+          description:
+            "A Run-owned image work item preserves picker and processing state.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "deleteRow",
+                effect: "hard-delete",
+                description:
+                  "A photo-inventory worklist row cannot outlive its image: a target always names an entity, so the link is never cleared.",
+              },
+              handler: {
+                module: "~/server/domains/image/repo/image",
+                export: "clearImageEdge",
+                argument: "PhotoRunImage.imageId",
+              },
+              order: 4,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "ImageDerivative.imageId",
+        from: "row:ImageDerivative",
+        to: "image",
+        cardinality: "one",
+        inverse: {
+          key: "image.incoming.ImageDerivative.imageId",
+          from: "image",
+          to: "row:ImageDerivative",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "ImageDerivative.imageId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "column",
+          column: "ImageDerivative.imageId",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "media",
+          label: "image derivatives",
+          description:
+            "A transparent representation derived from this original image; it is never a gallery attachment of its own.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "deleteRow",
+                effect: "hard-delete",
+                description:
+                  "Non-gallery derivative records are removed with their original image.",
+              },
+              handler: {
+                module: "~/server/domains/image/repo/image",
+                export: "clearImageEdge",
+                argument: "ImageDerivative.imageId",
+              },
+              order: 5,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "ImportPreparedOrder.primaryDocumentImageId",
+        from: "row:ImportPreparedOrder",
+        to: "image",
+        cardinality: "one",
+        inverse: {
+          key: "image.incoming.ImportPreparedOrder.primaryDocumentImageId",
+          from: "image",
+          to: "row:ImportPreparedOrder",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "ImportPreparedOrder.primaryDocumentImageId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "excluded",
+          reason:
+            "Workflow evidence about entities, not a relationship between them.",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "media",
+          label: "prepared primary documents",
+          description:
+            "The primary source document retained by an immutable prepared import order.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "clearFk",
+                effect: "detach",
+                description:
+                  "Prepared import evidence remains while its deleted primary document link is cleared.",
+              },
+              handler: {
+                module: "~/server/domains/image/repo/image",
+                export: "clearImageEdge",
+                argument: "ImportPreparedOrder.primaryDocumentImageId",
+              },
+              order: 6,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "ImportPreparedOrder.screenshotImageId",
+        from: "row:ImportPreparedOrder",
+        to: "image",
+        cardinality: "one",
+        inverse: {
+          key: "image.incoming.ImportPreparedOrder.screenshotImageId",
+          from: "image",
+          to: "row:ImportPreparedOrder",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "ImportPreparedOrder.screenshotImageId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "excluded",
+          reason:
+            "Workflow evidence about entities, not a relationship between them.",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "media",
+          label: "prepared screenshots",
+          description:
+            "The browser screenshot retained by an immutable prepared import order.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "clearFk",
+                effect: "detach",
+                description:
+                  "Prepared import evidence remains while its deleted screenshot link is cleared.",
+              },
+              handler: {
+                module: "~/server/domains/image/repo/image",
+                export: "clearImageEdge",
+                argument: "ImportPreparedOrder.screenshotImageId",
+              },
+              order: 7,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "OrderMailAttachment.imageId",
+        from: "row:OrderMailAttachment",
+        to: "image",
+        cardinality: "one",
+        inverse: {
+          key: "image.incoming.OrderMailAttachment.imageId",
+          from: "image",
+          to: "row:OrderMailAttachment",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "OrderMailAttachment.imageId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "excluded",
+          reason:
+            "Workflow evidence about entities, not a relationship between them.",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "media",
+          label: "mail attachments",
+          description: "A normalized document captured from an order email.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "clearFk",
+                effect: "detach",
+                description:
+                  "The normalized mail attachment remains while its optional stored image is cleared.",
+              },
+              handler: {
+                module: "~/server/domains/image/repo/image",
+                export: "clearImageEdge",
+                argument: "OrderMailAttachment.imageId",
+              },
+              order: 8,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "ImageSighting.imageId",
+        from: "row:ImageSighting",
+        to: "image",
+        cardinality: "one",
+        inverse: {
+          key: "image.incoming.ImageSighting.imageId",
+          from: "image",
+          to: "row:ImageSighting",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "ImageSighting.imageId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "column",
+          column: "ImageSighting.imageId",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "owned-child",
+          label: "sightings",
+          description:
+            "A report of this image appearing in a member's photo library or cloud asset; meaningless without the original image.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "deleteRow",
+                effect: "hard-delete",
+                description:
+                  "A sighting cannot outlive the image it reports on.",
+              },
+              handler: {
+                module: "~/server/domains/image/repo/image",
+                export: "clearImageEdge",
+                argument: "ImageSighting.imageId",
+              },
+              order: 9,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+    ],
+
     names: { singular: "Image", plural: "Images" },
     route: {
       listColumns: {
@@ -560,8 +1276,18 @@ export const { definition, readSchemas } = defineEntityModel(
             valueOptions: [
               { value: "none", label: "None", color: "neutral-status" },
               { value: "derived", label: "Derived", color: "neutral-status" },
-              { value: "ambiguous", label: "Ambiguous", color: "warning" },
-              { value: "confirmed", label: "Confirmed", color: "positive" },
+              {
+                value: "ambiguous",
+                label: "Ambiguous",
+                stage: "needs_you",
+                color: "warning",
+              },
+              {
+                value: "confirmed",
+                label: "Confirmed",
+                stage: "done",
+                color: "positive",
+              },
             ],
           },
           validation: readOnly(imageCaptureAttribution),
@@ -1139,20 +1865,31 @@ export const { definition, readSchemas } = defineEntityModel(
 
 export default defineEntity(
   definition,
-  (r) => [
-    r
-      .path("device", "many", [
-        { edge: "ImageSighting.imageId", direction: "incoming" },
-        { edge: "ImageSighting.deviceId", direction: "outgoing" },
-      ])
-      .named("sighting-devices", "Sighting devices"),
-    r
-      .path("ledgerParty", "many", [
-        { edge: "ImageSighting.imageId", direction: "incoming" },
-        { edge: "ImageSighting.ledgerPartyId", direction: "outgoing" },
-      ])
-      .named("sighting-members", "Observed by"),
-    r.field("capturedByPartyId").named("captured-by", "Captured by"),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r
+          .path("device", "many", [
+            { edge: "ImageSighting.imageId", direction: "incoming" },
+            { edge: "ImageSighting.deviceId", direction: "outgoing" },
+          ])
+          .named("sighting-devices", "Sighting devices"),
+        "device.image.sighting-devices",
+      ),
+      r.declare(
+        r
+          .path("ledgerParty", "many", [
+            { edge: "ImageSighting.imageId", direction: "incoming" },
+            { edge: "ImageSighting.ledgerPartyId", direction: "outgoing" },
+          ])
+          .named("sighting-members", "Observed by"),
+        "ledgerParty.image.sighting-members",
+      ),
+      r.declare(
+        r.field("capturedByPartyId").named("captured-by", "Captured by"),
+        "ledgerParty.images",
+      ),
+    ],
+  }),
   readSchemas,
 );

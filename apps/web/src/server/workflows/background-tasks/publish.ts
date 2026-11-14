@@ -1,26 +1,54 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import {
   backgroundTaskSchema,
   type BackgroundTaskInput,
   type BackgroundTaskReceipt,
 } from "@cubby/schemas/background-tasks";
-import {
-  BACKGROUND_TASK_MESSAGE_VERSION,
-  type PermitRecovery,
-} from "@cubby/schemas/queue-messages";
+import { BACKGROUND_TASK_MESSAGE_VERSION } from "@cubby/schemas/queue-messages";
 import { retryWithBackoff } from "@cubby/shared/retry";
 import { createLogger } from "@cubby/worker-tracing";
-import { z } from "zod";
 
 import { afterResponse, getBackgroundQueue } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { runAfterCommit } from "~/server/db/helpers/core";
 import { repositoryTransactionDatabase } from "~/server/db/repository-access.boundary";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 
 import type { BackgroundQueueProducer } from "../background-queue-types";
-import { backgroundTaskJobKey } from "./kinds";
 
 const logger = createLogger("jobs");
+type PendingWake = {
+  at: Date;
+  source: string;
+  ring?: boolean;
+  queue?: BackgroundQueueProducer;
+};
+type WakeBatch = { wake: PendingWake | null };
+const pendingWakes = new AsyncLocalStorage<WakeBatch>();
+function enrollWake(state: { wake: PendingWake | null }, request: PendingWake) {
+  const first = state.wake;
+  state.wake =
+    !first || request.at < first.at
+      ? { ...request, ring: request.ring || first?.ring }
+      : { ...first, ring: first.ring || request.ring };
+}
+
+/** One delivered batch produces at most one successor, including recovery deadlines. */
+export async function coalesceBackgroundWakes<T>(
+  work: () => Promise<T>,
+): Promise<T> {
+  if (pendingWakes.getStore()) return work();
+  const pending: WakeBatch = { wake: null };
+  const result = await pendingWakes.run(pending, work);
+  const earliest = pending.wake;
+  if (earliest) {
+    const ring = earliest.ring;
+    if (earliest.at.getTime() <= Date.now() && !ring)
+      await wakeKernel({ source: earliest.source, queue: earliest.queue });
+    else await wakeAt(earliest.at, { source: earliest.source, ring });
+  }
+  return result;
+}
 export interface PublishOptions {
   readonly source: string;
 }
@@ -55,9 +83,14 @@ async function sendWake(
 }
 
 /** Best-effort permit for intent already committed in Postgres. */
-export async function wakeJobs(
+export async function wakeKernel(
   options: PublishOptions & { queue?: BackgroundQueueProducer },
 ) {
+  const pending = pendingWakes.getStore();
+  if (pending) {
+    enrollWake(pending, { at: new Date(), ...options });
+    return;
+  }
   const queue = options.queue ?? getBackgroundQueue();
   if (!queue) return;
   // Only the wake is deferred: callers commit durable intent before getting here.
@@ -90,8 +123,13 @@ const MAX_WAKE_DELAY_SECONDS = 12 * 3_600;
  */
 export async function wakeAt(
   at: Date,
-  options: PublishOptions & { ring?: boolean; recover?: PermitRecovery },
+  options: PublishOptions & { ring?: boolean },
 ) {
+  const pending = pendingWakes.getStore();
+  if (pending) {
+    enrollWake(pending, { at, ...options });
+    return;
+  }
   const delayFromNow = () =>
     Math.max(0, Math.ceil((at.getTime() - Date.now()) / 1000));
   if (delayFromNow() > MAX_WAKE_DELAY_SECONDS) return;
@@ -105,7 +143,6 @@ export async function wakeAt(
           version: BACKGROUND_TASK_MESSAGE_VERSION,
           queueType: "background",
           ...(options.ring ? { ring: true as const } : {}),
-          ...(options.recover ? { recover: options.recover } : {}),
         },
         // A retry still lands when the work is due.
         delaySeconds: delayFromNow(),
@@ -149,15 +186,43 @@ export async function publishBackgroundTasks(
     }
     for (const task of parsed) {
       if (task.kind === "entity-embedding.refresh") continue;
-      await enqueueJob(tx, {
-        key: backgroundTaskJobKey(task),
-        kind: task.kind,
-        input: z.json().parse(JSON.parse(JSON.stringify(task))),
+      if (task.kind === "maintenance.purchase-discovery") {
+        const { purchaseDiscoveryPass } =
+          await import("../purchase-discovery-pass");
+        const { startPass } = await import("~/server/kernel/api");
+        await startPass(tx, purchaseDiscoveryPass, {
+          cursor: { senderAfter: task.senderAfter ?? null },
+        });
+        continue;
+      }
+      if (task.kind === "calendar-feed.mark-dirty") {
+        const { calendarInvalidatePass } =
+          await import("../calendar-invalidate-pass");
+        const { startPass } = await import("~/server/kernel/api");
+        await startPass(tx, calendarInvalidatePass, {
+          key: task.origin,
+          cursor: { origin: task.origin, reason: task.reason },
+        });
+        continue;
+      }
+      const { startPass } = await import("~/server/kernel/api");
+      await startPass(tx, "location.inventory", {
+        key: task.locationId,
         runId: task.runId,
-        invalidate: true,
+        cursor: {
+          locationId: task.locationId,
+          ...(task.runId ? { runId: task.runId } : {}),
+        },
       });
     }
-    await runAfterCommit(tx, () => wakeJobs(options));
+    if (
+      parsed.some(
+        (task) =>
+          task.kind !== "maintenance.purchase-discovery" &&
+          task.kind !== "calendar-feed.mark-dirty",
+      )
+    )
+      await runAfterCommit(tx, () => wakeKernel(options));
   });
   return { count: tasks.length };
 }

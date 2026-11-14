@@ -6,7 +6,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import {
   ENTITY_LINK_KINDS,
   type EntityLinkKind,
-} from "@cubby/schemas/entity-links";
+} from "@cubby/schemas/entity-link-catalog";
 import { type EntityId, parseEntityId } from "@cubby/schemas/identifiers";
 
 import type { Database, DrizzleClient } from "~/server/db";

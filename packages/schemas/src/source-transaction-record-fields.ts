@@ -43,6 +43,3 @@ export const sourceTransactionRecordMatchState = z.enum([
   "superseded",
   "ignored",
 ]);
-export type SourceTransactionRecordMatchState = z.infer<
-  typeof sourceTransactionRecordMatchState
->;

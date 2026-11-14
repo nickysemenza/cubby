@@ -10,14 +10,17 @@ import { taxonomyId } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { setFieldsFixture } from "~/server/ai/fields/fields.fixtures";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, unwrapDb } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
-import { financialTransactionAllocation } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { expenseSpendingCategoryResolutionSql } from "~/server/domains/expense/repo/expense-category-resolution";
+import { updateBankTransactionsWhere } from "~/server/domains/financial-transaction/repo/bank.fixtures";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductIdentityFixture,
   makeProductInput,
@@ -178,9 +181,9 @@ describe("derived field explanations against canonical records", () => {
       parentId: f.category.id,
       spendingCategoryMode: "blocked",
     });
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Product" SET "categoryId"=${blocked.id} WHERE id=${f.product.id}`,
-    );
+    await setFieldsFixture(ctx.db, "product", f.product.id, {
+      categoryId: blocked.id,
+    });
     const explanation = await explainExpenseCategory(f.line);
     expect(fieldValueOf(explanation.envelope)).toBe(f.deliberate.shortcode);
     expect(explanation.resolutionEvidence?.fallbackSource?.entityId).toBe(
@@ -213,8 +216,11 @@ describe("derived field explanations against canonical records", () => {
 
   it("keeps a retained Product reference ineligible for merchant fallback after soft deletion", async () => {
     const f = await categoryContextFixture("food_retail");
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Purchase" SET "spendingCategoryId"=NULL WHERE id=${f.purchase.id}`,
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { spendingCategoryId: null },
+      sql`id=${f.purchase.id}`,
     );
     const live = await explainExpenseCategory(f.line);
     expect(fieldValueOf(live.envelope)).toBe(f.mapped.shortcode);
@@ -234,8 +240,11 @@ describe("derived field explanations against canonical records", () => {
         (row) => row.title === "Vendor default without a Product",
       )?.state,
     ).toEqual({ kind: "skipped", label: "Not applicable to this line" });
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Expense" SET "productId"=NULL WHERE id=${f.line.id}`,
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { productId: null },
+      sql`id=${f.line.id}`,
     );
     const absent = await explainExpenseCategory(f.line);
     expect(fieldValueOf(absent.envelope)).toBe(f.contextual.shortcode);
@@ -255,7 +264,7 @@ describe("derived field explanations against canonical records", () => {
       name: "Synthetic unresolved receipt role",
       lineKind: "unclassified",
       date: "2026-09-01",
-      cost: 1,
+      cost: 100n,
       costType: "materials",
       purchaseId: f.purchase.id,
     });
@@ -298,7 +307,7 @@ describe("derived field explanations against canonical records", () => {
       purchaseId: purchase.id,
       lineKind: "principal",
       date: "2026-09-01",
-      cost: 30,
+      cost: 3000n,
       trade: "building",
       costType: "materials",
     });
@@ -307,7 +316,7 @@ describe("derived field explanations against canonical records", () => {
       purchaseId: purchase.id,
       lineKind: "principal",
       date: "2026-09-01",
-      cost: 10,
+      cost: 1000n,
       trade: "plumbing",
       costType: "services",
     });
@@ -316,7 +325,7 @@ describe("derived field explanations against canonical records", () => {
       purchaseId: purchase.id,
       lineKind: "shipping",
       date: "2026-09-01",
-      cost: 8,
+      cost: 800n,
       costType: "materials",
     });
     const explanation = await explainField(context(), {
@@ -400,7 +409,7 @@ describe("derived field explanations against canonical records", () => {
     await insertWithShortcode(ctx.db, "expense", {
       name: "Synthetic reimbursed booking",
       lineKind: "principal",
-      cost: -10,
+      cost: -1000n,
       date: "2026-09-01",
       costType: "materials",
       trade: "other",
@@ -486,13 +495,11 @@ describe("derived field explanations against canonical records", () => {
       id: purchaseRecord.entityId,
       shortcode: purchaseRecord.output.id,
     };
-    await getDb(ctx.db)
-      .insert(financialTransactionAllocation)
-      .values({
-        transactionId: transaction.id,
-        purchaseId: purchase.id,
-        amountMinor: moneyToMinor(1),
-      });
+    await insertPurchaseEventRows(ctx.db, "FinancialTransactionAllocation", {
+      transactionId: transaction.id,
+      purchaseId: purchase.id,
+      amountMinor: moneyToMinor(1),
+    });
     const single = await explain();
     expect(single.envelope.result).toMatchObject({
       kind: "live",
@@ -522,13 +529,11 @@ describe("derived field explanations against canonical records", () => {
       id: secondRecord.entityId,
       shortcode: secondRecord.output.id,
     };
-    await getDb(ctx.db)
-      .insert(financialTransactionAllocation)
-      .values({
-        transactionId: transaction.id,
-        purchaseId: second.id,
-        amountMinor: moneyToMinor(1),
-      });
+    await insertPurchaseEventRows(ctx.db, "FinancialTransactionAllocation", {
+      transactionId: transaction.id,
+      purchaseId: second.id,
+      amountMinor: moneyToMinor(1),
+    });
     const multiple = await explain();
     expect(multiple.envelope.result).toMatchObject({
       kind: "live",
@@ -546,8 +551,10 @@ describe("derived field explanations against canonical records", () => {
       trailing: "Expected",
       state: { kind: "done" },
     });
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "FinancialTransaction" SET "itemizationExpectation"=${itemizationExpectation.enum.unknown} WHERE id=${transaction.id}`,
+    await updateBankTransactionsWhere(
+      ctx.db,
+      { itemizationExpectation: itemizationExpectation.enum.unknown },
+      sql`id=${transaction.id}`,
     );
     const overridden = await explain();
     expect(overridden.envelope).toMatchObject({
@@ -572,7 +579,7 @@ describe("derived field explanations against canonical records", () => {
     await insertWithShortcode(ctx.db, "expense", {
       name: "Synthetic linked policy reimbursement",
       lineKind: "principal",
-      cost: -2,
+      cost: -200n,
       date: "2026-09-01",
       costType: "materials",
       economicRole: "reimbursement",

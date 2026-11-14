@@ -1,4 +1,5 @@
 import type { EntityFieldModel } from "./entity-fields";
+import type { KernelActor, KernelStage } from "./kernel/stage";
 import { z } from "zod";
 import {
   fieldDecisionOf,
@@ -17,10 +18,21 @@ export function fieldSetNoneLabel(policy: NonNullable<Policy>): string {
   return `Set to ${policy.labels?.none ?? "none"}`;
 }
 
-/** Twin of Swift `FieldEnvelope.missingLabel`. */
+/** Twin of Swift `FieldEnvelope.missingLabel`: a value Cubby has not worked out yet. */
 export function fieldMissingLabel(): string {
-  return "Updating…";
+  return FIELD_WAITING_LABEL;
 }
+
+/** The one missing-value phrase: a computed value Cubby has not published yet. */
+export const FIELD_WAITING_LABEL = "Waiting for Cubby";
+/** Appended to a published value whose inputs changed since it was worked out. */
+export const FIELD_STALE_LABEL = "out of date";
+/** The one reset action: release the field so Cubby or inheritance decides it. */
+export const FIELD_RESET_LABEL = "Let Cubby decide";
+/** The own level of a field whose intent is to inherit: Cubby or inheritance decides it. */
+export const FIELD_RELEASED_LABEL = "Cubby decides this";
+/** The veto on a value Cubby set. */
+export const FIELD_VETO_LABEL = "Wrong, clear it";
 
 /** Twin of Swift `FieldEnvelope.noneLabel(field:)`. */
 export function fieldNoneLabel(labels?: Labels | null): string {
@@ -106,7 +118,7 @@ export function fieldAssignmentActions(
   )
     actions.push({
       kind: "use-inherited",
-      label: "Use inherited",
+      label: FIELD_RESET_LABEL,
       patch: policy.reset,
     });
   const value = fieldValueOf(envelope);
@@ -123,4 +135,356 @@ export function fieldAssignmentActions(
       patch: policy.none,
     });
   return actions;
+}
+
+const KERNEL_STAGE_LABEL = {
+  ended: "Ended",
+  stuck: "Stuck",
+  working: "Working",
+  needs_you: "Needs you",
+  waiting: "Waiting",
+  done: "Done",
+} as const satisfies Record<KernelStage, string>;
+
+/** @public Member-facing stage name for the machinery panel; no client derives or humanizes a stage. */
+export function kernelStageLabel(stage: KernelStage): string {
+  return KERNEL_STAGE_LABEL[stage];
+}
+
+/** @public Member-facing actor name for the machinery panel; a source actor carries its own display name. */
+export function kernelActorLabel(actor: KernelActor): string {
+  switch (actor) {
+    case "you":
+      return "you";
+    case "cubby":
+      return "Cubby";
+    case "agent":
+      return "an agent";
+    case "time":
+      return "time";
+    default:
+      return actor.slice("source:".length);
+  }
+}
+
+/**
+ * @public The machinery panel's stage line.
+ *
+ * The stage line: `{Stage} · {waiting|working} for {input} from {actor}`,
+ * then queue position and ETA when the actor is a queue or time.
+ */
+export function kernelStageLine(line: {
+  stage: KernelStage;
+  input: string | null;
+  actor: KernelActor | null;
+  queue?: { position: number; of: number; eta: string | null } | null;
+}): string {
+  const stage = kernelStageLabel(line.stage);
+  if (!line.input || !line.actor) return stage;
+  const mode = line.stage === "working" ? "working" : "waiting";
+  const base = `${stage} · ${mode} for ${line.input} from ${kernelActorLabel(line.actor)}`;
+  if (!line.queue) return base;
+  const position = `${line.queue.position} of ${line.queue.of} in line`;
+  return line.queue.eta
+    ? `${base} · ${position} · expected by ${line.queue.eta}`
+    : `${base} · ${position}`;
+}
+
+/** A machinery panel row's status: always a visible word, never a colour alone. */
+export type MachineryRowStatus =
+  | "used"
+  | "skipped"
+  | "gap"
+  | "blocked"
+  | "failed";
+
+const MACHINERY_ROW_STATUS_LABEL = {
+  used: "Used",
+  skipped: "Skipped",
+  gap: "Gap",
+  blocked: "Blocked",
+  failed: "Failed",
+} as const satisfies Record<MachineryRowStatus, string>;
+
+/** @public Twin of Swift `MachineryRow.statusLabel`. */
+export function machineryRowStatusLabel(status: MachineryRowStatus): string {
+  return MACHINERY_ROW_STATUS_LABEL[status];
+}
+
+/**
+ * @public An input's row status: a decided input was used; an answer with a
+ * raw error and no model failed.
+ */
+export function machineryInputRowStatus(input: {
+  status: "decided" | "skipped" | "gap" | "blocked";
+  answer: { rawError: string | null; model: string | null } | null;
+}): MachineryRowStatus {
+  if (input.status === "decided") return "used";
+  if (input.answer?.rawError && input.answer.model === null) return "failed";
+  return input.status;
+}
+
+const MACHINERY_INPUT_KIND_LABEL = {
+  evidence: "Evidence",
+  answer: "Answer",
+  decision: "Decision",
+  default: "Default",
+} as const;
+
+/** @public Twin of Swift `MachineryRow.kindLabel`. */
+export function machineryInputKindLabel(
+  kind: keyof typeof MACHINERY_INPUT_KIND_LABEL,
+): string {
+  return MACHINERY_INPUT_KIND_LABEL[kind];
+}
+
+const DECISION_KIND_LABEL = {
+  set: "Set",
+  none: "Set to none",
+  release: "Released",
+  veto: "Vetoed",
+  same: "Same record",
+  distinct: "Different records",
+  reject: "Rejected",
+} as const;
+const DECISION_CHANNEL_LABEL = {
+  assignment: "Assignment",
+  veto: "Veto",
+  identity: "Identity",
+  rejection: "Rejection",
+} as const;
+
+/** @public Twin of Swift `MachineryDecision.kindLabel`. */
+export function decisionKindLabel(
+  kind: keyof typeof DECISION_KIND_LABEL,
+): string {
+  return DECISION_KIND_LABEL[kind];
+}
+
+/** @public Twin of Swift `MachineryDecision.channelLabel`. */
+export function decisionChannelLabel(
+  channel: keyof typeof DECISION_CHANNEL_LABEL,
+): string {
+  return DECISION_CHANNEL_LABEL[channel];
+}
+
+const plural = (n: number, one: string, many: string) =>
+  `${n} ${n === 1 ? one : many}`;
+
+/** @public Micro-dollars as the panel's cost: "$0.004", "$1.20", "$0". */
+export function machineryCostLabel(micros: number): string {
+  if (micros === 0) return "$0";
+  const dollars = micros / 1_000_000;
+  if (dollars >= 1) return `$${dollars.toFixed(2)}`;
+  return `$${Number(dollars.toPrecision(2))}`;
+}
+
+/**
+ * @public The detail header's count line, which opens the panel:
+ * "3 inputs · 2 asks · 1 decision · $0.004". Evidence and defaults are
+ * inputs, answers are asks; a capped collection adds "+".
+ */
+export function machineryCountLine(read: {
+  inputs: {
+    items: readonly { kind: "evidence" | "answer" | "decision" | "default" }[];
+    shown: number;
+    total: number;
+  };
+  totalCostMicros: number;
+}): string {
+  const count = (kinds: readonly string[]) =>
+    read.inputs.items.filter((input) => kinds.includes(input.kind)).length;
+  const more = read.inputs.total > read.inputs.shown ? "+" : "";
+  return [
+    plural(count(["evidence", "default"]), "input", "inputs") + more,
+    plural(count(["answer"]), "ask", "asks"),
+    plural(count(["decision"]), "decision", "decisions"),
+    machineryCostLabel(read.totalCostMicros),
+  ].join(" · ");
+}
+
+/** @public The first gap as one sentence: "Waiting for a receipt from Amazon." */
+export function machineryGapSentence(gap: {
+  input: string;
+  actor: KernelActor;
+}): string {
+  return `Waiting for ${gap.input} from ${kernelActorLabel(gap.actor)}.`;
+}
+
+/** @public A queue's estimate, or "ETA unknown" with too little history. */
+export function machineryEtaLabel(formattedEta: string | null): string {
+  return formattedEta === null ? "ETA unknown" : `expected by ${formattedEta}`;
+}
+
+/** @public "Attempt 2 of 5", with the next try when one is scheduled. */
+export function machineryAttemptsLabel(
+  attempts: { n: number; max: number },
+  formattedNextAt: string | null,
+): string {
+  const base = `Attempt ${attempts.n} of ${attempts.max}`;
+  return formattedNextAt ? `${base} · next try ${formattedNextAt}` : base;
+}
+
+/** @public "Showing 50 of 120" when a collection was capped; null when complete. */
+export function machineryCoverageLabel(collection: {
+  shown: number;
+  total: number;
+}): string | null {
+  return collection.total > collection.shown
+    ? `Showing ${collection.shown} of ${collection.total}`
+    : null;
+}
+
+/**
+ * @public A paid call Cubby will not resend on its own. Saying it was not
+ * sent lets Cubby send it again, which is charged again if it did go through.
+ */
+export const MACHINERY_UNKNOWN_CALL_NOTE =
+  "Cubby won't send this paid call again on its own. If you say it was not sent, Cubby may send it again and you may be charged again.";
+/** @public After a decision: the scope reruns before the value changes. */
+export const MACHINERY_DECIDED_NOTE =
+  "Recorded. Cubby reworks this next; the stage shows its progress.";
+
+/** @public Approval reports what applied and what still requires another attempt. */
+export function machineryApprovalNote(result: {
+  applied: number;
+  stale: number;
+  busy: number;
+  missing: number;
+}): string {
+  return [
+    result.applied
+      ? `${plural(result.applied, "change applied", "changes applied")}.`
+      : null,
+    result.stale
+      ? `${plural(result.stale, "proposal changed", "proposals changed")}. Review the current difference and approve again.`
+      : null,
+    result.busy
+      ? `${plural(result.busy, "record is", "records are")} being worked on. Try approval again.`
+      : null,
+    result.missing
+      ? `${plural(result.missing, "record has", "records have")} no current proposal. Refresh the machinery.`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+/** @public The reset preview's caveat when it still needs answers. */
+export function machineryResetPendingNote(
+  pendingAnswers: number,
+): string | null {
+  if (pendingAnswers === 0) return null;
+  return `after ${plural(pendingAnswers, "more answer", "more answers")}`;
+}
+
+/** @public A merged record's notice: "PUR-2345 was merged into this record." */
+export function absorbedRecordNotice(absorbed: string): string {
+  return `${absorbed} was merged into this record.`;
+}
+/** @public The header's second line when nothing is owed. */
+export const MACHINERY_NO_GAP_LABEL = "Nothing is waiting on this.";
+/** @public The empty panel. */
+export const MACHINERY_EMPTY_LABEL = "Cubby has recorded no work on this yet.";
+
+/**
+ * @public A field's deciding level in the field scope's shared words: "From
+ * {source}", "Set by {you / name}", "Set to none by {actor}", "Worked out by
+ * Cubby", "Waiting for {input} from {actor}".
+ */
+export function fieldDecidingLine(
+  level:
+    | { kind: "source"; source: string }
+    | { kind: "set"; by: string }
+    | { kind: "none"; by: string }
+    | { kind: "cubby" }
+    | { kind: "waiting"; input: string; actor: KernelActor },
+): string {
+  switch (level.kind) {
+    case "source":
+      return `From ${level.source}`;
+    case "set":
+      return `Set by ${level.by}`;
+    case "none":
+      return `Set to none by ${level.by}`;
+    case "cubby":
+      return "Worked out by Cubby";
+    case "waiting":
+      return `Waiting for ${level.input} from ${kernelActorLabel(level.actor)}`;
+  }
+}
+
+const MACHINERY_LIST_COLUMN_LABEL = {
+  stage: "Stage",
+  actor: "Actor",
+  gap: "Gap",
+  attempts: "Attempts",
+  cost: "Work cost",
+  eta: "ETA",
+} as const;
+
+/** @public The declared machinery list columns' headers. */
+export function machineryColumnLabel(
+  column: keyof typeof MACHINERY_LIST_COLUMN_LABEL,
+): string {
+  return MACHINERY_LIST_COLUMN_LABEL[column];
+}
+
+/** Labels for the structured facts a field explanation may carry. Unknown keys stay diagnostic code. */
+export function explanationFactLabel(key: string): string | null {
+  const labels = {
+    value: "Value",
+    unit: "Unit",
+    amount: "Amount",
+    total: "Total",
+    count: "Count",
+    start: "Start",
+    end: "End",
+    kind: "Kind",
+    source: "Source",
+    reason: "Reason",
+    confidence: "Confidence",
+    status: "Status",
+    score: "Score",
+    name: "Name",
+    quantity: "Quantity",
+    currency: "Currency",
+    date: "Date",
+    cost: "Cost",
+    inherited: "Inherited",
+    allocated: "Allocated",
+    shares: "Shares",
+  };
+  return Object.entries(labels).find(([value]) => value === key)?.[1] ?? null;
+}
+
+/** Member-facing quality outcomes; exceptions remain distinct in filters. */
+export function dataQualityLabel(status: string): string {
+  switch (status) {
+    case "complete":
+      return "Done";
+    case "complete_with_exceptions":
+      return "Done with exceptions";
+    case "needs_data":
+      return "Needs you";
+    case "defect":
+      return "Stuck";
+    case "not_assessed":
+      return "Waiting";
+    default:
+      return `Unsupported quality: ${status}`;
+  }
+}
+
+/** Twin of Swift FieldEnvelopePresentation.gapStatus. */
+export function machineryGapStatus(gap: {
+  askState?: string | null;
+  lastError: { class: string; raw: string } | null;
+  attempts: { n: number; max: number } | null;
+}): MachineryRowStatus {
+  return gap.askState === "unknown"
+    ? "blocked"
+    : gap.lastError && gap.attempts && gap.attempts.n >= gap.attempts.max
+      ? "failed"
+      : "gap";
 }

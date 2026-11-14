@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { galleryImagesField, galleryWriteFields } from "./image-fields";
 import { idField, readOnly, timestampField } from "./field-policy";
 import {
@@ -31,6 +32,286 @@ const SUBTASKS = { table: "Task", from: "parentTaskId", to: "id" } as const;
 
 export const { definition, readSchemas } = defineEntityModel({
   key: "task",
+  edges: [
+    defineEdge({
+      key: "Task.parentTaskId",
+      from: "task",
+      to: "task",
+      cardinality: "one",
+      inverse: {
+        key: "task.incoming.Task.parentTaskId",
+        from: "task",
+        to: "task",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "Task.parentTaskId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "task",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "hierarchy",
+        label: "sub-tasks",
+        description: "A child task nested under this one.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "cascade-live-child",
+              effect: "soft-delete",
+              description:
+                "A deleted task's live subtasks are soft-deleted alongside it — they're checklist items with no independent existence.",
+            },
+            handler: null,
+            expand: {
+              module: "~/server/domains/task/repo/crud",
+              export: "expandTaskRemoval",
+            },
+            order: 0,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "Planting.taskId",
+      from: "planting",
+      to: "task",
+      cardinality: "one",
+      inverse: {
+        key: "task.incoming.Planting.taskId",
+        from: "task",
+        to: "planting",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "Planting.taskId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "planting",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "plantings",
+        description:
+          "A planting retains the task whose completion produced it.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "clear-live-fk-with-audit",
+              effect: "detach",
+              description: "A planting outlives the task that produced it.",
+            },
+            handler: null,
+            order: 1,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "task/EntityAttachment.entityId",
+      from: "row:EntityAttachment",
+      to: "task",
+      cardinality: "one",
+      inverse: {
+        key: "task.incoming.EntityAttachment.entityId",
+        from: "task",
+        to: "row:EntityAttachment",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "EntityAttachment.entityId",
+        constrained: true,
+        partition: {
+          column: "EntityAttachment.entityKind",
+          value: "task",
+        },
+      },
+      ownership: {
+        kind: "identity",
+        column: "EntityAttachment.entityId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "media",
+        label: "task photos",
+        description: "A photo attached to this task.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "soft-delete-association",
+              effect: "soft-delete",
+              description:
+                "Image associations are soft-deleted with the task, and each file is\n      deleted too unless something else still references it.",
+            },
+            handler: null,
+            order: 2,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "task/EntityExternalId.entityId",
+      from: "row:EntityExternalId",
+      to: "task",
+      cardinality: "one",
+      inverse: {
+        key: "task.incoming.EntityExternalId.entityId",
+        from: "task",
+        to: "row:EntityExternalId",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "EntityExternalId.entityId",
+        constrained: true,
+        partition: {
+          column: "EntityExternalId.entityKind",
+          value: "task",
+        },
+      },
+      ownership: {
+        kind: "identity",
+        column: "EntityExternalId.entityId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "metadata",
+        label: "external ids",
+        description:
+          "An identifier another system gives this record (an ASIN, a barcode, a settlement reference, a Notion page); says nothing about ownership or spend.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "soft-delete-metadata",
+              effect: "soft-delete",
+              description:
+                "Outside identifiers (a Notion page, a Drive folder) are soft-deleted with the record, releasing them to be recorded again.",
+            },
+            handler: null,
+            order: 3,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+  ],
+
   names: { singular: "Task", plural: "Tasks" },
   route: {
     listColumns: {
@@ -1789,32 +2070,52 @@ export const { definition, readSchemas } = defineEntityModel({
 
 export default defineEntity(
   definition,
-  (r) => [
-    r.field("assigneeId").named("assignee", "Assignee"),
-    r
-      .path("task", "many", [
-        { edge: "Task.parentTaskId", direction: "incoming" },
-      ])
-      .named("subtasks", "Subtasks"),
-    r.field("projectId").named("project", "Project"),
-    r.field("subjectProductId").named("subject", "Subject product"),
-    r.field("parentTaskId").named("parent", "Parent task", {
-      view: {
-        columnGroup: "Dependencies",
-        order: "task",
-        filterPrefix: "parentTask",
-      },
-    }),
-    r.link("taskDependency", "outgoing").named("blocked-by", "Blocked by", {
-      view: {
-        key: "blockedBy",
-        columnGroup: "Dependencies",
-        order: "task",
-        filterPrefix: "blockedByTask",
-        defaultVisible: true,
-      },
-    }),
-    r.images(),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r.field("assigneeId").named("assignee", "Assignee"),
+        "ledgerParty.tasks",
+      ),
+      r.declare(
+        r
+          .path("task", "many", [
+            { edge: "Task.parentTaskId", direction: "incoming" },
+          ])
+          .named("subtasks", "Subtasks"),
+        "task.parent",
+      ),
+      r.declare(
+        r.field("projectId").named("project", "Project"),
+        "project.tasks",
+      ),
+      r.declare(
+        r.field("subjectProductId").named("subject", "Subject product"),
+        "product.tasks",
+      ),
+      r.declare(
+        r.field("parentTaskId").named("parent", "Parent task", {
+          view: {
+            columnGroup: "Dependencies",
+            order: "task",
+            filterPrefix: "parentTask",
+          },
+        }),
+        "task.subtasks",
+      ),
+      r.declare(
+        r.link("taskDependency", "outgoing").named("blocked-by", "Blocked by", {
+          view: {
+            key: "blockedBy",
+            columnGroup: "Dependencies",
+            order: "task",
+            filterPrefix: "blockedByTask",
+            defaultVisible: true,
+          },
+        }),
+        "task.task.blocked-by",
+      ),
+      r.declare(r.images(), "image.task.images"),
+    ],
+  }),
   readSchemas,
 );

@@ -2,6 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, insertAndReturn } from "~/server/db/helpers";
 import { mealRecipe, meal as mealTable } from "~/server/db/schema";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
@@ -12,7 +13,6 @@ import {
 import { saveMealFood } from "~/server/domains/meal/repo/food";
 import { saveMealRecipePreparation } from "~/server/domains/meal/repo/portions";
 import { loadRelatedPreviews } from "~/server/generic/entity-links/repo/related-view";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture as createProduct,
   makeProductInput,

@@ -44,7 +44,7 @@ export async function deriveToolTrades(
         productIds ? inArray(expense.productId, productIds) : undefined,
         eq(expense.lineKind, "principal"),
         actualExpense(),
-        gt(expense.cost, 0),
+        gt(expense.cost, 0n),
         notDeleted(expense),
       ),
     )

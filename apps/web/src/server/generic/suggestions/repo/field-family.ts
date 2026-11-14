@@ -1,183 +1,99 @@
-import { HIGH_CONFIDENCE_PROBABILITY } from "@cubby/schemas/ai-evaluation";
-import { entityFieldByKey } from "@cubby/schemas/entity-fields";
-import { suggestApplyPolicy } from "@cubby/schemas/field-suggestion-policy";
-import { suggestionJudgments } from "@cubby/schemas/suggestion";
-import {
-  fieldSuggestionRow,
-  type SuggestionSummaryPart,
-} from "@cubby/schemas/suggestion-list";
+import { fieldSuggestionRow } from "@cubby/schemas/suggestion-list";
 import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
 import { sql } from "drizzle-orm";
 
-import { matchFieldRules } from "~/server/generic/suggestions/repo/automatic-policy";
-import { fieldAfterApply } from "~/server/generic/suggestions/repo/field-after-apply";
-import { cubbyHeldFields } from "~/server/generic/suggestions/repo/field-authority";
-import { type SuggestionFamilyDeclaration } from "~/server/generic/suggestions/repo/suggestion-family-declaration";
 import {
-  stamps,
-  verbs,
-  qualityImpact,
-  keyBase,
-  cleanAcceptance,
-  fieldChecks,
-  fieldStrength,
-  shortcodeEntity,
-  fieldKind,
-} from "~/server/generic/suggestions/repo/suggestion-presentation";
-import {
-  fieldRecords,
-  referenceFields,
-  declareAffectedRecords,
-} from "~/server/generic/suggestions/repo/suggestion-record-discovery";
-import {
-  canAutomaticallyFillField,
-  fieldSuggestionKeys,
   readFieldSuggestions,
+  readFieldDecisions,
   suggestionCounts,
-  acceptSuggestion,
-  applyFieldCorrection,
-} from "~/server/generic/suggestions/repo/suggestion-review";
+} from "./field-gaps";
+import type { SuggestionFamilyDeclaration } from "./suggestion-family-declaration";
+import { keyBase, verbs } from "./suggestion-presentation";
+import { declareAffectedRecords } from "./suggestion-record-discovery";
 
+/** Read presentation only: field actions are kernel Decisions. */
 export const fieldFamily: SuggestionFamilyDeclaration<"field"> = {
   family: "field",
-  applicationKind: "saved_field",
-  applicationError: "Saved-field receipts require a field Suggestion",
-  supportsDraft: true,
-  fieldHistory: true,
-  afterApply: fieldAfterApply,
-  automatic: {
-    requiresStamp: false,
-    authority: "automatic",
-    canApply: (db, context, id) => canAutomaticallyFillField(db, context, id),
-    match: (row) => {
-      const entity = shortcodeEntity.safeParse(row.entity);
-      return entity.success
-        ? matchFieldRules({
-            entity: entity.data,
-            field: row.field,
-            kind: row.kind,
-            confidence: row.confidence,
-            model: row.model,
-          })
-        : [];
-    },
-  },
+  ...suggestionReviewFamilies.field,
   keys: async (db, query) => {
-    const { filters } = query;
-    const rows = await fieldSuggestionKeys(db, {
-      status: filters.status,
-      runId: query.filters.runId,
-      suggestionIds: query.suggestionIds,
-    });
-    // Rows an Automatic rule will apply, and (by default) plain guesses, are
-    // dropped before paging so totals count exactly what a page can return.
-    const listed = rows.filter(
-      (row) => filters.status !== "pending" || row.automaticRule === null,
-    );
-    // Cubby revising a value it holds is not a Disagreement. The same
-    // authority owner as the gate decides; a kept value is a person's.
-    const cubbyHeld = await cubbyHeldFields(
-      db,
-      listed.flatMap((row) =>
-        row.kind === "correction" &&
-        row.recordId !== null &&
-        row.confidence >= HIGH_CONFIDENCE_PROBABILITY &&
-        !row.answered
-          ? [
-              {
-                id: row.id,
-                entity: shortcodeEntity.parse(row.entity),
-                recordId: String(row.recordId),
-                field: row.field,
-              },
-            ]
-          : [],
-      ),
-    );
-    return listed.flatMap((row) => {
-      const entity = shortcodeEntity.parse(row.entity);
-      const kind = fieldKind.parse(row.kind);
-      const strength = fieldStrength(row.confidence);
-      const confident = row.confidence >= HIGH_CONFIDENCE_PROBABILITY;
-      // What needs a person: Cubby disagreeing with a person's value, or a
-      // confident answer for a field only a member applies. Every other
-      // pending answer is a guess the field's picker offers.
-      const disposition =
-        kind === "correction" &&
-        confident &&
-        !row.answered &&
-        !cubbyHeld.has(row.id)
-          ? "disagreement"
-          : confident &&
-              // Removals (prune) never apply automatically, like review fields.
-              (suggestApplyPolicy(entity, row.field) === "review" ||
-                entityFieldByKey(entity, row.field)?.control?.suggest?.mode ===
-                  "prune")
-            ? "needs_you"
-            : "guess";
-      const key = {
-        family: "field" as const,
-        suggestionId: row.id,
-        status: filters.status,
-        matchedRules: stamps.parse(row.matchedRules),
-        automaticRule: row.automaticRule,
-        fingerprint: row.fingerprint,
-        strength,
-        clean: false,
-        impact:
-          kind === "addition"
-            ? (fieldChecks.get(`${entity}.${row.field}`) ?? []).map(
-                qualityImpact,
-              )
-            : [],
-        createdAt: row.createdAt,
-        columns: {
-          entity,
-          field: row.field,
-          kind,
-          confidence: row.confidence,
-          disposition,
-        },
-      };
-      if (
-        filters.status === "pending" &&
-        filters.disposition === undefined &&
-        disposition === "guess"
+    const rows =
+      query.filters.status === "pending"
+        ? await readFieldSuggestions(
+            db,
+            query.suggestionIds,
+            query.filters.runId,
+          )
+        : await readFieldDecisions(
+            db,
+            query.filters.status,
+            query.suggestionIds,
+          );
+    return rows
+      .filter(
+        (row) =>
+          (!query.filters.recordEntity ||
+            row.entity === query.filters.recordEntity) &&
+          (!query.records ||
+            query.records.some((record) => record.code === row.recordId)),
       )
-        return [];
-      return [key];
-    });
+      .map((row) => ({
+        family: "field",
+        suggestionId: row.id,
+        status: query.filters.status,
+        fingerprint: row.id,
+        strength: "weak",
+        clean: false,
+        impact: [],
+        createdAt: new Date(row.createdAt),
+        columns: {
+          entity: row.entity,
+          field: row.field,
+          kind: row.kind,
+          confidence: row.confidence,
+          disposition: "needs_you",
+        },
+        matchedRules: [],
+        automaticRule: null,
+      }));
   },
   rows: async (db, keys) => {
-    const rows = await readFieldSuggestions(
-      db,
-      keys.map((key) => key.suggestionId),
-    );
-    const byId = new Map(keys.map((key) => [key.suggestionId, key]));
+    const rows = [
+      ...(await readFieldSuggestions(
+        db,
+        keys.map((key) => key.suggestionId),
+      )),
+      ...(await readFieldDecisions(
+        db,
+        "applied",
+        keys.map((key) => key.suggestionId),
+      )),
+      ...(await readFieldDecisions(
+        db,
+        "rejected",
+        keys.map((key) => key.suggestionId),
+      )),
+    ];
     return new Map(
       rows.flatMap((row) => {
-        const key = byId.get(row.suggestionId);
-        if (!key) return [];
-        const summary: SuggestionSummaryPart[] = [
-          { kind: "field", entity: row.entity, field: row.field },
-          ...(row.kind === "correction"
-            ? [{ kind: "value" as const, value: row.currentValue }]
-            : []),
-          { kind: "value", value: row.suggestedValue },
-        ];
-        return [
-          [
-            row.suggestionId,
-            fieldSuggestionRow.parse({
-              ...keyBase(key),
-              family: "field",
-              record: { entity: row.entity, id: row.recordId },
-              summary,
-              actions: verbs("accept", "correct", "reject", "dismiss"),
-              evidence: row,
-            }),
-          ],
-        ];
+        const key = keys.find((key) => key.suggestionId === row.id);
+        return key
+          ? [
+              [
+                row.id,
+                fieldSuggestionRow.parse({
+                  ...keyBase(key),
+                  family: "field",
+                  record: { entity: row.entity, id: row.recordId },
+                  summary: [
+                    { kind: "field", entity: row.entity, field: row.field },
+                    { kind: "value", value: row.suggestedValue },
+                  ],
+                  actions: verbs("accept", "correct", "reject"),
+                  evidence: row,
+                }),
+              ],
+            ]
+          : [];
       }),
     );
   },
@@ -186,56 +102,19 @@ export const fieldFamily: SuggestionFamilyDeclaration<"field"> = {
       runId: filters.runId,
       entity: filters.recordEntity,
     });
-    const sum = (key: "applied" | "rejected" | "superseded" | "resolved") =>
-      fields.reduce((total, row) => total + row[key], 0);
     return {
-      applied: sum("applied"),
-      rejected: sum("rejected"),
-      superseded: sum("superseded"),
-      resolved: sum("resolved"),
+      applied: fields.reduce((sum, row) => sum + row.applied, 0),
+      rejected: fields.reduce((sum, row) => sum + row.rejected, 0),
+      superseded: 0,
+      resolved: 0,
       fields,
     };
   },
-  acceptAsIs: cleanAcceptance,
-  ...suggestionReviewFamilies.field,
+  acceptAsIs: () => null,
   ...declareAffectedRecords({
-    roles: ["subject", "current", "proposed"],
-    forward: fieldRecords,
-    references: [
-      { kind: "primary" },
-      ...referenceFields.flatMap(({ entity, field, target }) =>
-        (["suggestedValue", "currentValue"] as const).map((column) => ({
-          kind: "elements" as const,
-          at: { column },
-          entity: target,
-          scalar: true,
-          guard: { entity, field },
-        })),
-      ),
-    ],
+    roles: ["subject"],
+    forward: () => sql`'[]'::jsonb`,
+    references: [],
   }),
-  actionable: sql`true`,
-  summarize: (value: unknown) =>
-    `Set field to ${JSON.stringify(suggestionJudgments.field.parse(value).value)}`,
-  apply: async (db, context, state, input, automatic) => {
-    // The automatic mode keeps acceptSuggestion's apply-policy refusal.
-    if (input.verdict === "correct" && !input.correction.present)
-      await acceptSuggestion(
-        db,
-        context,
-        { id: state.id },
-        automatic
-          ? { mode: "automatic", confidence: state.confidence }
-          : undefined,
-      );
-    else if (input.correction.present)
-      await applyFieldCorrection(db, context, {
-        id: state.id,
-        correctValue: input.correction.value,
-      });
-    else
-      throw new Error(
-        "Applying field Feedback requires acceptance or a correction",
-      );
-  },
+  actionable: sql`false`,
 };

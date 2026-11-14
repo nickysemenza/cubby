@@ -1,16 +1,18 @@
 import { financialTransactionFiltersSchema } from "@cubby/schemas/financial-transaction";
 import { spendingCategorySummarySchema } from "@cubby/schemas/spending-classification";
+import { nullableWholeCentToMinor } from "@cubby/shared";
 import { createRepoEntity, createRepoIdentity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { withTransactionDatabase } from "~/server/db/helpers";
 import {
   financialTransactionScaffold,
   updateFinancialTransaction,
 } from "~/server/domains/financial-transaction/repo/financial-transaction";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { readPurchaseById } from "~/server/domains/purchase/repo/purchase";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 // Public reads must retain line classification and never turn settlement amounts into item spend.
 describe("live Expense category summaries", () => {
@@ -25,7 +27,7 @@ describe("live Expense category summaries", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic summary vendor",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-20",
       itemizationExpectation: "not_expected",
@@ -34,9 +36,9 @@ describe("live Expense category summaries", () => {
       ["Synthetic tool", 30, tools],
       ["Synthetic food item", 20, food],
     ] as const)
-      await insertWithShortcode(ctx.db, "expense", {
+      await createPurchaseEventRecord(ctx.db, "expense", {
         name,
-        cost,
+        cost: nullableWholeCentToMinor(cost),
         spendingCategoryId: category.id,
         purchaseId: purchase.id,
         date: "2026-09-20",
@@ -62,9 +64,9 @@ describe("live Expense category summaries", () => {
         });
       }
     });
-    await insertWithShortcode(ctx.db, "expense", {
+    await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Sales tax",
-      cost: 5,
+      cost: 500n,
       purchaseId: purchase.id,
       date: "2026-09-20",
       costType: "materials",
@@ -180,7 +182,7 @@ describe("live Expense category summaries", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic unpriced vendor",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-20",
     });
@@ -188,9 +190,9 @@ describe("live Expense category summaries", () => {
       ["Unpriced classified principal", null, "principal"],
       ["Unclassified tax", 5, "tax"],
     ] as const) {
-      await insertWithShortcode(ctx.db, "expense", {
+      await createPurchaseEventRecord(ctx.db, "expense", {
         name,
-        cost,
+        cost: nullableWholeCentToMinor(cost),
         lineKind,
         spendingCategoryId: lineKind === "principal" ? category.id : null,
         purchaseId: purchase.id,
@@ -207,9 +209,9 @@ describe("live Expense category summaries", () => {
       complete: false,
       amountsKnown: false,
     });
-    await insertWithShortcode(ctx.db, "expense", {
+    await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Automatic tax without known principal weights",
-      cost: 2,
+      cost: 200n,
       lineKind: "tax",
       purchaseId: purchase.id,
       date: "2026-09-20",
@@ -230,21 +232,21 @@ describe("live Expense category summaries", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic summary vendor",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-20",
     });
-    await insertWithShortcode(ctx.db, "expense", {
+    await createPurchaseEventRecord(ctx.db, "expense", {
       lineKind: "principal",
       name: "Known line",
-      cost: 20,
+      cost: 2000n,
       spendingCategoryId: category.id,
       purchaseId: purchase.id,
       date: "2026-09-20",
       costType: "materials",
       trade: "other",
     });
-    await insertWithShortcode(ctx.db, "expense", {
+    await createPurchaseEventRecord(ctx.db, "expense", {
       lineKind: "principal",
       name: "Unclassified unknown cost",
       cost: null,

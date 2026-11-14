@@ -9,13 +9,13 @@ import { z } from "zod";
 
 import type { ListEntity } from "~/entity/model/list-contracts";
 import { wasm } from "~/lib/wasm";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { getDb } from "~/server/db/helpers";
 import { columnArrayParam, uuidArrayParam } from "~/server/db/helpers/query";
 import {
   image as imageTable,
   expense as expenseTable,
-  expenseAttribution,
   ledgerParty as ledgerPartyTable,
   imageProcessingSubmission,
   photoRunImage,
@@ -26,6 +26,7 @@ import {
   prepareExpenseDerivedRead,
 } from "~/server/domains/expense/repo/expense-derived-read";
 import { resolveExpenseProjectAllocationScope } from "~/server/domains/expense/repo/lookup";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { scheduleImageProcessingJobs } from "~/server/domains/image-processing/service/image-processing.service";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import {
@@ -40,7 +41,6 @@ import {
 } from "~/server/entity-kernel";
 import { listOperations } from "~/server/entity-kernel/list-operations";
 import type { ListFilterValues } from "~/server/generic/list/repo/field-compiler";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -622,7 +622,7 @@ describe("row-set filters", () => {
       .select({ id: ledgerPartyTable.id })
       .from(ledgerPartyTable)
       .where(eq(ledgerPartyTable.shortcode, party.output.id));
-    await getDb(ctx.db).insert(expenseAttribution).values({
+    await insertPurchaseEventRows(ctx.db, "ExpenseAttribution", {
       expenseId: lineRow!.id,
       ledgerPartyId: partyRow!.id,
       role: "beneficiary",

@@ -63,9 +63,10 @@ claim. An explicit regeneration (`force`) bypasses the matching entry and
 replaces it only when the new answer is written; failed or invalid answers are
 never stored, and a failed regeneration keeps the prior answer. A cache
 outage, an unwritten answer or an interactive wait past five minutes never
-places an uncached call: it throws `JobDeferredError` with the raw cause, which
-a job republishes as a deferred page and an interactive caller surfaces. A job
-page defers on its first contended lookup instead of polling.
+places an uncached call: it throws `WorkDeferredError` with the raw cause,
+which an Ask or Pass claim records as a wait until its `availableAt` without
+spending an attempt, and an interactive caller surfaces. A Pass page defers on
+its first contended lookup instead of polling.
 
 A new answer is written before the call reports success. When the write still
 fails after its retries, the call defers with the cause, keeps the
@@ -89,9 +90,10 @@ reports a single cost estimate: fresh reports identify it as a caller
 estimate, retained legacy reports as historical, and their standard comparison
 remains unknown without equivalent pricing evidence. A linked image job is a component of its parent Run's cost;
 displaying both does not create additional spend. Run totals include every
-transitive descendant Run and linked image-processing attempt, including failed
-attempts. Each usage row contributes once even if both lineage and a job link
-reach it; never sum inclusive child totals into their parent. Pagination limits
+transitive descendant Run and every image Ask (`image.cloud`, `image.device`)
+its image jobs owe, including failed attempts; an Ask's calls join through its
+Answer's claim. Each usage row contributes once even if both lineage and a job
+link reach it; never sum inclusive child totals into their parent. Pagination limits
 only the displayed call list, not the subtotal. Missing usage on any attempt or
 an external processor makes coverage incomplete; device-completed work proves
 zero charge but does not invent a standard-cost comparison. Reads never call a
@@ -117,7 +119,7 @@ with no Run stops at its window budget unless it says a member is waiting
 (`isAutomaticAiCall`).
 
 Run usage membership is an indexed union of directly attributed calls, linked
-image-job calls, and linked image-attempt calls. Resolve that set before reading
+image-job calls, and the calls of the image Asks those jobs owe. Resolve that set before reading
 the subtotal and page; a correlated job-membership check for each unrelated
 usage row makes household-wide history consume Run-detail query capacity.
 Resolve the transitive Run scope once per read and share its bound UUID set
@@ -153,3 +155,27 @@ calls, including Jev BYOK. They keep real database accounting and stub the
 routed inference boundary; the Worker egress suite owns credential routing.
 Ordinary decisions retain exactly one usage row, while Gateway cache hits keep
 provider token usage and record zero incremental charge.
+
+Owed producer calls are read before they are spent. Queued Asks are the
+calls the runner will make; a `Drift` row stores the asks its approval would
+file (`askCount`) and their estimate (`estimatedCostMicros`, NULL when any
+ask has no price). Price queued Asks the way Drift does, from the median of
+the last 100 priced Answers per feature and requested tier, and leave a
+feature without priced history unknown:
+
+```sql
+WITH queued AS (
+  SELECT feature, input->>'tier' AS tier, count(*) AS asks FROM "Ask"
+  WHERE state = 'queued' AND "cancelledAt" IS NULL GROUP BY 1, 2)
+SELECT q.*, (SELECT percentile_disc(0.5) WITHIN GROUP (ORDER BY r."costMicros")
+  FROM (SELECT p."costMicros" FROM "Answer" p
+    WHERE p.feature = q.feature AND p."costMicros" IS NOT NULL
+      AND (q.tier IS NULL OR p.tier = q.tier)
+    ORDER BY p."createdAt" DESC LIMIT 100) r) AS "medianMicros"
+FROM queued q;
+
+SELECT "scopeKind", count(*) AS proposals, sum("askCount") AS asks,
+  sum("estimatedCostMicros") AS "knownMicros",
+  count(*) FILTER (WHERE "estimatedCostMicros" IS NULL) AS unpriced
+FROM "Drift" GROUP BY "scopeKind";
+```

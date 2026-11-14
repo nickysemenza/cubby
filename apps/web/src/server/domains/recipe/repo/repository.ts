@@ -1,4 +1,5 @@
 import { recipeSchemaBindings } from "~/entity/generated/entity-schema-bindings.recipe.gen";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import { defineRepository } from "~/server/entity-kernel/repo/repository";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -6,7 +7,6 @@ import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode
 import {
   createRecipe,
   deleteRecipes,
-  RECIPE_DELETE_EDGE_POLICY,
   recipeScaffold,
   updateRecipe,
 } from "./crud";
@@ -15,7 +15,7 @@ const recipeShortcodes = bindShortcodeResolver("recipe");
 
 export const recipeRepository = defineRepository("recipe", {
   schemas: recipeSchemaBindings,
-  lifecycle: { delete: RECIPE_DELETE_EDGE_POLICY },
+  lifecycle: { delete: DECLARED_EDGE_DELETE_POLICIES.recipe },
   scaffold: recipeScaffold,
   create: async (ctx, data) => {
     const output = await createRecipe(ctx.db, data, ctx.actorContext);

@@ -136,7 +136,7 @@ async function readConvergenceFacts(
         [[photoProductId, purchaseProductId]],
       ),
       pool.query<{ productId: string; cost: string; purchaseId: string }>(
-        `SELECT e."productId", e.cost::text AS cost, p.shortcode AS "purchaseId"
+        `SELECT e."productId", (e."costMinor"::float8 / 100)::text AS cost, p.shortcode AS "purchaseId"
        FROM "Expense" e JOIN "Purchase" p ON p.id = e."purchaseId"
        WHERE p."orderId" = $1 AND e."deletedAt" IS NULL`,
         [orderId],

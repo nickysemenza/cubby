@@ -13,11 +13,11 @@ import {
   vi,
 } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { snapshotAiUsagePrice } from "~/server/ai/pricing";
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
 import { run, aiUsage } from "~/server/db/schema";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { startAgentRunFixture } from "../service/import-run.fixtures";
 import { runServicesFor } from "./agent-services";

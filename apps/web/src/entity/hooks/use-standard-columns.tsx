@@ -1,4 +1,12 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import {
+  kernelActorLabel,
+  kernelStageLabel,
+  machineryColumnLabel,
+  machineryCostLabel,
+  machineryEtaLabel,
+} from "@cubby/schemas/field-envelope-presentation";
+import { machineryListFields } from "@cubby/schemas/kernel/machinery";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { useQueryClient } from "@tanstack/react-query";
 import type { CellData } from "@tanstack/react-table";
@@ -29,6 +37,7 @@ import {
   multiSelectFilterFn,
   type RowLinkResolver,
 } from "~/entity/table/column-helpers";
+import { formatInstant } from "~/lib/date-format";
 import type { RuntimeFilterOptions } from "~/ui/combobox/filter-option-types";
 import { buildSelectColumn } from "~/ui/data-table/row-selection";
 import {
@@ -457,6 +466,123 @@ export function useStandardColumns<TData extends BaseListRow>({
           add(withManifestFilter(standardDefinitions.image, "image"));
         }
         add(withManifestFilter(identityDefinition, titleField));
+        add(
+          withManifestFilter(
+            columnHelper.accessor(
+              (row) => {
+                const read = machineryListFields.safeParse(
+                  readPathValue(row, "machinery"),
+                );
+                return read.success ? read.data.stage : null;
+              },
+              {
+                id: "machineryStage",
+                header: "Stage",
+                enableSorting: true,
+                meta: {
+                  className: "w-52",
+                  mobile: { slot: "meta", priority: 10 },
+                },
+                cell: ({ row }) => {
+                  const read = machineryListFields.safeParse(
+                    readPathValue(row.original, "machinery"),
+                  );
+                  if (!read.success) return null;
+                  const work = read.data;
+                  return (
+                    <span
+                      className="break-words whitespace-normal"
+                      title={work.firstGap ?? undefined}
+                    >
+                      {kernelStageLabel(work.stage)}
+                      {work.nextActor
+                        ? ` · ${kernelActorLabel(work.nextActor)}`
+                        : ""}
+                      {work.firstGap
+                        ? ` · ${work.firstGap.split(/\s+/).slice(0, 6).join(" ")}`
+                        : ""}
+                    </span>
+                  );
+                },
+              },
+            ),
+            "machineryStage",
+          ),
+        );
+
+        for (const key of [
+          "gap",
+          "actor",
+          "attempts",
+          "cost",
+          "eta",
+        ] as const) {
+          const id =
+            key === "actor"
+              ? "machineryActor"
+              : `machinery${key[0]?.toUpperCase()}${key.slice(1)}`;
+          add(
+            withManifestFilter(
+              columnHelper.accessor(
+                (row) => {
+                  const read = machineryListFields.safeParse(
+                    readPathValue(row, "machinery"),
+                  );
+                  if (!read.success) return null;
+                  const work = read.data;
+                  return key === "actor"
+                    ? work.nextActor
+                    : key === "gap"
+                      ? work.firstGap
+                      : key === "attempts"
+                        ? work.attempts
+                        : key === "cost"
+                          ? work.costMicros
+                          : work.eta;
+                },
+                {
+                  id,
+                  header: machineryColumnLabel(key),
+                  enableSorting: key === "actor",
+                  meta: { className: "w-40" },
+                  cell: ({ row }) => {
+                    const read = machineryListFields.safeParse(
+                      readPathValue(row.original, "machinery"),
+                    );
+                    if (!read.success) return null;
+                    const work = read.data;
+                    const value =
+                      key === "gap"
+                        ? work.firstGap
+                        : key === "actor"
+                          ? work.nextActor
+                            ? kernelActorLabel(work.nextActor)
+                            : null
+                          : key === "attempts"
+                            ? String(work.attempts)
+                            : key === "cost"
+                              ? machineryCostLabel(work.costMicros)
+                              : work.nextActor === "cubby" ||
+                                  work.nextActor === "agent" ||
+                                  work.nextActor === "time"
+                                ? machineryEtaLabel(
+                                    work.eta
+                                      ? formatInstant(work.eta, "monthDayTime")
+                                      : null,
+                                  )
+                                : null;
+                    return (
+                      <span className="break-words whitespace-normal tabular-nums">
+                        {value ?? "—"}
+                      </span>
+                    );
+                  },
+                },
+              ),
+              id,
+            ),
+          );
+        }
 
         // Custom columns get two things applied from the registries: sorting from
         // `sortableFields`, and their filter control from the manifest.
@@ -524,6 +650,7 @@ export function useStandardColumns<TData extends BaseListRow>({
         add(standardDefinitions.actions);
       }),
     [
+      columnHelper,
       customColumns,
       entity,
       standardDefinitions,

@@ -19,7 +19,7 @@ export const productSpendingEvidenceSql = sql`
     actual AND NOT "vendorOwned" AS reimbursement
   FROM (
   SELECT spending_expense."productId" AS owner,
-    spending_expense."id" AS identity, spending_expense."cost" AS value,
+    spending_expense."id" AS identity, (spending_expense."costMinor"::float8 / 100) AS value,
     ${sql.raw(actualExpenseSql("spending_expense"))} AS actual,
     spending_expense."economicRole" = ${sqlEnumConstant(expenseEconomicRoleSchema, expenseEconomicRoleSchema.enum.vendor)} AS "vendorOwned",
     spending_seller."id" AS seller,

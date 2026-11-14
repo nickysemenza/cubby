@@ -11,6 +11,8 @@ import { describe, expect, it } from "vitest";
 import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { declaredListReadProjection } from "~/entity/entity-list/list-read-demand";
 import { locationRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.location.gen";
+import { setFieldsFixture } from "~/server/ai/fields/fields.fixtures";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import { getDb, mapImages } from "~/server/db/helpers";
 import {
@@ -20,7 +22,6 @@ import {
   sourceTransactionRecord,
   image,
   imageDerivative,
-  product,
   vendor,
 } from "~/server/db/schema";
 import {
@@ -29,6 +30,7 @@ import {
 } from "~/server/domains/cookbook/repo/cookbook";
 import { createDevice } from "~/server/domains/device/repo/device";
 import { createExpense } from "~/server/domains/expense/repo/crud";
+import { updateBankTransactionsWhere } from "~/server/domains/financial-transaction/repo/bank.fixtures";
 import {
   createGardenEntry,
   createPlanting,
@@ -65,7 +67,7 @@ import {
   selectedListProjection,
 } from "~/server/generic/list/repo/list-projection";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { decide, recordSubject } from "~/server/kernel/api";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createIngredientFixture,
@@ -228,22 +230,21 @@ describe("entity display image resolver", () => {
         count: 1,
       });
     }
-    await getDb(ctx.db)
-      .update(financialTransaction)
-      .set({ deletedAt: new Date() })
-      .where(eq(financialTransaction.id, transaction.entityId));
+    await updateBankTransactionsWhere(
+      ctx.db,
+      { deletedAt: new Date() },
+      eq(financialTransaction.id, transaction.entityId),
+    );
     expect(
       (await resolvePublicEntityDisplayImages(ctx.db, [ref])).get(key),
     ).toBeUndefined();
   });
 
   it("uses a supported unique merchant logo after confirmed images and rejects ambiguity", async () => {
-    const { record } = await createFinancialEvidenceFixture(ctx.db);
     const merchant = `Synthetic merchant ${crypto.randomUUID()}`;
-    await getDb(ctx.db)
-      .update(sourceTransactionRecord)
-      .set({ merchant })
-      .where(eq(sourceTransactionRecord.id, record.id));
+    const { record } = await createFinancialEvidenceFixture(ctx.db, {
+      merchant,
+    });
     const seller = await createRepoEntity(ctx, "vendor", {
       name: "Synthetic inferred seller",
     });
@@ -313,6 +314,17 @@ describe("entity display image resolver", () => {
       },
       ctx.actor,
     );
+    const history = await getDb(ctx.db).select().from(financialTransaction);
+    await decide(
+      ctx.db,
+      ctx.actor,
+      history.map((transaction) => ({
+        channel: "identity",
+        kind: "distinct",
+        subject: `bank:${record.occurrenceId}`,
+        field: recordSubject("financialTransaction", transaction.id),
+      })),
+    );
     const confirmed = await createRepoEntity(ctx, "financialTransaction", {
       accountId: account.output.id,
       kind: "purchase",
@@ -325,10 +337,11 @@ describe("entity display image resolver", () => {
     expect(
       (await resolvePublicEntityDisplayImages(ctx.db, [ref])).get(key)?.url,
     ).toBe(getR2PublicUrl(otherLogo.key));
-    await getDb(ctx.db)
-      .update(financialTransaction)
-      .set({ deletedAt: new Date() })
-      .where(eq(financialTransaction.id, confirmed.entityId));
+    await updateBankTransactionsWhere(
+      ctx.db,
+      { deletedAt: new Date() },
+      eq(financialTransaction.id, confirmed.entityId),
+    );
     await addHistory(otherPurchase.output.id);
     expect(
       (await resolvePublicEntityDisplayImages(ctx.db, [ref])).get(key),
@@ -902,10 +915,9 @@ describe("entity display image resolver", () => {
         { name: "Labelled borrowed ingredient" },
         ctx.actor,
       );
-      await getDb(ctx.db)
-        .update(product)
-        .set({ ingredientId: ingredient.entityId })
-        .where(eq(product.id, labelledProduct.entityId));
+      await setFieldsFixture(ctx.db, "product", labelledProduct.entityId, {
+        ingredientId: ingredient.entityId,
+      });
       const borrowed = await withDisplayImages(
         ctx.db,
         "ingredient",

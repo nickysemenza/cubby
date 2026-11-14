@@ -9,6 +9,7 @@ import { createDevice } from "~/server/domains/device/repo/device";
 import {
   readImageById,
   getImageMetadataExtractionRow,
+  clearImageMetadataOutcomes,
 } from "~/server/domains/image/repo/image";
 import { applyImageMetadataExtraction } from "~/server/domains/image/repo/image-metadata";
 import { recordImageSightings } from "~/server/domains/image/repo/image-sighting";
@@ -18,11 +19,7 @@ import {
   type ExtractImageMetadataPorts,
 } from "~/server/domains/image/service/image-metadata-extraction.service";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
-import { withJobExecution } from "~/server/generic/jobs/context";
-import { claimJob } from "~/server/generic/jobs/jobs.fixtures";
-import { cancelJob } from "~/server/generic/jobs/repo/operator";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
-import { claimContext } from "~/server/generic/jobs/service/jobs";
+import { seedPass, claimPassFixture } from "~/server/kernel/pass.fixtures";
 import { createImageFixture } from "~/server/testing/repo.fixtures";
 
 // ---------------------------------------------------------------------------
@@ -193,17 +190,17 @@ describe("image metadata extraction + backfill (real Postgres)", () => {
         { contentType: "image/jpeg" },
       );
       const imageId = parseEntityId("image", source.id);
-      const saved = await enqueueJob(ctx.db, {
+      const saved = await seedPass(ctx.db, {
         key: `synthetic-metadata:${imageId}`,
-        kind: "image-metadata.extract",
-        input: {},
+        name: "synthetic.image.metadata",
+        cursor: {},
       });
-      const claim = await claimJob(ctx.db, saved.id);
+      const claim = await claimPassFixture(ctx.db, saved);
       if (!claim) throw new Error("Expected metadata Job");
       const ports: ExtractImageMetadataPorts = {
         ...stubbedPorts(buildJpegWithExif("2025:07:04 09:15:00", 40, -74)),
         getBytes: async () => {
-          if (change === "cancelled") await cancelJob(ctx.db, saved.id);
+          if (change === "cancelled") await claim.cancel();
           else
             await getDb(ctx.db)
               .update(imageTable)
@@ -213,17 +210,12 @@ describe("image metadata extraction + backfill (real Postgres)", () => {
         },
       };
       await expect(
-        withJobExecution(ctx.db, claim, () =>
-          extractAndStoreImageMetadata(
-            ctx.db,
-            imageId,
-            ports,
-            claimContext(ctx.db, claim).fenced,
-          ),
+        claim.owned(() =>
+          extractAndStoreImageMetadata(ctx.db, imageId, ports, claim.fenced),
         ),
       ).rejects.toThrow(
         change === "cancelled"
-          ? "Job generation or lease is obsolete"
+          ? "Work claim is obsolete"
           : "Image metadata source changed",
       );
       expect(
@@ -240,6 +232,12 @@ describe("image metadata extraction + backfill (real Postgres)", () => {
     });
     const imageId = parseEntityId("image", image.id);
 
+    const missing = await extractAndStoreImageMetadata(ctx.db, imageId, {
+      ...stubbedPorts(jpeg),
+      getBytes: async () => null,
+    });
+    expect(missing).toHaveProperty("missing");
+    await clearImageMetadataOutcomes(ctx.db, [imageId]);
     const outcome = await extractAndStoreImageMetadata(
       ctx.db,
       imageId,

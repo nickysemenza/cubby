@@ -1,14 +1,13 @@
 import { taskCreateInput } from "@cubby/schemas/entities/task";
 import { testUserId } from "@cubby/schemas/testing";
-import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { TEST_USER_ID, withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { mock } from "~/lib/test/mock-schema";
-import { getDb } from "~/server/db/helpers";
-import { task } from "~/server/db/schema";
+import { holdFieldsValues } from "~/server/ai/fields/repo/field-decisions";
+import { withTransactionDatabase } from "~/server/db/helpers";
 import { createTask } from "~/server/domains/task/repo/crud";
 import { executeEntity } from "~/server/entity-kernel";
 import {
@@ -143,10 +142,14 @@ describe("bounded entity writes", () => {
       );
     const target = await make("Synthetic target task");
     const unrelated = await make("Synthetic unrelated task");
-    await getDb(ctx.db)
-      .update(task)
-      .set({ trade: null })
-      .where(eq(task.id, unrelated.entityId));
+    await withTransactionDatabase(ctx.db, async (tx) => {
+      await holdFieldsValues("task", { trade: null }).settle(
+        tx,
+        ctx.actor,
+        unrelated.entityId,
+        { trade: "other" },
+      );
+    });
     const result = await executeEntity(
       buildKernelContext(ctx.db, testUserId(TEST_USER_ID)),
       {

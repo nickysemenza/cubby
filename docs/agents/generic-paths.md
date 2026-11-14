@@ -45,8 +45,9 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   Run through `ensureRun` (`server/domains/run/repo/ensure-run.ts`). Counts, tallies, no-result reasons, raw errors and Retry failed render through the
   `run.steps` slot. Suggestion families add Sweep steps (`service/sweep.ts`); backlogs
   add maintenance steps (`server/domains/maintenance/service/maintenance-run.ts`). AI
-  work fans out as `ai.evaluation` Jobs owned or requested by the Run itself, never a
-  child Run, queue chain or ad hoc counter.
+  work uses model Asks; `AskScope` associates waiting scopes and the requesting
+  Run, and Answers retain the producer result and `costMicros`, the charged cost
+  of the usage rows its produce call wrote (`server/kernel/produce-ledger.ts`).
 - Suggestion review: `suggestions_read.list`/`acceptClean` over the family registry
   (`suggestionFamilies` in `server/generic/suggestions/repo/suggestion-family-declarations.ts`)
   and the Suggestions page. Each family's `SuggestionFamilyDeclaration`
@@ -148,14 +149,21 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   Semantic artifact validation belongs to `findSimilarEntitiesPage` in
   `generic/embedding/repo/entity-embedding-search.ts`; similarity and identity
   consumers share its bounded seed/hit hydration and current-artifact checks.
-- Background execution: `server/generic/jobs/` owns one-off Job claims and retries;
-  `server/generic/background/drains.ts` owns row-drain paging. The hourly derived
-  pass owns one resumable cursor, with publication and progress committed together.
-  `server/workflows/jobs.ts` composes the round and coalesces continuation wakes.
-  Runs retain member/agent sessions and history. Provider work precedes the
-  transaction that checks current inputs and publishes. The read-only
-  `generic/jobs/repo/observation.ts` reports those owners without scheduling work.
+- Background execution: `server/kernel/claim.ts` owns claims and retries across dirty scopes,
+  Asks and Passes. `server/kernel/pass.ts` owns resumable pages; the hourly derived snapshot
+  keeps publication and progress together. Queue delivery and cron invoke the runner directly.
+  Runs retain member/agent sessions and history. Provider work precedes the transaction that
+  checks current inputs and publishes. `machinery`, `runWork` and `needsYou` read those owners.
   [Background derived data](../entities.md#background-derived-data) owns freshness.
+- Evidence, answers and decisions ([ADR 0029](../adr/0029-evidence-facts-and-reconcilers.md)):
+  the kernel's one entry `server/kernel/api.ts`. A domain declares `defineEvidence`,
+  `defineAsk`, `defineReconciler` and `definePass` in one `defineModule` and adds one line to
+  `server/kernel/modules.ts`. Writers call `append` and `decide`; producer calls go through
+  `withAsk`; the shared entity writers emit kernel keys themselves and a bespoke writer of a
+  column a reconciler reads calls `emitWrites`; money-lane writers use `householdWrite`;
+  merges outside a reconcile use `merge`; records resolve through
+  `resolveForRead`/`resolveForWrite`; list pages bind `loadMachineryRows`. The kernel runner
+  runs dirty scopes, Asks and Passes.
 - Unbounded reads: `listAll` (never a literal huge `pageSize`).
 - Money: `cents`, `dollars`, `round2` (`@cubby/shared`); expense
   rollups select `expenseAggregateFields` (`server/db/computed/expense-aggregate-sql.ts`);

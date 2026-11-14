@@ -282,9 +282,9 @@ const unlinkedRequiredLineSql = (alias: string): SQL =>
 
 const purchaseBookingSql = (alias: string): SQL => sql`(SELECT CASE
   WHEN count(*) = 0 THEN 'missing'
-  WHEN count(*) FILTER (WHERE ep_book.cost IS NULL AND NOT ${unpricedForeignExpenseSql({ id: column("ep_book", "id"), purchaseId: column("ep_book", "purchaseId"), lineKind: column("ep_book", "lineKind"), cost: column("ep_book", "cost") })}) > 0 THEN 'partial'
-  WHEN count(*) FILTER (WHERE ep_book.cost IS NULL) > 0
-    AND count(*) FILTER (WHERE ep_book."lineBasis" = ${sqlEnumConstant(expenseLineBasisSchema, expenseLineBasisSchema.enum.allocation)} AND ep_book.cost IS NOT NULL) = 0 THEN ${sqlEnumConstant(purchaseEvidenceCoverage.shape.booking, purchaseEvidenceCoverage.shape.booking.enum.partial)}
+  WHEN count(*) FILTER (WHERE ep_book."costMinor" IS NULL AND NOT ${unpricedForeignExpenseSql({ id: column("ep_book", "id"), purchaseId: column("ep_book", "purchaseId"), lineKind: column("ep_book", "lineKind"), cost: column("ep_book", "costMinor") })}) > 0 THEN 'partial'
+  WHEN count(*) FILTER (WHERE ep_book."costMinor" IS NULL) > 0
+    AND count(*) FILTER (WHERE ep_book."lineBasis" = ${sqlEnumConstant(expenseLineBasisSchema, expenseLineBasisSchema.enum.allocation)} AND ep_book."costMinor" IS NOT NULL) = 0 THEN ${sqlEnumConstant(purchaseEvidenceCoverage.shape.booking, purchaseEvidenceCoverage.shape.booking.enum.partial)}
   ELSE 'recorded' END
   FROM "Expense" ep_book WHERE ep_book."purchaseId" = ${column(alias, "id")}
     AND ${notDeleted("ep_book")} AND ${sql.raw(actualExpenseSql("ep_book"))}

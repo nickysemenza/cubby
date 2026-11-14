@@ -1,11 +1,15 @@
 import type { ActivityExecutor } from "@cubby/schemas/activity";
+import {
+  executionWaitReason,
+  type ExecutionWaitReason,
+} from "@cubby/schemas/execution";
 import type { ImageId, ImageJobId, DeviceId } from "@cubby/schemas/identifiers";
-import { jobWaitReason, type JobWaitReason } from "@cubby/schemas/job";
-import { and, count, eq, inArray, sql } from "drizzle-orm";
+import { and, count, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
+  databaseForTransaction,
   getDb,
   insertAndReturn,
   unwrapDb,
@@ -14,13 +18,14 @@ import {
   isTransaction,
 } from "~/server/db/helpers";
 import {
-  imageProcessingAttempt,
   imageProcessingJob,
   imageProcessingSubmission,
   imageProcessingSubmissionJob,
 } from "~/server/db/image-processing-schema";
 import { image } from "~/server/db/schema";
 import { getDeviceParticipation } from "~/server/domains/device/repo/device-participation";
+import { appendExecutionReceipt } from "~/server/domains/image-processing/repo/execution-receipt-write";
+import { imageExecutionReceipts } from "~/server/domains/image-processing/repo/execution-receipts";
 
 import { ringDeviceWorkAt } from "./image-processing-ring";
 
@@ -38,8 +43,8 @@ export async function recordImageProcessingEvent(
 ) {
   const dbc = unwrapDb(db);
   await dbc.execute(sql`INSERT INTO "ImageProcessingEvent" ("jobId", "eventKey", event, attempt, level, source, details)
- SELECT ${input.jobId}::uuid, ${input.eventKey}, ${input.event}, ${input.attempt ?? null}, ${input.level ?? "info"}, ${input.source ?? "server"}, ${JSON.stringify(input.details ?? null)}::jsonb
- FROM "ImageProcessingJob" WHERE id = ${input.jobId}::uuid ON CONFLICT DO NOTHING`);
+ SELECT id, ${input.eventKey}, ${input.event}, ${input.attempt ?? null}, ${input.level ?? "info"}, ${input.source ?? "server"}, ${JSON.stringify(input.details ?? null)}::jsonb
+ FROM "ImageProcessingJob" WHERE (id = ${input.jobId}::uuid OR "askId"=${input.jobId}::uuid) ON CONFLICT DO NOTHING`);
 }
 
 /**
@@ -48,7 +53,7 @@ export async function recordImageProcessingEvent(
  * The caller holds the job row lock, which serializes numbering. Returns the
  * attempt number, or null when `attemptId` already has a row.
  */
-export async function insertImageProcessingAttempt(
+export async function appendInitialImageReceipt(
   db: Database | DrizzleTransaction,
   input: {
     jobId: ImageJobId;
@@ -62,39 +67,52 @@ export async function insertImageProcessingAttempt(
   },
 ): Promise<number | null> {
   const dbc = unwrapDb(db);
-  const inserted = await dbc.execute(
-    sql`
-    WITH inserted AS (INSERT INTO "ImageProcessingAttempt"
-      (id, "jobId", number, "submissionId", state, executor, "assignedUserId",
-       "assignedConnectionId", diagnostics, result, error, "completedAt")
-    SELECT ${input.attemptId}::uuid, j.id,
-      coalesce((SELECT max(a.number) FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id), 0) + 1,
-      j."submissionId", ${input.state},
-      ${input.executor ? JSON.stringify(input.executor) : null}::jsonb,
-      ${input.userId ?? null}, null,
-      jsonb_build_object(
-        'sourceContentHash', j."sourceContentHash",
-        'sourceKey', i.key,
-        'inputAvailability', 'recorded original',
-        'processorRevision', j."processorRevision",
-        'contentType', i."contentType"
-      ) || ${JSON.stringify(input.diagnostics ?? {})}::jsonb,
-      ${input.result === undefined ? null : JSON.stringify(input.result)}::jsonb,
-      ${input.error ?? null},
-      ${input.state === "running" ? null : sql`now()`}
-    FROM "ImageProcessingJob" j
-    LEFT JOIN "Image" i ON i.id = j."imageId"
-    WHERE j.id = ${input.jobId}::uuid
-    ON CONFLICT DO NOTHING
-    RETURNING number), counted AS (
-      UPDATE "ImageProcessingJob" SET attempts = attempts + 1
-      WHERE id = ${input.jobId}::uuid AND EXISTS (SELECT 1 FROM inserted)
-    ) SELECT number FROM inserted`,
-    "objects",
-  );
-  const row = z.array(z.object({ number: z.number() })).parse(inserted)[0];
-  if (!row) return null;
-  return row.number;
+  const [previous] = await dbc
+    .select({ id: imageExecutionReceipts.id })
+    .from(imageExecutionReceipts)
+    .where(eq(imageExecutionReceipts.id, input.attemptId));
+  if (previous) return null;
+  const [job] = await dbc
+    .update(imageProcessingJob)
+    .set({ attempts: sql`${imageProcessingJob.attempts}+1` })
+    .where(
+      or(
+        eq(imageProcessingJob.id, input.jobId),
+        eq(imageProcessingJob.askId, input.jobId),
+      ),
+    )
+    .returning();
+  if (!job) return null;
+  const [source] = await dbc
+    .select({
+      key: image.key,
+      sha256: image.sha256,
+      contentType: image.contentType,
+    })
+    .from(image)
+    .where(eq(image.id, job.imageId));
+  await appendExecutionReceipt(db, {
+    id: input.attemptId,
+    jobId: job.id,
+    patch: {
+      number: job.attempts,
+      submissionId: job.submissionId,
+      state: input.state,
+      executor: input.executor ?? null,
+      assignedUserId: input.userId ?? null,
+      diagnostics: {
+        sourceContentHash: job.sourceContentHash,
+        sourceKey: source?.key,
+        processorRevision: job.processorRevision,
+        contentType: source?.contentType,
+        ...z.record(z.string(), z.unknown()).parse(input.diagnostics ?? {}),
+      },
+      result: input.result ?? null,
+      error: input.error ?? null,
+      completedAt: input.state === "running" ? null : new Date().toISOString(),
+    },
+  });
+  return job.attempts;
 }
 
 export async function assignImageProcessingExecutor(
@@ -118,7 +136,10 @@ export async function assignImageProcessingExecutor(
         .from(imageProcessingJob)
         .where(
           and(
-            eq(imageProcessingJob.id, input.jobId),
+            or(
+              eq(imageProcessingJob.id, input.jobId),
+              eq(imageProcessingJob.askId, input.jobId),
+            ),
             eq(imageProcessingJob.attemptId, input.attemptId),
             eq(imageProcessingJob.state, "pending"),
             // Wall time, not now(): a device hand-off assigns inside the
@@ -146,7 +167,7 @@ export async function assignImageProcessingExecutor(
         if (participation) executor = { ...executor, name: participation.name };
       }
       // The conflict on the lease's attempt id makes a repeated call return false.
-      const number = await insertImageProcessingAttempt(tx, {
+      const number = await appendInitialImageReceipt(tx, {
         jobId: input.jobId,
         attemptId: input.attemptId,
         state: "running",
@@ -180,14 +201,14 @@ export async function findImageProcessingDeviceAssignment(
 ): Promise<boolean> {
   const [attempt] = await getDb(db)
     .select({
-      executor: imageProcessingAttempt.executor,
-      userId: imageProcessingAttempt.assignedUserId,
+      executor: imageExecutionReceipts.executor,
+      userId: imageExecutionReceipts.assignedUserId,
     })
-    .from(imageProcessingAttempt)
+    .from(imageExecutionReceipts)
     .where(
       and(
-        eq(imageProcessingAttempt.id, input.attemptId),
-        eq(imageProcessingAttempt.jobId, input.jobId),
+        eq(imageExecutionReceipts.id, input.attemptId),
+        sql`EXISTS (SELECT 1 FROM "Ask" owed WHERE owed.id=${input.jobId}::uuid AND owed.input->${"input"}->>${"receiptId"}=${imageExecutionReceipts.jobId}::text)`,
       ),
     );
   return (
@@ -268,7 +289,7 @@ export async function deferImageProcessingJob(
     attemptId: string;
     until: Date;
     reason: string;
-    waitReason: JobWaitReason;
+    waitReason: ExecutionWaitReason;
   },
 ): Promise<boolean> {
   return withTransaction(db, async (tx) => {
@@ -282,7 +303,10 @@ export async function deferImageProcessingJob(
       })
       .where(
         and(
-          eq(imageProcessingJob.id, input.jobId),
+          or(
+            eq(imageProcessingJob.id, input.jobId),
+            eq(imageProcessingJob.askId, input.jobId),
+          ),
           eq(imageProcessingJob.attemptId, input.attemptId),
           eq(imageProcessingJob.state, "pending"),
           sql`${imageProcessingJob.leaseUntil} > clock_timestamp()`,
@@ -291,17 +315,36 @@ export async function deferImageProcessingJob(
       .returning({ lane: imageProcessingJob.lane });
     const [row] = rows;
     if (!row) return false;
+    const { releaseExternalAsk } = await import("~/server/kernel/api");
+    const found = await tx.execute<{ id: string; executor: string }>(
+      sql`SELECT id,executor FROM "Ask" WHERE "claimToken"=${input.attemptId}::uuid`,
+    );
+    const held = found.rows[0];
+    if (
+      !held ||
+      !(await releaseExternalAsk(
+        databaseForTransaction(tx),
+        { id: held.id, token: input.attemptId, executor: held.executor },
+        input.until,
+      ))
+    )
+      return false;
     // Parked device work waits out the deferral; the ring covers its end.
     if (row.lane === "device") await ringDeviceWorkAt(tx, input.until);
-    await tx
-      .update(imageProcessingAttempt)
-      .set({ state: "released", completedAt: sql`now()`, error: input.reason })
-      .where(
-        and(
-          eq(imageProcessingAttempt.id, input.attemptId),
-          eq(imageProcessingAttempt.jobId, input.jobId),
-        ),
-      );
+    const [receipt] = await tx
+      .select({ id: imageExecutionReceipts.id })
+      .from(imageExecutionReceipts)
+      .where(eq(imageExecutionReceipts.id, input.attemptId));
+    if (receipt)
+      await appendExecutionReceipt(tx, {
+        id: input.attemptId,
+        jobId: input.jobId,
+        patch: {
+          state: "released",
+          completedAt: new Date().toISOString(),
+          error: input.reason,
+        },
+      });
     await recordImageProcessingEvent(tx, {
       jobId: input.jobId,
       eventKey: `${input.attemptId}:deferred`,
@@ -321,7 +364,10 @@ export async function deferImageProcessingJob(
 const fundingWaitingImageJobs = () =>
   and(
     eq(imageProcessingJob.state, "pending"),
-    eq(imageProcessingJob.waitReason, jobWaitReason.enum.ai_funding_window),
+    eq(
+      imageProcessingJob.waitReason,
+      executionWaitReason.enum.ai_funding_window,
+    ),
     sql`${imageProcessingJob.runAt} > now()`,
   );
 

@@ -3,12 +3,14 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import * as databaseHelpers from "~/server/db/helpers";
-import { aiEvaluation, aiUsage, run } from "~/server/db/schema";
+import { ask } from "~/server/db/kernel-schema";
+import { kernelPass } from "~/server/db/kernel-schema";
+import { aiUsage, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { seedJobs, updateJobs } from "~/server/generic/jobs/jobs.fixtures";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { seedPass } from "~/server/kernel/pass.fixtures";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 
 import { readAiBudget, setAiBudget } from "./budget";
@@ -192,63 +194,49 @@ describe("AI funding availability", () => {
     },
   );
 
-  // Failure mode: after a member funds a source, evaluations parked for
-  // funding keep waiting until the six-hour window ends.
-  it("wakes evaluations waiting for funding, and only those", async () => {
+  it("wakes only queued asks waiting for funding", async () => {
     const later = new Date(Date.now() + 60 * 60_000);
-    const row = (waitCause: string) => ({
-      executionKind: "ai_refresh" as const,
-      feature: "field-suggestion",
-      workKey: crypto.randomUUID(),
-      target: {
-        kind: "field" as const,
-        entity: "product",
-        recordId: crypto.randomUUID(),
-        field: "name",
-        suggestionIds: [],
-      },
-      provenance: {
-        dependencies: [],
-        inputFingerprint: "synthetic",
-        optionFingerprint: "synthetic",
-        model: null,
-      },
-      snapshot: {},
-      state: "queued" as const,
-      runAt: later,
-      waitCause,
-    });
-    const [funding, provider] = await getDb(ctx.db)
-      .insert(aiEvaluation)
-      .values([row("ai_funding_window"), row("provider_capacity")])
-      .returning({ id: aiEvaluation.id });
+    const [fundingAsk, providerAsk, unknownAsk] = await getDb(ctx.db)
+      .insert(ask)
+      .values(
+        (
+          [
+            { state: "queued", waitCause: "funding" },
+            { state: "queued", waitCause: "provider_capacity" },
+            { state: "unknown", waitCause: "funding" },
+          ] as const
+        ).map((state) => ({
+          inputHash: crypto.randomUUID(),
+          feature: "synthetic.funding",
+          producer: "model" as const,
+          promptVersion: "1",
+          input: {},
+          availableAt: later,
+          ...state,
+        })),
+      )
+      .returning({ id: ask.id });
     // The funding page names what the wake brings back and when it retries.
     expect((await readAiFundingStatus(ctx.db)).waiting).toEqual({
       resumeAt: expect.any(String),
       runs: 0,
       work: 1,
     });
-    const waiter = fundingWaiters.find(
-      (entry) => entry.name === "evaluations",
-    )!;
     const now = new Date();
-    expect(await waiter.count(ctx.db, now)).toBe(1);
-    expect(await waiter.wake(ctx.db, now, true)).toBe(1);
-    expect(await waiter.count(ctx.db, now)).toBe(0);
-    const read = async (id: string) =>
-      (
-        await getDb(ctx.db)
-          .select({
-            runAt: aiEvaluation.runAt,
-            waitCause: aiEvaluation.waitCause,
-          })
-          .from(aiEvaluation)
-          .where(eq(aiEvaluation.id, id))
-      )[0];
-    const woken = await read(funding!.id);
-    expect(woken?.waitCause).toBeNull();
-    expect(woken?.runAt?.getTime()).toBeLessThanOrEqual(Date.now());
-    expect((await read(provider!.id))?.waitCause).toBe("provider_capacity");
+    const asks = fundingWaiters.find((entry) => entry.name === "kernel")!;
+    expect(await asks.count(ctx.db, now)).toBe(1);
+    expect(await asks.wake(ctx.db, now, true)).toBe(1);
+    expect(await asks.count(ctx.db, now)).toBe(0);
+    const storedAsks = await getDb(ctx.db).select().from(ask);
+    expect(
+      storedAsks.find((row) => row.id === fundingAsk!.id)?.waitCause,
+    ).toBeNull();
+    expect(
+      storedAsks.find((row) => row.id === providerAsk!.id)?.waitCause,
+    ).toBe("provider_capacity");
+    expect(storedAsks.find((row) => row.id === unknownAsk!.id)?.state).toBe(
+      "unknown",
+    );
   });
 
   it("counts and releases eligible Run and Job rows in a funding wake", async () => {
@@ -298,24 +286,15 @@ describe("AI funding availability", () => {
           .update(run)
           .set({ status, failureCode: "execution_limit", updatedAt: past })
           .where(eq(run.id, id));
-      await seedJobs(ctx.db, [
-        {
-          key: "synthetic.funding.future",
-          kind: "synthetic.funding",
-          input: {},
-        },
-      ]);
-      await updateJobs(
-        ctx.db,
-        { key: "synthetic.funding.future" },
-        {
-          availableAt: new Date(Date.now() + 60_000),
-          waitReason: "provider_capacity",
-        },
-      );
+      await seedPass(ctx.db, {
+        name: "synthetic.funding",
+        key: "future",
+        waitCause: "funding",
+        availableAt: new Date(Date.now() + 60_000),
+      });
       const now = new Date(Date.now() + 1000);
       const runs = fundingWaiters.find((entry) => entry.name === "runs")!;
-      const jobs = fundingWaiters.find((entry) => entry.name === "jobs")!;
+      const jobs = fundingWaiters.find((entry) => entry.name === "kernel")!;
       expect(await readFundingWaits(ctx.db, now)).toEqual({ runs: 2, work: 1 });
       expect(await runs.count(ctx.db, now)).toBe(2);
       expect(await runs.wake(ctx.db, now, true)).toBe(2);
@@ -346,14 +325,13 @@ describe("AI funding availability", () => {
           updatedAt: past,
         })
         .where(eq(run.id, discovery));
-      await updateJobs(
-        ctx.db,
-        { key: "synthetic.funding.future" },
-        {
+      await getDb(ctx.db)
+        .update(kernelPass)
+        .set({
+          waitCause: "funding",
           availableAt: new Date(Date.now() + 60_000),
-          waitReason: "provider_capacity",
-        },
-      );
+        })
+        .where(eq(kernelPass.key, "future"));
       expect(
         await resumeFundingPausedRuns(ctx.db, { now, anyWindow: true }),
       ).toBe(2);

@@ -1,7 +1,9 @@
+import { defineEdge } from "./edges";
 import { attachedImageInputs } from "./image-description-inputs";
 import { timestampField, readOnly } from "./field-policy";
 import { withQuiet } from "./select-control-options.js";
 import type { ColorToken, EnumIcon } from "@cubby/shared/enum-palette";
+import type { KernelStage } from "../kernel/stage";
 import { runChildren } from "../child-tables/run.js";
 import { z } from "zod";
 import { dateTime } from "../codec";
@@ -65,54 +67,63 @@ const RUN_STATUS_OPTIONS = [
     label: "Running",
     color: "info",
     phase: "active",
+    stage: "working",
   },
   {
     value: "paused",
     label: "Paused",
     color: "warning",
     phase: "active",
+    stage: "waiting",
   },
   {
     value: "paused_auth",
     label: "Agent authorization needed",
     color: "warning",
     phase: "needs",
+    stage: "needs_you",
   },
   {
     value: "paused_offline",
     label: "Paused offline (historical)",
     color: "warning",
     phase: "active",
+    stage: "waiting",
   },
   {
     value: "needs_review",
     label: "Needs review",
     color: "warning",
     phase: "needs",
+    stage: "needs_you",
   },
   {
     value: "completed",
     label: "Completed",
     color: "positive",
     phase: "finished",
+    stage: "done",
   },
   {
     value: "failed",
     label: "Failed",
     color: "destructive",
     phase: "needs",
+    stage: "stuck",
   },
   {
     value: "dispatch_failed",
     label: "Dispatch failed",
     color: "destructive",
     phase: "needs",
+    stage: "stuck",
   },
 ] satisfies {
   value: z.infer<typeof runStatus>;
   label: string;
   color: ColorToken;
   phase: EntityPhase;
+  stage: KernelStage;
 }[];
 
 /**
@@ -127,6 +138,1528 @@ const RUN_STATUS_OPTIONS = [
  */
 export const { definition, readSchemas } = defineEntityModel({
   key: "run",
+  edges: [
+    defineEdge({
+      key: "PhotoInventoryEvidence.runId",
+      from: "row:PhotoInventoryEvidence",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.PhotoInventoryEvidence.runId",
+        from: "run",
+        to: "row:PhotoInventoryEvidence",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "PhotoInventoryEvidence.runId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "Immutable workflow evidence retains its source references.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "source",
+        description: "The Run that requested the immutable photo observation.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "evidence",
+        description: "The Run that requested the immutable photo observation.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "MailHandlingReceipt.runId",
+      from: "row:MailHandlingReceipt",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.MailHandlingReceipt.runId",
+        from: "run",
+        to: "row:MailHandlingReceipt",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "MailHandlingReceipt.runId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "Immutable workflow evidence retains its source references.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "source",
+        description: "The Run that retains the mail handling receipt.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "evidence",
+        description: "The Run that retains the mail handling receipt.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+
+    defineEdge({
+      key: "Run.parentRunId",
+      from: "run",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.Run.parentRunId",
+        from: "run",
+        to: "run",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "Run.parentRunId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "run",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "child runs",
+        description:
+          "Work caused by this Run, distinct from its retry attempts.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "Email.runId",
+      from: "email",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.Email.runId",
+        from: "run",
+        to: "email",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "Email.runId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "email",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "association",
+        label: "mail research assignments",
+        description:
+          "The durable researcher currently processing a retained mailbox message.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "ImageProcessingJob.runId",
+      from: "imageJob",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.ImageProcessingJob.runId",
+        from: "run",
+        to: "imageJob",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "ImageProcessingJob.runId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "imageJob",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "image processing jobs",
+        description:
+          "An Image job requested by this run. The FK is NO ACTION; the one Run hard delete (routine-run pruning) skips runs with jobs.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Append-only provenance: a job keeps naming the run that scheduled it.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "SourceOrderObservation.runId",
+      from: "row:SourceOrderObservation",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.SourceOrderObservation.runId",
+        from: "run",
+        to: "row:SourceOrderObservation",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "SourceOrderObservation.runId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "Immutable source extraction history.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "source order observations",
+        description:
+          "The Run that captured an immutable source order extraction.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Immutable observation history retains its original subject UUID through deletion and merge.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "EmailCandidateObservation.runId",
+      from: "row:EmailCandidateObservation",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.EmailCandidateObservation.runId",
+        from: "run",
+        to: "row:EmailCandidateObservation",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "EmailCandidateObservation.runId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "Immutable Email candidate history.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "Email candidate observations",
+        description:
+          "The original Run that produced this immutable Email evidence.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Immutable observation history retains its original subject UUID through deletion and merge.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "EmailClassificationObservation.runId",
+      from: "row:EmailClassificationObservation",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.EmailClassificationObservation.runId",
+        from: "run",
+        to: "row:EmailClassificationObservation",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "EmailClassificationObservation.runId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "Immutable Email classification history.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "Email classification observations",
+        description:
+          "The original Run that produced this immutable Email evidence.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Immutable observation history retains its original subject UUID through deletion and merge.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "EmailRetrievalFailure.runId",
+      from: "row:EmailRetrievalFailure",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.EmailRetrievalFailure.runId",
+        from: "run",
+        to: "row:EmailRetrievalFailure",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "EmailRetrievalFailure.runId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "Immutable Email retrieval history.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "Email retrieval failures",
+        description:
+          "The original Run that produced this immutable Email evidence.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Immutable observation history retains its original subject UUID through deletion and merge.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "PhotoRunImage.runId",
+      from: "row:PhotoRunImage",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.PhotoRunImage.runId",
+        from: "run",
+        to: "row:PhotoRunImage",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "PhotoRunImage.runId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "column",
+        column: "PhotoRunImage.runId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "owned-child",
+        label: "photo work",
+        description: "The picker and processing membership owned by this Run.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "AuditLog.runId",
+      from: "row:AuditLog",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.AuditLog.runId",
+        from: "run",
+        to: "row:AuditLog",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "AuditLog.runId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "History attribution.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "audit entries",
+        description: "An audit entry written as part of this run.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Append-only provenance: an audit entry keeps naming the run it belonged to.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "AiUsage.runId",
+      from: "row:AiUsage",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.AiUsage.runId",
+        from: "run",
+        to: "row:AiUsage",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "AiUsage.runId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "Telemetry attribution.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "AI usage",
+        description: "One model call made as part of this run.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Append-only provenance: a usage row keeps naming the run it was billed to.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "McpToolCall.runId",
+      from: "row:McpToolCall",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.McpToolCall.runId",
+        from: "run",
+        to: "row:McpToolCall",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "McpToolCall.runId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "Telemetry attribution.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "agent MCP calls",
+        description:
+          "One Cubby MCP tool call the in-app agent made for this run.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Append-only telemetry: a call keeps naming its run until a hard delete nulls it.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "RunPushRegistration.runId",
+      from: "row:RunPushRegistration",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.RunPushRegistration.runId",
+        from: "run",
+        to: "row:RunPushRegistration",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "RunPushRegistration.runId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason:
+          "Push delivery state for a device's Run registration, not a relationship.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "owned-child",
+        label: "push registrations",
+        description:
+          "A device's Live Activity or notification push registration for this Run; deleting the Run removes it.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "Suggestion.runId",
+      from: "row:Suggestion",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.Suggestion.runId",
+        from: "run",
+        to: "row:Suggestion",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "Suggestion.runId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason:
+          "Workflow evidence about entities, not a relationship between them.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "Suggestions",
+        description:
+          "Nullable execution provenance; deleting the Run preserves Suggestions and their decisions.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Field reviews retain execution provenance after archival or deletion.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "RunFinding.runId",
+      from: "row:RunFinding",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.RunFinding.runId",
+        from: "run",
+        to: "row:RunFinding",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "RunFinding.runId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason:
+          "Workflow evidence about entities, not a relationship between them.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "Findings",
+        description:
+          "Nullable execution provenance; deleting the Run preserves the finding and its resolutions.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Import findings retain execution provenance after archival or deletion.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "Purchase.runId",
+      from: "purchase",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.Purchase.runId",
+        from: "run",
+        to: "purchase",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "Purchase.runId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "purchase",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "purchases",
+        description: "A purchase this run imported or validated.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "Run.predecessorRunId",
+      from: "run",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.Run.predecessorRunId",
+        from: "run",
+        to: "run",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "Run.predecessorRunId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "run",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "successor runs",
+        description: "A later run that continued from this one.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "RunStep.runId",
+      from: "row:RunStep",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.RunStep.runId",
+        from: "run",
+        to: "row:RunStep",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "RunStep.runId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "column",
+        column: "RunStep.runId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "owned-child",
+        label: "steps",
+        description:
+          "One ordered step of this step-ledger Run (a backlog or a Suggestion family); deleting the Run removes it.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "RunOperation.runId",
+      from: "row:RunOperation",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.RunOperation.runId",
+        from: "run",
+        to: "row:RunOperation",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "RunOperation.runId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason:
+          "Workflow evidence about entities, not a relationship between them.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "owned-child",
+        label: "operations",
+        description: "One idempotent operation this run executed.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "RunControlEvent.runId",
+      from: "row:RunControlEvent",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.RunControlEvent.runId",
+        from: "run",
+        to: "row:RunControlEvent",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "RunControlEvent.runId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason:
+          "Workflow evidence about entities, not a relationship between them.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "owned-child",
+        label: "control events",
+        description:
+          "A prompt, pause, resume, or other control-plane event for this run.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "ImportPreparedOrder.runId",
+      from: "row:ImportPreparedOrder",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.ImportPreparedOrder.runId",
+        from: "run",
+        to: "row:ImportPreparedOrder",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "ImportPreparedOrder.runId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason:
+          "Workflow evidence about entities, not a relationship between them.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "owned-child",
+        label: "prepared orders",
+        description: "Immutable prepared order evidence captured by this run.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "PhotoGroupProposal.runId",
+      from: "row:PhotoGroupProposal",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.PhotoGroupProposal.runId",
+        from: "run",
+        to: "row:PhotoGroupProposal",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "PhotoGroupProposal.runId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "column",
+        column: "PhotoGroupProposal.runId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "owned-child",
+        label: "photo group proposals",
+        description:
+          "A proposed item grouping of this photo-inventory run's images.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "ImportSourceClaim.firstRunId",
+      from: "row:ImportSourceClaim",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.ImportSourceClaim.firstRunId",
+        from: "run",
+        to: "row:ImportSourceClaim",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "ImportSourceClaim.firstRunId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason:
+          "Workflow evidence about entities, not a relationship between them.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "source claims (first seen)",
+        description: "An idempotent source claim first captured by this run.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "ImportSourceClaim.lastRunId",
+      from: "row:ImportSourceClaim",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.ImportSourceClaim.lastRunId",
+        from: "run",
+        to: "row:ImportSourceClaim",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "ImportSourceClaim.lastRunId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason:
+          "Workflow evidence about entities, not a relationship between them.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "source claims (last seen)",
+        description:
+          "An idempotent source claim most recently confirmed by this run.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+  ],
+
   names: { singular: "Run", plural: "Runs" },
   route: { basePath: "runs" },
   table: "Run",
@@ -211,6 +1744,12 @@ export const { definition, readSchemas } = defineEntityModel({
       },
       quickActions: ["retry", "resume", "restart", "pause"],
       sections: [
+        {
+          kind: "slot",
+          id: "diagnostics",
+          group: "timeline",
+          title: "Work",
+        },
         // What the run did, newest state first.
         {
           kind: "slot",
@@ -321,13 +1860,6 @@ export const { definition, readSchemas } = defineEntityModel({
           id: "import-stats",
           group: "results",
           title: "Import counts",
-        },
-        // What the run read and wrote, for checking it.
-        {
-          kind: "slot",
-          id: "diagnostics",
-          group: "evidence",
-          title: "Diagnostics",
         },
         {
           kind: "slot",
@@ -640,12 +2172,14 @@ export const { definition, readSchemas } = defineEntityModel({
               label: "Retried",
               color: "neutral-status",
               phase: "finished",
+              stage: "ended",
             },
             {
               value: "waiting_for_funding",
               label: "Paused: waiting for AI funding",
               color: "warning",
               phase: "needs",
+              stage: "waiting",
             },
           ],
         },
@@ -676,7 +2210,7 @@ export const { definition, readSchemas } = defineEntityModel({
         provenance: {
           kind: "derived",
           sources: [
-            { label: "The Run's live Jobs" },
+            { label: "The Run's kernel claims" },
             { label: "Queue claim order" },
             { label: "Recent completions of the same kind" },
             { label: "AI funding window" },
@@ -685,7 +2219,7 @@ export const { definition, readSchemas } = defineEntityModel({
         explanation: {
           ruleId: "run.waiting-on",
           description:
-            "The main reason the Run waits (waiting for AI funding, queued for model capacity, a rate limit, retrying after an error, waiting for an Apple device, queued, in progress, paused), its place among every due Job of that kind in claim order, and an estimate: its place divided by that kind's completions over the last 5 minutes, the funding resume time, or when a Job not yet due (a retry or a deferral) falls due.",
+            "The Run’s main kernel wait, its position among due Passes, and an estimate from recent Pass page durations or the wait deadline.",
         },
         // Drawn inside the State badge; the column stays available.
         display: {
@@ -702,12 +2236,12 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "boolean",
         provenance: {
           kind: "derived",
-          sources: [{ label: "Latest Job claim or completion" }],
+          sources: [{ label: "Latest kernel claim or completion" }],
         },
         explanation: {
           ruleId: "run.stalled",
           description:
-            "Live Jobs remain but none was claimed or finished for 15 minutes.",
+            "Unfinished Passes exceed their progress window, or a requested Ask requires attention.",
         },
         display: { columnGroup: "Execution", width: "sm", listHidden: true },
         validation: readOnly(z.boolean().default(false)),
@@ -1732,29 +3266,54 @@ export const { definition, readSchemas } = defineEntityModel({
 
 export default defineEntity(
   definition,
-  (r) => [
-    r
-      .path("image", "many", [
-        { edge: "PhotoRunImage.runId", direction: "incoming" },
-        { edge: "PhotoRunImage.imageId", direction: "outgoing" },
-      ])
-      .named("source-images", "Source images"),
-    r.field("vendorAccountId").named("vendor-account", "Vendor account"),
-    r.field("vendorId").named("vendor", "Vendor"),
-    r.field("ledgerPartyId").named("ledger-party", "Member"),
-    r.field("predecessorRunId").named("predecessor", "Predecessor", {
-      inverseOmit:
-        "A run links its predecessor; a retry chain is short and read from the newest run back.",
-    }),
-    r.field("parentRunId").named("parent", "Parent Run"),
-    r
-      .path("run", "many", [{ edge: "Run.parentRunId", direction: "incoming" }])
-      .named("children", "Child Runs"),
-    r
-      .path("purchase", "many", [
-        { edge: "Purchase.runId", direction: "incoming" },
-      ])
-      .named("purchases", "Purchases"),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r
+          .path("image", "many", [
+            { edge: "PhotoRunImage.runId", direction: "incoming" },
+            { edge: "PhotoRunImage.imageId", direction: "outgoing" },
+          ])
+          .named("source-images", "Source images"),
+        "image.run.source-images",
+      ),
+      r.declare(
+        r.field("vendorAccountId").named("vendor-account", "Vendor account"),
+        "vendorAccount.runs",
+      ),
+      r.declare(r.field("vendorId").named("vendor", "Vendor"), "vendor.runs"),
+      r.declare(
+        r.field("ledgerPartyId").named("ledger-party", "Member"),
+        "ledgerParty.runs",
+      ),
+      r.declare(
+        r.field("predecessorRunId").named("predecessor", "Predecessor", {
+          inverseOmit:
+            "A run links its predecessor; a retry chain is short and read from the newest run back.",
+        }),
+        "run.run.predecessor",
+      ),
+      r.declare(
+        r.field("parentRunId").named("parent", "Parent Run"),
+        "run.children",
+      ),
+      r.declare(
+        r
+          .path("run", "many", [
+            { edge: "Run.parentRunId", direction: "incoming" },
+          ])
+          .named("children", "Child Runs"),
+        "run.parent",
+      ),
+      r.declare(
+        r
+          .path("purchase", "many", [
+            { edge: "Purchase.runId", direction: "incoming" },
+          ])
+          .named("purchases", "Purchases"),
+        "purchase.run.purchases",
+      ),
+    ],
+  }),
   readSchemas,
 );

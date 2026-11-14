@@ -1,13 +1,14 @@
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type { PurchaseFilters } from "@cubby/schemas/purchase";
 import { rawPurchaseListItemOut } from "@cubby/schemas/purchase-raw-read";
-import { moneyToMinor } from "@cubby/shared";
+import { moneyToMinor, nullableWholeCentToMinor } from "@cubby/shared";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { setDataException } from "~/server/generic/data-quality/repo/exceptions";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 
 import { purchaseScaffold } from "./purchase";
@@ -45,17 +46,17 @@ describe("purchase reconciliation=mismatch filter", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: `Reconcile fixture ${label}`,
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-01",
       statedTotal: statedTotal === null ? null : moneyToMinor(statedTotal),
     });
     if (cost !== null) {
-      await insertWithShortcode(ctx.db, "expense", {
+      await createPurchaseEventRecord(ctx.db, "expense", {
         lineKind: "principal",
         purchaseId: purchase.id,
         name: `Line ${label}`,
-        cost,
+        cost: nullableWholeCentToMinor(cost),
         date: "2026-09-01",
         costType: "services",
         trade: "other",
@@ -136,16 +137,16 @@ describe("purchase list display labels", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Label fixture vendor",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-01",
       statedTotal: moneyToMinor(100),
     });
-    await insertWithShortcode(ctx.db, "expense", {
+    await createPurchaseEventRecord(ctx.db, "expense", {
       lineKind: "principal",
       purchaseId: purchase.id,
       name: "Label line",
-      cost: 50,
+      cost: 5000n,
       date: "2026-09-01",
       costType: "services",
       trade: "other",

@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { recipe, expense } from "~/server/db/schema";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { markRecipesStale } from "~/server/domains/recipe/repo/totals";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
@@ -146,14 +147,16 @@ describe("recipe Job publication", () => {
       expect(before).toMatchObject({ cost: { lower: 10 } });
       const fields =
         change === "price edit"
-          ? { cost: 20 }
+          ? { cost: 2000n }
           : change === "removal"
             ? { deletedAt: new Date() }
             : { productId: other.entityId };
-      await getDb(ctx.db)
-        .update(expense)
-        .set(fields)
-        .where(eq(expense.id, charge.entityId));
+      await updatePurchaseEventWhere(
+        ctx.db,
+        "expense",
+        fields,
+        eq(expense.id, charge.entityId),
+      );
 
       await drain();
       expect(await stored()).not.toEqual(before);

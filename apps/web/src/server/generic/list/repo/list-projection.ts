@@ -17,12 +17,14 @@ import {
 } from "@cubby/schemas/entity-manifest";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import { machineryListFields } from "@cubby/schemas/kernel/machinery";
 import pMap from "p-map";
 import { z } from "zod";
 
 import type { ListReadRow } from "~/entity/model/list-read-fields";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { inheritedFieldOfColumn } from "~/server/db/computed/effective-field";
+import { databaseForTransaction } from "~/server/db/helpers/core";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
 import {
   resolveEntityDisplayMedia,
@@ -254,7 +256,38 @@ export function listReadPlan<Row>(
       await import("~/server/generic/suggestions/repo/suggestion-row-counts");
     return loadSuggestionRowCounts(page.db, entity, page.ids);
   });
+  const machinery = bind.ids(async (page) => {
+    const { machineryCapability, loadMachineryRows } =
+      await import("~/server/kernel/api");
+    const capability = await machineryCapability(entity);
+    return capability
+      ? loadMachineryRows(
+          "rollback" in page.db ? databaseForTransaction(page.db) : page.db,
+          capability,
+          page.ids,
+        )
+      : null;
+  });
   const declaredBindings = [
+    ...(Object.hasOwn(schema.shape, "machinery")
+      ? [
+          machinery.fields(
+            z.object({ machinery: machineryListFields.nullable() }),
+            (row, rows) => ({
+              machinery: rows
+                ? (rows.get(sourceIdentity.parse(row).id) ?? {
+                    stage: "done" as const,
+                    nextActor: null,
+                    firstGap: null,
+                    eta: null,
+                    attempts: 0,
+                    costMicros: 0,
+                  })
+                : null,
+            }),
+          ),
+        ]
+      : []),
     ...(Object.hasOwn(schema.shape, "pendingSuggestionCount")
       ? [
           suggestionCounts.fields(

@@ -1,36 +1,29 @@
 import { aiRefreshProgress } from "@cubby/schemas/ai-evaluation";
-import { eq } from "drizzle-orm";
+import { kernelWaitCause } from "@cubby/schemas/kernel/machinery";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { run, runStep } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { withJobExecution } from "~/server/generic/jobs/context";
-import { JobRetryableError } from "~/server/generic/jobs/errors";
-import {
-  claimJob,
-  publishJobPage,
-  updateJobs,
-} from "~/server/generic/jobs/jobs.fixtures";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { pauseJob, retryJob } from "~/server/generic/jobs/repo/operator";
-import { claimContext } from "~/server/generic/jobs/service/jobs";
+import { readRunPass } from "~/server/domains/run/repo/run-execution";
+import { WorkRetryableError } from "~/server/kernel/work-errors";
 
 import { controlWorkflowRun } from "./control";
-import { withWorkflowExecution } from "./execution";
 import {
   launchWorkflowRun,
   recordRunProgress,
   resumeClaimedWorkflowRun,
   claimWorkflowRun,
 } from "./lifecycle";
+import { runPassFixture } from "./pass.fixtures";
 
-describe("Run Job admission", () => {
+describe("Run Pass admission", () => {
   const ctx = withTestDb();
   // A generic Job retry must restore its reconciled Run too. Admission waits
   // for a competing pass, and member stops still win over an old lease.
-  it("restores a recovered Run only under its live Job claim and available admission slot", async () => {
+  it("restores a recovered Run only under its live Pass claim and available admission slot", async () => {
     const id = await ensureRun(ctx.db, ctx.actor, {
       purpose: "maintenance",
       trigger: "manual",
@@ -41,7 +34,7 @@ describe("Run Job admission", () => {
       purpose: "maintenance",
       automatic: true,
     });
-    const [execution] = await readJobs(ctx.db, { key: `run:${id}` });
+    const execution = await readRunPass(ctx.db, id);
     if (!execution) throw new Error("Synthetic Run execution missing");
     const progress = aiRefreshProgress.parse({ selected: 7, completed: 2 });
     await getDb(ctx.db)
@@ -53,34 +46,25 @@ describe("Run Job admission", () => {
         progress,
       })
       .where(eq(run.id, id));
-    await updateJobs(
-      ctx.db,
-      { id: execution.id },
-      { state: "failed", attempts: 3 },
-    );
-    await retryJob(ctx.db, execution.id);
+    await (
+      await import("~/server/kernel/api")
+    ).cancelWork(ctx.db, { table: "Pass", name: "run.execute", key: id });
+    await launchWorkflowRun(ctx.db, { runId: id, purpose: "maintenance" });
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "failed", failureCode: "job_failed" })
+      .where(eq(run.id, id));
     const competing = await ensureRun(ctx.db, ctx.actor, {
       purpose: "maintenance",
       trigger: "manual",
       status: "running",
     });
-    const claim = await claimJob(ctx.db, execution.id);
-    if (!claim) throw new Error("Synthetic recovered Job missing");
-    const owned = <T>(work: () => Promise<T>) =>
-      withJobExecution(ctx.db, claim, () =>
-        withWorkflowExecution(
-          {
-            runId: id,
-            attempt: claim.generation,
-            job: claimContext(ctx.db, claim),
-          },
-          work,
-        ),
-      );
+    const claim = await runPassFixture(ctx.db, id);
+    const owned = claim.owned;
     const params = { runId: id, attempt: claim.generation };
     await expect(
       owned(() => resumeClaimedWorkflowRun(ctx.db, params)),
-    ).rejects.toBeInstanceOf(JobRetryableError);
+    ).rejects.toBeInstanceOf(WorkRetryableError);
     expect(
       (await getDb(ctx.db).select().from(run).where(eq(run.id, id)))[0]?.status,
     ).toBe("failed");
@@ -96,7 +80,9 @@ describe("Run Job admission", () => {
       endedAt: null,
       progress: { ...progress, attempt: claim.generation },
     });
-    await pauseJob(ctx.db, execution.id);
+    await (
+      await import("~/server/kernel/api")
+    ).cancelWork(ctx.db, { table: "Pass", name: "run.execute", key: id });
     await getDb(ctx.db)
       .update(run)
       .set({ status: "failed", failureCode: "job_failed" })
@@ -109,7 +95,7 @@ describe("Run Job admission", () => {
     ).toBe("failed");
   });
 
-  it("refuses a finished Run whose pruned Job no longer does", async () => {
+  it("refuses a finished Run whose pruned Pass no longer does", async () => {
     const id = await ensureRun(ctx.db, ctx.actor, {
       purpose: "maintenance",
       trigger: "manual",
@@ -125,7 +111,7 @@ describe("Run Job admission", () => {
     await expect(
       launchWorkflowRun(ctx.db, { runId: id, purpose: "maintenance" }),
     ).rejects.toThrow("Completed Run cannot be relaunched");
-    expect(await readJobs(ctx.db, { key: `run:${id}` })).toEqual([]);
+    expect(await readRunPass(ctx.db, id)).toBeNull();
   });
 
   it("commits Run and execution together, coalesces launches, and fences cancellation", async () => {
@@ -147,28 +133,20 @@ describe("Run Job admission", () => {
       }),
     ]);
     expect(launches[0]?.instanceId).toBe(launches[1]?.instanceId);
-    const [execution] = await readJobs(ctx.db, { key: `run:${id}` });
+    const execution = await readRunPass(ctx.db, id);
     if (!execution) throw new Error("Missing execution");
     const fundingDeadline = new Date(Date.now() + 3_600_000);
-    const cursor = { after: "synthetic-funded-page" };
-    await updateJobs(
-      ctx.db,
-      { id: execution.id },
-      {
-        availableAt: fundingDeadline,
-        waitReason: "ai_funding_window",
-        attempts: 1,
-        cursor,
-      },
-    );
+    await getDb(ctx.db)
+      .execute(sql`UPDATE "Pass" SET "availableAt" = ${fundingDeadline.toISOString()}::timestamp,
+      "waitCause" = ${kernelWaitCause.enum.funding}, attempts = 1 WHERE name = 'run.execute' AND key = ${id}`);
     await launchWorkflowRun(ctx.db, {
       runId: id,
       purpose: "maintenance",
       automatic: true,
     });
-    const [waiting] = await readJobs(ctx.db, { key: `run:${id}` });
+    const waiting = await readRunPass(ctx.db, id);
     expect(waiting?.availableAt).toEqual(fundingDeadline);
-    expect(waiting?.waitReason).toBe("ai_funding_window");
+    expect(waiting?.waitCause).toBe("funding");
     await getDb(ctx.db)
       .update(run)
       .set({
@@ -177,17 +155,16 @@ describe("Run Job admission", () => {
       })
       .where(eq(run.id, id));
     await launchWorkflowRun(ctx.db, { runId: id, purpose: "maintenance" });
-    const [resumed] = await readJobs(ctx.db, { key: `run:${id}` });
+    const resumed = await readRunPass(ctx.db, id);
     expect(resumed).toMatchObject({
-      id: execution.id,
+      runId: id,
       generation: execution.generation,
       attempts: 1,
-      cursor,
-      waitReason: null,
     });
     if (!resumed) throw new Error("Missing resumed execution");
-    expect(resumed.availableAt.getTime()).toBeLessThanOrEqual(Date.now());
-    const claimed = await claimJob(ctx.db, execution.id);
+    expect(resumed.availableAt).toEqual(fundingDeadline);
+    await (await import("~/server/kernel/api")).releaseFundingWaits(ctx.db);
+    const claimed = await runPassFixture(ctx.db, id);
     if (!claimed) throw new Error("Missing claim");
     const [owner] = await getDb(ctx.db)
       .select()
@@ -213,13 +190,11 @@ describe("Run Job admission", () => {
       { runPublicId: owner.shortcode, action: "cancel" },
       "maintenance",
     );
-    let published = false;
-    expect(
-      await publishJobPage(ctx.db, claimed, { done: true }, async () => {
-        published = true;
-      }),
-    ).toBe(false);
-    expect(published).toBe(false);
+    await expect(
+      claimed.owned(() =>
+        claimWorkflowRun(ctx.db, { runId: id, attempt: claimed.generation }),
+      ),
+    ).rejects.toThrow(/obsolete/);
     expect(
       (await getDb(ctx.db).select().from(run).where(eq(run.id, id)))[0]
         ?.failureCode,
@@ -240,51 +215,32 @@ describe("Run Job admission", () => {
     });
   });
 
-  // Progress must use the same Job generation as publication; an old Worker
+  // Progress must use the same Pass generation as publication; an old Worker
   // must not retain a heartbeat after a member pauses its execution.
-  it("records current Job progress and fences progress after pause", async () => {
+  it("records current Pass progress and fences progress after pause", async () => {
     const id = await ensureRun(ctx.db, ctx.actor, {
       purpose: "maintenance",
       trigger: "manual",
       status: "running",
     });
-    const [execution] = await readJobs(ctx.db, { key: `run:${id}` });
+    const execution = await readRunPass(ctx.db, id);
     if (!execution) throw new Error("Missing execution");
-    const claim = await claimJob(ctx.db, execution.id);
-    if (!claim) throw new Error("Missing claim");
-    await expect(
-      withJobExecution(ctx.db, claim, () =>
-        withWorkflowExecution(
-          {
-            runId: id,
-            attempt: claim.generation,
-            job: claimContext(ctx.db, claim),
-          },
-          () =>
-            recordRunProgress(ctx.db, id, "working", "Synthetic page", {
-              attempt: claim.generation,
-              sequence: 1,
-            }),
+    const claim = await runPassFixture(ctx.db, id);
+    const record = (sequence: number) =>
+      claim.owned(() =>
+        recordRunProgress(
+          ctx.db,
+          id,
+          sequence === 1 ? "working" : "late",
+          "Synthetic page",
+          { attempt: claim.generation, sequence },
         ),
-      ),
-    ).resolves.toEqual({ recorded: true });
-    await pauseJob(ctx.db, execution.id);
-    await expect(
-      withJobExecution(ctx.db, claim, () =>
-        withWorkflowExecution(
-          {
-            runId: id,
-            attempt: claim.generation,
-            job: claimContext(ctx.db, claim),
-          },
-          () =>
-            recordRunProgress(ctx.db, id, "late", "Synthetic stale page", {
-              attempt: claim.generation,
-              sequence: 2,
-            }),
-        ),
-      ),
-    ).rejects.toThrow("Job generation or lease is obsolete");
+      );
+    await expect(record(1)).resolves.toEqual({ recorded: true });
+    await (
+      await import("~/server/kernel/api")
+    ).cancelWork(ctx.db, { table: "Pass", name: "run.execute", key: id });
+    await expect(record(2)).rejects.toThrow(/obsolete/);
     const [owner] = await getDb(ctx.db)
       .select()
       .from(run)
@@ -292,7 +248,7 @@ describe("Run Job admission", () => {
     expect(owner?.liveProgress?.phase).toBe("working");
   });
 
-  it("rolls Run and Job admission back with the caller transaction", async () => {
+  it("rolls Run and Pass admission back with the caller transaction", async () => {
     const key = "synthetic-run-rollback";
     await expect(
       withTransactionDatabase(ctx.db, async (tx) => {
@@ -308,6 +264,8 @@ describe("Run Job admission", () => {
     expect(
       await getDb(ctx.db).select().from(run).where(eq(run.clientKey, key)),
     ).toEqual([]);
-    expect(await readJobs(ctx.db, {})).toEqual([]);
+    expect(
+      await getDb(ctx.db).execute(sql`SELECT * FROM "Pass"`, "objects"),
+    ).toEqual([]);
   });
 });

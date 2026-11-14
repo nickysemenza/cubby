@@ -2,9 +2,9 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { vendor as vendorTable } from "~/server/db/schema";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { loadVendorSuggestionContext } from "./vendor-suggestion-context";
 
@@ -28,7 +28,7 @@ describe("vendor suggestion evidence", () => {
     await insertWithShortcode(ctx.db, "expense", {
       lineKind: "principal",
       name: "Fixture goods",
-      cost: 12,
+      cost: 1200n,
       date: "2026-09-01",
       purchaseId: order.id,
       costType: "materials",

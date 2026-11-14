@@ -20,7 +20,6 @@ import {
 } from "@cubby/schemas/run-work-progress";
 
 import type { RunDetailStep } from "~/contracts/run-detail.contract";
-import { formatCalendarDay } from "~/lib/date-format";
 import { formatDuration } from "~/lib/format-duration";
 import { formatCount } from "~/lib/number-format";
 
@@ -37,10 +36,7 @@ type PlanStep = Pick<
   | "meta"
 > &
   Partial<{ [K in "startedAt" | "endedAt"]: RunDetailStep[K] | Date }>;
-type InputListHref = (
-  entity: "financialTransaction" | "sourceTransactionRecord",
-  token: string,
-) => string;
+
 type PlanTableRow = Extract<ReportBlock, { kind: "table" }>["rows"][number];
 
 function stepState(step: PlanStep | undefined) {
@@ -129,11 +125,6 @@ function scopeLabel(entry: StoredSweepFamilyScope) {
   if (!isExecutableSweepFamily(entry)) return "Retired, not run";
   const scope = entry.scope;
   const parts: string[] = [];
-  if ("accountIds" in scope && scope.accountIds)
-    parts.push(`${scope.accountIds.length} selected accounts`);
-  if ("importId" in scope && scope.importId) parts.push("Selected import");
-  if ("since" in scope && scope.since)
-    parts.push(`Since ${formatCalendarDay(scope.since, "dateShort")}`);
   if ("targets" in scope && scope.targets)
     parts.push(
       ...scope.targets.map(
@@ -144,89 +135,11 @@ function scopeLabel(entry: StoredSweepFamilyScope) {
   return parts.join(" · ") || "All eligible inputs";
 }
 
-/** These are current selector views; counted membership was not retained as a snapshot. */
-function inputInspection(
-  runId: string | undefined,
-  key: string,
-  counted: boolean,
-  inputHref: InputListHref | undefined,
-) {
-  if (!runId) return null;
-  const list = (
-    entity: "financialTransaction" | "sourceTransactionRecord",
-    label: string,
-  ) => ({
-    label,
-    href: inputHref ? inputHref(entity, `${runId}:${key}`) : "",
-  });
-  const current = counted
-    ? "Current eligibility under the Run scope and recorded cutoff; original membership was not saved."
-    : "Input inspection becomes available when this step records its count and selection boundary.";
-  switch (key) {
-    case "transfer_pair_scan":
-      return {
-        kind: "links",
-        links:
-          counted && inputHref
-            ? [
-                list("financialTransaction", "Transactions"),
-                list("sourceTransactionRecord", "Source records"),
-              ]
-            : [],
-        note: `Live categorized source charge keys, plus dated observed/pending/posted transactions without a transfer that have a movement kind or category. Date/cutoff apply; accounts are checked later. Source rows include every live observation for selected keys, so row counts differ. ${current}`,
-      } satisfies NonNullable<PlanTableRow["presentation"]>[string];
-    case "statement_generate":
-      return {
-        kind: "links",
-        links:
-          counted && inputHref
-            ? [
-                list(
-                  "sourceTransactionRecord",
-                  "Source records for eligible charges",
-                ),
-              ]
-            : [],
-        note: `Non-ignored, non-superseded charges needing a match, lifecycle correction or spending booking. Import/date scope selects charge keys; account admission happens later. All live observations for selected keys are shown, so row counts differ. ${current}`,
-      } satisfies NonNullable<PlanTableRow["presentation"]>[string];
-    case "statement_holds":
-      return {
-        kind: "links",
-        links:
-          counted && inputHref
-            ? [list("financialTransaction", "Pending transactions to inspect")]
-            : [],
-        note: `Live pending transactions in selected accounts whose settlement references all have provider-pending evidence. Import/date restrictions do not apply. Inspection does not imply a hold can be voided. ${current}`,
-      } satisfies NonNullable<PlanTableRow["presentation"]>[string];
-    case "transfer_pair_retire":
-    case "transfer_pair_label":
-    case "statement_label":
-      return {
-        kind: "links",
-        links: [
-          {
-            label: "View this Run’s decisions",
-            href: `/runs/${encodeURIComponent(runId)}#decisions`,
-          },
-        ],
-        note:
-          key === "transfer_pair_retire"
-            ? "Stored transfer-pair suggestions in account/date/cutoff scope, including inactive or reviewed ones. Related decisions are not an exact input list."
-            : key === "transfer_pair_label"
-              ? "This Run’s pending pairs needing labels, or pairs awaiting statement refresh. Related decisions are not an exact input list."
-              : "Current pending statement advice needing a label or application, optionally restricted by import. This population can span Runs; the link shows only this Run’s decisions.",
-      } satisfies NonNullable<PlanTableRow["presentation"]>[string];
-    default:
-      return null;
-  }
-}
-
-/** Both clients render this declared plan through the generic report/StaticTable path. */
 export function runPlanBlocks(
   run: {
     purpose: string;
     runId?: string;
-    inputHref?: InputListHref;
+
     input: unknown;
     steps: readonly PlanStep[];
   },
@@ -280,18 +193,11 @@ export function runPlanBlocks(
         );
         const frozen = runStepMeta.safeParse(stored?.meta).data?.input;
         const state = stepState(stored);
-        const inspection = inputInspection(
-          run.runId,
-          declaration.key,
-          frozen?.mode === "count",
-          run.inputHref,
-        );
         return {
           id: declaration.key,
           presentation: {
             "4": { kind: "status", state: state.state },
             "6": { kind: "figure" },
-            ...(inspection ? { "3": inspection } : {}),
           },
           cells: [
             `${index + 1}. ${declaration.label}`,

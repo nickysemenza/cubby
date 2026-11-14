@@ -127,10 +127,7 @@ const TRANSACTION_LOCK_RETRIES = 5;
 const TRANSACTION_LOCK_RETRY_DELAY_MS = 15_000;
 
 /**
- * Live queue traffic can hold or cross a cutover's locks (0037 deadlocked on every
- * attempt). A statement in this mode is idempotent and rolled back whole, so taking
- * it again from the start is safe. Whatever was already committed stays compatible
- * with the running Worker; a later Deploy resumes from the same statement.
+ * Retry only after PostgreSQL has rolled back the entire pending chain.
  */
 const isLockContention = (error: unknown) => {
   // Drizzle wraps the driver's error as its cause.
@@ -152,6 +149,100 @@ export async function retryingLockContention<T>(
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
   }
+}
+
+const NAME = String.raw`(?:"[^"]+"|[A-Za-z_][\w$]*)(?:\.(?:"[^"]+"|[A-Za-z_][\w$]*))?`;
+const NAMES = String.raw`${NAME}(?:\s*,\s*${NAME})*`;
+const names = (list: string) => list.match(new RegExp(NAME, "g")) ?? [];
+const matches = (text: string, pattern: string) =>
+  [...text.matchAll(new RegExp(pattern, "gi"))].map((match) => match[1]!);
+
+/**
+ * The relations a pending chain locks beyond row level: tables it names in a
+ * lock, alter, drop, truncate, index, trigger or reference, the table of each
+ * index it drops, the referenced table of each constraint it drops, and the
+ * foreign-key partners of each table it drops.
+ */
+export function pendingLockTargets(statements: readonly string[]) {
+  const text = statements
+    .map((statement) => statement.replace(/--[^\n]*/g, ""))
+    .join("\n");
+  return {
+    tables: [
+      ...matches(
+        text,
+        String.raw`\bLOCK\s+(?:TABLE\s+)?(?:ONLY\s+)?(${NAMES})`,
+      ),
+      ...matches(
+        text,
+        String.raw`\bALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(${NAME})`,
+      ),
+      ...matches(
+        text,
+        String.raw`\bTRUNCATE\s+(?:TABLE\s+)?(?:ONLY\s+)?(${NAMES})`,
+      ),
+      ...matches(
+        text,
+        String.raw`\bCREATE\s+(?:UNIQUE\s+)?INDEX\b[^;]*?\bON\s+(?:ONLY\s+)?(${NAME})`,
+      ),
+      ...matches(
+        text,
+        String.raw`\bCREATE\s+(?:OR\s+REPLACE\s+)?(?:CONSTRAINT\s+)?TRIGGER\b[^;]*?\bON\s+(${NAME})`,
+      ),
+      ...matches(text, String.raw`\bREFERENCES\s+(${NAME})`),
+    ].flatMap(names),
+    dropped: matches(
+      text,
+      String.raw`\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(${NAMES})`,
+    ).flatMap(names),
+    indexes: matches(
+      text,
+      String.raw`\bDROP\s+INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+EXISTS\s+)?(${NAMES})`,
+    ).flatMap(names),
+    constraints: matches(
+      text,
+      String.raw`\bDROP\s+CONSTRAINT\s+(?:IF\s+EXISTS\s+)?("[^"]+"|[A-Za-z_][\w$]*)`,
+    ).map((name) => name.replace(/^"|"$/g, "")),
+  };
+}
+
+/**
+ * Take every lock the pending chain needs, in its final mode and one sorted
+ * order, before any of its statements reads or writes. A weaker lock taken
+ * first and upgraded later in the transaction can deadlock against live
+ * traffic. Relations the chain creates do not exist yet and need no lock.
+ */
+async function lockPendingTables(
+  tx: Pick<NodePgDatabase, "execute">,
+  statements: readonly string[],
+): Promise<void> {
+  const targets = pendingLockTargets(statements);
+  const list = (values: readonly string[]) =>
+    JSON.stringify([...new Set(values)]);
+  const { rows } = await tx.execute<{ name: string }>(sql`
+    WITH pending_lock_targets(oid) AS (
+      SELECT to_regclass(name) FROM jsonb_array_elements_text(${list([...targets.tables, ...targets.dropped])}::jsonb) target(name)
+      UNION SELECT i.indrelid FROM jsonb_array_elements_text(${list(targets.indexes)}::jsonb) target(name)
+        JOIN pg_index i ON i.indexrelid = to_regclass(name)
+      UNION SELECT c.confrelid FROM pg_constraint c
+        WHERE c.contype = 'f' AND c.conname IN (SELECT jsonb_array_elements_text(${list(targets.constraints)}::jsonb))
+      UNION SELECT CASE WHEN c.conrelid = d.oid THEN c.confrelid ELSE c.conrelid END
+        FROM jsonb_array_elements_text(${list(targets.dropped)}::jsonb) target(name)
+        CROSS JOIN LATERAL (SELECT to_regclass(name) oid) d
+        JOIN pg_constraint c ON c.contype = 'f' AND d.oid IN (c.conrelid, c.confrelid)
+    )
+    SELECT format('%I.%I', n.nspname, c.relname) AS name
+    FROM pending_lock_targets t
+    JOIN pg_class c ON c.oid = t.oid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE c.relkind IN ('r', 'p') AND c.relpersistence <> 't'
+    ORDER BY 1`);
+  if (rows.length)
+    await tx.execute(
+      sql.raw(
+        `LOCK TABLE ${rows.map((row) => row.name).join(", ")} IN ACCESS EXCLUSIVE MODE`,
+      ),
+    );
 }
 
 /** Advance through an inclusive migration boundary; omitted means every pending migration. */
@@ -181,89 +272,67 @@ export async function migrateDatabase(
     throw new Error(
       `Refusing to migrate: database is already beyond --through=${options.through}. No migrations were applied.`,
     );
-  await ensureDbExtensions(db);
-  // SAFETY: the concrete node-postgres HKT is the engine's runtime database;
-  // its generic query-result signature loses the concrete driver's variance.
-  const migrationDb = db as Parameters<typeof migrate>[1];
-  // Upgrade the complete applied ledger before limiting execution to the boundary.
-  // Passing only applied files lets Drizzle backfill names without executing DDL.
-  await migrate(
-    migrations.filter((entry) => applied.has(entry.name)),
-    migrationDb,
-    { migrationsFolder },
-  );
+  // Bookkeeping and extension DDL must have the same bounded lock wait as SQL.
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL lock_timeout = '2s'`);
+    await ensureDbExtensions(tx);
+    // SAFETY: the native migrator accepts the node-postgres transaction HKT.
+    const migrationDb = tx as Parameters<typeof migrate>[1];
+    await migrate(
+      migrations.filter((entry) => applied.has(entry.name)),
+      migrationDb,
+      { migrationsFolder },
+    );
+  });
   const pending = migrations
     .slice(0, boundary + 1)
     .filter((entry) => !applied.has(entry.name));
-  const retryTransaction = (batch: MigrationMeta[]) =>
-    retryingLockContention(
-      () => migrate(batch, migrationDb, { migrationsFolder }),
-      {
-        retries: TRANSACTION_LOCK_RETRIES,
-        delayMs: options.lockRetryDelayMs ?? TRANSACTION_LOCK_RETRY_DELAY_MS,
-      },
-    );
-  if (
-    !pending.some((migration) =>
-      migration.sql[0]?.includes("-- cubby:transaction-per-statement"),
-    )
-  ) {
-    await retryTransaction(pending);
-    return;
-  }
-  for (const migration of pending) {
-    if (!migration.sql[0]?.includes("-- cubby:transaction-per-statement")) {
-      await retryTransaction([migration]);
-      continue;
-    }
-    // Opt-in backfills must be restartable: a crash leaves committed batches
-    // but no migration receipt. Each statement therefore has to be idempotent.
-    for (const statement of migration.sql) {
-      if (statement.includes("-- cubby:outside-transaction")) {
-        // An interrupted concurrent build leaves an invalid index that
-        // `IF NOT EXISTS` would keep; rebuild it and verify the result.
-        for (const name of await invalidIndexesNamedIn(db, statement))
-          await db.execute(
-            sql.raw(`DROP INDEX CONCURRENTLY IF EXISTS "${name}"`),
-          );
-        await db.execute(sql.raw(statement));
-        const invalid = await invalidIndexesNamedIn(db, statement);
-        if (invalid.length)
-          throw new Error(
-            `Concurrent index build left invalid indexes: ${invalid.join(", ")}`,
-          );
-        continue;
-      }
-      let remaining: boolean;
-      do {
-        remaining = await retryingLockContention(() =>
-          db.transaction(async (tx) => {
-            await tx.execute(sql`SET LOCAL lock_timeout = '2s'`);
-            const result = await tx.execute<{ remaining: boolean }>(
-              sql.raw(statement),
-            );
-            return statement.includes("-- cubby:repeat-batch")
-              ? z.object({ remaining: z.boolean() }).parse(result.rows[0])
-                  .remaining
-              : false;
-          }),
+  // All pending DDL, retained data and receipts share one rollback boundary.
+  // Historical files used concurrent indexes and repeatable batches. Keep their
+  // immutable hashes while building indexes transactionally and draining batches.
+  await retryingLockContention(
+    () =>
+      db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '2s'`);
+        await lockPendingTables(
+          tx,
+          pending.flatMap((migration) => migration.sql),
         );
-      } while (remaining);
-    }
-    await db.execute(sql`INSERT INTO drizzle.__drizzle_migrations (hash, created_at, name)
-      VALUES (${migration.hash}, ${migration.folderMillis}, ${migration.name})`);
-  }
-}
-
-async function invalidIndexesNamedIn(db: NodePgDatabase, statement: string) {
-  const { rows } = await db.execute<{ name: string }>(sql`
-    SELECT c.relname AS name FROM pg_index i
-    JOIN pg_class c ON c.oid = i.indexrelid
-    JOIN pg_namespace n ON n.oid = c.relnamespace
-    WHERE NOT i.indisvalid AND n.nspname = current_schema()`);
-  return rows
-    .map((row) => row.name)
-    .filter((name) => statement.includes(`"${name}"`));
+        for (const migration of pending) {
+          for (const source of migration.sql) {
+            const statement = source.replace(/\bCONCURRENTLY\b/gi, "");
+            if (source.includes("-- cubby:outside-transaction")) {
+              const { rows } = await tx.execute<{ name: string }>(sql`
+              SELECT c.relname AS name FROM pg_index i
+              JOIN pg_class c ON c.oid = i.indexrelid
+              JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE NOT i.indisvalid AND n.nspname = current_schema()`);
+              for (const { name } of rows)
+                if (statement.includes(`"${name}"`))
+                  await tx.execute(
+                    sql.raw(`DROP INDEX "${name.replaceAll('"', '""')}"`),
+                  );
+            }
+            let remaining: boolean;
+            do {
+              const result = await tx.execute<{ remaining: boolean }>(
+                sql.raw(statement),
+              );
+              remaining = source.includes("-- cubby:repeat-batch")
+                ? z.object({ remaining: z.boolean() }).parse(result.rows[0])
+                    .remaining
+                : false;
+            } while (remaining);
+          }
+          await tx.execute(sql`INSERT INTO drizzle.__drizzle_migrations (hash, created_at, name)
+          VALUES (${migration.hash}, ${migration.folderMillis}, ${migration.name})`);
+        }
+      }),
+    {
+      retries: TRANSACTION_LOCK_RETRIES,
+      delayMs: options.lockRetryDelayMs ?? TRANSACTION_LOCK_RETRY_DELAY_MS,
+    },
+  );
 }
 
 const PRODUCTION_URL_ENV = "PRODUCTION_DIRECT_DATABASE_URL";

@@ -8,6 +8,8 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb } from "~/server/db/helpers";
 import {
   runOperation,
@@ -23,7 +25,7 @@ import {
   purchase,
   user,
 } from "~/server/db/schema";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { activeEmailPurchaseDecision as orderMailCandidateDecision } from "~/server/testing/email-link.fixtures";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
 
@@ -73,12 +75,12 @@ describe("retained mail source associations", () => {
       },
     });
     const purchases = [
-      await insertWithShortcode(ctx.db, "purchase", {
+      await createPurchaseEventRecord(ctx.db, "purchase", {
         vendorId: vendor.id,
         orderId: "EXAMPLE-201",
         date: "2026-09-01",
       }),
-      await insertWithShortcode(ctx.db, "purchase", {
+      await createPurchaseEventRecord(ctx.db, "purchase", {
         vendorId: vendor.id,
         orderId: "EXAMPLE-202",
         date: "2026-09-02",
@@ -320,7 +322,11 @@ describe("retained mail source associations", () => {
     );
     expect(await outcomes()).toEqual(expected);
     expect(
-      (await getDb(ctx.db).select({ cost: expense.cost }).from(expense))
+      (
+        await getDb(ctx.db)
+          .select({ cost: expenseCostDollarsSql() })
+          .from(expense)
+      )
         .map((row) => row.cost)
         .sort((a, b) => (a ?? 0) - (b ?? 0)),
     ).toEqual([10, 20]);
@@ -382,7 +388,7 @@ describe("retained mail source associations", () => {
       "EXAMPLE-102",
     ]);
     const costs = await getDb(ctx.db)
-      .select({ cost: expense.cost })
+      .select({ cost: expenseCostDollarsSql() })
       .from(expense);
     expect(costs.map(({ cost }) => cost).sort()).toEqual([18, 24]);
     expect(await getDb(ctx.db).select().from(importSourceOrder)).toHaveLength(
@@ -694,7 +700,7 @@ describe("retained mail source associations", () => {
       committed,
     );
     const costs = await getDb(ctx.db)
-      .select({ cost: expense.cost })
+      .select({ cost: expenseCostDollarsSql() })
       .from(expense);
     expect(costs.reduce((sum, { cost }) => sum + (cost ?? Number.NaN), 0)).toBe(
       30,

@@ -1,5 +1,4 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 /**
  * Ingredient soft-delete with dependency guards.
  * The declared policy refuses live products and meal food entries and clears
@@ -10,7 +9,8 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
+import { DECLARED_EDGE_DELETE_HOOKS } from "~/server/db/generated/declared-edges.gen";
 import { assertNoDependents, notDeleted, unwrapDb } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
@@ -20,33 +20,6 @@ import {
   recipeSectionIngredient,
 } from "~/server/db/schema";
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
-
-export const INGREDIENT_DELETE_EDGE_POLICY = {
-  "MealFoodEntry.ingredientId": {
-    code: "block-live-meal-food-entry",
-    effect: "block",
-    description:
-      "An ingredient recorded in a live meal food entry cannot be deleted.",
-  },
-  "RecipeSectionIngredient.ingredientId": {
-    code: "block-live-recipe-usage",
-    effect: "block",
-    description:
-      "An ingredient still used in a live recipe can't be deleted — remove it from every recipe first.",
-  },
-  "Product.ingredientId": {
-    code: "block-live-product",
-    effect: "block",
-    description:
-      "An ingredient linked to a product can't be deleted — unlink or delete the product first.",
-  },
-  "Plant.ingredientId": {
-    code: "clearFk",
-    effect: "detach",
-    description:
-      "A plant's ingredient link is informational; deleting the ingredient clears it.",
-  },
-} as const satisfies IncomingEdgePolicy<"ingredient", OperationDisposition>;
 
 /**
  * Live recipe-line usages of the given ingredients — joined through section
@@ -83,7 +56,7 @@ const findLiveRecipeUsagesOfIngredients = (
       ),
     );
 
-const refuseLiveRecipeUsage = async (
+export const refuseLiveRecipeUsage = async (
   tx: DrizzleTransaction,
   ids: IngredientId[],
 ) => {
@@ -112,10 +85,8 @@ export const deleteIngredients = (
 ) =>
   deleteByPolicy(db, {
     entity: "ingredient",
-    policy: INGREDIENT_DELETE_EDGE_POLICY,
+    policy: DECLARED_EDGE_DELETE_POLICIES.ingredient,
     ids,
     actor,
-    overrides: {
-      "RecipeSectionIngredient.ingredientId": refuseLiveRecipeUsage,
-    },
+    ...DECLARED_EDGE_DELETE_HOOKS.ingredient,
   });

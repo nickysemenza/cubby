@@ -32,8 +32,6 @@ import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
 /** Uploads abandoned after presign; the same threshold the presign cull uses. */
 const PENDING_UPLOAD_HOURS = 24;
-/** Inline EXIF attempts before a non-404 failure becomes `extraction_failed`. */
-const EXIF_ATTEMPTS = 3;
 // Automatic retirement is disabled; the member must explicitly authorize disposal.
 const RETIRE_COORDINATORS_AFTER_MS: number | null = null;
 
@@ -195,7 +193,7 @@ function exifStep(
 }
 
 /**
- * Extracts each image with bounded inline retries. A 404 is terminal at once
+ * Extracts each image through its Ask, whose producer bounds storage retries. A 404 is terminal at once
  * (`original_missing`); any other failure becomes `extraction_failed` after
  * the last attempt. Either way the row leaves the backlog with its raw error.
  */
@@ -207,31 +205,24 @@ async function extractImages(
   const delta = { done: 0, failed: 0, skipped: 0 };
   const errors: RunStepError[] = [];
   for (const id of ids) {
-    let lastError: unknown;
-    let settled = false;
-    for (let attempt = 1; attempt <= EXIF_ATTEMPTS && !settled; attempt++) {
-      try {
-        const outcome = await extractAndStoreImageMetadata(
-          db,
-          id,
-          ports.metadata,
-        );
-        settled = true;
-        if (outcome === "succeeded") delta.done += 1;
-        else if (outcome === "skipped") delta.skipped += 1;
-        else {
-          delta.failed += 1;
-          errors.push(failure(outcome.missing, imageRef(id)));
-        }
-      } catch (error) {
-        lastError = error;
+    try {
+      const outcome = await extractAndStoreImageMetadata(
+        db,
+        id,
+        ports.metadata,
+      );
+      if (outcome === "succeeded") delta.done += 1;
+      else if (outcome === "skipped") delta.skipped += 1;
+      else {
+        delta.failed += 1;
+        errors.push(failure(outcome.missing, imageRef(id)));
       }
+    } catch (error) {
+      const message = `EXIF/GPS extraction failed: ${failureText(error)}`;
+      await markImageMetadataOutcome(db, id, "extraction_failed", message);
+      delta.failed += 1;
+      errors.push(failure(message, imageRef(id)));
     }
-    if (settled) continue;
-    const message = `EXIF/GPS extraction failed after ${EXIF_ATTEMPTS} attempts: ${failureText(lastError)}`;
-    await markImageMetadataOutcome(db, id, "extraction_failed", message);
-    delta.failed += 1;
-    errors.push(failure(message, imageRef(id)));
   }
   return { delta, errors };
 }
@@ -272,11 +263,10 @@ export function maintenanceStepDrivers(
     "image-repair": onceStep(async ({ db }) => {
       const repaired = await repairImageProcessingWork(db);
       return {
-        done: repaired.orphans + repaired.executorless,
+        done: repaired.orphans,
         more: repaired.more,
         meta: detail({
           orphans: repaired.orphans,
-          executorless: repaired.executorless,
         }),
       };
     }),
@@ -379,23 +369,20 @@ export function maintenanceStepDrivers(
       return { done: 0, meta: detail({ refreshed: true }) };
     }),
     "mail-discovery": onceStep(async ({ db }) => {
-      // Each mailbox's pass is its own `mail_discovery` Run with its own
-      // history; this step only starts them, so it is never backlog.
-      const { discoverPurchases } = await import("~/server/workflows/catch-up");
-      try {
-        const { mail } = await discoverPurchases(db);
-        return {
-          done: 0,
-          meta: detail({
-            started: mail?.started ?? 0,
-            running: mail?.running ?? 0,
-            configured: mail !== null,
-          }),
-        };
-      } catch (error) {
-        if (!(error instanceof AggregateError)) throw error;
-        return { done: 0, errors: failuresOf(error) };
-      }
+      // The purchase Pass owns admission and its bounded sender cursor.
+      const { publishBackgroundTasks } =
+        await import("~/server/workflows/background-tasks/publish");
+      await publishBackgroundTasks(
+        db,
+        [
+          {
+            kind: "maintenance.purchase-discovery",
+            requestedAt: new Date().toISOString(),
+          },
+        ],
+        { source: "maintenance.mail-discovery" },
+      );
+      return { done: 0, meta: detail({ queued: true }) };
     }),
     "image-backfill": imageBackfillStep(ports),
   };

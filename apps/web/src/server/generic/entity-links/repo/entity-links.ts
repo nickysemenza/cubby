@@ -3,11 +3,11 @@ import {
   type EntityLinkEnd,
   type EntityLinkKind,
   entityLinkKinds,
-} from "@cubby/schemas/entity-links";
+} from "@cubby/schemas/entity-link-catalog";
 /**
  * The one write/read seam for `EntityLink` (ADR 0007). Every many-to-many
  * relationship between entities is a row here, typed by its link kind in
- * `@cubby/schemas/entity-links`; the per-domain repositories (kit
+ * `@cubby/schemas/entity-link-catalog`; the per-domain repositories (kit
  * components, purchase products, project tools, garden plantings,
  * dependencies) keep their own validation and refusals and call
  * these helpers for the rows themselves.

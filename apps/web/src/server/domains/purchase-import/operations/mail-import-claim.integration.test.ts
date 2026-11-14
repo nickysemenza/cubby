@@ -25,6 +25,7 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
 import {
@@ -42,6 +43,7 @@ import {
   purchase,
   vendor,
 } from "~/server/db/schema";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import {
   cubbyToolResult,
@@ -50,7 +52,6 @@ import {
 import { storedMailOutcome } from "~/server/domains/purchase-import/repo/mail-outcome/outcome";
 import { readMailProductCandidates } from "~/server/domains/purchase-import/repo/mail-rule-evidence";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { describeToolError } from "~/server/mcp/tools/tool-error";
 import { activeEmailPurchaseDecision } from "~/server/testing/email-link.fixtures";
 import {
@@ -666,10 +667,12 @@ describe("Mail import claim", () => {
     const version = z
       .object({ evidenceVersion: z.string() })
       .parse(claimed).evidenceVersion;
-    await getDb(ctx.db)
-      .update(purchase)
-      .set({ date: "2026-09-02" })
-      .where(eq(purchase.id, target.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { date: "2026-09-02" },
+      eq(purchase.id, target.id),
+    );
     await getDb(ctx.db)
       .update(vendor)
       .set({ name: "Synthetic renamed shop" })

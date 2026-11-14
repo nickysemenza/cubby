@@ -57,7 +57,10 @@ export async function listTransactionImports(db: Database, source?: string) {
 }
 
 /** Shared valid evidence graph for liveness fixtures that subsequently seed invalid references. */
-export async function createFinancialEvidenceFixture(db: Database) {
+export async function createFinancialEvidenceFixture(
+  db: Database,
+  observation: { merchant?: string } = {},
+) {
   const receipt = await recordSourceTransactionRecords(
     db,
     recordSourceTransactionRecordsInput.parse({
@@ -68,6 +71,7 @@ export async function createFinancialEvidenceFixture(db: Database) {
       },
       rows: [
         {
+          ...observation,
           rowPosition: 1,
           accountDescriptor: "Synthetic source account",
           statementDate: "2026-01-01",

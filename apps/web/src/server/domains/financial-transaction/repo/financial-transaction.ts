@@ -1,7 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { financialTransactionRawOut as rawFinancialTransactionOut } from "@cubby/schemas/entity-contracts/financialTransaction";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
   FinancialTransactionCreateInput,
   FinancialTransactionSourceOptionsOut,
@@ -33,9 +32,11 @@ import {
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import { sourceTransactionSettlements } from "~/server/db/computed/source-transaction-settlement-sql";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
+import { DECLARED_EDGE_DELETE_HOOKS } from "~/server/db/generated/declared-edges.gen";
 import {
   buildPartialUpdateValues,
+  databaseForTransaction,
   getDb,
   notDeleted,
   touchUpdatedAt,
@@ -53,6 +54,11 @@ import {
   emptySpendingCategorySummary,
   loadTransactionSpendingCategorySummaries,
 } from "~/server/domains/expense/repo/expense-category-summary";
+import { bankTransactionWrites } from "~/server/domains/financial-transaction/repo/bank-event";
+import {
+  createBankTransactions,
+  updateBankTransactions,
+} from "~/server/domains/financial-transaction/repo/bank-mutations";
 import { allocationIntegrityDefectSql } from "~/server/domains/financial-transaction/repo/financial-allocation-integrity";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { financialTransactionItemizationSql } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
@@ -90,7 +96,6 @@ import {
   financialTransactionCoverageSql,
   financialTransactionEvidenceFieldResolutionsSql,
 } from "~/server/domains/purchase/repo/purchase-evidence-policy";
-import { runStepInputListRows } from "~/server/domains/run/repo/run-step-input";
 import { evidenceAuditEntries } from "~/server/domains/transaction-import/repo/intake-audit";
 import { enrichFinancialTransactionVendorRead } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import {
@@ -113,6 +118,7 @@ import {
 } from "~/server/generic/audit-log/repo/audit-log";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import { resolveAllOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 
 const accountName = sql<string | null>`(
   SELECT fa.name FROM "FinancialAccount" fa
@@ -138,7 +144,6 @@ export const financialTransactionScaffold = listScaffold(
     readSchema: financialTransactionRepositoryReadSchema,
     rows: {
       settlementRefs: sql`SELECT owner,source,"externalId" FROM ${financialSourceReferenceRows} reference`,
-      runStepInputs: runStepInputListRows("financialTransaction"),
       acceptedSourceRecords: sql`SELECT "transaction" AS "owner", "record" FROM (${sourceTransactionSettlements}) accepted`,
     },
     derived: {
@@ -469,6 +474,7 @@ export async function createFinancialTransactionRows(
   actor: ActorContext,
 ) {
   if (!inputs.length) return [];
+  await enterWriteTransaction(tx, { lane: "money", mode: "member" });
   // One locked occurrence FK owns acceptance; retained aliases never grant it.
   const proof = await lockFreshFinancialSources(
     tx,
@@ -491,8 +497,7 @@ export async function createFinancialTransactionRows(
 }
 
 /**
- * Insert proven fresh transactions in the layer, accept their sources and
- * stage the create and evidence audits.
+ * Append validated bank inputs, accept their sources and stage provenance audits.
  */
 export async function insertFreshFinancialTransactions(
   layer: WriteLayer,
@@ -504,20 +509,10 @@ export async function insertFreshFinancialTransactions(
   actor: ActorContext,
 ) {
   if (!inputs.length) return [];
-  const created = await layer.insert(
-    "financialTransaction",
-    layer.stage(
-      "financialTransaction",
-      inputs.map(({ data, accountId }) => {
-        const {
-          allocations: _allocations,
-          sourceRefs: _sourceRefs,
-          purchaseId: _purchaseId,
-          ...columns
-        } = data;
-        return { ...columns, accountId, amount: moneyToMinor(data.amount) };
-      }),
-    ),
+  const created = await createBankTransactions(
+    databaseForTransaction(layer.tx),
+    inputs,
+    actor,
   );
   const acceptedSourceChanges = await acceptFreshFinancialSources(
     layer.tx,
@@ -967,6 +962,7 @@ export async function updateFinancialTransactions(
     updates.map((update) => update.shortcode),
   );
   await withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     await lockFinancialEvidenceKeys(
       tx,
       "reviewed-booking",
@@ -1142,8 +1138,7 @@ export async function updateFinancialTransactions(
           )
         : null,
     );
-    // Updates that write the same column values share one statement.
-    const groups = new Map<string, FinancialTransactionId[]>();
+    // Reconciled values become decisions; ordinary metadata keeps its writer.
     const columnValues = valuesFor.map((values) =>
       Object.fromEntries(
         Object.entries(values).filter(([key]) =>
@@ -1151,22 +1146,31 @@ export async function updateFinancialTransactions(
         ),
       ),
     );
+    await updateBankTransactions(
+      databaseForTransaction(tx),
+      updates.map((_update, index) => ({
+        id: ids[index]!,
+        values: columnValues[index]!,
+      })),
+      actor,
+    );
     for (const [index, values] of columnValues.entries()) {
-      const key = JSON.stringify(values, (_key, value: unknown) =>
-        typeof value === "bigint" ? `${value}n` : value,
+      const ordinary = Object.fromEntries(
+        Object.entries(values).filter(
+          ([field]) => !bankTransactionWrites.columns.includes(field),
+        ),
       );
-      groups.set(key, [...(groups.get(key) ?? []), ids[index]!]);
+      if (Object.keys(ordinary).length)
+        await tx
+          .update(financialTransaction)
+          .set(ordinary)
+          .where(
+            and(
+              inArray(financialTransaction.id, [ids[index]!]),
+              notDeleted(financialTransaction),
+            ),
+          );
     }
-    for (const group of groups.values())
-      await tx
-        .update(financialTransaction)
-        .set(columnValues[ids.indexOf(group[0]!)]!)
-        .where(
-          and(
-            inArray(financialTransaction.id, group),
-            notDeleted(financialTransaction),
-          ),
-        );
     const acceptedSourceChanges = await replaceFinancialSourceRefsFor(
       tx,
       updates.flatMap(({ data }, index) =>
@@ -1244,38 +1248,8 @@ export async function updateFinancialTransactions(
   return ids;
 }
 
-const FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY = {
-  "EmailFinancialAssociation.transactionId": {
-    code: "preserve-reviewed-email-association",
-    effect: "preserve",
-    description:
-      "A reviewed Email association keeps naming the deleted transaction's tombstone; the review is history and is never rewritten.",
-  },
-  "FinancialTransactionAllocation.transactionId": {
-    code: "soft-delete-association",
-    effect: "soft-delete",
-    description:
-      "Deleting a settlement transaction soft-deletes the purchase allocations that decompose it. Those Purchases keep their expenses and their identity; they simply lose this piece of settlement evidence.",
-  },
-  "SourceOccurrence.acceptedTransactionId": {
-    code: "preserve-accepted-source-reservation",
-    effect: "preserve",
-    description:
-      "Deleting a transaction keeps its source reservation; it cannot recreate money through replay.",
-  },
-  "FinancialEvidenceAlias.historicalTransactionId": {
-    code: "retire-financial-source-provenance",
-    effect: "soft-delete",
-    description:
-      "Deleting a transaction retires its reference bindings while preserving every alias row and provenance through tombstones. Proven source occurrence reservations remain independent.",
-  },
-} as const satisfies IncomingEdgePolicy<
-  "financialTransaction",
-  OperationDisposition
->;
-
 /** Evidence for a ledger transfer stays until the transfer releases it. */
-const refuseTransferEvidence = async (
+export const refuseTransferEvidence = async (
   tx: DrizzleTransaction,
   ids: FinancialTransactionId[],
 ) => {
@@ -1301,7 +1275,7 @@ const refuseTransferEvidence = async (
  * transaction split across two purchases has a NULL mirror, so reading only
  * that column would leave both purchases' data-quality exceptions stale.
  */
-const touchAllocatedPurchases = async (
+export const touchAllocatedPurchases = async (
   tx: DrizzleTransaction,
   ids: FinancialTransactionId[],
 ) => {
@@ -1341,7 +1315,7 @@ export const financialTransactionRepository = defineRepository(
   "financialTransaction",
   {
     schemas: financialTransactionSchemaBindings,
-    lifecycle: { delete: FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY },
+    lifecycle: { delete: DECLARED_EDGE_DELETE_POLICIES.financialTransaction },
     scaffold: financialTransactionScaffold,
     create: asActor(createFinancialTransaction),
     update: asActor(
@@ -1360,30 +1334,31 @@ export const financialTransactionRepository = defineRepository(
         data,
         ctx.actorContext,
       ),
-    deleteHooks: {
-      beforeLock: async (tx, ids) => {
-        await lockFinancialEvidenceKeys(
-          tx,
-          "reviewed-booking",
-          ids.map((id) => `transaction:${id}`),
-        );
-        const refs = await financialSourceRefsFor(tx, ids);
-        await lockFinancialEvidenceKeys(
-          tx,
-          "transaction-ref",
-          [...refs.values()]
-            .flat()
-            .map((ref) => JSON.stringify([ref.source, ref.externalId])),
-        );
-        await tx
-          .select({ id: sourceOccurrence.id })
-          .from(sourceOccurrence)
-          .where(inArray(sourceOccurrence.acceptedTransactionId, ids))
-          .orderBy(sourceOccurrence.id)
-          .for("update");
-      },
-      beforeDelete: refuseTransferEvidence,
-      afterDelete: touchAllocatedPurchases,
-    },
+    deleteHooks: DECLARED_EDGE_DELETE_HOOKS.financialTransaction,
   },
 );
+
+export const lockFinancialTransactionDeletion = async (
+  tx: DrizzleTransaction,
+  ids: FinancialTransactionId[],
+): Promise<void> => {
+  await lockFinancialEvidenceKeys(
+    tx,
+    "reviewed-booking",
+    ids.map((id) => `transaction:${id}`),
+  );
+  const refs = await financialSourceRefsFor(tx, ids);
+  await lockFinancialEvidenceKeys(
+    tx,
+    "transaction-ref",
+    [...refs.values()]
+      .flat()
+      .map((ref) => JSON.stringify([ref.source, ref.externalId])),
+  );
+  await tx
+    .select({ id: sourceOccurrence.id })
+    .from(sourceOccurrence)
+    .where(inArray(sourceOccurrence.acceptedTransactionId, ids))
+    .orderBy(sourceOccurrence.id)
+    .for("update");
+};

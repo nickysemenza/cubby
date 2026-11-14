@@ -6,7 +6,6 @@ import {
 import { productCategoryRawOut as rawProductCategoryOut } from "@cubby/schemas/entity-contracts/productCategory";
 import { normalizeAliases } from "@cubby/schemas/entity-definitions/field-policy";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
   FieldResolution,
   FieldResolutions,
@@ -52,7 +51,8 @@ import {
   type CategoryStockTracking,
   categoryStockTrackingSql,
 } from "~/server/db/computed/product-category-sql";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
+import { DECLARED_EDGE_DELETE_HOOKS } from "~/server/db/generated/declared-edges.gen";
 import { buildPartialUpdateValues } from "~/server/db/helpers";
 import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
 import { uuidArrayParam } from "~/server/db/helpers/query";
@@ -78,29 +78,6 @@ import { listScaffold } from "~/server/generic/list/repo/list";
 import { type ListReadOptions } from "~/server/generic/list/repo/list-projection";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-
-const PRODUCT_CATEGORY_DELETE_EDGE_POLICY = {
-  "ProductCategory.parentId": {
-    code: "block-child-categories",
-    effect: "block",
-    description:
-      "Move or delete child categories before deleting their parent.",
-  },
-  "Product.categoryId": {
-    code: "block-products",
-    effect: "block",
-    description: "Products retain their selected category until reassigned.",
-  },
-  "PhotoGroupProposal.productCreateCategoryId": {
-    code: "clear-proposal-category",
-    effect: "detach",
-    description:
-      "Deleting a category clears it from a proposed photo group's new Product, which is then created unclassified.",
-  },
-} as const satisfies IncomingEdgePolicy<
-  "productCategory",
-  OperationDisposition
->;
 
 type CategoryRow = typeof productCategory.$inferSelect;
 
@@ -683,7 +660,7 @@ export const updateProductCategory = defineMutationWriter({
 });
 
 /** A category bound to a behavior feature is structural; it cannot go. */
-const refuseBoundCategories = async (
+export const refuseBoundCategories = async (
   tx: DrizzleTransaction,
   ids: ProductCategoryId[],
 ) => {
@@ -826,9 +803,9 @@ export async function loadCategorySummaries(
 
 export const productCategoryRepository = defineRepository("productCategory", {
   schemas: productCategorySchemaBindings,
-  lifecycle: { delete: PRODUCT_CATEGORY_DELETE_EDGE_POLICY },
+  lifecycle: { delete: DECLARED_EDGE_DELETE_POLICIES.productCategory },
   scaffold: productCategoryScaffold,
   create: asActor(createProductCategory),
   update: asActor(updateProductCategory),
-  deleteHooks: { beforeDelete: refuseBoundCategories },
+  deleteHooks: DECLARED_EDGE_DELETE_HOOKS.productCategory,
 });

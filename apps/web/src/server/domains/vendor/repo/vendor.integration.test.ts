@@ -4,11 +4,6 @@ import type {
   VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import {
-  STATEMENT_ANSWER_VERSIONS,
-  statementMerchantKey,
-} from "@cubby/schemas/statement-answers";
-import { statementTransactionJudgment } from "@cubby/schemas/statement-suggestion";
 import { and, eq, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -17,7 +12,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { AUTOMATIC_AI_CALL } from "~/server/ai/policy/call-owner";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import {
   getDb,
   insertAndReturn,
@@ -34,7 +29,7 @@ import {
   product,
   vendor,
 } from "~/server/db/schema";
-import { adviseSpending } from "~/server/domains/financial-transaction/service/spending-advice";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   updateProduct,
   deleteProducts,
@@ -48,7 +43,7 @@ import {
 import { loadRelatedPreviews } from "~/server/generic/entity-links/repo/related-view";
 import { withListGroupBy } from "~/server/generic/list/repo/list";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 import {
   createProductFixture,
   makeProductInput,
@@ -198,98 +193,6 @@ describe("vendor repository — findOrCreateVendor", () => {
       .where(eq(vendor.id, original.id));
     const replacement = await findOrCreateVendor(ctx.db, "Synthetic maker");
     expect(replacement).not.toBe(original.id);
-  });
-});
-
-describe("statement merchant aliases", () => {
-  const ctx = withTestDb();
-
-  const advise = (merchant: string, person: boolean) => {
-    const create = {
-      kind: "purchase",
-      kindSource: "rule",
-      counterparty: {
-        label: person ? "person" : null,
-        history: null,
-        storedValue: false,
-      },
-      status: "posted",
-      amount: 12.5,
-      transactionDate: "2026-01-05",
-      postedDate: "2026-01-05",
-      merchant,
-      rawDescription: null,
-      sourceCategory: null,
-      notes: null,
-      sourceRef: { source: "synthetic-bank", externalId: merchant },
-    } as const;
-    const key = { merchant: statementMerchantKey(merchant) };
-    return adviseSpending(ctx.db, {
-      judgment: statementTransactionJudgment.parse({
-        recommended: "create",
-        accountId: crypto.randomUUID(),
-        statementDate: "2026-01-05",
-        providerStatus: "posted",
-        create,
-        candidates: [],
-        supersede: null,
-        void: null,
-        siblings: [],
-        clean: false,
-      }),
-      owner: AUTOMATIC_AI_CALL,
-      // Answers are current, so a closed port proves no model call is placed.
-      port: async () => {
-        throw new Error("no model call expected");
-      },
-      answers: {
-        merchant: {
-          identity: {
-            value: {
-              name: "Synthetic Roastery",
-              counterparty: "business",
-              confidence: "high",
-            },
-            input: key,
-            versions: {
-              "merchant-identity": STATEMENT_ANSWER_VERSIONS.merchantIdentity,
-            },
-            models: [],
-          },
-          support: {
-            value: true,
-            input: { ...key, proposed: "Synthetic Roastery" },
-            versions: {
-              "merchant-identity-support":
-                STATEMENT_ANSWER_VERSIONS.merchantSupport,
-            },
-            models: [],
-          },
-        },
-      },
-    });
-  };
-  const aliases = async (id: VendorId) =>
-    (
-      await getDb(ctx.db)
-        .select({ aliases: vendor.aliases })
-        .from(vendor)
-        .where(eq(vendor.id, id))
-    )[0]!.aliases;
-
-  it("aliases a supported business merchant onto its one Vendor, never a person's", async () => {
-    const roastery = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Synthetic Roastery",
-    });
-    await advise("VENMO *SYNTH ROASTERY", true);
-    expect(await aliases(roastery.id)).toEqual([]);
-
-    const advised = await advise("SQ *SYNTH ROASTERY 042", false);
-    expect(advised?.advice).toMatchObject({
-      vendorName: "Synthetic Roastery",
-      vendorConfidence: "high",
-    });
-    expect(await aliases(roastery.id)).toEqual(["SQ *SYNTH ROASTERY 042"]);
   });
 });
 
@@ -462,6 +365,7 @@ describe("vendor repository — spend rollup", () => {
           sorts: [],
           pagination: page,
         }),
+      // Includes the page's single batched kernel machinery read.
       { statements: 16, parameters: 27 },
     );
     expect(
@@ -632,6 +536,7 @@ describe("vendor repository — mergeVendors", () => {
     const locked = Promise.withResolvers<number>();
     const release = Promise.withResolvers<void>();
     const editing = getDb(ctx.db).transaction(async (tx) => {
+      await enterWriteTransaction(tx, { lane: "money", mode: "member" });
       await tx
         .select({ id: vendor.id })
         .from(vendor)
@@ -654,10 +559,12 @@ describe("vendor repository — mergeVendors", () => {
         .set({ orderEmailSenders: ["late@synthetic-seller.example"] })
         .where(eq(vendor.id, lose.entityId));
 
-      await tx
-        .update(purchase)
-        .set({ notes: sql`${purchase.notes} || E'\nConcurrent research'` })
-        .where(eq(purchase.id, keeper.entityId));
+      await updatePurchaseEventWhere(
+        tx,
+        "purchase",
+        { notes: sql`${purchase.notes} || E'\nConcurrent research'` },
+        eq(purchase.id, keeper.entityId),
+      );
     });
     const pid = await locked.promise;
     const merging = mergeVendors(
@@ -689,6 +596,7 @@ describe("vendor repository — mergeVendors", () => {
     const editLocked = Promise.withResolvers<number>();
     const editRelease = Promise.withResolvers<void>();
     const learning = getDb(ctx.db).transaction(async (tx) => {
+      await enterWriteTransaction(tx, { lane: "money", mode: "member" });
       await tx
         .select({ id: vendor.id })
         .from(vendor)

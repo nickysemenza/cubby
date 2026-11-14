@@ -31,9 +31,8 @@ import type {
   RunServices,
 } from "~/server/domains/purchase-agent/service/environment";
 import { assertNotInMaintenance } from "~/server/http/maintenance";
+import { WorkSupersededError } from "~/server/kernel/work-errors";
 import { getAuthSecret } from "~/server/lib/auth-configuration";
-
-import { CoordinatorLeaseLostError } from "./coordinator-turn";
 
 /** The MCP endpoint the delegation bearer's audience names. */
 const MCP_URL = "https://cubby.internal/api/mcp";
@@ -99,7 +98,7 @@ export async function admissionRead<T>(
   } catch (error: unknown) {
     // A lost coordinator turn is a transport fault pi retries, never a
     // final admission refusal.
-    if (error instanceof CoordinatorLeaseLostError)
+    if (error instanceof WorkSupersededError)
       throw new Error(`${ADMISSION_DATABASE_FAULT} ${error.message}`, {
         cause: error,
       });
@@ -123,29 +122,59 @@ export async function admissionRead<T>(
   }
 }
 
-/**
- * Bring this Run's `purchase.dispatch` forward once the gate reserved it a
- * turn; it deferred when none was free. Whether a waiting Job was found.
- * Host-only: the agent never calls it.
- */
+/** Wake the Run's Pass for a durable coordinator alarm or member prompt. */
 export function wakeWaitingDispatch(
   env: Env,
   ctx: HostContext,
   rawRunId: string,
-): Promise<boolean> {
-  const runId = runEntityId.parse(rawRunId);
+): Promise<void> {
   return withHostDatabase(env, ctx, async (db) => {
-    const [{ bringRunWaitingJobForward }, { wakeJobs }] = await Promise.all([
-      import("~/server/generic/jobs/repo/operator"),
-      import("~/server/workflows/background-tasks/publish"),
-    ]);
-    const woken = await bringRunWaitingJobForward(db, {
-      runId,
-      kind: "purchase.dispatch",
-      waitReason: "provider_capacity",
+    const { startPass } = await import("~/server/kernel/api");
+    const { purchaseDispatchPass } =
+      await import("~/server/workflows/purchase-dispatch-pass");
+    await startPass(db, purchaseDispatchPass, {
+      key: rawRunId,
+      runId: rawRunId,
+      cursor: { runId: rawRunId, events: [] },
     });
-    if (woken) await wakeJobs({ source: "coordinator-turn.reserved" });
-    return woken;
+  });
+}
+
+/** Host RPCs and every scoped effect require the Run's live Pass token. */
+export function fenceDispatch(
+  env: Env,
+  ctx: HostContext,
+  runId: string,
+  token: string,
+): Promise<void> {
+  return withHostDatabase(env, ctx, async (db) => {
+    const [{ fenceClaim }, { repositoryQueries }] = await Promise.all([
+      import("~/server/kernel/claim"),
+      import("~/server/db/repository-access.boundary"),
+    ]);
+    await fenceClaim(
+      repositoryQueries(db),
+      { table: "Pass", name: "purchase.dispatch", key: runId },
+      token,
+    );
+  });
+}
+
+/** The committed Answer precedes replaying a complete model response to Pi. */
+export function agentModelTurn(
+  env: Env,
+  ctx: HostContext,
+  rawRunId: string,
+  input: { generation: string; request: z.JSONType; recovery?: "unknown" },
+  send: () => Promise<Response>,
+  fence: () => Promise<void>,
+): Promise<Response> {
+  return withHostDatabase(env, ctx, async (db, service) => {
+    const scope = await service.loadRunScope(db, runEntityId.parse(rawRunId));
+    if (scope.public.dispatchEventId !== input.generation)
+      throw new WorkSupersededError();
+    const { runAgentTurn } = await import("./agent-turn-ask");
+    return runAgentTurn(db, { runId: rawRunId, ...input }, send, fence);
   });
 }
 
@@ -170,8 +199,10 @@ export function authorizeLegacyRetirement(
 export function purchaseDispatchEnvironment(
   env: Env,
   ctx: HostContext,
+  claimToken: string,
 ): PurchaseDispatchEnvironment {
   return {
+    claimToken,
     run: (runId) => runServicesFor(env, ctx, runId),
     coordinator: (agentId) => env.PURCHASE_IMPORT_RUN.getByName(agentId),
   };

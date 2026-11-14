@@ -1,15 +1,12 @@
 import type { SuggestionFamily } from "@cubby/schemas/suggestion";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { StackIcon } from "@phosphor-icons/react/dist/csr/Stack";
-import { useQueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useSyncExternalStore } from "react";
 
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { ReportBlocks } from "~/entity/entity-detail/report-slot";
-import { entityListHref } from "~/entity/entity-list-href";
 import { useEntityMetadata } from "~/entity/metadata";
-import { job } from "~/integrations/tanstack-query/generated/domains/job.gen";
 import { runDetail } from "~/integrations/tanstack-query/generated/domains/runDetail.gen";
 import { formatCount } from "~/lib/number-format";
 import { runPlanBlocks } from "~/lib/run-plan";
@@ -22,9 +19,9 @@ import { Button } from "~/ui/primitives/button";
 import type { KeyNumber } from "~/ui/records/key-numbers";
 import { RecordList } from "~/ui/records/record-list";
 
-import { JobDiagnostics } from "../job/job-diagnostics";
 import { DecisionLedger } from "./decision-ledger";
 import { decisionFacetCounts, presenterFor } from "./decision-presenters";
+import { RunMachinery } from "./run-machinery";
 import { RunStepStrip } from "./run-step-strip";
 import {
   type BreakdownGroup,
@@ -89,9 +86,12 @@ function useRunFacet(runId: string) {
 }
 
 const scrollTo = (id: string) =>
-  document
-    .getElementById(id)
-    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  document.getElementById(id)?.scrollIntoView({
+    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? "instant"
+      : "smooth",
+    block: "start",
+  });
 
 /**
  * The reads every Run detail slot shares; React Query dedupes them, so the
@@ -104,12 +104,8 @@ function useRunDetail(record: RunOut) {
     ...runDetail.steps.queryOptions({ runId: record.id }),
     refetchInterval: polling,
   });
-  const jobs = useQuery({
-    ...job.list.queryOptions({ runId: record.id }),
-    refetchInterval: polling,
-  });
   const overview = steps.data
-    ? runOverview(steps.data, jobs.data, Date.now(), steps.data.input)
+    ? runOverview(steps.data, undefined, Date.now(), steps.data.input)
     : null;
   const families = [
     ...new Set(
@@ -139,7 +135,6 @@ function useRunDetail(record: RunOut) {
   const facets = presenter ? decisionFacetCounts(rows, presenter) : [];
   return {
     steps,
-    jobs,
     overview,
     family,
     families,
@@ -156,7 +151,6 @@ function useRunDetail(record: RunOut) {
  * RunStep timeline. Decisions and Diagnostics are their own declared slots.
  */
 export function RunStepsDetail({ record }: { record: RunOut }) {
-  const queryClient = useQueryClient();
   useEntityMetadata("financialTransaction");
   useEntityMetadata("sourceTransactionRecord");
   const {
@@ -273,7 +267,7 @@ export function RunStepsDetail({ record }: { record: RunOut }) {
         className="inline-flex items-center gap-1 text-link hover:underline"
       >
         <StackIcon aria-hidden className="size-3" />
-        Job diagnostics
+        Passes and asks
       </a>
     </>
   );
@@ -284,10 +278,7 @@ export function RunStepsDetail({ record }: { record: RunOut }) {
       <ReportBlocks
         blocks={runPlanBlocks({
           runId: record.id,
-          inputHref: (entity, token) =>
-            entityListHref(queryClient, entity, {
-              filters: [{ id: "runStepInput", value: token }],
-            }),
+
           purpose: record.purpose,
           input: steps.data?.input,
           steps: steps.data?.steps ?? [],
@@ -357,31 +348,9 @@ export function RunDecisions({ record }: { record: RunOut }) {
   );
 }
 
-/** The Job executing the Run, its pages and raw logs. */
+/** The kernel work carrying this Run, including raw pass and ask diagnostics. */
 export function RunDiagnostics({ record }: { record: RunOut }) {
-  const { jobs } = useRunDetail(record);
-  return (
-    <div className="grid gap-2">
-      <p className="text-xs/4.5 text-muted-foreground">
-        The Job executing this Run, its pages and raw logs.
-      </p>
-      <JobDiagnostics
-        jobs={jobs.data}
-        state={
-          jobs.isError
-            ? {
-                status: "error",
-                error: jobs.error,
-                title: "Couldn't load Jobs",
-                onRetry: () => void jobs.refetch(),
-              }
-            : jobs.isPending
-              ? { status: "pending", rows: 4 }
-              : { status: "success" }
-        }
-      />
-    </div>
-  );
+  return <RunMachinery record={record} />;
 }
 
 type RunOut = DetailRecordOf<"run">;

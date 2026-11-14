@@ -7,17 +7,13 @@ import { getDb, withTransaction } from "~/server/db/helpers";
 import { updateManyAndReturn } from "~/server/db/helpers/crud";
 import { suggestionTable } from "~/server/db/schema";
 import {
-  kernelCtx,
   productFixture,
   recordId,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
-import { recordFeedback } from "~/server/generic/suggestions/repo/suggestion";
 import {
   publishExactSuggestion,
   publishExactSuggestions,
 } from "~/server/generic/suggestions/repo/suggestion-publication";
-import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
 import {
   retireSuggestionTargetsTx,
@@ -218,65 +214,6 @@ describe("Suggestion publication and transitions", () => {
     ).toEqual(before);
   });
 
-  it("applies publication, member review and system transitions in statement order", async () => {
-    const product = await productFixture(ctx, "Synthetic parity item");
-    const productId = await recordId(ctx.db, product.id, "product");
-    const kept = await publishExactSuggestion(
-      ctx.db,
-      recommendation(productId, "kept"),
-      { data: { candidateKey: "kept" } },
-    );
-    const dismissed = await publishExactSuggestion(
-      ctx.db,
-      recommendation(productId, "dismissed"),
-      { data: { candidateKey: "dismissed" } },
-    );
-    expect(kept).toMatchObject({
-      entity: "product",
-      recordId: productId,
-      fingerprint: "synthetic-kept",
-    });
-    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
-      suggestionId: dismissed.id,
-      operationId: "synthetic-dismissal",
-      verdict: "dismissed",
-      intent: "history",
-      suppression: {
-        scope: "product.related",
-        candidateKey: "dismissed",
-        fingerprint: null,
-      },
-    });
-    // Two transitions in one transaction must apply in statement order.
-    await withTransaction(ctx.db, async (tx) => {
-      await transitionSuggestionState(tx, kept.id, { confidence: 0.4 });
-      await transitionSuggestionState(tx, kept.id, {
-        confidence: 0.7,
-        acceptanceReceipt: null,
-      });
-    });
-    // Grades without a patch never move the projection.
-    await recordFeedback(ctx.db, {
-      suggestionId: kept.id,
-      operationId: "synthetic-grade",
-      verdict: "correct",
-      authority: "member",
-      actorUserId: "synthetic-reviewer",
-    });
-    const ids = [kept.id, dismissed.id];
-    const live = await liveRows(ctx, ids);
-    expect(live.find((row) => row.id === dismissed.id)?.suppression).toEqual(
-      expect.objectContaining({ candidateKey: "dismissed" }),
-    );
-    expect(live.find((row) => row.id === kept.id)?.confidence).toBe(0.7);
-    // Transitions leave no event of their own; only the grade is retained.
-    expect(
-      (await readSuggestionDecisions(ctx.db, kept.id)).map(
-        (decision) => decision.operationId,
-      ),
-    ).toEqual(["synthetic-grade"]);
-  });
-
   it("batches distinct values while preserving no-ops and rollback", async () => {
     const product = await productFixture(
       ctx,
@@ -399,7 +336,7 @@ describe("Suggestion publication and transitions", () => {
     ]);
   });
 
-  it("retires a removed record's rows", async () => {
+  it("retains stored recommendation history when its record is removed", async () => {
     const product = await productFixture(ctx, "Synthetic removed parity item");
     const productId = await recordId(ctx.db, product.id, "product");
     const published = await publishExactSuggestion(
@@ -410,7 +347,7 @@ describe("Suggestion publication and transitions", () => {
       retireSuggestionTargetsTx(tx, "product", [productId]),
     );
     const [live] = await liveRows(ctx, [published.id]);
-    expect(live).toMatchObject({ active: false, status: "superseded" });
+    expect(live).toMatchObject({ active: true, status: "pending" });
     // History stays: the Suggestion row is untouched.
     expect(
       await getDb(ctx.db)

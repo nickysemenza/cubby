@@ -7,24 +7,30 @@ import {
   sourceTransactionRecordSummaryOut,
 } from "@cubby/schemas/source-transaction-record";
 import {
-  statementSuggestionPreviewInput,
-  statementSuggestionPreviewOut,
-} from "@cubby/schemas/statement-suggestion";
+  statementDecisionInput,
+  statementDecisionOut,
+} from "@cubby/schemas/statement-decision";
 
 import { defineContract, mutation, query } from "~/contracts/define";
 
 export const sourceTransactionRecordContract = defineContract(
   "sourceTransactionRecord",
   {
-    previewSuggestion: query({
+    apply: mutation({
       description:
-        "Preview a statement Suggestions review draft against current evidence without writing. Pass the listed suggestionId, expectedFingerprint and declared application. Returns current transaction, Purchase/Expense, vendor and settlement effects or refuses stale/unsupported evidence. A successful preview does not apply the draft; explicit Suggestions review revalidates it again. To apply a draft that differs from the recommendation, review it with verdict wrong and correction {present:true, value:<the same application>}.",
-      input: statementSuggestionPreviewInput,
-      output: statementSuggestionPreviewOut,
+        "Apply, attach, book or void the current statement observation by recording decisions. Evidence is retained; ambiguous identity and missing order details remain visible in machinery. Attach names a reviewed live transaction; fields explicitly select the movement, posting date or status to copy. Reconcile an existing split before changing its movement.",
+      input: statementDecisionInput,
+      output: statementDecisionOut,
+      invalidates: [
+        "sourceTransactionRecord",
+        "financialTransaction",
+        "purchase",
+        "expense",
+      ],
     }),
     record: mutation({
       description:
-        "Record normalized financial evidence from an MCP source or client-parsed export; never submit file contents or paths. At most 500 observations per call. Resume a collection with identical source, fingerprint, observedAt, declared count and coverage. Scoped provider IDs identify revisions; retain providerAccountId, providerTransactionId, original descriptions and providerData. For ID-less exports preserve physical rowPosition. providerAmount is charges-negative; Cubby derives its outflow-positive amount. Zero records are retained without spending. Unknown providerStatus remains null; pending/unknown status does not prevent otherwise supported booking. Complete only an exhaustively enumerated account/window whose retained count equals its declaration. A visible-only query cannot prove withdrawal; confirmedWithdrawals additionally requires complete all-visibility coverage and source rechecking. Evidence plus the existing Sweep Job intent commit atomically. Dry runs and unchanged replays launch no financial work. Guarded corrections can revise or retire untouched generated lump bookings; edited/itemized/corroborated cases remain in Suggestions. Historical observations and settlement references are retained.",
+        "Record normalized financial evidence from an MCP source or client-parsed export; never submit file contents or paths. At most 500 observations per call. Resume a collection with identical source, fingerprint, observedAt, declared count and coverage. Scoped provider IDs identify revisions; retain providerAccountId, providerTransactionId, original descriptions and providerData. For ID-less exports preserve physical rowPosition. providerAmount is charges-negative; Cubby derives its outflow-positive amount. Zero records are retained without spending. Unknown providerStatus remains null; pending/unknown status does not prevent otherwise supported booking. Complete only an exhaustively enumerated account/window whose retained count equals its declaration. A visible-only query cannot prove withdrawal; confirmedWithdrawals additionally requires complete all-visibility coverage and source rechecking. Evidence and kernel discovery commit atomically. Reconciliation derives bank events and statement spending; ambiguous identity, held baselines and missing order details remain visible as machinery gaps or drift. Historical observations and settlement references are retained.",
       input: recordSourceTransactionRecordsInput,
       output: recordSourceTransactionRecordsOut,
       invalidates: ["sourceTransactionRecord"],

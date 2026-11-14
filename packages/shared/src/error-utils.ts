@@ -56,6 +56,8 @@ export const AppErrors = {
   // surface, its kind is not callable here, or the request was not a POST.
   OPERATION_NOT_FOUND: "NOT_FOUND",
   OPERATION_KIND_UNSUPPORTED: "BAD_REQUEST",
+  // A machinery decision the record's read does not offer, or an entity without machinery.
+  MACHINERY_DECISION_NOT_OFFERED: "BAD_REQUEST",
   OPERATION_METHOD_NOT_ALLOWED: "METHOD_NOT_ALLOWED",
 
   // Entity not found — one `<ENTITY>_NOT_FOUND` per shortcode entity, derived
@@ -155,6 +157,8 @@ export const AppErrors = {
   // An identifier (ASIN, barcode, Notion page, ...) already belongs to another
   // live record; the live `(source, kind, externalId)` unique allows one.
   EXTERNAL_ID_CONFLICT: "CONFLICT",
+  // A write named a record merged into another; the message names the survivor.
+  RECORD_ABSORBED: "CONFLICT",
   // A declared `block` edge of a policy-driven delete still has live rows.
   ENTITY_DELETE_BLOCKED: "PRECONDITION_FAILED",
   LEDGER_SOURCE_CLAIM_CONFLICT: "CONFLICT",

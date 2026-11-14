@@ -192,8 +192,6 @@ export const ripple = {
       FIELD_SUGGESTIONS,
     ],
   ),
-  /** A member review can reopen a remembered decline. */
-  settledSuggestions: exactRippleTags([["ai", "settledSuggestionQuestion"]]),
   /** The cross-family Suggestion list and its counts. */
   suggestions: exactRippleTags([["suggestions"]]),
   connectedApps: exactRippleTags([["oauth", "connectedApps"]]),

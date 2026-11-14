@@ -10,7 +10,7 @@ import {
   parseShortcodeFor,
   type ExpenseShortcode,
 } from "@cubby/schemas/identifiers";
-import { parseShortcode } from "@cubby/shared";
+import { parseShortcode, nullableMinorToMoney } from "@cubby/shared";
 import { and, eq, getTableColumns, inArray, sql, type SQL } from "drizzle-orm";
 import { uniqBy } from "es-toolkit";
 import { z } from "zod";
@@ -38,13 +38,13 @@ import {
   listPurchasesSettlementCandidates,
 } from "~/server/domains/purchase/repo/purchase-settlement-candidates";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
-import { JobEvidenceObsoleteError } from "~/server/generic/jobs/errors";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   SHORTCODE_TABLE,
   orderedEntityLockKinds,
   type ShortcodeTable,
 } from "~/server/generic/shortcode/repo/shortcode-tables";
+import { WorkEvidenceObsoleteError } from "~/server/kernel/work-errors";
 
 import { captureEmailConnectionBasis } from "./email-connections";
 
@@ -164,6 +164,12 @@ function connectionRelevantRowSql(kind: string, table: ShortcodeTable) {
     ? sql<unknown>`jsonb_build_object(${sql.join(pairs, sql`, `)})`
     : sql<unknown>`'{}'::jsonb`;
 }
+
+/** Evidence snapshots keep Expense cost on the dollar-number wire. */
+const dollarExpense = (row: typeof expense.$inferSelect) => ({
+  ...row,
+  cost: nullableMinorToMoney(row.cost),
+});
 
 const jsonEvidence = z.json();
 type ConnectionJson = z.infer<typeof jsonEvidence>;
@@ -336,7 +342,7 @@ async function connectionRecord(db: Database, ref: EntityRef, lock = false) {
   const parsed = parseShortcode(ref.entityId);
   if (parsed?.type !== kind) {
     await resolveOrThrow(db, kind, ref.entityId);
-    throw new JobEvidenceObsoleteError(`Connection ${kind} no longer exists`);
+    throw new WorkEvidenceObsoleteError(`Connection ${kind} no longer exists`);
   }
   const table: ShortcodeTable = SHORTCODE_TABLE[kind];
   // One statement by live shortcode: resolving first doubled every record read.
@@ -350,7 +356,7 @@ async function connectionRecord(db: Database, ref: EntityRef, lock = false) {
   // rediscovers without it); only a live code without a row "no longer exists".
   if (!value) {
     await resolveOrThrow(db, kind, ref.entityId);
-    throw new JobEvidenceObsoleteError(`Connection ${kind} no longer exists`);
+    throw new WorkEvidenceObsoleteError(`Connection ${kind} no longer exists`);
   }
   return {
     id: parseEntityId(kind, value.id),
@@ -566,7 +572,7 @@ async function readConnectionBases(
       if (row.purchaseId && row.productId)
         purchaseProducts
           .get(pairKey(row.purchaseId, row.productId))
-          ?.expenses.push(row);
+          ?.expenses.push(dollarExpense(row));
   }
   return {
     locked: lock,
@@ -597,7 +603,7 @@ export async function captureConnectionBasis(
  * whose source is not a payload row), so a locked publication need not
  * resolve the source again.
  */
-export async function captureConnectionEvidence(
+async function captureConnectionEvidence(
   db: Database,
   raw: ConnectionCandidate,
   lock = false,
@@ -726,7 +732,8 @@ export async function captureConnectionEvidence(
               notDeleted(expense),
             ),
           )
-          .orderBy(expense.id),
+          .orderBy(expense.id)
+          .then((rows) => rows.map(dollarExpense)),
       });
       break;
     }

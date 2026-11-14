@@ -26,7 +26,9 @@ export async function lockFinancialEvidenceKeys(
 ): Promise<void> {
   // JSON escaping keeps evidence values containing NUL delimiters valid UTF-8
   // bind parameters while retaining an unambiguous namespace/key boundary.
-  await advisoryXactLocks(unwrapDb(tx), namespace, keys);
+  // Evidence writers then lock and dirty rows the kernel reads, so they take
+  // the household write gate first.
+  await advisoryXactLocks(unwrapDb(tx), namespace, keys, { afterGate: true });
 }
 
 /** Legacy evidence doubles must refuse through the financial constraint boundary. */

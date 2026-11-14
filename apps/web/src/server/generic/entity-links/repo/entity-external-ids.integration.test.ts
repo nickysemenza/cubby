@@ -8,11 +8,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { entityIdentity } from "~/server/db/entity-identity-schema";
-import {
-  getDb,
-  databaseForTransaction,
-  withSnapshotWrite,
-} from "~/server/db/helpers";
+import { getDb } from "~/server/db/helpers";
 import { entityExternalId } from "~/server/db/schema";
 import {
   updateFinancialTransaction,
@@ -187,33 +183,17 @@ describe("EntityExternalId", () => {
   it("refuses a reference another live transaction holds, with the structured reason", async () => {
     const account = await mkAccount("Conflict Visa");
     const ref = { source: "monarch", externalId: "mon-held" };
-    let arrived = 0;
-    let release: () => void = () => undefined;
-    const bothSnapshots = new Promise<void>((resolve) => {
-      release = resolve;
-    });
     const attempt = () =>
-      withSnapshotWrite(
+      createFinancialTransaction(
         ctx.db,
-        async (tx) => {
-          // Both snapshots precede either reference claim: the unique guard must
-          // also fence a writer whose snapshot cannot see the advisory-lock winner.
-          await tx.select().from(entityExternalId);
-          if (++arrived === 2) release();
-          await bothSnapshots;
-          return createFinancialTransaction(
-            databaseForTransaction(tx),
-            buildEntity("financialTransaction", {
-              accountId: account.id,
-              kind: "purchase",
-              status: "pending",
-              amount: 12.5,
-              sourceRefs: [ref],
-            }),
-            ctx.actor,
-          );
-        },
-        { isolationLevel: "repeatable read" },
+        buildEntity("financialTransaction", {
+          accountId: account.id,
+          kind: "purchase",
+          status: "pending",
+          amount: 12.5,
+          sourceRefs: [ref],
+        }),
+        ctx.actor,
       );
     const results = await Promise.allSettled([attempt(), attempt()]);
     expect(

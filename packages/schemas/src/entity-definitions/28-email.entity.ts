@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { timestampField, readOnly } from "./field-policy";
 import { withQuiet } from "./select-control-options.js";
 import { emailRelationshipResult } from "../email-relationship-facts";
@@ -6,7 +7,8 @@ import type { ColorToken, EnumIcon } from "@cubby/shared/enum-palette";
 import { z } from "zod";
 import { dateTime } from "../codec";
 import {
-  EMAIL_IMPORT_OUTCOME_LABEL,
+  EMAIL_IMPORT_OUTCOME_DETAIL_LABEL,
+  EMAIL_IMPORT_OUTCOME_STAGE,
   EMAIL_LINK_STATE_LABEL,
   emailImportOutcome,
   emailImportOutcomeDetail,
@@ -125,7 +127,8 @@ const IMPORT_OUTCOME_PRESENTATION = {
 } satisfies Record<z.infer<typeof emailImportOutcome>, OptionPresentation>;
 const importOutcomeOptions = emailImportOutcome.options.map((value) => ({
   value,
-  label: EMAIL_IMPORT_OUTCOME_LABEL[value],
+  label: EMAIL_IMPORT_OUTCOME_DETAIL_LABEL[value],
+  stage: EMAIL_IMPORT_OUTCOME_STAGE[value],
   ...IMPORT_OUTCOME_PRESENTATION[value],
 }));
 
@@ -135,6 +138,388 @@ const importOutcomeOptions = emailImportOutcome.options.map((value) => ({
  */
 export const { definition, readSchemas } = defineEntityModel({
   key: "email",
+  edges: [
+    defineEdge({
+      key: "MailHandlingReceipt.emailId",
+      from: "row:MailHandlingReceipt",
+      to: "email",
+      cardinality: "one",
+      inverse: {
+        key: "email.incoming.MailHandlingReceipt.emailId",
+        from: "email",
+        to: "row:MailHandlingReceipt",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "MailHandlingReceipt.emailId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "Immutable workflow evidence retains its source references.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "source",
+        description: "Mail handling receipts retain their original Email.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason: "Mail handling receipts retain their original Email.",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "evidence",
+        description: "Mail handling receipts retain their original Email.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason: "Mail handling receipts retain their original Email.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            order: 99,
+            handler: null,
+            disposition: {
+              code: "preserve-mailhandlingreceipt",
+              effect: "preserve",
+              description:
+                "Mail handling receipts retain their original Email.",
+            },
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+
+    defineEdge({
+      key: "ShipmentSourceCapture.emailId",
+      from: "row:ShipmentSourceCapture",
+      to: "email",
+      cardinality: "one",
+      inverse: {
+        key: "email.incoming.ShipmentSourceCapture.emailId",
+        from: "email",
+        to: "row:ShipmentSourceCapture",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "ShipmentSourceCapture.emailId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason:
+          "Workflow evidence about entities, not a relationship between them.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "shipment source captures",
+        description: "Retained reference to the original shipping Email.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Shipment provenance retains the Email identity after its removal.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "EmailCandidateObservation.emailId",
+      from: "row:EmailCandidateObservation",
+      to: "email",
+      cardinality: "one",
+      inverse: {
+        key: "email.incoming.EmailCandidateObservation.emailId",
+        from: "email",
+        to: "row:EmailCandidateObservation",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "EmailCandidateObservation.emailId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "Immutable Email candidate history.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "candidate observations",
+        description:
+          "Immutable evidence about the original Email, retained through its tombstone.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Immutable observation history retains its original subject UUID through deletion and merge.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "EmailClassificationObservation.emailId",
+      from: "row:EmailClassificationObservation",
+      to: "email",
+      cardinality: "one",
+      inverse: {
+        key: "email.incoming.EmailClassificationObservation.emailId",
+        from: "email",
+        to: "row:EmailClassificationObservation",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "EmailClassificationObservation.emailId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "Immutable Email classification history.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "classification observations",
+        description:
+          "Immutable evidence about the original Email, retained through its tombstone.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Immutable observation history retains its original subject UUID through deletion and merge.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "EmailFinancialAssociation.emailId",
+      from: "row:EmailFinancialAssociation",
+      to: "email",
+      cardinality: "one",
+      inverse: {
+        key: "email.incoming.EmailFinancialAssociation.emailId",
+        from: "email",
+        to: "row:EmailFinancialAssociation",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "EmailFinancialAssociation.emailId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "column",
+        column: "EmailFinancialAssociation.emailId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "financial associations",
+        description:
+          "A member-reviewed link from this Email's evidence to a settlement transaction, retained through its tombstone.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "A reviewed Email-to-transaction association is append-only history that keeps its original UUIDs through every tombstone.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "EmailRetrievalFailure.emailId",
+      from: "row:EmailRetrievalFailure",
+      to: "email",
+      cardinality: "one",
+      inverse: {
+        key: "email.incoming.EmailRetrievalFailure.emailId",
+        from: "email",
+        to: "row:EmailRetrievalFailure",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "EmailRetrievalFailure.emailId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "Immutable Email retrieval history.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "retrieval failures",
+        description:
+          "Immutable evidence about the original Email, retained through its tombstone.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Immutable observation history retains its original subject UUID through deletion and merge.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+  ],
+
   names: { singular: "Email", plural: "Emails" },
   route: { basePath: "emails" },
   // Preserve processing UUIDs and existing writers until the contract migration.
@@ -1231,15 +1616,29 @@ export const { definition, readSchemas } = defineEntityModel({
 
 export default defineEntity(
   definition,
-  (r) => [
-    r
-      .query("reviewedEmailTransactions", "many")
-      .named("reviewed-transactions", "Reviewed transaction evidence"),
-    r
-      .query("reviewedEmailAccounts", "many")
-      .named("reviewed-accounts", "Account at review"),
-    r.field("ledgerPartyId").named("ledger-party", "Owner"),
-    r.field("runId").named("run", "Current import Run"),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r
+          .query("reviewedEmailTransactions", "many")
+          .named("reviewed-transactions", "Reviewed transaction evidence"),
+        "financialTransaction.email.reviewed-transactions",
+      ),
+      r.declare(
+        r
+          .query("reviewedEmailAccounts", "many")
+          .named("reviewed-accounts", "Account at review"),
+        "financialAccount.email.reviewed-accounts",
+      ),
+      r.declare(
+        r.field("ledgerPartyId").named("ledger-party", "Owner"),
+        "ledgerParty.emails",
+      ),
+      r.declare(
+        r.field("runId").named("run", "Current import Run"),
+        "run.emails",
+      ),
+    ],
+  }),
   readSchemas,
 );

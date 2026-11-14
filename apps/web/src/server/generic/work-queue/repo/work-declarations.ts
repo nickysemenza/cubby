@@ -56,6 +56,12 @@ import {
   type WorkSource,
 } from "./work-source";
 
+/** Bind values are part of identity; minor-unit money binds as bigint. */
+const bindIdentity = (compiled: { sql: string; params: unknown[] }) =>
+  JSON.stringify([compiled.sql, compiled.params], (_key, value: unknown) =>
+    typeof value === "bigint" ? `${value}n` : value,
+  );
+
 type GapEntity = (typeof workQueueGapViews)[number]["entity"];
 const gapView = (entity: GapEntity) => {
   const view = workQueueGapViews.find((view) => view.entity === entity);
@@ -251,7 +257,7 @@ export const entityProblemSources = (
         // Bind values are part of identity: prepared contexts can differ by Problem.
         const project = (value: SQL): SQL => {
           const compiled = dialect.sqlToQuery(value);
-          const key = JSON.stringify([compiled.sql, compiled.params]);
+          const key = bindIdentity(compiled);
           let name = expressions.get(key);
           if (!name) {
             name = `fact_${expressions.size}`;
@@ -301,7 +307,7 @@ export const entityProblemSources = (
                   )}]::text[]`
                 : sql`${value}`;
               const compiled = dialect.sqlToQuery(expression);
-              const identity = JSON.stringify([compiled.sql, compiled.params]);
+              const identity = bindIdentity(compiled);
               let name = routedNames.get(identity);
               if (!name) {
                 name = `route_${routedNames.size}`;

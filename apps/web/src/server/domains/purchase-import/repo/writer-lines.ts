@@ -7,16 +7,22 @@ import type {
   ExtractedOrderCandidate,
   ExtractedPurchaseLine,
 } from "@cubby/schemas/purchase-import";
-import { cents } from "@cubby/shared";
-import { eq } from "drizzle-orm";
+import {
+  cents,
+  wholeCentToMinor,
+  nullableWholeCentToMinor,
+} from "@cubby/shared";
+import { eq, type InferInsertModel } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
 import { expense, importSourceProduct } from "~/server/db/schema";
-import type { ExistingExpenseSnapshot } from "~/server/domains/purchase-import/repo/writer-policy";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-
-import type { LineProducts } from "./writer";
-import type { LineIdentityDecision } from "./writer-decisions";
+import {
+  createPurchaseEventRecord,
+  createPurchaseEventRecords,
+} from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { type planLineMatch } from "~/server/domains/purchase-import/policy/accepted-source";
+import type { ExistingExpenseSnapshot } from "~/server/domains/purchase-import/policy/import-lines";
 import {
   planAggregateExpense,
   planLineAction,
@@ -25,9 +31,11 @@ import {
   planImportedExpense,
   planInsertedFindings,
   type LineFinding,
-  type planLineMatch,
   type planLineMode,
-} from "./writer-plan";
+} from "~/server/domains/purchase-import/repo/writer-plan";
+
+import type { LineProducts } from "./writer";
+import type { LineIdentityDecision } from "./writer-decisions";
 
 export type LineMutation = {
   targetKind: "expense" | "product";
@@ -78,6 +86,12 @@ export async function writePurchaseLines(
     >
   > = [];
   const rowMutations: LineMutation[] = [];
+  const newLines: {
+    lineIndex: number;
+    productId: ProductId | null;
+    values: Omit<InferInsertModel<typeof expense>, "id" | "shortcode">;
+    fields: string[];
+  }[] = [];
   const fileFindings = async (findings: Finding[]) => {
     for (const finding of findings)
       findingIds.push(await args.fileFinding(finding));
@@ -100,7 +114,10 @@ export async function writePurchaseLines(
         existing,
       );
       if (plan) {
-        const inserted = await insertWithShortcode(tx, "expense", plan);
+        const inserted = await createPurchaseEventRecord(tx, "expense", {
+          ...plan,
+          cost: wholeCentToMinor(plan.cost),
+        });
         rowMutations.push({
           targetKind: "expense",
           targetId: inserted.id,
@@ -193,10 +210,12 @@ export async function writePurchaseLines(
           lineMatch,
         );
         if (binding) {
-          await tx
-            .update(expense)
-            .set(binding.values)
-            .where(eq(expense.id, binding.id));
+          await updatePurchaseEventWhere(
+            tx,
+            "expense",
+            binding.values,
+            eq(expense.id, binding.id),
+          );
           rowMutations.push({
             targetKind: "expense",
             targetId: row.id,
@@ -218,18 +237,38 @@ export async function writePurchaseLines(
           orderDate,
           unpriced,
         );
-        const inserted = await insertWithShortcode(tx, "expense", plan.values);
-        productLines.push({ lineIndex, productId, expenseId: inserted.id });
-        rowMutations.push({
-          targetKind: "expense",
-          targetId: inserted.id,
-          mutationKind: "create",
+        newLines.push({
+          lineIndex,
+          productId,
+          values: {
+            ...plan.values,
+            cost: nullableWholeCentToMinor(plan.values.cost),
+          },
           fields: plan.fields,
         });
         await fileFindings(planInsertedFindings(line, identity));
       }
     }
     await products.flush();
+    const inserted = await createPurchaseEventRecords(
+      tx,
+      "expense",
+      newLines.map((line) => line.values),
+    );
+    for (const [index, row] of inserted.entries()) {
+      const line = newLines[index]!;
+      productLines.push({
+        lineIndex: line.lineIndex,
+        productId: line.productId,
+        expenseId: parseEntityId("expense", row.id),
+      });
+      rowMutations.push({
+        targetKind: "expense",
+        targetId: row.id,
+        mutationKind: "create",
+        fields: line.fields,
+      });
+    }
   }
   return { findingIds, productLines, rowMutations };
 }

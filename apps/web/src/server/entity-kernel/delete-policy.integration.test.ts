@@ -2,7 +2,7 @@ import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   ENTITY_LINK_KINDS,
   entityLinkKinds,
-} from "@cubby/schemas/entity-links";
+} from "@cubby/schemas/entity-link-catalog";
 /**
  * Every declared delete disposition, checked at the database boundary.
  *
@@ -72,6 +72,8 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { mock } from "~/lib/test/mock-schema";
+import { setFieldsFixture } from "~/server/ai/fields/fields.fixtures";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db";
 import {
   INCOMING_EDGES,
@@ -90,7 +92,6 @@ import {
   emailFinancialAssociation,
   entityLink,
   run as runTable,
-  expenseAttribution,
   importPreparedOrder,
   importSourceClaim,
   importSourceOrder,
@@ -109,6 +110,9 @@ import {
   sourceObservationAnnotation,
 } from "~/server/db/schema";
 import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-decision";
+import { updateBankTransactionsWhere } from "~/server/domains/financial-transaction/repo/bank.fixtures";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { attachExistingImageToEntity } from "~/server/domains/image/repo/image";
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
 import {
@@ -138,10 +142,9 @@ import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-runtime
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import {
-  insertWithShortcode,
-  SHORTCODE_TABLE,
-} from "~/server/generic/shortcode/repo/shortcode-utils";
+import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { columnOwner } from "~/server/kernel/api";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 import { createImageFixture } from "~/server/testing/repo.fixtures";
 import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
 
@@ -479,6 +482,53 @@ const pointEdgeAt = async (
     physical(edge);
   const table = sql.identifier(tableName);
   const column = sql.identifier(columnName);
+  if (
+    tableName === "Product" &&
+    ["ingredientId", "categoryId", "growsPlantId", "brandId"].includes(
+      columnName,
+    )
+  ) {
+    const found = await getDb(db).execute<{ id: string }>(
+      sql`SELECT id FROM "Product" WHERE id::text <> ${targetId} AND "deletedAt" IS NULL LIMIT 1`,
+    );
+    if (!found.rows[0]) return false;
+    await setFieldsFixture(db, "product", found.rows[0].id, {
+      [columnName]: targetId,
+    });
+    return true;
+  }
+  const sourceTable = getColumnTable(edge.column);
+  const property = Object.entries(getTableColumns(sourceTable)).find(
+    ([, declared]) => declared === edge.column,
+  )?.[0];
+  const owner = property ? await columnOwner(sourceTable, property) : null;
+  if (owner === "purchaseEvent" || owner === "bankEvent") {
+    const found = await getDb(db).execute<{ id: string }>(sql`
+      SELECT s.id FROM ${table} s WHERE s.${column} IS DISTINCT FROM ${targetId}
+      AND s.id::text <> ${targetId} ${liveRow(softDeletable)} ${scopeSql} LIMIT 1`);
+    const id = found.rows[0]?.id;
+    if (!id || !property) return false;
+    const where = sql`"id" = ${id}::uuid`;
+    if (owner === "bankEvent")
+      await updateBankTransactionsWhere(db, { [property]: targetId }, where);
+    else {
+      const entity = {
+        Purchase: "purchase",
+        Expense: "expense",
+        ExpenseAttribution: "ExpenseAttribution",
+        FinancialTransactionAllocation: "FinancialTransactionAllocation",
+      } as const;
+      if (!(tableName in entity)) return false;
+      // SAFETY: the registered money owner above narrows this physical table.
+      await updatePurchaseEventWhere(
+        db,
+        entity[tableName as keyof typeof entity],
+        { [property]: targetId },
+        where,
+      );
+    }
+    return true;
+  }
   const attempt = (statement: SQL) =>
     getDb(db)
       .transaction(
@@ -591,6 +641,7 @@ async function measureEdge(
   let measured = false;
   await getDb(db)
     .transaction(async (tx) => {
+      await enterWriteTransaction(tx, { lane: "money", mode: "member" });
       const txDb = databaseForTransaction(tx);
       if (synthetic && !(await pointEdgeAt(txDb, edge, target.id)))
         throw new Rollback();
@@ -1020,7 +1071,7 @@ async function seedCookbookExpenseAttributionInventory(
     }).catch(() => undefined);
 
   if (expenseId && ledgerPartyId)
-    await insertAndReturn(db, expenseAttribution, {
+    await createPurchaseEventRecord(db, "ExpenseAttribution", {
       expenseId,
       role: "funder",
       ledgerPartyId,
@@ -1390,6 +1441,12 @@ async function seedDeletePolicyStagingRows(
     locationId: await resolve("location", "LOC-"),
   };
 
+  if (ids.purchaseId && ids.financialTransactionId)
+    await createPurchaseEventRecord(db, "FinancialTransactionAllocation", {
+      purchaseId: ids.purchaseId,
+      transactionId: ids.financialTransactionId,
+      amountMinor: 1n,
+    });
   await seedMealChildRows(db, ids);
   await seedShipmentReferences(db, shortcodeByPrefix);
   await seedProductMatchCandidate(db, ids);

@@ -19,7 +19,6 @@ import {
 import { sql, type SQL } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { dollarsToMinorSql } from "~/server/db/computed/money";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { columnArrayParam } from "~/server/db/helpers/query";
@@ -133,7 +132,7 @@ export const expenseJointAllocationSql = (
       : sql``
   } principal_input AS (
     SELECT e.id, e."purchaseId", e."projectId", e."productId", e."spendingCategoryId",
-      e."lineKind", e.trade, e."costType", e.cost
+      e."lineKind", e.trade, e."costType", e."costMinor"
     FROM ${
       expenseIds
         ? sql`(
@@ -177,7 +176,7 @@ export const expenseJointAllocationSql = (
       } AS "productCategoryRemainder",
       ${trades ? inherited.trade : sql`NULL::text`} AS trade,
       e."costType"::text AS "costType",
-      ${dollarsToMinorSql(sql`e."cost"`)} AS cost_cents,
+      e."costMinor" AS cost_cents,
       live_purchase."id" IS NOT NULL AS live_purchase,
       EXISTS (SELECT 1 FROM "Expense" unknown_role
         WHERE unknown_role."purchaseId" = e."purchaseId"
@@ -253,16 +252,16 @@ export const expenseJointAllocationSql = (
     SELECT e."id" AS "expenseId", e."purchaseId", w."principalExpenseId",
       ${projects ? sql`CASE WHEN p."id" IS NULL THEN standalone_project."id" ELSE w."projectId" END` : sql`NULL::uuid`} AS "projectId",
       CASE
-        WHEN e."cost" < 0 AND e."lineKind" <> ${expenseLineKindSchema.enum.discount} AND coalesce(d.has_positive, false) THEN NULL
+        WHEN e."costMinor" < 0 AND e."lineKind" <> ${expenseLineKindSchema.enum.discount} AND coalesce(d.has_positive, false) THEN NULL
         ELSE w."spendingCategoryId"
       END AS "spendingCategoryId",
       -- Incomplete item evidence leaves ancillary Product identity unknown;
       -- existing weights still conserve the same cents across the other axes.
-      CASE WHEN e."cost" < 0 AND e."lineKind" <> ${expenseLineKindSchema.enum.discount} AND coalesce(d.has_positive, false)
+      CASE WHEN e."costMinor" < 0 AND e."lineKind" <> ${expenseLineKindSchema.enum.discount} AND coalesce(d.has_positive, false)
         THEN NULL
         WHEN d.has_unpriced_principal OR d.has_unclassified THEN NULL
         ELSE w."productCategoryId" END AS "productCategoryId",
-      CASE WHEN e."cost" < 0 AND e."lineKind" <> ${expenseLineKindSchema.enum.discount} AND coalesce(d.has_positive, false)
+      CASE WHEN e."costMinor" < 0 AND e."lineKind" <> ${expenseLineKindSchema.enum.discount} AND coalesce(d.has_positive, false)
         THEN ${expenseProductCategoryRemainderSchema.enum.unknown_refund}
         WHEN d.has_unpriced_principal OR d.has_unclassified THEN ${expenseProductCategoryRemainderSchema.enum.unknown_allocation}
         ELSE coalesce(w."productCategoryRemainder",
@@ -276,7 +275,7 @@ export const expenseJointAllocationSql = (
       CASE WHEN e."trade" IS NOT NULL OR w."costType" IS NULL THEN e."costType"::text
         ELSE w."costType" END AS "costType",
       coalesce(w.basis, ${allocationBasis.default}) AS basis, coalesce(w.weight, 1::bigint) AS weight,
-      ${dollarsToMinorSql(sql`e."cost"`)} AS source_cents,
+      e."costMinor" AS source_cents,
       sum(coalesce(w.weight, 1::bigint)) OVER (PARTITION BY e."id") AS total_weight,
       coalesce(d.has_unpriced_principal, false) AS has_unpriced_principal,
       coalesce(d.has_unclassified, false) AS has_unclassified
@@ -315,8 +314,8 @@ export const expenseJointAllocationSql = (
       NULL::uuid AS "projectId", NULL::uuid AS "spendingCategoryId",
       NULL::uuid AS "productCategoryId", ${expenseProductCategoryRemainderSchema.enum.unclassified}::text AS "productCategoryRemainder",
       NULL::text AS trade, e."costType"::text AS "costType",
-      ${dollarsToMinorSql(sql`e."cost"`)} AS source_cents,
-      ${dollarsToMinorSql(sql`e."cost"`)} AS attributed_cents,
+      e."costMinor" AS source_cents,
+      e."costMinor" AS attributed_cents,
       ${expenseLineKindSchema.enum.unclassified}::text AS basis, true AS incomplete, true AS category_incomplete
     FROM "Expense" e
     WHERE ${notDeleted("e")} AND e."lineKind" = ${expenseLineKindSchema.enum.unclassified}

@@ -181,13 +181,10 @@ read-only outside intake. Provider facts and memberships change only through
 recording source evidence. The [evidence lifecycle](../../../docs/import-evidence-convergence.md#financial-evidence-entities)
 owns create/merge restrictions and deletion guards.
 
-When working the Transaction suggestion backlog, follow
-[statement backlog](references/statement-backlog.md); read
+When resolving statement gaps, follow the
+[statement backlog](references/statement-backlog.md). Read
 [Reviewing statement outcomes](../../../docs/import-evidence-convergence.md#reviewing-statement-outcomes)
-for optional inspection, current write validation and corrections. When resuming
-held cases or replaying a committed booking, follow its retained-hold and receipt
-sections. For explicit booking classification and graph read-back, use
-[Statement review receipts and classification](../../../docs/import-evidence-convergence.md#statement-review-receipts-and-classification).
+for decision authority, baseline drift, retained holds and graph read-back.
 
 ## Completion
 

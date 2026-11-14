@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { purchase as purchaseTable, vendorAccount } from "~/server/db/schema";
@@ -15,12 +16,12 @@ import {
   orderMail,
   orderMailEvent,
 } from "~/server/db/schema";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { withEmailEvidenceWrite } from "~/server/domains/purchase-import/repo/email-evidence-write-scope";
 import { decideEmailPurchase } from "~/server/domains/purchase-import/repo/email-purchase-decision";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 // Failure modes: discovery grants operational link authority; inverse discovery
 // misses retained events; subject similarity invents identity; a changed checksum
@@ -283,10 +284,12 @@ describe("fresh retained Email connection recommendations", () => {
       vendorId: f.purchase.vendorId,
       ledgerPartyId: foreign.id,
     });
-    await getDb(ctx.db)
-      .update(purchaseTable)
-      .set({ vendorAccountId: account.id })
-      .where(eq(purchaseTable.id, f.purchase.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { vendorAccountId: account.id },
+      eq(purchaseTable.id, f.purchase.id),
+    );
     expect(await retrieveConnectionCandidates(ctx.db, f.source)).toEqual([]);
     await getDb(ctx.db)
       .update(vendorAccount)
@@ -302,10 +305,12 @@ describe("fresh retained Email connection recommendations", () => {
       .where(eq(vendorAccount.id, account.id));
     expect(await retrieveConnectionCandidates(ctx.db, f.source)).toEqual([]);
     expect(await readEntityConnections(ctx.db, f.source)).toEqual([]);
-    await getDb(ctx.db)
-      .update(purchaseTable)
-      .set({ vendorAccountId: null })
-      .where(eq(purchaseTable.id, f.purchase.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { vendorAccountId: null },
+      eq(purchaseTable.id, f.purchase.id),
+    );
     expect(await retrieveConnectionCandidates(ctx.db, f.source)).toHaveLength(
       1,
     );
@@ -388,13 +393,7 @@ describe("fresh retained Email connection recommendations", () => {
     };
     await expect(
       withEmailEvidenceWrite(ctx.db, async (db, scope) => {
-        await reviewSuggestion(
-          db,
-          { ...kernelCtx(ctx), db },
-          command,
-          undefined,
-          scope,
-        );
+        await reviewSuggestion(db, { ...kernelCtx(ctx), db }, command, scope);
         throw new Error("synthetic rollback");
       }),
     ).rejects.toThrow("synthetic rollback");

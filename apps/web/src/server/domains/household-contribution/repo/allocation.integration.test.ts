@@ -6,27 +6,25 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { LedgerPartyKind } from "@cubby/schemas/ledger-party";
-import { moneyToMinor } from "@cubby/shared";
+import { moneyToMinor, nullableWholeCentToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { unwrapDb } from "~/server/db/helpers";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import {
-  expenseAttribution,
   financialAccount,
   financialTransactionAllocation,
   ledgerParty,
 } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { updateFinancialAccount } from "~/server/domains/financial-account/repo/financial-account";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { loadStoredDerived } from "~/server/generic/derived/repo/read";
-import {
-  type ShortcodeInsertValues,
-  insertWithShortcode,
-} from "~/server/generic/shortcode/repo/shortcode-utils";
+import { type ShortcodeInsertValues } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 
@@ -86,28 +84,26 @@ describe("loadExpenseAllocations SQL arithmetic", () => {
       const row = await insertWithShortcode(ctx.db, "expense", {
         lineKind: "principal",
         name: "Large weighted allocation fixture",
-        cost,
+        cost: nullableWholeCentToMinor(cost),
         date: "2026-08-20",
         costType: "materials",
         trade: "other",
         future: false,
       });
-      await unwrapDb(ctx.db)
-        .insert(expenseAttribution)
-        .values([
-          {
-            expenseId: row.id,
-            role: "beneficiary",
-            ledgerPartyId: first.id,
-            weight: 2_147_483_647,
-          },
-          {
-            expenseId: row.id,
-            role: "beneficiary",
-            ledgerPartyId: second.id,
-            weight: 2_147_483_646,
-          },
-        ]);
+      await insertPurchaseEventRows(ctx.db, "ExpenseAttribution", [
+        {
+          expenseId: row.id,
+          role: "beneficiary",
+          ledgerPartyId: first.id,
+          weight: 2_147_483_647,
+        },
+        {
+          expenseId: row.id,
+          role: "beneficiary",
+          ledgerPartyId: second.id,
+          weight: 2_147_483_646,
+        },
+      ]);
 
       const allocations = await loadExpenseAllocations(ctx.db, {
         asOf: "2026-08-20",
@@ -257,10 +253,12 @@ describe("loadExpenseAllocations SQL arithmetic", () => {
     await drainStoredDerived(ctx.db);
     expect(await ownerOf(firstLine.entityId)).toEqual([owner.output.id]);
     expect(await ownerOf(secondLine.entityId)).toEqual([household.output.id]);
-    await unwrapDb(ctx.db)
-      .update(financialTransactionAllocation)
-      .set({ purchaseId: second.entityId })
-      .where(eq(financialTransactionAllocation.transactionId, transaction.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "FinancialTransactionAllocation",
+      { purchaseId: second.entityId },
+      eq(financialTransactionAllocation.transactionId, transaction.id),
+    );
     await drainStoredDerived(ctx.db);
     expect(await ownerOf(firstLine.entityId)).toEqual([household.output.id]);
     expect(await ownerOf(secondLine.entityId)).toEqual([owner.output.id]);
@@ -282,28 +280,26 @@ describe("loadExpenseAllocations SQL arithmetic", () => {
     const expense = await insertWithShortcode(ctx.db, "expense", {
       lineKind: "principal",
       name: "Shortcode tie fixture",
-      cost: 0.01,
+      cost: 1n,
       date: "2026-08-20",
       costType: "materials",
       trade: "other",
       future: false,
     });
-    await unwrapDb(ctx.db)
-      .insert(expenseAttribution)
-      .values([
-        {
-          expenseId: expense.id,
-          role: "beneficiary",
-          ledgerPartyId: first.id,
-          weight: 1,
-        },
-        {
-          expenseId: expense.id,
-          role: "beneficiary",
-          ledgerPartyId: second.id,
-          weight: 1,
-        },
-      ]);
+    await insertPurchaseEventRows(ctx.db, "ExpenseAttribution", [
+      {
+        expenseId: expense.id,
+        role: "beneficiary",
+        ledgerPartyId: first.id,
+        weight: 1,
+      },
+      {
+        expenseId: expense.id,
+        role: "beneficiary",
+        ledgerPartyId: second.id,
+        weight: 1,
+      },
+    ]);
 
     const rows = await loadExpenseAllocations(ctx.db, { asOf: "2026-08-20" });
     const allocations = rows.filter(
@@ -340,7 +336,7 @@ describe("loadExpenseAllocations derived funders", () => {
     const expense = await insertWithShortcode(ctx.db, "expense", {
       lineKind: "principal",
       name: `Derived funder fixture ${cost}`,
-      cost,
+      cost: nullableWholeCentToMinor(cost),
       date: "2026-08-10",
       costType: "materials",
       trade: "other",
@@ -355,13 +351,11 @@ describe("loadExpenseAllocations derived funders", () => {
         postedDate: split.postedDate ?? "2026-08-10",
         amount: moneyToMinor(split.amount),
       });
-      await unwrapDb(ctx.db)
-        .insert(financialTransactionAllocation)
-        .values({
-          transactionId: txn.id,
-          purchaseId: purchase.id,
-          amountMinor: moneyToMinor(split.amount),
-        });
+      await insertPurchaseEventRows(ctx.db, "FinancialTransactionAllocation", {
+        transactionId: txn.id,
+        purchaseId: purchase.id,
+        amountMinor: moneyToMinor(split.amount),
+      });
     }
     return expense;
   };
@@ -581,8 +575,8 @@ describe("loadExpenseAllocations derived funders", () => {
       mkParty("Split two", "LPY-SPB2", "household"),
     ]);
     const [a, b] = await Promise.all([
-      mkAccount("FAC-SPLA", "Split A", one.id),
-      mkAccount("FAC-SPLB", "Split B", two.id),
+      mkAccount("FAC-SP2A", "Split A", one.id),
+      mkAccount("FAC-SP2B", "Split B", two.id),
     ]);
     const expense = await payFor(100, [
       { accountId: a.id, amount: 75 },
@@ -606,7 +600,7 @@ describe("loadExpenseAllocations derived funders", () => {
   });
 
   it("flags a paying account with no owner rather than inventing one", async () => {
-    const account = await mkAccount("FAC-ORPH", "Orphan", null);
+    const account = await mkAccount("FAC-2RPH", "Orphan", null);
     const expense = await payFor(50, [{ accountId: account.id, amount: 50 }]);
 
     expect(await fundersOf(expense.id)).toEqual([
@@ -711,7 +705,7 @@ describe("loadExpenseAllocations derived funders", () => {
     ]);
     const account = await mkAccount("FAC-CHNC", "Chain card", payer.id);
     const expense = await payFor(40, [{ accountId: account.id, amount: 40 }]);
-    await unwrapDb(ctx.db).insert(expenseAttribution).values({
+    await insertPurchaseEventRows(ctx.db, "ExpenseAttribution", {
       expenseId: expense.id,
       role: "funder",
       ledgerPartyId: chosen.id,
@@ -757,19 +751,17 @@ describe("loadExpenseAllocations derived funders", () => {
       postedDate: "2026-08-10",
       amount: moneyToMinor(30),
     });
-    await unwrapDb(ctx.db)
-      .insert(financialTransactionAllocation)
-      .values({
-        transactionId: txn.id,
-        purchaseId: purchase.id,
-        amountMinor: moneyToMinor(30),
-      });
+    await insertPurchaseEventRows(ctx.db, "FinancialTransactionAllocation", {
+      transactionId: txn.id,
+      purchaseId: purchase.id,
+      amountMinor: moneyToMinor(30),
+    });
     const lines = await Promise.all(
       [10, 20].map((cost) =>
         insertWithShortcode(ctx.db, "expense", {
           lineKind: "principal",
           name: `Shared line ${cost}`,
-          cost,
+          cost: nullableWholeCentToMinor(cost),
           date: "2026-08-10",
           costType: "materials",
           trade: "other",
@@ -803,7 +795,7 @@ describe("loadExpenseAllocations assumed-household beneficiaries", () => {
     insertWithShortcode(ctx.db, "expense", {
       lineKind: "principal",
       name,
-      cost: 25,
+      cost: 2500n,
       date: "2026-08-10",
       costType: "materials",
       trade: "other",
@@ -823,7 +815,7 @@ describe("loadExpenseAllocations assumed-household beneficiaries", () => {
     });
     const assumed = await mkExpense("Assumed fixture");
     const explicit = await mkExpense("Explicit fixture");
-    await unwrapDb(ctx.db).insert(expenseAttribution).values({
+    await insertPurchaseEventRows(ctx.db, "ExpenseAttribution", {
       expenseId: explicit.id,
       role: "beneficiary",
       ledgerPartyId: member.id,

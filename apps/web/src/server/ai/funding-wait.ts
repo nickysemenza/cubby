@@ -1,5 +1,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { RunId } from "@cubby/schemas/identifiers";
+import { askState, kernelWaitCause } from "@cubby/schemas/kernel/machinery";
+import { sql } from "drizzle-orm";
 
 import {
   AiBudgetExhaustedError,
@@ -8,6 +10,7 @@ import {
   readAiBudget,
 } from "~/server/ai/budget";
 import type { Database } from "~/server/db";
+import { repositoryQueries } from "~/server/db/repository-access.boundary";
 
 /** Admit paid work against its Run's confirmed allowance. */
 export async function admitPaid(db: Database, call: { runId?: RunId }) {
@@ -64,13 +67,28 @@ export async function grantPaid(
 }
 
 type FundingWait = {
-  name: "runs" | "evaluations" | "embeddings" | "images" | "jobs";
+  name: "runs" | "images" | "kernel";
   count(db: Database, now: Date): Promise<number>;
   wake(db: Database, now: Date, anyWindow: boolean): Promise<number>;
 };
 
 /** A funding change counts and releases the same rows, in wake order. */
 export const fundingWaiters: readonly FundingWait[] = [
+  {
+    name: "kernel",
+    async count(db) {
+      const result = await repositoryQueries(db).execute<{
+        n: number;
+      }>(sql`SELECT (
+        (SELECT count(*) FROM "Ask" WHERE state = ${askState.enum.queued} AND "waitCause" = ${kernelWaitCause.enum.funding} AND "cancelledAt" IS NULL)
+        + (SELECT count(*) FROM "Pass" WHERE "waitCause" = ${kernelWaitCause.enum.funding} AND "doneAt" IS NULL AND "cancelledAt" IS NULL)
+      )::int AS n`);
+      return result.rows[0]?.n ?? 0;
+    },
+    async wake(db, now) {
+      return (await import("~/server/kernel/api")).releaseFundingWaits(db, now);
+    },
+  },
   {
     name: "runs",
     async count(db, now) {
@@ -100,28 +118,6 @@ export const fundingWaiters: readonly FundingWait[] = [
     },
   },
   {
-    name: "evaluations",
-    count: async (db) =>
-      (
-        await import("~/server/ai/evaluation/repo/ai-evaluation-work")
-      ).countFundingWaitingEvaluations(db),
-    wake: async (db) =>
-      (
-        await import("~/server/ai/evaluation/repo/ai-evaluation-work")
-      ).wakeFundingWaitingEvaluations(db),
-  },
-  {
-    name: "embeddings",
-    count: async (db) =>
-      (
-        await import("~/server/generic/embedding/repo/embedding-work")
-      ).countFundingWaitingEmbeddings(db),
-    wake: async (db) =>
-      (
-        await import("~/server/generic/embedding/repo/embedding-work")
-      ).wakeFundingWaitingEmbeddings(db),
-  },
-  {
     name: "images",
     count: async (db) =>
       (
@@ -131,19 +127,6 @@ export const fundingWaiters: readonly FundingWait[] = [
       (
         await import("~/server/domains/image-processing/repo/image-processing-history")
       ).wakeFundingWaitingImageJobs(db),
-  },
-  {
-    name: "jobs",
-    count: async (db, now) =>
-      (
-        await import("~/server/generic/jobs/repo/operator")
-      ).countQueuedJobsToBringForward(db, now),
-    wake: async (db, now) =>
-      (
-        await (
-          await import("~/server/generic/jobs/repo/operator")
-        ).bringQueuedJobsForward(db, now)
-      ).length,
   },
 ];
 
@@ -176,16 +159,6 @@ export async function resumeFundingPausedRuns(
       woken += await entry.wake(db, now, anyWindow);
   await (
     await import("~/server/workflows/background-tasks/publish")
-  ).wakeJobs({ source: "funding-window" });
+  ).wakeKernel({ source: "funding-window" });
   return woken;
-}
-
-/** The evaluation drain resumes its own paused requesters after it claims them. */
-export async function resumeFundingStoppedRuns(
-  db: Database,
-  runIds: readonly RunId[],
-) {
-  await (
-    await import("~/server/domains/run/repo/ai-work-state")
-  ).resumeFundingStoppedRuns(db, runIds);
 }

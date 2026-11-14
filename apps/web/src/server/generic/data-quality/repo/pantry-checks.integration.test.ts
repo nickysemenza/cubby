@@ -3,6 +3,7 @@ import { buildEntity } from "tooling/factories/build";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { upsertCookbook } from "~/server/domains/cookbook/repo/cookbook";
 import {
   ensureGlobalUnknownLocation,
@@ -12,7 +13,6 @@ import { createMealWithEntityId } from "~/server/domains/meal/repo/crud";
 import { createProductCategory } from "~/server/domains/product-category/repo/product-category";
 import { upsertCookbookRecipe } from "~/server/domains/recipe/repo/crud";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createIngredientFixture,

@@ -139,8 +139,8 @@ export async function eligibleTargets(
       totals.total AS "amountMinor", totals.total - COALESCE(alloc.total, 0) AS "remainingMinor", false AS claimed, false AS owned
     FROM r JOIN "Purchase" p ON r.kind = ${"purchase"} AND p.id = r.id
     CROSS JOIN LATERAL (SELECT CASE WHEN count(*) = 0 THEN p."statedTotalMinor"
-      WHEN bool_or(e.cost IS NULL OR e."lineKind" = ${expenseLineKindSchema.enum.unclassified}) THEN NULL
-      ELSE round(sum(e.cost) * 100) END AS total FROM "Expense" e
+      WHEN bool_or(e."costMinor" IS NULL OR e."lineKind" = ${expenseLineKindSchema.enum.unclassified}) THEN NULL
+      ELSE sum(e."costMinor") END AS total FROM "Expense" e
       WHERE e."purchaseId" = p.id AND ${notDeleted("e")} AND NOT e.future AND e."economicRole" = ${expenseEconomicRoleSchema.enum.vendor}) totals
     CROSS JOIN LATERAL (SELECT sum(a."amountMinor") AS total FROM "FinancialTransactionAllocation" a
       JOIN "FinancialTransaction" t ON t.id = a."transactionId"

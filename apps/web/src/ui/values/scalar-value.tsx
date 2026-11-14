@@ -1,3 +1,4 @@
+import type { KernelStage } from "@cubby/schemas/kernel/stage";
 import type { EnumIcon, EnumRole } from "@cubby/shared/enum-palette";
 import { cn } from "cn";
 import type { ReactNode } from "react";
@@ -23,6 +24,7 @@ export type ScalarDisplayValue =
    * stored value for copy, sort, and filter seeds. */
   | {
       kind: "enum";
+      stage?: KernelStage;
       raw: string;
       label: string;
       color: string;
@@ -167,6 +169,7 @@ export function renderScalarValue(
         <EnumPill
           value={value.raw}
           optionRole={value.role}
+          stage={value.stage}
           glyph={value.glyph}
           color={value.color}
           icon={value.icon}

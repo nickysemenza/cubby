@@ -10,12 +10,6 @@ import {
   type ConnectionProposal,
   type ConnectionRelation,
 } from "@cubby/schemas/entity-connections";
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
-import type {
-  StatementSuggestionOut,
-  StatementTransactionAction,
-  StatementTransactionApplication,
-} from "@cubby/schemas/statement-suggestion";
 import {
   suggestionFamily,
   type suggestionReviewInput,
@@ -37,8 +31,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
-import { type StatementSuggestionScope } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
-import { suggestionCounts } from "~/server/generic/suggestions/repo/suggestion-review";
+import { suggestionCounts } from "~/server/generic/suggestions/repo/field-gaps";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
 type ShortcodeEntity = SuggestionRecordRef["entity"];
@@ -60,8 +53,6 @@ export type SuggestionKey = {
   matchedRules: string[];
   automaticRule: string | null;
 };
-
-export const stamps = z.array(z.string()).catch([]);
 
 /** `records` is set when the caller filters by recordIds (resolved, maybe empty). */
 export type SuggestionFamilyQuery = {
@@ -179,7 +170,7 @@ export type SuggestionFamilyPresentation<F extends SuggestionListFamily> = {
 export const verbs = (...list: Action["verb"][]): Action[] =>
   list.map((verb) => ({ verb, ownerOnly: false }));
 
-export const qualityImpact = (check: DataCheck): SuggestionImpact => ({
+const qualityImpact = (check: DataCheck): SuggestionImpact => ({
   kind: "quality_check",
   label: dataCheckPresentation[check].satisfiedLabel,
   qualityCheck: check,
@@ -204,7 +195,7 @@ export const keyBase = (key: SuggestionKey) => ({
 
 // ---------------------------------------------------------------- field
 
-export const fieldChecks = new Map<string, DataCheck[]>();
+const fieldChecks = new Map<string, DataCheck[]>();
 for (const [entity, checks] of Object.entries(dataChecksByEntity))
   for (const check of checks.options) {
     const placement = dataCheckPresentation[check].placement;
@@ -218,86 +209,7 @@ for (const [entity, checks] of Object.entries(dataChecksByEntity))
     fieldChecks.set(key, [...(fieldChecks.get(key) ?? []), check]);
   }
 
-/**
- * A field Suggestion's only evidence is the decision model's confidence, and
- * confidence alone never makes a Suggestion strong or clean (terminology:
- * Strength; ADR 0016 amendment). Its Automatic rule, not bulk accept, is
- * what may apply a confident Addition unattended.
- */
-export const fieldStrength = (confidence: number): SuggestionStrength =>
-  confidence >= 0.85 ? "medium" : "weak";
-
-export const shortcodeEntity = z.enum(shortcodeEntities);
-export const fieldKind = z.enum(["correction", "addition"]);
-
-// ---------------------------------------------------- statement_transaction
-
-export const statementImpact = {
-  // No data-quality check closes: the outcome is the unmatched charge.
-  create: [
-    outcome("Statement charge matched"),
-    {
-      kind: "caution",
-      label: "The new transaction may open its own data-quality checks",
-    },
-  ],
-  attach: [outcome("Statement charge matched")],
-  supersede: [
-    outcome("Statement charge matched"),
-    outcome("Pending hold retired"),
-  ],
-  void: [outcome("Statement charge matched"), outcome("Hold voided")],
-  book: [outcome("Spending booked")],
-} satisfies Record<StatementTransactionAction, SuggestionImpact[]>;
-
-export const statementStrength = (key: {
-  clean: boolean;
-  labelSame: string | null;
-  labelConfidence: string | null;
-}): SuggestionStrength =>
-  key.clean || (key.labelSame === "same" && key.labelConfidence === "high")
-    ? "strong"
-    : key.labelConfidence === "medium"
-      ? "medium"
-      : "weak";
-
-export const otherTransaction = (row: StatementSuggestionOut) => {
-  if (row.matchedTransactionId) return row.matchedTransactionId;
-  if (row.recommended === "attach" && row.candidates[0])
-    return row.candidates[0].transactionId;
-  if (row.recommended === "supersede" && row.supersedeTransactionId)
-    return row.supersedeTransactionId;
-  if (row.recommended === "void" && row.voidTransactionId)
-    return row.voidTransactionId;
-  return null;
-};
-
 /** Accept as is: the recommended action; an attach always names its candidate. */
-export function statementAcceptApplication(
-  row: StatementSuggestionOut,
-): StatementTransactionApplication | null {
-  const target = row.candidates[0]?.transactionId;
-  if (row.recommended === "attach" && !target) return null;
-  return {
-    kind: "statement_transaction",
-    action: row.recommended,
-    ...(row.recommended === "attach" ? { transactionId: target } : {}),
-    fields: [],
-    // The server refuses a create while any candidate is still live.
-    rejectedCandidateIds:
-      row.recommended === "create"
-        ? row.candidates.map((candidate) => candidate.transactionId)
-        : [],
-  };
-}
-
-export function statementScope(
-  query: SuggestionFamilyQuery,
-): StatementSuggestionScope | null {
-  const { status, runId } = query.filters;
-  if (status !== "pending" && status !== "applied") return null;
-  return { runCode: runId, status, suggestionIds: query.suggestionIds };
-}
 
 // ------------------------------------------------------------ recommendation
 
@@ -326,7 +238,7 @@ export const connectionImpact = {
 
 // Acquisition discovery's indexed lexical/semantic retrieval; every other
 // candidate comes from deterministic record evidence.
-export const RETRIEVED_REASON = "Retrieved from ";
+const RETRIEVED_REASON = "Retrieved from ";
 
 export const connectionStrength = (
   evidence: z.infer<typeof connectionEvidence>,
@@ -354,14 +266,6 @@ export const connectionActions = (proposal: ConnectionProposal): Action[] => {
     ...verbs("reject", "dismiss", "never_suggest"),
   ];
 };
-
-export const connectionImpactCount = sql.join(
-  Object.entries(connectionImpact).map(
-    ([relation, impacts]) =>
-      sql`WHEN ${`connection.${relation}`} THEN ${impacts.filter((impact) => "qualityCheck" in impact).length}::int`,
-  ),
-  sql` `,
-);
 
 export async function transferPairRows(
   db: Database,

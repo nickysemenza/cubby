@@ -10,7 +10,7 @@ import type {
   FieldExplanationOutput,
 } from "@cubby/schemas/field-explanation";
 import { type FieldResolution } from "@cubby/schemas/field-resolution";
-import { humanize, parseShortcode } from "@cubby/shared";
+import { parseShortcode } from "@cubby/shared";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -185,7 +185,7 @@ export function valueText(
       model?.display.valueOptions ??
       []
     ).find((candidate) => candidate.value === value);
-    return option?.label ?? humanize(value);
+    return option?.label ?? value;
   }
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (typeof value === "number") return String(value);

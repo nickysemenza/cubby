@@ -1,5 +1,4 @@
 import { shortcode } from "@cubby/schemas/identifiers";
-import { runWorkLabel } from "@cubby/schemas/run-fields";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -53,34 +52,21 @@ const counted = (total: number) => ({
 });
 
 describe("Steps ledger", () => {
-  it("projects the selected manifest plan before execution and separates retained legacy steps", () => {
-    const input = {
-      kind: "sweep",
-      families: [
-        { family: "transfer_pair", scope: { since: "2026-10-01" } },
-        { family: "statement_transaction", scope: {} },
-      ],
-    };
-    const run = {
+  it("keeps retained steps in history without planning kernel work", () => {
+    const blocks = runStepsBlocks({
       ...report("sweep", "running", [
         step({ key: "transfer_pair", label: "Legacy transfer pass" }),
       ]),
-      input,
-    };
-    const blocks = runStepsBlocks(run);
+      input: {
+        kind: "sweep",
+        families: [{ family: "statement_transaction", scope: {} }],
+      },
+    });
     const plan = blocks.find(
       (block) => block.kind === "table" && block.title === "Plan",
     );
     if (plan?.kind !== "table") throw new Error("expected plan table");
-    // The retired transfer-pair family stays readable history; it plans no steps.
-    expect(plan.rows.map((row) => row.id)).toEqual([
-      "statement_generate",
-      "statement_holds",
-      "statement_label",
-    ]);
-    expect(plan.rows[0]?.cells).toEqual(
-      expect.arrayContaining(["Counted when step starts", "Not started"]),
-    );
+    expect(plan.rows).toEqual([]);
     expect(blocks).toContainEqual(
       expect.objectContaining({
         kind: "table",
@@ -92,37 +78,6 @@ describe("Steps ledger", () => {
         ],
       }),
     );
-    expect(runWorkLabel(run)).toBe("Sweep");
-    expect(run.purpose).toBe("sweep");
-    const resumed = runStepsBlocks({
-      ...run,
-      steps: [
-        step({
-          key: "statement_generate",
-          label: "Statements: match",
-          state: "queued",
-          pages: 2,
-          found: 100,
-          done: 20,
-          meta: counted(100),
-        }),
-      ],
-    }).find((block) => block.kind === "table" && block.title === "Plan");
-    if (resumed?.kind !== "table") throw new Error("expected resumed plan");
-    expect(resumed.rows[0]?.cells).toEqual(
-      expect.arrayContaining(["Queued to resume", "100 charges"]),
-    );
-    expect(
-      runStepsBlocks({ ...run, steps: [] }).some(
-        (block) => block.kind === "table" && block.title === "Plan",
-      ),
-    ).toBe(true);
-    expect(
-      runWorkLabel({
-        purpose: "sweep",
-        input: { kind: "sweep", families: [{ family: "field", scope: {} }] },
-      }),
-    ).toBe("Sweep");
   });
   it("shows counts and raw errors, offers Retry failed once the Run stops, and reads an unstarted step as Not started", () => {
     const [block] = runStepsBlocks(
@@ -190,7 +145,7 @@ describe("Steps ledger", () => {
           endedAt: null,
           meta: {
             ...counted(1_280),
-            action: null,
+            action: "Reviewing retained charges",
             tallies: { pairs: 12 },
             reasons: { no_candidate: 380, suppressed: 4 },
           },
@@ -200,10 +155,10 @@ describe("Steps ledger", () => {
     if (block?.kind !== "records") throw new Error("expected records");
     const [scan] = block.rows;
     expect(scan?.commands).toEqual([]);
-    expect(scan?.trailing).toBe("410 of 1,280 charges");
+    expect(scan?.trailing).toBe("410 of 1,280 items");
     expect(scan?.lines?.map((line) => line.text)).toEqual(
       expect.arrayContaining([
-        "Matching charges",
+        "Reviewing retained charges",
         "12 pairs",
         "No result: 380 no candidate · 4 suppressed",
       ]),

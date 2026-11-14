@@ -1,0 +1,36 @@
+import { emailPurchaseDiscoveryPass } from "~/server/domains/connection/service/email-purchase-discovery";
+import { agentTurnAsk } from "~/server/domains/purchase-import/operations/agent-turn-ask";
+import { defineModule, type Pass } from "~/server/kernel/api";
+
+import { calendarInvalidatePass } from "./calendar-invalidate-pass";
+import { derivedSnapshotPass } from "./derived-snapshot-pass";
+import { fieldsReconcilePass } from "./fields-reconcile-pass";
+/**
+ * The workflow module's passes: Run execution, stopped-execution
+ * reconciliation, retention, purchase admission and calendar invalidation.
+ */
+import { locationInventoryPass } from "./location-inventory-pass";
+import { purchaseDiscoveryPass } from "./purchase-discovery-pass";
+import { purchaseDispatchPass } from "./purchase-dispatch-pass";
+import { retentionPass } from "./retention-pass";
+import { runsReconcilePass } from "./runs/reconcile-pass";
+import { runExecutePass } from "./runs/run-pass";
+
+const WORKFLOW_PASSES: readonly Pass[] = [
+  fieldsReconcilePass,
+  locationInventoryPass,
+  emailPurchaseDiscoveryPass,
+  derivedSnapshotPass,
+  purchaseDispatchPass,
+  retentionPass,
+  purchaseDiscoveryPass,
+  calendarInvalidatePass,
+  runExecutePass,
+  runsReconcilePass,
+];
+
+export const workflowKernelModule = defineModule({
+  name: "workflows",
+  asks: [agentTurnAsk],
+  passes: WORKFLOW_PASSES,
+});

@@ -16,7 +16,6 @@ import {
   decisionFacetCounts,
   presenterFor,
 } from "./decision-presenters";
-import { runOverview } from "./run-view-model";
 
 const leg = (amount: number): TransferPairLeg => ({
   key: `synthetic:${amount}`,
@@ -130,25 +129,5 @@ describe("Run decision outcomes", () => {
         row({ judgment: { ...evidence, blockers: ["competing_candidates"] } }),
       ).label,
     ).toBe("Multiple possible matches");
-  });
-
-  it("counts declared pending work before stored steps exist without treating legacy work as active", () => {
-    const overview = runOverview(
-      { purpose: "sweep", status: "running", steps: [] },
-      undefined,
-      Date.now(),
-      {
-        kind: "sweep",
-        families: [{ family: "statement_transaction", scope: {} }],
-      },
-    );
-    expect(overview.steps.map((step) => step.key)).toEqual([
-      "statement_generate",
-      "statement_holds",
-      "statement_label",
-    ]);
-    expect(overview.current?.phase).toBe("not_started");
-    expect(overview.current?.total).toBeNull();
-    expect(overview.current?.rate).toBeNull();
   });
 });

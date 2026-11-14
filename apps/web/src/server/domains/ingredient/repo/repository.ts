@@ -6,6 +6,8 @@ import { rawIngredientOutput as ingredientOut } from "@cubby/schemas/ingredient-
 import { z } from "zod";
 
 import { ingredientSchemaBindings } from "~/entity/generated/entity-schema-bindings.ingredient.gen";
+import { DECLARED_EDGE_MERGE_POLICIES } from "~/server/db/generated/declared-edges.gen";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import {
   asActor,
   defineRepository,
@@ -14,8 +16,8 @@ import { recordChange } from "~/server/generic/changes/repo/change";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { createIngredient, readIngredientById, updateIngredient } from "./crud";
-import { deleteIngredients, INGREDIENT_DELETE_EDGE_POLICY } from "./deletion";
-import { INGREDIENT_MERGE_EDGE_POLICY, mergeIngredients } from "./merge";
+import { deleteIngredients } from "./deletion";
+import { mergeIngredients } from "./merge";
 import { ingredientScaffold } from "./search";
 
 const ingredientShortcodes = bindShortcodeResolver("ingredient");
@@ -23,8 +25,8 @@ const ingredientShortcodes = bindShortcodeResolver("ingredient");
 export const ingredientRepository = defineRepository("ingredient", {
   schemas: ingredientSchemaBindings,
   lifecycle: {
-    delete: INGREDIENT_DELETE_EDGE_POLICY,
-    merge: INGREDIENT_MERGE_EDGE_POLICY,
+    delete: DECLARED_EDGE_DELETE_POLICIES.ingredient,
+    merge: DECLARED_EDGE_MERGE_POLICIES.ingredient,
   },
   scaffold: ingredientScaffold,
   create: asActor(createIngredient),

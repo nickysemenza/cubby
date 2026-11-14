@@ -22,15 +22,8 @@ import {
   derivedSink,
   isDerivedSink,
 } from "~/server/generic/derived/repo/compute";
-import {
-  rebuildDerived,
-  DerivedRebuildBusyError,
-} from "~/server/generic/derived/service/rebuild";
-import { claimJob, updateJobs } from "~/server/generic/jobs/jobs.fixtures";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { readRebuildObservation as readDerivedRebuildStatus } from "~/server/generic/jobs/repo/observation";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
-import type { JobHandlers } from "~/server/generic/jobs/types";
+import { readSnapshotState as readDerivedRebuildStatus } from "~/server/generic/derived/repo/snapshot-state";
+import { runSnapshotPage } from "~/server/generic/derived/snapshot.fixtures";
 import { prepareProductConversionCoverage } from "~/server/generic/problems/service/problems.service";
 import { derivedComputes } from "~/server/workflows/derived-computes";
 
@@ -113,14 +106,9 @@ export async function drainStoredDerived(
   for (let round = 0; round < rounds; round++) {
     let finished = false;
     for (let page = 0; page < maxPages; page++) {
-      try {
-        if (!(await rebuildDerived(db, computes, { force: page === 0 }))) {
-          finished = true;
-          break;
-        }
-      } catch (error) {
-        if (!(error instanceof DerivedRebuildBusyError)) throw error;
-        await new Promise((resolve) => setTimeout(resolve, 50));
+      if (!(await runSnapshotPage(db, computes, { force: page === 0 }))) {
+        finished = true;
+        break;
       }
     }
     if (!finished)
@@ -178,7 +166,7 @@ export async function drainDerivedPage(
     ),
   );
   for (let page = 0; page < 1_000; page++) {
-    const more = await rebuildDerived(db, observed, { force: page === 0 });
+    const more = await runSnapshotPage(db, observed, { force: page === 0 });
     if (!pending) return;
     if (!more) break;
   }
@@ -234,7 +222,7 @@ export async function reconcileDerivedRefreshInputs(
   await drainDerivedRefreshFrontier(db);
 }
 
-/** A lost wake does not hide intent: drain committed Jobs, not captured messages. */
+/** Permits wake the kernel; persisted Ask and Pass rows own work. */
 export function captureBackgroundQueue() {
   const messages: BackgroundTaskMessage[] = [];
   setCfEnv(
@@ -251,104 +239,15 @@ export function captureBackgroundQueue() {
     messages,
     async drain(
       db: Database,
-      options: { maxTasks?: number; handlers?: JobHandlers } = {},
+      options: { maxTasks?: number } = {},
     ): Promise<number> {
-      const handlers =
-        options.handlers ??
-        (await import("~/server/workflows/jobs")).productionJobHandlers;
-      const maxPages = options.maxTasks ?? 10_000;
-      for (let page = 0; page < maxPages; page++) {
-        const [pending] = await readJobs(
-          db,
-          { kinds: Object.keys(handlers), states: ["queued", "retry_wait"] },
-          { order: ["availableAt", "id"], limit: 1 },
-        );
-        if (!pending) {
-          messages.length = 0;
-          return page;
-        }
-        if (pending.state !== "completed" && pending.availableAt > new Date())
-          throw new Error(
-            `Synthetic drain reached deferred Job ${pending.kind}`,
-          );
-        const outcome = await advanceJob(db, pending.id, handlers);
-        if (outcome === "failed")
-          throw new Error(
-            `Synthetic Job ${pending.kind} failed; inspect retained Job.error`,
-          );
-      }
-      throw new Error(`Background Job drain exceeded ${maxPages} pages`);
+      const { runProductionKernel } = await import("~/server/kernel/api");
+      const result = await runProductionKernel(db, {
+        budgetMs: options.maxTasks ?? 20_000,
+      });
+      messages.length = 0;
+      return result;
     },
     restore: () => setCfEnv(undefined),
   };
-}
-
-/**
- * Domain regression seams execute under the same persisted Job ownership as a
- * worker: `work` receives the claim's context, and a Run Job's work also runs
- * in its Run workflow context, as `run.execute` does.
- */
-export async function withJobFixtureExecution<T>(
-  db: Database,
-  input: import("@cubby/schemas/job").EnqueueJobInput,
-  work: (
-    context: ReturnType<
-      typeof import("~/server/generic/jobs/service/jobs").claimContext
-    >,
-  ) => Promise<T>,
-  options: { releaseClaim?: true } = {},
-) {
-  const { enqueueJob } = await import("~/server/generic/jobs/repo/producer");
-  const { claimContext } = await import("~/server/generic/jobs/service/jobs");
-  const { withJobExecution } = await import("~/server/generic/jobs/context");
-  const saved = await enqueueJob(db, input);
-  const existing =
-    saved.state === "running" &&
-    saved.leaseToken &&
-    saved.leaseExpiresAt &&
-    saved.leaseExpiresAt.getTime() > Date.now()
-      ? {
-          ...saved,
-          leaseToken: saved.leaseToken,
-          leaseExpiresAt: saved.leaseExpiresAt,
-        }
-      : null;
-  const claim = existing ?? (await claimJob(db, saved.id));
-  if (!claim)
-    throw new Error(`Synthetic execution ${saved.key} is ${saved.state}`);
-  const context = claimContext(db, claim);
-  const runId =
-    input.kind === "run.execute" &&
-    typeof input.input === "object" &&
-    input.input !== null &&
-    "runId" in input.input
-      ? String(input.input.runId)
-      : null;
-  try {
-    return await withJobExecution(db, claim, async () =>
-      runId
-        ? (
-            await import("~/server/workflows/runs/execution")
-          ).withWorkflowExecution(
-            { runId, attempt: claim.generation, database: db, job: context },
-            () => work(context),
-          )
-        : work(context),
-    );
-  } finally {
-    // Completed fixture work can free admission capacity. Multi-step fence
-    // fixtures retain their token by default; borrowed claims stay with their caller.
-    if (options.releaseClaim && !existing)
-      await updateJobs(
-        db,
-        { id: claim.id },
-        {
-          state: "queued",
-          waitReason: null,
-          leaseToken: null,
-          leaseExpiresAt: null,
-          availableAt: new Date(),
-        },
-      );
-  }
 }

@@ -63,16 +63,16 @@ const projectedQuantityRowSchema = z.object({
 
 /** Shared signed per-line SQL contribution; derive all ledger aggregates from this expression. */
 const expenseSignedUnitsSql = (alias: string) =>
-  `CASE WHEN ${alias}."cost" > 0 THEN abs(${alias}."productQuantity")
-        WHEN ${alias}."cost" < 0 THEN -abs(${alias}."productQuantity")
+  `CASE WHEN ${alias}."costMinor" > 0 THEN abs(${alias}."productQuantity")
+        WHEN ${alias}."costMinor" < 0 THEN -abs(${alias}."productQuantity")
         ELSE ${alias}."productQuantity"
    END`;
 
 /** Own ledger contributions use signed known quantities only; kit projection is intentionally excluded. */
 const QUANTITY_OWN_MEASURES = `COALESCE(sum(GREATEST(${expenseSignedUnitsSql("kqe")}, 0)), 0) AS "acquiredUnits",
          COALESCE(sum(-LEAST(${expenseSignedUnitsSql("kqe")}, 0)), 0) AS "exitedUnits",
-         count(*) FILTER (WHERE kqe."productQuantity" IS NULL AND (kqe."cost" IS NULL OR kqe."cost" >= 0)) AS "unknownAcquisitionLines",
-         count(*) FILTER (WHERE kqe."productQuantity" IS NULL AND kqe."cost" < 0) AS "unknownExitLines",
+         count(*) FILTER (WHERE kqe."productQuantity" IS NULL AND (kqe."costMinor" IS NULL OR kqe."costMinor" >= 0)) AS "unknownAcquisitionLines",
+         count(*) FILTER (WHERE kqe."productQuantity" IS NULL AND kqe."costMinor" < 0) AS "unknownExitLines",
          count(*) AS "ledgerLines"`;
 const QUANTITY_OWN_PREDICATES = `NOT ${serviceProductSqlText('kqe."productId"')} AND ${liveAliasSqlText("kqe")} AND ${actualExpenseSql("kqe")}`;
 const QUANTITY_OWN_AGGREGATE = `SELECT ${QUANTITY_OWN_MEASURES}

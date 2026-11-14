@@ -4,7 +4,10 @@ import {
   fieldEnvelopeFor,
   type ReadableFieldEnvelope,
 } from "@cubby/schemas/field-envelope";
-import { fieldAssignmentActions } from "@cubby/schemas/field-envelope-presentation";
+import {
+  FIELD_RESET_LABEL,
+  fieldAssignmentActions,
+} from "@cubby/schemas/field-envelope-presentation";
 import { getErrorMessage } from "@cubby/shared";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
@@ -78,7 +81,7 @@ export function useRedundantOverrideBulkAction<TData extends { id: string }>(
       return null;
     return {
       id: "use-inherited-values",
-      label: "Use inherited values",
+      label: FIELD_RESET_LABEL,
       icon: <ArrowCounterClockwiseIcon />,
       availability: (rows) =>
         rows.some(
@@ -180,7 +183,7 @@ export function InheritedMarker({ title }: { title?: string }) {
 export const resolutionActionClassName =
   "h-auto min-w-0 p-0 text-xs underline decoration-border underline-offset-4 hover:decoration-current";
 
-/** Use inherited / set to none / confirm links for a record addressed by
+/** Let Cubby decide / set to none / confirm links for a record addressed by
  * entity and shortcode (the explanation popover has no row record). */
 export function FieldResolutionEntityActions({
   entity: candidateEntity,

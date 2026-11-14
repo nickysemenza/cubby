@@ -5,7 +5,6 @@ import {
 } from "@cubby/schemas/entities/financialAccount";
 import { financialAccountRawOut as rawFinancialAccountOut } from "@cubby/schemas/entity-contracts/financialAccount";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { FieldResolutions } from "@cubby/schemas/field-resolution";
 import {
   financialAccountIdentity,
@@ -33,11 +32,12 @@ import {
   effectiveFieldSql,
   inheritedFieldSql,
 } from "~/server/db/computed/effective-field";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import {
   buildPartialUpdateValues,
   notDeleted,
   unwrapDb,
+  withHouseholdWrite,
   withTransaction,
 } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
@@ -74,42 +74,6 @@ import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolv
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { accountPartyPeriodItemsSql } from "./funding-sql";
-
-export const FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY = {
-  "EmailFinancialAssociation.reviewedAccountId": {
-    code: "preserve-reviewed-email-association",
-    effect: "preserve",
-    description:
-      "A reviewed Email association keeps naming the deleted account's tombstone; the review is history and is never rewritten.",
-  },
-  "FinancialTransaction.accountId": {
-    code: "block-live-financial-transactions",
-    effect: "block",
-    description:
-      "An account cannot be deleted while live financial transactions still retain settlement evidence against it.",
-  },
-  "EntityLink[purchasePaymentAccount].to": {
-    code: "soft-delete-association",
-    effect: "soft-delete",
-    description:
-      "A member's assertion that this account paid an order is soft-deleted with the account; the order's paying accounts fall back to its payment evidence.",
-  },
-  "SourceOccurrence.accountId": {
-    code: "block-live-source-transaction-records",
-    effect: "block",
-    description:
-      "An account cannot be deleted while live statement rows are assigned to it. The column is nullable, so detaching would succeed silently — and it would discard the triage judgment that put the row on this account while leaving the row looking untriaged.",
-  },
-  "SourceObservationAnnotation.accountId": {
-    code: "preserve-source-account-history",
-    effect: "preserve",
-    description:
-      "Original observation judgments retain their account tombstone; current assignments are guarded by the occurrence edge.",
-  },
-} as const satisfies IncomingEdgePolicy<
-  "financialAccount",
-  OperationDisposition
->;
 
 const cardholderCode = (expression: ReturnType<typeof effectiveFieldSql>) =>
   sql<
@@ -571,7 +535,8 @@ export const updateFinancialAccount = defineMutationWriter({
     actor: ActorContext,
   ) => {
     const accountId = await resolveOrThrow(db, "financialAccount", id);
-    const output = await withTransaction(db, async (tx) => {
+    // The gate before the account row: the entity writers below take it.
+    const output = await withHouseholdWrite(db, async (tx) => {
       const [before] = await tx
         .select()
         .from(financialAccount)
@@ -737,7 +702,7 @@ export const updateFinancialAccount = defineMutationWriter({
 
 export const financialAccountRepository = defineRepository("financialAccount", {
   schemas: financialAccountSchemaBindings,
-  lifecycle: { delete: FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY },
+  lifecycle: { delete: DECLARED_EDGE_DELETE_POLICIES.financialAccount },
   scaffold: financialAccountScaffold,
   create: asActor(createFinancialAccount),
   update: asActor(updateFinancialAccount),

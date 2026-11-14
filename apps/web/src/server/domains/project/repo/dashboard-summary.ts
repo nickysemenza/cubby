@@ -324,7 +324,7 @@ export async function projectDashboardSummary(
             in90Days: sql<number>`coalesce(sum(${committedRead.cost}) filter (where ${expense.date} <= ${householdDaysFromNow(FORWARD_COMMITTED_WINDOWS_DAYS[2])}), 0)::float`,
           })
           .where(
-            and(notDeleted(expense), plannedExpense(), gt(expense.cost, 0)),
+            and(notDeleted(expense), plannedExpense(), gt(expense.cost, 0n)),
           )
       : Promise.resolve([{ in30Days: 0, in60Days: 0, in90Days: 0 }]),
   ]);

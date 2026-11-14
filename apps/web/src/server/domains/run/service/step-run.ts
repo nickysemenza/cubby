@@ -1,6 +1,6 @@
 import { MEMBER_CANCELLED_AI_WORK } from "@cubby/schemas/ai-evaluation";
+import type { ExecutionWaitReason } from "@cubby/schemas/execution";
 import type { RunId } from "@cubby/schemas/identifiers";
-import type { JobWaitReason } from "@cubby/schemas/job";
 import {
   isExecutedRunPurpose,
   isStepRunPurpose,
@@ -19,8 +19,7 @@ import type {
 type JsonValue = RunStepInput["boundary"];
 
 import type { Database } from "~/server/db";
-import { setJobStepKey } from "~/server/generic/jobs/context";
-import { measurePage, type PageWork } from "~/server/generic/jobs/page-work";
+import { measurePage, type PageWork } from "~/server/kernel/page-work";
 import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
 import {
   claimWorkflowRun,
@@ -77,7 +76,7 @@ export type StepPage =
       kind: "paused";
       reason: string;
       until: Date | null;
-      waitReason?: JobWaitReason;
+      waitReason?: ExecutionWaitReason;
       /** What the page finished before the pause, kept on the step. */
       delta?: Partial<Omit<RunStepCounts, "found">>;
       errors?: readonly RunStepError[];
@@ -173,7 +172,7 @@ async function planForRun(
 
 export type StepAdvance =
   | { kind: "continue"; waitSeconds?: number }
-  | { kind: "paused"; waitReason?: JobWaitReason }
+  | { kind: "paused"; waitReason?: ExecutionWaitReason }
   | { kind: "finished" }
   | { kind: "lost" };
 
@@ -286,7 +285,6 @@ export async function advanceStepRun(
     await finishStepRun(db, owner, rows, params.attempt);
     return { kind: "finished" };
   }
-  setJobStepKey(next.key);
   const entry = steps.find((step) => step.declaration.key === next.key);
   if (!entry) {
     await recordRunStepPage(db, owner.id, next.key, {

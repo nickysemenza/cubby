@@ -1,18 +1,24 @@
-import { parseShortcodeFor, type PurchaseId } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { nullableWholeCentToMinor } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE } from "~/server/ai/policy/features";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers";
-import { expense, expenseAttribution } from "~/server/db/schema";
+import { expense } from "~/server/db/schema";
 import { expenseLineRoleClassifier } from "~/server/domains/expense/service/expense-line-role";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import {
+  createPurchaseEventRecord,
+  createPurchaseEventRecords,
+} from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import { splitExpense } from "~/server/domains/purchase/repo/purchase";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
   checkLinkExpensesFor,
@@ -40,35 +46,52 @@ describe("split and attach checks against the ledger", () => {
       insertWithShortcode(ctx.db, "vendor", { name: "Synthetic Supply" }),
       insertWithShortcode(ctx.db, "vendor", { name: "Synthetic Other Shop" }),
     ]);
-    const [target, sameVendor, elsewhere] = await Promise.all([
-      insertWithShortcode(ctx.db, "purchase", {
-        vendorId: vendor.id,
-        date: "2026-09-01",
-      }),
-      insertWithShortcode(ctx.db, "purchase", {
-        vendorId: vendor.id,
-        date: "2026-08-01",
-      }),
-      insertWithShortcode(ctx.db, "purchase", {
-        vendorId: otherVendor.id,
-        date: "2026-08-02",
-      }),
-    ]);
-    const make = (name: string, cost: number | null, purchaseId?: PurchaseId) =>
-      insertWithShortcode(ctx.db, "expense", {
-        ...line,
-        name,
-        cost,
-        purchaseId: purchaseId ?? null,
-      });
-    const [here, free, sibling, foreign, unpriced] = await Promise.all([
-      make("Board on this order", 5, target.id),
-      make("Free board", 12.5),
-      make("Board on another order of this vendor", 0.1, sameVendor.id),
-      make("Board from a different vendor", 0.2, elsewhere.id),
-      make("Unpriced board", null),
-    ]);
-    return { vendor, target, here, free, sibling, foreign, unpriced };
+    const [target, sameVendor, elsewhere] = await createPurchaseEventRecords(
+      ctx.db,
+      "purchase",
+      [
+        { vendorId: vendor.id, date: "2026-09-01" },
+        { vendorId: vendor.id, date: "2026-08-01" },
+        { vendorId: otherVendor.id, date: "2026-08-02" },
+      ],
+    );
+    const [here, free, sibling, foreign, unpriced] =
+      await createPurchaseEventRecords(ctx.db, "expense", [
+        {
+          ...line,
+          name: "Board on this order",
+          cost: nullableWholeCentToMinor(5),
+          purchaseId: target!.id,
+        },
+        {
+          ...line,
+          name: "Free board",
+          cost: nullableWholeCentToMinor(12.5),
+          purchaseId: null,
+        },
+        {
+          ...line,
+          name: "Board on another order of this vendor",
+          cost: nullableWholeCentToMinor(0.1),
+          purchaseId: sameVendor!.id,
+        },
+        {
+          ...line,
+          name: "Board from a different vendor",
+          cost: nullableWholeCentToMinor(0.2),
+          purchaseId: elsewhere!.id,
+        },
+        { ...line, name: "Unpriced board", cost: null, purchaseId: null },
+      ]);
+    return {
+      vendor,
+      target: target!,
+      here: here!,
+      free: free!,
+      sibling: sibling!,
+      foreign: foreign!,
+      unpriced: unpriced!,
+    };
   }
 
   it("scopes attach candidates the way the dialog always has", async () => {
@@ -151,10 +174,10 @@ describe("split and attach checks against the ledger", () => {
         brandId: await findOrCreateVendor(ctx.db, "Synthetic"),
       }),
     ]);
-    await insertWithShortcode(ctx.db, "expense", {
+    await createPurchaseEventRecord(ctx.db, "expense", {
       ...line,
       name: "Itemized line",
-      cost: 3,
+      cost: 300n,
       purchaseId: target.id,
       productId: derived.id,
       productQuantity: 1,
@@ -220,14 +243,14 @@ describe("split and attach checks against the ledger", () => {
       const vendor = await insertWithShortcode(ctx.db, "vendor", {
         name: "Synthetic split vendor",
       });
-      const purchase = await insertWithShortcode(ctx.db, "purchase", {
+      const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
         vendorId: vendor.id,
         date: "2026-09-01",
       });
-      return insertWithShortcode(ctx.db, "expense", {
+      return createPurchaseEventRecord(ctx.db, "expense", {
         ...line,
         name: "Sample kit",
-        cost,
+        cost: nullableWholeCentToMinor(cost),
         purchaseId: purchase.id,
       });
     }
@@ -392,10 +415,10 @@ describe("split and attach checks against the ledger", () => {
     });
 
     it("refuses splitting without a Purchase before asking for a role", async () => {
-      const source = await insertWithShortcode(ctx.db, "expense", {
+      const source = await createPurchaseEventRecord(ctx.db, "expense", {
         ...line,
         name: "Unattached expense",
-        cost: 10,
+        cost: 1000n,
         purchaseId: null,
       });
       const code = parseShortcodeFor("expense", source.shortcode);
@@ -430,12 +453,12 @@ describe("split and attach checks against the ledger", () => {
       const category = await insertWithShortcode(ctx.db, "spendingCategory", {
         name: "Split category",
       });
-      const source = await insertWithShortcode(ctx.db, "expense", {
+      const source = await createPurchaseEventRecord(ctx.db, "expense", {
         ...line,
         name: "Categorized goods",
-        cost: 10,
+        cost: 1000n,
         purchaseId: (
-          await insertWithShortcode(ctx.db, "purchase", {
+          await createPurchaseEventRecord(ctx.db, "purchase", {
             vendorId: (
               await insertWithShortcode(ctx.db, "vendor", {
                 name: "Synthetic categorized split vendor",
@@ -472,7 +495,7 @@ describe("split and attach checks against the ledger", () => {
         ctx.actor,
       );
       if (!person.entityId) throw new Error("expected party");
-      await unwrapDb(ctx.db).insert(expenseAttribution).values({
+      await insertPurchaseEventRows(ctx.db, "ExpenseAttribution", {
         expenseId: source.id,
         role: "funder",
         ledgerPartyId: person.entityId,

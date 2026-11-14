@@ -7,6 +7,8 @@ import { and, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
+import { settleFieldEdits } from "~/server/ai/fields/repo/field-decisions";
+import { fieldsPlanOf } from "~/server/ai/fields/repo/plan";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { textArrayParam } from "~/server/db/helpers/query";
@@ -31,17 +33,36 @@ export function repositoryRecordInput(entity: Entity, input: unknown) {
   return data;
 }
 
+/**
+ * Write a record's emoji. A `fields` scope owns the emoji of an entity whose
+ * manifest lets Cubby fill it: there the write is the actor's decision, which
+ * the scope applies in this transaction (and audits).
+ */
 export async function writeRecordEmoji(
   db: Database,
+  actor: ActorContext,
   entity: keyof typeof SHORTCODE_TABLE,
   id: string,
   input: unknown,
+  previous: string | null = null,
 ) {
   const field = entityInspectorMetadata[entity].recordEmojiField;
   if (!field) return;
   const data = z.record(z.string(), z.unknown()).parse(input);
   if (!Object.hasOwn(data, field)) return;
   const value = recordEmojiInput.parse(data[field]);
+  const plan = fieldsPlanOf(entity);
+  if (plan?.writes.includes(field)) {
+    await settleFieldEdits(
+      db,
+      actor,
+      plan,
+      id,
+      { [field]: previous },
+      { [field]: value },
+    );
+    return;
+  }
   const table = SHORTCODE_TABLE[entity];
   await unwrapDb(db).execute(
     sql`UPDATE ${table} SET ${sql.identifier(field)} = ${value} WHERE ${table.id} = ${id} AND ${notDeleted(table)}`,
@@ -129,6 +150,8 @@ export async function auditRecordEmoji(
 ) {
   const field = entityInspectorMetadata[entity].recordEmojiField;
   if (!field || previous === undefined) return;
+  // The `fields` scope audits its own write of an emoji it owns.
+  if (fieldsPlanOf(entity)?.writes.includes(field)) return;
   const value = recordEmojiInput.parse(
     z.record(z.string(), z.unknown()).parse(input)[field],
   );

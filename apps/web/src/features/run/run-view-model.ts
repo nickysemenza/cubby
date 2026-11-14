@@ -1,4 +1,5 @@
-import type { JobWaitReason } from "@cubby/schemas/job";
+import type { ExecutionWaitReason } from "@cubby/schemas/execution";
+import type { RunWaitingOn } from "@cubby/schemas/execution";
 import {
   runStepDeclaration,
   type RunStepInputMode,
@@ -19,7 +20,6 @@ import {
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { z } from "zod";
 
-import type { JobFacts, JobListOut } from "~/contracts/job.contract";
 import type {
   RunDecisionStatus,
   RunDetailStep,
@@ -29,7 +29,7 @@ import { formatInstant } from "~/lib/date-format";
 import { declaredRunSteps } from "~/lib/run-plan";
 
 /**
- * The Run detail page's one reading of stored RunSteps and Job facts. Every
+ * The Run detail page's one reading of stored RunSteps and kernel waits. Every
  * component renders these shapes; only `stepView` reads the stored step meta
  * and the step's manifest declaration.
  */
@@ -71,9 +71,9 @@ const PHASE_OF = {
   failed: "failed",
 } as const satisfies Record<RunDetailStep["state"], StepPhase>;
 
-/** Why a step or Job is not moving, with the raw detail it was stored with. */
+/** Why a step or claim is not moving, with the raw detail it was stored with. */
 export type StepWait = {
-  reason: JobWaitReason | "retry" | "paused";
+  reason: ExecutionWaitReason | "retry" | "paused";
   label: string;
   /** "until 11:42", "attempt 2 of 3": the quiet line beside the pill. */
   until: string | null;
@@ -145,33 +145,22 @@ export const humanizeKey = (key: string) => {
   return words.charAt(0).toUpperCase() + words.slice(1);
 };
 
-const WAIT_LABEL = {
-  provider_capacity: "AI capacity",
-  ai_funding_window: "Funding window",
-  rate_limit: "Provider rate limit",
-  device: "Waiting for a device",
-} as const satisfies Record<JobWaitReason, string>;
-
 const clock = (iso: string) => formatInstant(iso, "clock");
 
-/** Why the Run's Job is not executing now, when it is waiting at all. */
-export function jobWait(job: JobFacts | null): StepWait | null {
-  if (!job) return null;
-  if (job.waitReason)
-    return {
-      reason: job.waitReason,
-      label: WAIT_LABEL[job.waitReason],
-      until: job.waitUntil ? `until ${clock(job.waitUntil)}` : null,
-      raw: job.error,
-    };
-  if (job.state === "retry_wait")
-    return {
-      reason: "retry",
-      label: "Retrying",
-      until: `attempt ${job.attempts + 1} of ${job.maxAttempts ?? "unbounded"} at ${clock(job.availableAt)}`,
-      raw: job.error,
-    };
-  return null;
+/** A Run's kernel wait, shared with its header and native read. */
+function runWait(wait: RunWaitingOn | null): StepWait | null {
+  if (!wait || wait.reason === "in_progress") return null;
+  return {
+    reason:
+      wait.reason === "funding"
+        ? "ai_funding_window"
+        : wait.reason === "model_capacity"
+          ? "provider_capacity"
+          : "paused",
+    label: wait.label,
+    until: wait.etaAt ? `until ${clock(wait.etaAt)}` : null,
+    raw: null,
+  };
 }
 
 const boundaryText = (boundary: unknown): string | null => {
@@ -254,7 +243,7 @@ const settledPhase = (phase: StepPhase, runStatus: string): StepPhase => {
 function stepView(
   purpose: string,
   step: RunDetailStep,
-  job: JobFacts | null,
+  waiting: RunWaitingOn | null,
   now: number,
   runStatus: string,
 ): RunStepView {
@@ -267,7 +256,7 @@ function stepView(
   const live = phase === "running" || phase === "waiting";
   const stepWait: StepWait | null =
     phase === "waiting" || phase === "paused"
-      ? (jobWait(job) ?? {
+      ? (runWait(waiting) ?? {
           reason: "paused",
           label: phase === "paused" ? "Paused" : "Waiting",
           until: step.pausedUntil ? `until ${clock(step.pausedUntil)}` : null,
@@ -293,10 +282,7 @@ function stepView(
     countedAt: meta.input?.countedAt ?? step.startedAt,
     boundary: boundaryText(meta.input?.boundary),
     rate:
-      mode === "count" &&
-      phase === "running" &&
-      !jobWait(job) &&
-      (!job || job.state === "running")
+      mode === "count" && phase === "running" && !runWait(waiting)
         ? rateOf(step, meta, now)
         : null,
     ratePaused: mode === "count" && (phase === "waiting" || phase === "paused"),
@@ -356,11 +342,11 @@ export type RunOverview = {
 
 export function runOverview(
   detail: RunDetailStepsOut,
-  jobs: JobListOut | undefined,
+  waiting: RunWaitingOn | null | undefined,
   now: number,
   input: RunDetailStepsOut["input"],
 ): RunOverview {
-  const primary = jobs?.primary ?? null;
+  const primary = waiting ?? null;
   const steps = declaredRunSteps(detail.purpose, input).map(
     (declaration, position) => {
       const stored = detail.steps.find((step) => step.key === declaration.key);
@@ -418,9 +404,9 @@ export function runOverview(
 /* ——— Decisions ——— */
 
 export const DECISION_STATUS_LABEL = {
-  pending: "Needs review",
-  applied: "Applied",
-  rejected: "Rejected",
-  superseded: "Replaced",
-  resolved: "Review complete",
+  pending: "Needs you",
+  applied: "Done",
+  rejected: "Ended",
+  superseded: "Ended",
+  resolved: "Done",
 } as const satisfies Record<RunDecisionStatus, string>;

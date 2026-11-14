@@ -2,20 +2,22 @@ import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { expenseChargeContextOut } from "@cubby/schemas/project";
 import { purchaseUpdateData } from "@cubby/schemas/purchase";
+import { nullableWholeCentToMinor } from "@cubby/shared";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { expenseHandlers } from "~/server/domains/expense/operations/expense.server";
 import { readExpense, updateExpense } from "~/server/domains/expense/repo/crud";
 import { resolveDraftExpenseFields } from "~/server/domains/expense/repo/expense-inheritance";
 import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { purchaseHandlers } from "~/server/domains/purchase/operations/purchase.server";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { systemPrincipal } from "~/server/http/authenticate";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -100,20 +102,20 @@ describe("purchase inheritance lifecycle", () => {
       name: "Second fixture project",
       defaultTrade: "plumbing",
     });
-    const source = await insertWithShortcode(ctx.db, "purchase", {
+    const source = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: fixtureDate,
       defaultProjectId: first.id,
     });
-    const keeper = await insertWithShortcode(ctx.db, "purchase", {
+    const keeper = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: fixtureDate,
       defaultProjectId: second.id,
     });
-    const item = await insertWithShortcode(ctx.db, "expense", {
+    const item = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Inherited fixture item",
       date: fixtureDate,
-      cost: 10,
+      cost: 1000n,
       costType: "materials",
       lineKind: "principal",
       trade: null,
@@ -253,19 +255,19 @@ describe("purchase inheritance lifecycle", () => {
 
   it("reads inherited purchase context and explains allocated shares without scalar overrides", async () => {
     const { source, item, first, second } = await fixture();
-    await insertWithShortcode(ctx.db, "expense", {
+    await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Second project item",
       date: fixtureDate,
-      cost: 40,
+      cost: 4000n,
       costType: "materials",
       lineKind: "principal",
       purchaseId: source.id,
       projectId: second.id,
     });
-    const charge = await insertWithShortcode(ctx.db, "expense", {
+    const charge = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Shared fixture tax",
       date: fixtureDate,
-      cost: 1,
+      cost: 100n,
       costType: "materials",
       lineKind: "tax",
       trade: "building",
@@ -315,19 +317,19 @@ describe("purchase inheritance lifecycle", () => {
 
   it("returns canonical attach and charge contexts without losing inherited or allocated decisions", async () => {
     const { source, keeper, item, first, second } = await fixture();
-    await insertWithShortcode(ctx.db, "expense", {
+    await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Synthetic alternate project principal",
       date: fixtureDate,
-      cost: 40,
+      cost: 4000n,
       costType: "materials",
       lineKind: "principal",
       purchaseId: source.id,
       projectId: second.id,
     });
-    const allocated = await insertWithShortcode(ctx.db, "expense", {
+    const allocated = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Synthetic allocated tax",
       date: fixtureDate,
-      cost: 1,
+      cost: 100n,
       costType: "materials",
       lineKind: "tax",
       purchaseId: source.id,
@@ -403,10 +405,10 @@ describe("purchase inheritance lifecycle", () => {
   it("sums fractional purchase amounts before converting to floating point", async () => {
     const { source } = await fixture();
     for (const cost of [0.1, 0.2]) {
-      await insertWithShortcode(ctx.db, "expense", {
+      await createPurchaseEventRecord(ctx.db, "expense", {
         name: "Fractional item",
         date: fixtureDate,
-        cost,
+        cost: nullableWholeCentToMinor(cost),
         costType: "materials",
         lineKind: "principal",
         purchaseId: source.id,
@@ -442,15 +444,15 @@ describe("purchase inheritance lifecycle", () => {
       name: "Explicit expense project",
       defaultTrade: "building",
     });
-    const source = await insertWithShortcode(ctx.db, "purchase", {
+    const source = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: fixtureDate,
       defaultProjectId: purchaseProject.id,
     });
-    const item = await insertWithShortcode(ctx.db, "expense", {
+    const item = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Explicit trade reset item",
       date: fixtureDate,
-      cost: 10,
+      cost: 1000n,
       costType: "materials",
       lineKind: "principal",
       projectId: explicitProject.id,
@@ -512,14 +514,14 @@ describe("purchase inheritance lifecycle", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "No fallback trade fixture vendor",
     });
-    const source = await insertWithShortcode(ctx.db, "purchase", {
+    const source = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: fixtureDate,
     });
-    const item = await insertWithShortcode(ctx.db, "expense", {
+    const item = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "No fallback trade item",
       date: fixtureDate,
-      cost: 10,
+      cost: 1000n,
       costType: "materials",
       lineKind: "principal",
       trade: "electrical",
@@ -555,15 +557,15 @@ describe("purchase inheritance lifecycle", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Purchase default trade fixture vendor",
     });
-    const source = await insertWithShortcode(ctx.db, "purchase", {
+    const source = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: fixtureDate,
       defaultTrade: "plumbing",
     });
-    const item = await insertWithShortcode(ctx.db, "expense", {
+    const item = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Purchase default trade item",
       date: fixtureDate,
-      cost: 10,
+      cost: 1000n,
       costType: "materials",
       lineKind: "principal",
       trade: "electrical",
@@ -636,10 +638,10 @@ describe("purchase inheritance lifecycle", () => {
 
   it("detaches an unresolved signed Expense without inventing inherited attribution", async () => {
     const { source } = await fixture();
-    const unresolved = await insertWithShortcode(ctx.db, "expense", {
+    const unresolved = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Unresolved receipt adjustment",
       date: fixtureDate,
-      cost: -2.13,
+      cost: -213n,
       costType: "materials",
       lineKind: "unclassified",
       trade: null,
@@ -678,10 +680,10 @@ describe("purchase inheritance lifecycle", () => {
       trade: "building",
       purchaseId: null,
     });
-    await insertWithShortcode(ctx.db, "expense", {
+    await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Shared fee",
       date: fixtureDate,
-      cost: 1,
+      cost: 100n,
       costType: "services",
       lineKind: "fee",
       trade: null,

@@ -1,80 +1,6 @@
+import { financialTransactionKind } from "./financial-transaction-fields";
 import { z } from "zod";
 
-/**
- * One completed model answer for one statement question. Reuse requires the
- * stored `input` to equal the question's current projected input (canonical
- * JSON) and `versions` to equal the current feature versions. A present answer
- * whose `value` is null is a completed abstention; an absent answer is
- * unanswered. Failures are never stored as answers.
- */
-export const statementAnswer = <T extends z.ZodType>(value: T) =>
-  z.object({
-    value: value.nullable(),
-    input: z.json(),
-    versions: z.record(z.string(), z.string()),
-    models: z.array(z.string()).default([]),
-  });
-
-export const statementQuestionSubject = z.object({
-  descriptor: z.string().nullable(),
-  merchant: z.string().nullable(),
-  category: z.string().nullable(),
-  date: z.string(),
-  amount: z.number().finite(),
-  status: z.enum(["pending", "posted"]).nullable(),
-});
-export const statementCandidateQuestionInput = z.object({
-  statement: statementQuestionSubject.nullable(),
-  transaction: z.object({
-    descriptor: z.string().nullable(),
-    merchant: z.string().nullable(),
-    date: z.string().nullable(),
-    amount: z.number().finite(),
-    status: z.string(),
-  }),
-});
-const statementEscrowQuestionInput = z.object({
-  merchant: z.string().nullable(),
-  description: z.string().nullable(),
-  sourceCategory: z.string().nullable(),
-  amount: z.number().finite(),
-});
-const statementMerchantQuestionInput = z.object({
-  merchant: z.string(),
-});
-const statementMerchantSupportQuestionInput =
-  statementMerchantQuestionInput.extend({ proposed: z.string() });
-
-const statementEscrowAnswer = statementAnswer(z.boolean()).extend({
-  input: statementEscrowQuestionInput,
-});
-
-/** Identity and support are separate questions; support depends on identity. */
-const statementMerchantAnswer = z.object({
-  identity: statementAnswer(
-    z.object({
-      name: z.string().nullable(),
-      counterparty: z.string(),
-      confidence: z.string(),
-    }),
-  ).extend({ input: statementMerchantQuestionInput }),
-  /** Null when support was inapplicable to the identity answer. */
-  support: statementAnswer(z.boolean())
-    .extend({ input: statementMerchantSupportQuestionInput })
-    .nullable(),
-});
-
-/** Answers owned by spending advice; produced and validated by `adviseSpending`. */
-export const statementSpendingAnswers = z.object({
-  escrow: statementEscrowAnswer.optional(),
-  merchant: statementMerchantAnswer.optional(),
-});
-export type StatementSpendingAnswers = z.infer<typeof statementSpendingAnswers>;
-
-/**
- * Prompt versions of the spending questions. `ai/policy/features.ts` reads
- * these so repos can check answer validity without importing `ai/`.
- */
 export const STATEMENT_ANSWER_VERSIONS = {
   escrow: "2026-11-12.1",
   merchantIdentity: "2026-11-13.1",
@@ -120,109 +46,27 @@ export function statementMerchantSupportInput(
   return { merchant: identityInput.merchant, proposed: identity.name };
 }
 
-type StatementAnswerInput = z.infer<ReturnType<typeof z.json>>;
+const statementKindVotes = z.object({
+  /** The provider-category rule, or an own-account move the descriptor names. */
+  rule: financialTransactionKind.nullable(),
+  /** A high-confidence decision-model label. */
+  label: financialTransactionKind.nullable(),
+  /** Earlier member-made transactions on the account with the same merchant. */
+  history: z.union([financialTransactionKind, z.literal("mixed")]).nullable(),
+});
+export type StatementKindVotes = z.infer<typeof statementKindVotes>;
 
-const canonicalJson = (value: StatementAnswerInput): string =>
-  JSON.stringify(value, (_key, entry: unknown) =>
-    entry && typeof entry === "object" && !Array.isArray(entry)
-      ? Object.fromEntries(
-          Object.entries(entry).sort(([a], [b]) =>
-            a < b ? -1 : a > b ? 1 : 0,
-          ),
-        )
-      : entry,
-  );
-
-/** A stored answer is reusable only for an equal input under equal versions. */
-export function statementAnswerMatches(
-  answer:
-    | { input: StatementAnswerInput; versions: Record<string, string> }
-    | undefined
-    | null,
-  input: StatementAnswerInput,
-  versions: Record<string, string>,
-): boolean {
-  return Boolean(
-    answer &&
-    canonicalJson(answer.input) === canonicalJson(input) &&
-    canonicalJson(answer.versions) === canonicalJson(versions),
-  );
-}
-
-/** Advice fields carried by spending answers; Vendor resolution still wins. */
-export function statementAdviceFromAnswers(answers: StatementSpendingAnswers) {
-  const identity = answers.merchant?.identity.value ?? null;
-  const supported = answers.merchant?.support
-    ? answers.merchant.support.value === true
-    : true;
-  return {
-    ...(answers.escrow?.value === true ? { escrowDisbursement: true } : {}),
-    vendorName: identity?.name ?? null,
-    vendorConfidence: identity && supported ? identity.confidence : "low",
-    counterparty: identity?.counterparty ?? "unknown",
-  };
-}
-
-/** Keep only independently compatible spending answers from one retained row. */
-export function reusableStatementSpendingAnswers(
-  create: SpendingSubject,
-  isLoan: boolean,
-  answers: StatementSpendingAnswers,
-): StatementSpendingAnswers {
-  const result: StatementSpendingAnswers = {};
-  const escrow = statementEscrowInput(create, isLoan);
-  if (
-    escrow &&
-    statementAnswerMatches(answers.escrow, escrow, {
-      "loan-escrow-disbursement": STATEMENT_ANSWER_VERSIONS.escrow,
-    })
-  )
-    result.escrow = answers.escrow;
-  const identityInput = statementMerchantIdentityInput(create);
-  const merchant = answers.merchant;
-  if (
-    identityInput &&
-    merchant &&
-    statementAnswerMatches(merchant.identity, identityInput, {
-      "merchant-identity": STATEMENT_ANSWER_VERSIONS.merchantIdentity,
-    })
-  ) {
-    const supportInput = merchant.identity.value
-      ? statementMerchantSupportInput(identityInput, merchant.identity.value)
-      : null;
-    result.merchant = {
-      identity: merchant.identity,
-      support:
-        supportInput &&
-        statementAnswerMatches(merchant.support, supportInput, {
-          "merchant-identity-support":
-            STATEMENT_ANSWER_VERSIONS.merchantSupport,
-        })
-          ? merchant.support
-          : null,
-    };
-  }
-  return result;
-}
-
-/** Absence means unanswered; completed negative and null answers are complete. */
-export function statementSpendingAnswersComplete(
-  create: SpendingSubject,
-  isLoan: boolean,
-  answers: StatementSpendingAnswers,
-  vendorResolved: boolean,
-): boolean {
-  if (!["purchase", "refund", "fee"].includes(create.kind)) return true;
-  const reusable = reusableStatementSpendingAnswers(create, isLoan, answers);
-  if (statementEscrowInput(create, isLoan) && !reusable.escrow) return false;
-  if (vendorResolved) return true;
-  const identityInput = statementMerchantIdentityInput(create);
-  if (!identityInput) return true;
-  const merchant = reusable.merchant;
-  if (!merchant) return false;
-  return (
-    !merchant.identity.value ||
-    !statementMerchantSupportInput(identityInput, merchant.identity.value) ||
-    merchant.support !== null
-  );
-}
+const counterpartyKind = z.enum(["person", "business"]);
+/** Who is on the other side; a person counterparty is never bulk-acceptable. */
+const statementCounterparty = z.object({
+  /** A high-confidence decision-model label. */
+  label: counterpartyKind.nullable(),
+  history: counterpartyKind.nullable(),
+  /**
+   * The charge's account holds stored value (a payment app). Its payees are
+   * mostly people whose notes read like merchants, so only history, never the
+   * label alone, establishes a business there.
+   */
+  storedValue: z.boolean().default(false),
+});
+export type StatementCounterparty = z.infer<typeof statementCounterparty>;

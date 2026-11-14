@@ -4,24 +4,18 @@ import { describe, expect, it } from "vitest";
 
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { withJobExecution } from "~/server/generic/jobs/context";
-import { JobSupersededError } from "~/server/generic/jobs/errors";
-import { claimJob } from "~/server/generic/jobs/jobs.fixtures";
-import { cancelJob, retryJob } from "~/server/generic/jobs/repo/operator";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
-import { claimContext } from "~/server/generic/jobs/service/jobs";
+import { cancelWork } from "~/server/kernel/api";
+import { WorkSupersededError } from "~/server/kernel/work-errors";
 
-import {
-  assertWorkflowEffect,
-  isWorkflowInterrupted,
-  withWorkflowExecution,
-} from "./execution";
+import { assertWorkflowEffect, isWorkflowInterrupted } from "./execution";
+import { runPassFixture } from "./pass.fixtures";
+import { startRunPass } from "./run-pass";
 
 describe("Workflow effect admission", () => {
   const ctx = withTestDb();
 
-  it("recognizes obsolete Job ownership through wrapped causes", () => {
-    const error = new JobSupersededError();
+  it("recognizes obsolete claim ownership through wrapped causes", () => {
+    const error = new WorkSupersededError();
     expect(isWorkflowInterrupted(error)).toBe(true);
     expect(
       isWorkflowInterrupted(new Error("Publication failed", { cause: error })),
@@ -31,21 +25,14 @@ describe("Workflow effect admission", () => {
     );
   });
 
-  // Workflow context must retain the Job fence across cancellation and replacement.
-  it("rechecks current Job authority inside every publication transaction", async () => {
+  // Workflow context must retain the Pass fence across cancellation and replacement.
+  it("rechecks current Pass authority inside every publication transaction", async () => {
     const runId = await ensureRun(ctx.db, ctx.actor, {
       purpose: "maintenance",
       trigger: "manual",
       status: "running",
     });
-    const saved = await enqueueJob(ctx.db, {
-      key: `run:${runId}`,
-      kind: "run.execute",
-      input: { runId, purpose: "maintenance" },
-      runId,
-    });
-    const claim = await claimJob(ctx.db, saved.id);
-    if (!claim) throw new Error("Synthetic Workflow Job was not claimed");
+    const claim = await runPassFixture(ctx.db, runId);
     const publish = (notes = "published") =>
       withTransactionDatabase(ctx.db, async (tx) => {
         await assertWorkflowEffect(tx);
@@ -53,22 +40,26 @@ describe("Workflow effect admission", () => {
           sql`UPDATE "Run" SET notes = ${notes} WHERE id = ${runId}`,
         );
       });
-    await withJobExecution(ctx.db, claim, () =>
-      withWorkflowExecution(
-        { runId, attempt: claim.generation, job: claimContext(ctx.db, claim) },
-        async () => {
-          await expect(publish()).resolves.toBeUndefined();
-          await cancelJob(ctx.db, saved.id);
-          await expect(publish("stale")).rejects.toThrow(/obsolete/);
-          const savedRun = await getDb(ctx.db).execute<{ notes: string }>(
-            sql`SELECT notes FROM "Run" WHERE id = ${runId}`,
-          );
-          expect(savedRun.rows[0]?.notes).toBe("published");
-          await retryJob(ctx.db, saved.id);
-          await expect(publish()).rejects.toThrow(/obsolete/);
-        },
-      ),
-    );
+    await claim.owned(async () => {
+      await expect(publish()).resolves.toBeUndefined();
+      await cancelWork(ctx.db, {
+        table: "Pass",
+        name: "run.execute",
+        key: runId,
+      });
+      await expect(publish("stale")).rejects.toThrow(/obsolete/);
+      const savedRun = await getDb(ctx.db).execute<{ notes: string }>(
+        sql`SELECT notes FROM "Run" WHERE id = ${runId}`,
+      );
+      expect(savedRun.rows[0]?.notes).toBe("published");
+      await startRunPass(ctx.db, {
+        runId,
+        purpose: "maintenance",
+        generation: claim.generation + 1,
+        restart: true,
+      });
+      await expect(publish()).rejects.toThrow(/obsolete/);
+    });
     await expect(publish()).resolves.toBeUndefined();
   });
 });

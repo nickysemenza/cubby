@@ -24,9 +24,10 @@ import {
   buildEntity,
 } from "#web/tooling/factories/build.ts";
 import { buildKernelContext } from "#web/tooling/scenarios/context.ts";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import { getDb } from "~/server/db/helpers";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
+import { householdWrite } from "~/server/kernel/gate";
 import { e2eFaker } from "../support/e2e-helpers";
 
 type CreatedEntity = { id: string };
@@ -193,7 +194,7 @@ export async function createFixtureGraph<Result>(
   ) => Promise<Result>,
 ): Promise<Result> {
   const userId = await fixtureUserId(page);
-  const created = await withTransactionDatabase(getFixtureDb(), async (db) => {
+  const created = await householdWrite(getFixtureDb(), async (db) => {
     const context = buildKernelContext(db, userId);
     return build(
       (entity, input) =>

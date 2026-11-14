@@ -1,5 +1,5 @@
-import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
 import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
+import { askState } from "@cubby/schemas/kernel/machinery";
 import {
   mailboxDiscoveryInput,
   mailboxDiscoveryProgress,
@@ -8,7 +8,8 @@ import {
 import { type ExecutedRunPurpose } from "@cubby/schemas/run-fields";
 import { runStepState } from "@cubby/schemas/run-step";
 import { createLogger } from "@cubby/worker-tracing";
-import { and, or, not, eq, getTableColumns, isNull, sql } from "drizzle-orm";
+import { and, not, eq, getTableColumns, isNull, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import {
   describeErrorCauses,
@@ -16,11 +17,7 @@ import {
 } from "~/lib/error-diagnostics";
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
-import {
-  getDb,
-  withTransactionDatabase,
-  runAfterCommit,
-} from "~/server/db/helpers/core";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers/core";
 import { related, outer } from "~/server/db/helpers/related";
 import { run as runTable } from "~/server/db/retained-tables";
 import {
@@ -29,27 +26,23 @@ import {
   mailDiscoveryShouldYield,
   retainedMailDiscoveryScope,
 } from "~/server/domains/purchase-import/repo/gmail/discovery-admission";
+import {
+  readRunPass,
+  RUN_EXECUTE_PASS,
+  type PassRunPurpose,
+} from "~/server/domains/run/repo/run-execution";
 import { recordRunProgress as recordProgress } from "~/server/domains/run/repo/run-progress";
 import { createAppError } from "~/server/errors/app-error";
 import { findPgError } from "~/server/errors/db-errors";
-import { currentJobExecution } from "~/server/generic/jobs/context";
+import { classifyWorkFailure, stopsPage } from "~/server/kernel/failure";
 import {
-  JobDeferredError,
-  JobRetryableError,
-} from "~/server/generic/jobs/errors";
-import { classifyJobFailure, stopsPage } from "~/server/generic/jobs/failure";
+  WorkDeferredError,
+  WorkRetryableError,
+} from "~/server/kernel/work-errors";
 import {
-  lockUnchangedJob,
-  stoppedRunExecutions,
-  stoppedRunExecutionsSince,
-} from "~/server/generic/jobs/repo/job-reads";
-import {
-  makeJobsDueNow,
-  prioritizeJob,
-  retryJob,
-} from "~/server/generic/jobs/repo/operator";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
-import { assertWorkflowEffect } from "~/server/workflows/runs/execution";
+  assertWorkflowEffect,
+  currentRunExecution,
+} from "~/server/workflows/runs/execution";
 
 import { type WorkflowRunParams } from "./contract";
 
@@ -93,25 +86,18 @@ export const recordRunProgress = (
   recordProgress(db, {
     runId,
     eventId: crypto.randomUUID(),
-    generation: `job:${currentJobExecution()?.claim.generation ?? stamp.attempt}`,
+    generation: `job:${currentRunExecution()?.generation ?? stamp.attempt}`,
     sequence: stamp.sequence,
     phase,
     detail,
   });
 
-/**
- * A member's launch, resume or retry leads unattended Run execution by this
- * many minutes of due time: priority orders Jobs within one kind, never
- * across kinds.
- */
-const MANUAL_RUN_PRIORITY = 10;
-
-/** An aborted Mail snapshot waits on its canonical Job without spending attempts. */
+/** An aborted Mail snapshot waits on its Run Pass without spending attempts. */
 export function mailDiscoveryBackpressure(
   error: UnparsedError,
 ): Error | undefined {
   // A wrapped database cause cannot turn cancellation or lease loss into demand.
-  if (stopsPage(classifyJobFailure(error))) return undefined;
+  if (stopsPage(classifyWorkFailure(error))) return undefined;
   const pg = findPgError(error);
   if (
     !pg ||
@@ -124,9 +110,9 @@ export function mailDiscoveryBackpressure(
   log.warn("Mail discovery database capacity wait", { error });
   const message =
     "Mail discovery is waiting for shared database or search capacity";
-  if (!currentJobExecution())
+  if (!currentRunExecution())
     return createAppError("RUN_CONTROL_REFUSED", message, error);
-  const deferred = new JobDeferredError(
+  const deferred = new WorkDeferredError(
     message,
     new Date(Date.now() + 15_000),
     "provider_capacity",
@@ -150,11 +136,19 @@ export async function launchWorkflowRun(
   db: Database,
   input: LaunchWorkflowRunInput & { automatic?: false },
 ): Promise<LaunchedWorkflowRun>;
-/** Run is provenance/history. The Job row owns execution, retry, pause and cancellation. */
+/**
+ * Run is provenance/history. Its kernel Pass owns execution, retry, pause and cancellation.
+ */
 export async function launchWorkflowRun(
   db: Database,
   input: LaunchWorkflowRunInput,
 ): Promise<LaunchedWorkflowRun | null> {
+  if (input.purpose !== "mail_discovery")
+    return launchPassRun(db, { ...input, purpose: input.purpose }).catch(
+      (error: unknown) => {
+        throw activeSlotRefusal(input, error) ?? error;
+      },
+    );
   return withTransactionDatabase(db, async (tx) => {
     const mailbox = await lockMailDiscoveryRunAdmission(tx, input.runId);
     const [owner] = await getDb(tx)
@@ -212,61 +206,29 @@ export async function launchWorkflowRun(
             : {}),
         }
       : {};
-    const priority = input.automatic ? 0 : MANUAL_RUN_PRIORITY;
-    // Retention prunes the finished Job, so the Run's status has to refuse automatic
-    // work as the row would.
     if (
       input.automatic &&
       ["completed", "failed", "cancelled"].includes(owner.status)
     )
       return null;
-    let execution = await enqueueJob(tx, {
-      key: `run:${input.runId}`,
-      kind: "run.execute",
-      input: { runId: input.runId, purpose: input.purpose },
-      runId: input.runId,
-      priority,
-    });
-    if (["failed", "cancelled", "paused"].includes(execution.state)) {
+    const pass = await readRunPass(tx, input.runId);
+    const live = pass && ["due", "waiting", "working"].includes(pass.state);
+    if (input.automatic && pass && !live) return null;
+    if (owner.status === "completed" && !(await runOwesWork(tx, input.runId))) {
       if (input.automatic) return null;
-      const retried = await retryJob(tx, execution.id);
-      if (retried) execution = retried;
+      throw new Error("Completed Run cannot be relaunched; create a new Run");
     }
-    if (
-      execution.state === "completed" ||
-      // Its finished Job was pruned, so this row is new and the same rule applies.
-      (owner.status === "completed" &&
-        execution.generation === 1 &&
-        execution.attempts === 0)
-    ) {
-      if (input.automatic) return null;
-      const pending = await getDb(tx).execute<{ pending: boolean }>(sql`SELECT (
-        EXISTS (SELECT 1 FROM "AiEvaluation" e WHERE e.state IN (${aiEvaluationState.enum.queued},${aiEvaluationState.enum.result_ready})
-          AND e.receipt->>'retryEvaluationId' IS NULL
-          AND (e."runId"=${input.runId}::uuid OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" r WHERE r."evaluationId"=e.id AND r."runId"=${input.runId}::uuid AND r."cancelledAt" IS NULL)))
-        OR EXISTS (SELECT 1 FROM "RunStep" s WHERE s."runId"=${input.runId}::uuid AND s.state=${runStepState.enum.queued})
-      ) AS pending`);
-      // A completed transport Job can leave a failed discovery's frozen page owed.
-      const retainedDiscoveryPage =
-        owner.purpose === "mail_discovery" &&
-        owner.status === "failed" &&
-        mailboxDiscoveryProgress.safeParse(owner.progress).data?.page !==
-          undefined;
-      if (!pending.rows[0]?.pending && !retainedDiscoveryPage)
-        throw new Error("Completed Run cannot be relaunched; create a new Run");
-      execution = await enqueueJob(tx, {
-        key: execution.key,
-        kind: execution.kind,
-        input: execution.input,
+    const generation = live
+      ? (pass.generation ?? 1)
+      : (progressAttempt.safeParse(owner.progress).data?.attempt ?? 0) + 1;
+    const { startRunPass } = await import("./run-pass");
+    if (!input.automatic || !live)
+      await startRunPass(tx, {
         runId: input.runId,
-        priority,
-        invalidate: true,
+        purpose: input.purpose,
+        generation,
+        restart: Boolean(pass && !live),
       });
-    }
-    if (!input.automatic && execution.priority < priority) {
-      const raised = await prioritizeJob(tx, execution.id, priority);
-      if (raised) execution = raised;
-    }
     await getDb(tx)
       .update(runTable)
       .set({
@@ -276,67 +238,127 @@ export async function launchWorkflowRun(
         dispatchError: admitted
           ? null
           : "Mail discovery is queued for shared search capacity",
-        progress: sql`(coalesce(${runTable.progress}, '{}'::jsonb) - 'fundingReleasedAt' - 'admissionRequestedAt') || ${JSON.stringify(admissionProgress)}::jsonb || jsonb_build_object('attempt', ${execution.generation}::int)`,
+        progress: sql`(coalesce(${runTable.progress}, '{}'::jsonb) - 'fundingReleasedAt' - 'admissionRequestedAt') || ${JSON.stringify(admissionProgress)}::jsonb || jsonb_build_object('attempt', ${generation}::int)`,
       })
       .where(eq(runTable.id, input.runId));
-    if (!input.automatic) {
-      // An explicit launch releases the retained Job's backoff without resetting
-      // its attempt, cursor or the funding preflights on the next page.
-      await makeJobsDueNow(tx, sql`SELECT ${execution.key}::text`);
-      // Items parked while this Run was stopped return at its priority.
-      const pending = await getDb(tx).execute<{
-        id: string;
-      }>(sql`SELECT e.id FROM "AiEvaluation" e
-        WHERE e.state IN (${aiEvaluationState.enum.queued},${aiEvaluationState.enum.result_ready})
-          AND (e."runId"=${input.runId}::uuid OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" r WHERE r."evaluationId"=e.id AND r."runId"=${input.runId}::uuid AND r."cancelledAt" IS NULL))`);
-      const { markAiEvaluationWork } =
-        await import("~/server/ai/evaluation/repo/ai-evaluation-work");
-      await markAiEvaluationWork(
-        tx,
-        pending.rows.map((row) => row.id),
-        { revive: true },
-      );
-    }
-    await runAfterCommit(tx, async () => {
-      await (
-        await import("../background-tasks/publish")
-      ).wakeJobs({ source: "run-launch" });
-    });
-    return { attempt: execution.generation, instanceId: execution.id };
+    if (!input.automatic) await reviveRunAsks(tx, input.runId);
+    return {
+      attempt: generation,
+      instanceId: `${RUN_EXECUTE_PASS}:${input.runId}`,
+    };
   }).catch((error: unknown) => {
     if (input.purpose === "mail_discovery") {
       const deferred = mailDiscoveryBackpressure(error);
       if (deferred) throw deferred;
     }
-    const pg = findPgError(error);
-    if (
-      !input.automatic &&
-      pg?.code === "23505" &&
-      pg.constraint?.startsWith("Run_one_active_")
-    )
-      throw createAppError(
+    throw activeSlotRefusal(input, error) ?? error;
+  });
+}
+
+function activeSlotRefusal(input: LaunchWorkflowRunInput, error: unknown) {
+  const pg = findPgError(error);
+  return !input.automatic &&
+    pg?.code === "23505" &&
+    pg.constraint?.startsWith("Run_one_active_")
+    ? createAppError(
         "RUN_CONTROL_REFUSED",
         "Another active Run owns this admission slot; retry after it finishes",
         error,
-      );
-    throw error;
+      )
+    : null;
+}
+
+const progressAttempt = z.object({ attempt: z.number().int().nonnegative() });
+
+/** Whether a finished Run still owes queued steps or AI work a relaunch would run. */
+async function runOwesWork(tx: Database, runId: RunId) {
+  const pending = await getDb(tx).execute<{ pending: boolean }>(sql`SELECT (
+    EXISTS (SELECT 1 FROM "Ask" a JOIN "AskScope" s ON s."askId"=a.id
+      WHERE s."runId"=${runId}::uuid AND s."cancelledAt" IS NULL AND a.state=${askState.enum.queued})
+    OR EXISTS (SELECT 1 FROM "RunStep" s WHERE s."runId"=${runId}::uuid AND s.state=${runStepState.enum.queued})
+  ) AS pending`);
+  return pending.rows[0]?.pending ?? false;
+}
+
+/** Items parked while a Run was stopped return when a member relaunches it. */
+async function reviveRunAsks(tx: Database, runId: RunId) {
+  await (await import("~/server/kernel/api")).retryRunAsks(tx, runId);
+}
+
+/**
+ * Launch, resume or retry a step-ledger or AI-work Run through its Pass. A
+ * live Pass keeps its generation and becomes due now; a finished, cancelled
+ * or exhausted one restarts at the next generation. Automatic launches never
+ * revive a stopped Pass or a finished Run.
+ */
+async function launchPassRun(
+  db: Database,
+  input: LaunchWorkflowRunInput & { purpose: PassRunPurpose },
+): Promise<LaunchedWorkflowRun | null> {
+  return withTransactionDatabase(db, async (tx) => {
+    const [owner] = await getDb(tx)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.id, input.runId))
+      .for("update");
+    if (!owner) throw new Error("Run no longer exists");
+    if (
+      input.automatic &&
+      ["completed", "failed", "cancelled"].includes(owner.status)
+    )
+      return null;
+    const pass = await readRunPass(tx, input.runId);
+    const live =
+      pass !== null &&
+      (pass.state === "due" ||
+        pass.state === "waiting" ||
+        pass.state === "working");
+    if (input.automatic && pass) {
+      if (!live) return null;
+      return {
+        attempt: pass.generation ?? 1,
+        instanceId: `${RUN_EXECUTE_PASS}:${input.runId}`,
+      };
+    }
+    if (owner.status === "completed") {
+      if (input.automatic) return null;
+      if (!(await runOwesWork(tx, input.runId)))
+        throw new Error("Completed Run cannot be relaunched; create a new Run");
+    }
+    const attempt =
+      progressAttempt.safeParse(owner.progress).data?.attempt ?? 0;
+    const generation =
+      live && pass.generation !== null ? pass.generation : attempt + 1;
+    const { startRunPass } = await import("./run-pass");
+    await startRunPass(tx, {
+      runId: input.runId,
+      purpose: input.purpose,
+      generation,
+      restart: pass !== null && !live,
+    });
+    await getDb(tx)
+      .update(runTable)
+      .set({
+        status: "running",
+        endedAt: null,
+        failureCode: null,
+        dispatchError: null,
+        progress: sql`(coalesce(${runTable.progress}, '{}'::jsonb) - 'fundingReleasedAt' - 'admissionRequestedAt') || jsonb_build_object('attempt', ${generation}::int)`,
+      })
+      .where(eq(runTable.id, input.runId));
+    if (!input.automatic) await reviveRunAsks(tx, input.runId);
+    return {
+      attempt: generation,
+      instanceId: `${RUN_EXECUTE_PASS}:${input.runId}`,
+    };
   });
 }
 
 function currentRunClaim(params: WorkflowRunParams) {
-  const current = currentJobExecution();
-  if (
-    !current ||
-    current.claim.kind !== "run.execute" ||
-    current.claim.input === null ||
-    typeof current.claim.input !== "object" ||
-    !("runId" in current.claim.input) ||
-    current.claim.input.runId !== params.runId
-  )
-    throw new Error(
-      "Background Run execution requires its universal Job claim",
-    );
-  return current.claim.generation === params.attempt ? current : null;
+  const current = currentRunExecution();
+  if (!current || current.runId !== params.runId)
+    throw new Error("Background Run execution requires its Run's claim");
+  return current.generation === params.attempt ? current : null;
 }
 
 /** Yield only before new domain work, never while a provider request is in flight. */
@@ -398,27 +420,21 @@ export async function yieldClaimedMailDiscovery(
     throw mailDiscoveryBackpressure(error) ?? error;
   });
   if (yielded)
-    throw new JobDeferredError(
+    throw new WorkDeferredError(
       "Mail discovery yielded shared search capacity",
       new Date(Date.now() + 15_000),
       "provider_capacity",
     );
 }
 
-/** A recovered universal Job restores only its own reconciled failure, under its fence. */
+/** A recovered universal Pass restores only its own reconciled failure, under its fence. */
 export async function resumeClaimedWorkflowRun(
   db: Database,
   params: WorkflowRunParams,
   reason: "job_failed" | "funding_ready" | "mail_admission" = "job_failed",
 ): Promise<void> {
   const current = currentRunClaim(params);
-  if (
-    !current ||
-    (reason === "job_failed" &&
-      current.claim.generation === 1 &&
-      current.claim.attempts === 0)
-  )
-    return;
+  if (!current || (reason === "job_failed" && !current.recovered)) return;
   const runId = runEntityId.parse(params.runId);
   try {
     const waiting = await withTransactionDatabase(db, async (tx) => {
@@ -479,7 +495,7 @@ export async function resumeClaimedWorkflowRun(
             dispatchError:
               "Mail discovery is queued for shared search capacity",
             // The attempt names the generation that waits: admission counts
-            // a waiter only while its Job is live at that generation, and one
+            // a waiter only while its Pass is live at that generation, and one
             // it cannot see has no place in line.
             progress: sql`coalesce(${runTable.progress}, '{}'::jsonb) || ${JSON.stringify(
               {
@@ -489,7 +505,7 @@ export async function resumeClaimedWorkflowRun(
                   mailboxDiscoveryProgress.parse(mailOwner.progress)
                     .admissionRequestedAt ?? new Date().toISOString(),
               },
-            )}::jsonb || jsonb_build_object('attempt', ${current.claim.generation}::int)`,
+            )}::jsonb || jsonb_build_object('attempt', ${current.generation}::int)`,
           })
           .where(
             and(
@@ -511,7 +527,7 @@ export async function resumeClaimedWorkflowRun(
           endedAt: null,
           failureCode: null,
           dispatchError: null,
-          progress: sql`(coalesce(${runTable.progress}, '{}'::jsonb) - 'fundingReleasedAt' - 'admissionRequestedAt') || ${JSON.stringify(scope ? { discoveryScope: scope, admissionClass: recovery ? "recovery" : "automatic" } : {})}::jsonb || jsonb_build_object('attempt', ${current.claim.generation}::int)`,
+          progress: sql`(coalesce(${runTable.progress}, '{}'::jsonb) - 'fundingReleasedAt' - 'admissionRequestedAt') || ${JSON.stringify(scope ? { discoveryScope: scope, admissionClass: recovery ? "recovery" : "automatic" } : {})}::jsonb || jsonb_build_object('attempt', ${current.generation}::int)`,
         })
         .where(
           and(
@@ -538,31 +554,23 @@ export async function resumeClaimedWorkflowRun(
           ),
         )
         .returning({ id: runTable.id });
-      // Run-before-Job ordering matches launch/control. A member stop or stale
+      // Run-before-Pass ordering matches launch/control. A member stop or stale
       // generation rolls the restoration back before any domain work can run.
       if (resumed) await assertWorkflowEffect(tx);
       return false;
     });
     if (waiting)
-      throw new JobDeferredError(
+      throw new WorkDeferredError(
         "Mail discovery is queued for shared search capacity",
         new Date(Date.now() + 15_000),
         "provider_capacity",
       );
   } catch (error) {
-    const claimInput = current.claim.input;
-    if (
-      claimInput !== null &&
-      typeof claimInput === "object" &&
-      "purpose" in claimInput &&
-      claimInput.purpose === "mail_discovery"
-    ) {
-      const deferred = mailDiscoveryBackpressure(error);
-      if (deferred) throw deferred;
-    }
+    const deferred = mailDiscoveryBackpressure(error);
+    if (deferred) throw deferred;
     const pg = findPgError(error);
     if (pg?.code === "23505" && pg.constraint?.startsWith("Run_one_active_"))
-      throw new JobRetryableError(
+      throw new WorkRetryableError(
         "Run recovery is waiting for another active Run",
         { cause: error },
       );
@@ -602,57 +610,4 @@ export async function claimWorkflowRun(
     )
     .limit(1);
   return row ?? null;
-}
-
-const reconcilable = () =>
-  or(
-    eq(runTable.status, "running"),
-    and(
-      eq(runTable.status, "paused_auth"),
-      eq(runTable.failureCode, "execution_limit"),
-    ),
-  )!;
-
-/** Permit selection: since when a stopped execution leaves its Run reading as running. */
-export const workflowRunsToReconcileSince = () =>
-  stoppedRunExecutionsSince(reconcilable() ?? sql`false`);
-
-/** Lost permits and interrupted workers are recovered by permit selection, never new Run attempts. */
-export async function reconcileWorkflowRuns(
-  db: Database,
-  after: string | null = null,
-) {
-  const rows = await stoppedRunExecutions(db, reconcilable(), 100, after);
-  let reconciled = 0;
-  for (const row of rows) {
-    if (!row.runId || !["failed", "cancelled", "paused"].includes(row.state))
-      continue;
-    const updated = await withTransactionDatabase(db, async (tx) => {
-      // Match launch's Run-before-Job order without waiting on an active writer.
-      const [owner] = await getDb(tx)
-        .select({ id: runTable.id })
-        .from(runTable)
-        .where(and(eq(runTable.id, row.runId!), reconcilable()))
-        .for("update", { skipLocked: true });
-      if (!owner) return false;
-      if (!(await lockUnchangedJob(tx, row))) return false;
-      await getDb(tx)
-        .update(runTable)
-        .set({
-          status: row.state === "paused" ? "paused" : "failed",
-          endedAt: row.state === "paused" ? null : new Date(),
-          dispatchError: row.error,
-          failureCode:
-            row.state === "cancelled"
-              ? "user_cancelled"
-              : row.state === "failed"
-                ? "job_failed"
-                : null,
-        })
-        .where(and(eq(runTable.id, row.runId!), reconcilable()));
-      return true;
-    });
-    if (updated) reconciled++;
-  }
-  return { reconciled, next: rows.length === 100 ? rows.at(-1)!.id : null };
 }

@@ -37,7 +37,7 @@ import {
   getDb,
   notDeleted,
   withTransaction,
-  withTransactionDatabase,
+  databaseForTransaction,
 } from "~/server/db/helpers";
 import {
   expense,
@@ -93,6 +93,7 @@ import { readOperation } from "~/server/domains/run/repo/run-operation";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { householdWrite, enterWriteTransaction } from "~/server/kernel/gate";
 
 import { readExistingOrderCandidates } from "../repo/existing-order-candidates";
 import { ensureMailVendorAccount } from "../repo/gmail/mail-account";
@@ -714,7 +715,7 @@ export async function preparePurchaseImport(
               decisionPort,
             )
           : [];
-      return withTransactionDatabase(db, async (transactionDb) => {
+      return householdWrite(db, async (transactionDb) => {
         const database = getDb(transactionDb);
         // Lock the Run before the operation: cancellation uses the same order.
         await database
@@ -1028,6 +1029,7 @@ async function finalizeReviewRun(
     operationId: `${operationId}:required-audit`,
   });
   await withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     const [stopped] = await tx
       .update(runTable)
       .set({
@@ -1043,6 +1045,15 @@ async function finalizeReviewRun(
         ),
       )
       .returning({ purpose: runTable.purpose, input: runTable.input });
+    if (stopped)
+      await (
+        await import("~/server/kernel/api")
+      ).emitWrites(databaseForTransaction(tx), {
+        table: runTable,
+        entity: "run",
+        ids: [runId],
+        columns: ["status", "endedAt", "updatedAt"],
+      });
     if (stopped?.purpose === "mail_import" && stopped.input !== null)
       await releaseUnsettledMailRunSources(tx, runEntityId.parse(runId));
   });
@@ -1120,7 +1131,7 @@ export async function commitPurchaseImport(
           );
       }
       // oxlint-disable-next-line complexity -- Ledger publication, source settlement and its recovery wake share this transaction.
-      return withTransactionDatabase(db, async (transactionDb) => {
+      return householdWrite(db, async (transactionDb) => {
         const database = getDb(transactionDb);
         // Lock the Run before the operation: cancellation uses the same order.
         await database
@@ -1489,6 +1500,14 @@ export async function commitPurchaseImport(
             updatedAt: new Date(),
           })
           .where(eq(runTable.id, scope.runId));
+        await (
+          await import("~/server/kernel/api")
+        ).emitWrites(transactionDb, {
+          table: runTable,
+          entity: "run",
+          ids: [scope.runId],
+          columns: ["status", "endedAt", "updatedAt"],
+        });
         await recordChange(transactionDb, {
           kind: "source",
           categories: ["run"],

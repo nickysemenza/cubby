@@ -6,7 +6,6 @@ import {
 import { entityRefKey } from "@cubby/schemas/entity";
 import type { ImageRawOut as RawImageOutput } from "@cubby/schemas/entity-contracts/image";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type LocationId,
   parseEntityId,
@@ -32,16 +31,16 @@ import { alias, QueryBuilder } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import { locationRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.location.gen";
+import { holdFieldsValues } from "~/server/ai/fields/repo/field-decisions";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { stockOnly } from "~/server/db/computed/inventory-placement";
-import {
-  LOCATION_DESCRIPTION_FEATURE_ID,
-  locationAiDescriptionSql,
-} from "~/server/db/computed/location-ai-description";
+import { locationAiDescriptionSql } from "~/server/db/computed/location-ai-description";
 import { declaredStoredSourceSql } from "~/server/db/derived-source-sql";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
+import { DECLARED_EDGE_DELETE_HOOKS } from "~/server/db/generated/declared-edges.gen";
 import {
+  databaseForTransaction,
   associatePendingImages,
   buildOrderBy,
   buildPartialUpdateValues,
@@ -58,7 +57,6 @@ import {
 import { outer } from "~/server/db/helpers/related";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
-  aiAnalysis,
   inventoryReadSnapshot,
   entityAttachment,
   image,
@@ -118,44 +116,6 @@ import {
 import { loadStockItemsByLocation } from "./stock-items";
 import { loadLocationAncestors, wouldCreateParentCycle } from "./tree";
 import { loadStoredLocationValuations } from "./valuation";
-
-export const LOCATION_DELETE_EDGE_POLICY = {
-  "InventoryEntry.locationId": {
-    code: "block-live-inventory",
-    effect: "block",
-    description:
-      "A location still holding inventory can't be deleted — move or remove the inventory first.",
-  },
-  "EntityAttachment.entityId": {
-    code: "soft-delete-association",
-    effect: "soft-delete",
-    description:
-      "Image associations are soft-deleted with the location, and each file is\n      deleted too unless something else still references it.",
-  },
-  "Location.parentId": {
-    code: "promote-live-child",
-    effect: "detach",
-    description:
-      "A deleted location's children are promoted to its nearest surviving ancestor rather than the deletion being blocked.",
-  },
-  "PhotoGroupProposal.inventoryLocationId": {
-    code: "clear-proposal-location",
-    effect: "detach",
-    description:
-      "Deleting a location clears a photo group proposal's inventory location; a proposed group must then pick another before approval.",
-  },
-  "Planting.locationId": {
-    code: "block-live-planting",
-    effect: "block",
-    description:
-      "A location named by a current or planned planting cannot be deleted.",
-  },
-  "GardenEntry.locationId": {
-    code: "block-garden-history",
-    effect: "block",
-    description: "A location with dated garden observations cannot be deleted.",
-  },
-} as const satisfies IncomingEdgePolicy<"location", OperationDisposition>;
 
 /**
  * Turn a `Location_name_key` violation into an error that names the blocker.
@@ -304,18 +264,28 @@ const createLocationTx = defineMutationWriter({
         : null;
       const type = data.type ?? (productId ? "furniture" : raiseMissingType());
       assertClassificationPolicies("location", { type, productId });
-      const newLocation = await insertWithShortcode(tx, "location", {
-        name: data.name,
-        aliases: data.aliases,
-        tags: data.tags ?? [],
-        // `type` is the physical form factor; `productId` is identity. A
-        // product-linked location can still carry a type (e.g. a raised bed
-        // that is also a specific product); without one it is `furniture`.
-        type,
-        notes: data.notes ?? null,
-        productId,
-        parentId,
-      });
+      const fields = holdFieldsValues(
+        "location",
+        {
+          name: data.name,
+          aliases: data.aliases,
+          tags: data.tags ?? [],
+          // `type` is the physical form factor; `productId` is identity. A
+          // product-linked location can still carry a type (e.g. a raised bed
+          // that is also a specific product); without one it is `furniture`.
+          type,
+          notes: data.notes ?? null,
+          productId,
+          parentId,
+        },
+        "create",
+      );
+      const newLocation = await insertWithShortcode(
+        tx,
+        "location",
+        fields.values,
+      );
+      await fields.settle(tx, actor, newLocation.id);
 
       if (data.pendingImageIds && data.pendingImageIds.length > 0) {
         const resolvedImageIds = await resolveAllPresent(
@@ -511,17 +481,27 @@ export const updateLocation = defineMutationWriter({
         productId: nextProductId,
       });
 
-      const updateValues = buildPartialUpdateValues({
-        name: data.name,
-        aliases: data.aliases,
-        tags: data.tags,
-        type: data.type,
-        notes: data.notes,
-        productId,
-        parentId,
-      });
+      const fields = holdFieldsValues(
+        "location",
+        buildPartialUpdateValues({
+          name: data.name,
+          aliases: data.aliases,
+          tags: data.tags,
+          type: data.type,
+          notes: data.notes,
+          productId,
+          parentId,
+        }),
+      );
 
-      const updated = await updateLiveAndReturn(tx, location, updateValues, id);
+      await fields.lock(tx, id);
+      const updated = await updateLiveAndReturn(
+        tx,
+        location,
+        fields.values,
+        id,
+      );
+      await fields.settle(tx, actor, id, before ?? {});
 
       // Reorder existing images (first = cover) before appending new ones so
       // additions always land after the reordered set. `data.imageOrder` /
@@ -579,7 +559,7 @@ export const updateLocation = defineMutationWriter({
   item: (full) => full.location,
 });
 
-const refuseHomeLocation = async (
+export const refuseHomeLocation = async (
   tx: DrizzleTransaction,
   ids: LocationId[],
 ) => {
@@ -596,7 +576,7 @@ const refuseHomeLocation = async (
  * room and its shelf go together, the shelf's bins belong under Home, not
  * under the soon-to-be-deleted room.
  */
-const promoteSurvivingChildren = async (
+export const promoteSurvivingChildren = async (
   tx: DrizzleTransaction,
   ids: LocationId[],
 ) => {
@@ -640,11 +620,10 @@ export const deleteLocations = (
 ) =>
   deleteByPolicy(db, {
     entity: "location",
-    policy: LOCATION_DELETE_EDGE_POLICY,
+    policy: DECLARED_EDGE_DELETE_POLICIES.location,
     ids,
     actor,
-    beforeDelete: refuseHomeLocation,
-    overrides: { "Location.parentId": promoteSurvivingChildren },
+    ...DECLARED_EDGE_DELETE_HOOKS.location,
   });
 
 const qbDirect = new QueryBuilder();
@@ -784,7 +763,7 @@ export const locationScaffold = listScaffold("location", location, {
   read: {
     search: locationSearchRead,
     columns: {
-      // Not a column: the latest live AiAnalysis text. A single-table select
+      // Not a column: the current fields-scope Answer text. A single-table select
       // renders an interpolated column bare, so the row is qualified by hand.
       aiDescription: locationAiDescriptionSql(outer(location.id)),
       // The rolled-up valuation the list cell and record read show; the
@@ -1080,47 +1059,28 @@ export const locationSearch = async (
   };
 };
 
-/**
- * Set or clear a location's AI description outside the model run. The
- * description is the latest live `location-description` AiAnalysis, so
- * "clear" retires those analyses (a location whose last photo was removed has
- * nothing left to describe) and "set" records a manual one that outranks the
- * older analyses without disturbing their cache. `describeLocation` writes
- * its own analysis through `upsertAiAnalysis` and never needs this.
- */
+/** Manual text is an assignment; clearing reopens the location's analysis scope. */
 export const updateLocationAiDescription = async (
   db: Database | DrizzleTransaction,
   id: LocationId,
   aiDescription: string | null,
 ) => {
   await withTransactionOn(db, async (tx) => {
-    const client = unwrapDb(tx);
-    await client
-      .update(aiAnalysis)
-      .set({ deletedAt: new Date() })
-      .where(
-        and(
-          eq(aiAnalysis.entityKind, "location"),
-          eq(aiAnalysis.entityId, id),
-          eq(aiAnalysis.feature, LOCATION_DESCRIPTION_FEATURE_ID),
-          aiDescription === null ? undefined : eq(aiAnalysis.model, "manual"),
-          notDeleted(aiAnalysis),
-        ),
-      );
-    if (aiDescription !== null)
-      await client.insert(aiAnalysis).values({
-        entityKind: "location",
-        entityId: id,
-        feature: LOCATION_DESCRIPTION_FEATURE_ID,
-        model: "manual",
-        promptVersion: "manual",
-        inputFingerprint: `manual:${id}`,
-        result: { description: aiDescription, confidence: "low" },
-      });
-    await recordChange(tx, {
-      kind: "source",
-      categories: ["location"],
-    });
+    const { decide, reconcileNow } = await import("~/server/kernel/api");
+    const { systemActor } = await import("@cubby/schemas/context");
+    const target = databaseForTransaction(tx);
+    await decide(target, systemActor(), [
+      {
+        channel: "assignment",
+        kind: aiDescription === null ? "release" : "set",
+        subject: `location-description/${id}`,
+        field: "text",
+        value: aiDescription,
+        scopes: [{ kind: "fields", key: `location:${id}` }],
+      },
+    ]);
+    await reconcileNow(target, [{ kind: "fields", key: `location:${id}` }]);
+    await recordChange(tx, { kind: "source", categories: ["location"] });
   });
 };
 

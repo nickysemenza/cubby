@@ -182,6 +182,8 @@ export class PurchaseImportRunAgent
   private primaryModel: SupportedChatModel | undefined;
   /** The funded providers pi requests through; set when pi opens. */
   private piModels: MutableModels | undefined;
+  private requestOutcomeUnknown = false;
+  private requestGeneration: string | undefined;
   private requestStartedAt = 0;
   /** What carried the current model request; the coordinator runs one at a time. */
   private requestTransport: AiUsageTransport = "unknown";
@@ -340,6 +342,18 @@ export class PurchaseImportRunAgent
     this.piModels = models;
     const identity = this.identity();
     for (const provider of cubbyAgentProviders({
+      modelTurn: (request, send) => {
+        if (!this.requestGeneration)
+          throw new Error("Model request has no durable submission generation");
+        return this.agentEnv.modelTurn(
+          {
+            generation: this.requestGeneration,
+            request,
+            ...(this.requestOutcomeUnknown && { recovery: "unknown" as const }),
+          },
+          send,
+        );
+      },
       fundingFallback: true,
       fixedModel: this.agentEnv.fixedModel,
       // A harness override measures its named models, never tier substitutes.
@@ -722,6 +736,16 @@ export class PurchaseImportRunAgent
                 { generation },
                 requestContext,
               );
+              const protocolKey = `request-ask-protocol:${api.taskId}`;
+              this.requestOutcomeUnknown =
+                this.readState(`request-generation:${api.taskId}`) !==
+                  undefined && this.readState(protocolKey) !== "1";
+              // Mark the protocol before any send: a crash here can safely create its first Ask later.
+              if (!this.requestOutcomeUnknown)
+                this.writeState(protocolKey, "1");
+              this.requestGeneration = z
+                .object({ generation: z.string() })
+                .parse(memo).generation;
               this.writeState(
                 `request-generation:${api.taskId}`,
                 z.object({ generation: z.string() }).parse(memo).generation,
@@ -1121,7 +1145,9 @@ export class PurchaseImportRunAgent
     if (!parsed.success)
       return Response.json({ error: parsed.error.message }, { status: 400 });
     await this.ensureRunReady(identity);
-    const operationId = `prompt:${crypto.randomUUID()}`;
+    const operationId =
+      request.headers.get("x-cubby-operation") ??
+      `prompt:${crypto.randomUUID()}`;
     this.writeState(STATE_KEYS.latestSubmission, operationId);
     const receipt = await this.harness.submit(parsed.data.body, {
       operationId,

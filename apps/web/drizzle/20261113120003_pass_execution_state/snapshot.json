@@ -1,0 +1,119 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "f6302065-2a77-480c-8f11-6e3dc4c5fe77",
+  "prevIds": [
+    "3f3ef4ac-e0b9-4343-8018-c2f82819d18a"
+  ],
+  "footprints": [
+    {
+      "statementType": "drop_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "DerivedRebuild"
+      ],
+      "writes": [
+        "s|tbl|public.DerivedRebuild",
+        "n|tbl|public.DerivedRebuild",
+        "e|tbl|public.DerivedRebuild",
+        "n|rel|public.DerivedRebuild",
+        "n|type|public.DerivedRebuild"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "drop",
+      "key": "tables\u0000[\"public\",\"DerivedRebuild\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"DerivedRebuild\",\"key\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"DerivedRebuild\",\"running\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"DerivedRebuild\",\"target\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"DerivedRebuild\",\"afterId\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"DerivedRebuild\",\"createdAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"DerivedRebuild\",\"startedAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"DerivedRebuild\",\"lastMovementAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"DerivedRebuild\",\"cleanAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"DerivedRebuild\",\"pages\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"DerivedRebuild\",\"processedRecords\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"DerivedRebuild\",\"failedPages\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"DerivedRebuild\",\"history\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"DerivedRebuild\",\"finishedAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"DerivedRebuild\",\"token\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"DerivedRebuild\",\"leaseExpiresAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"DerivedRebuild\",\"failures\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"DerivedRebuild\",\"cursorAttempts\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"DerivedRebuild\",\"passFailures\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"DerivedRebuild\",\"error\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"DerivedRebuild\",\"durationsMs\"]"
+    },
+    {
+      "op": "drop",
+      "key": "pks\u0000[\"public\",\"DerivedRebuild\",\"DerivedRebuild_pkey\"]"
+    }
+  ]
+}

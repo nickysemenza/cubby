@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { historicalDateRangePresets } from "../date-range";
 import { idField, readOnly, timestampField } from "./field-policy";
 import {
@@ -36,6 +37,297 @@ export const generatedFinancialTransactionStatusValues =
 export const { definition, readSchemas } = defineEntityModel(
   {
     key: "financialTransaction",
+    edges: [
+      defineEdge({
+        key: "SourceOccurrence.acceptedTransactionId",
+        from: "sourceOccurrence",
+        to: "financialTransaction",
+        cardinality: "one",
+        inverse: {
+          key: "financialTransaction.incoming.SourceOccurrence.acceptedTransactionId",
+          from: "financialTransaction",
+          to: "sourceOccurrence",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "SourceOccurrence.acceptedTransactionId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "entity",
+          entity: "sourceOccurrence",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "history",
+          label: "accepted source reservation",
+          description:
+            "Acceptance remains reserved after transaction deletion.",
+          liveness: {
+            kind: "allow-target-deleted",
+            reason:
+              "A deleted accepted transaction never releases identity for automatic money recreation.",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "preserve-accepted-source-reservation",
+                effect: "preserve",
+                description:
+                  "Deleting a transaction keeps its source reservation; it cannot recreate money through replay.",
+              },
+              handler: null,
+              order: 2,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "FinancialEvidenceAlias.historicalTransactionId",
+        from: "row:FinancialEvidenceAlias",
+        to: "financialTransaction",
+        cardinality: "one",
+        inverse: {
+          key: "financialTransaction.incoming.FinancialEvidenceAlias.historicalTransactionId",
+          from: "financialTransaction",
+          to: "row:FinancialEvidenceAlias",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "FinancialEvidenceAlias.historicalTransactionId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "excluded",
+          reason: "Retained financial provenance, never current ownership.",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "history",
+          label: "retained source bindings",
+          description: "Former source bindings remain original evidence.",
+          liveness: {
+            kind: "allow-target-deleted",
+            reason:
+              "Retained provenance names transaction tombstones without establishing current ownership.",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "retire-financial-source-provenance",
+                effect: "soft-delete",
+                description:
+                  "Deleting a transaction retires its reference bindings while preserving every alias row and provenance through tombstones. Proven source occurrence reservations remain independent.",
+              },
+              handler: null,
+              order: 3,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "EmailFinancialAssociation.transactionId",
+        from: "row:EmailFinancialAssociation",
+        to: "financialTransaction",
+        cardinality: "one",
+        inverse: {
+          key: "financialTransaction.incoming.EmailFinancialAssociation.transactionId",
+          from: "financialTransaction",
+          to: "row:EmailFinancialAssociation",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "EmailFinancialAssociation.transactionId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "column",
+          column: "EmailFinancialAssociation.emailId",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "history",
+          label: "reviewed Email associations",
+          description:
+            "A member-reviewed link from an Email's evidence to this transaction; the review keeps naming it after the transaction is deleted.",
+          liveness: {
+            kind: "allow-target-deleted",
+            reason:
+              "A reviewed Email-to-transaction association is append-only history that keeps its original UUIDs through every tombstone.",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "preserve-reviewed-email-association",
+                effect: "preserve",
+                description:
+                  "A reviewed Email association keeps naming the deleted transaction's tombstone; the review is history and is never rewritten.",
+              },
+              handler: null,
+              order: 0,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "FinancialTransactionAllocation.transactionId",
+        from: "row:FinancialTransactionAllocation",
+        to: "financialTransaction",
+        cardinality: "one",
+        inverse: {
+          key: "financialTransaction.incoming.FinancialTransactionAllocation.transactionId",
+          from: "financialTransaction",
+          to: "row:FinancialTransactionAllocation",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "FinancialTransactionAllocation.transactionId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "column",
+          column: "FinancialTransactionAllocation.transactionId",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "composition",
+          label: "purchase allocations",
+          description:
+            "One slice of this transaction's amount, attributed to a single Purchase. The slices are meaningless apart from the charge whose amount they decompose: a transaction has either none of them, or a set that sums to its amount exactly and shares its sign.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "soft-delete-association",
+                effect: "soft-delete",
+                description:
+                  "Deleting a settlement transaction soft-deletes the purchase allocations that decompose it. Those Purchases keep their expenses and their identity; they simply lose this piece of settlement evidence.",
+              },
+              handler: null,
+              before: {
+                module:
+                  "~/server/domains/financial-transaction/repo/financial-transaction",
+                export: "refuseTransferEvidence",
+              },
+              after: {
+                module:
+                  "~/server/domains/financial-transaction/repo/financial-transaction",
+                export: "touchAllocatedPurchases",
+              },
+              beforeLock: {
+                module:
+                  "~/server/domains/financial-transaction/repo/financial-transaction",
+                export: "lockFinancialTransactionDeletion",
+              },
+              order: 1,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+    ],
+
     names: { singular: "Financial Transaction", plural: "Transactions" },
     route: {
       listColumns: {
@@ -1133,10 +1425,6 @@ export const { definition, readSchemas } = defineEntityModel(
       ],
 
       rows: {
-        runStepInputs: {
-          label: "Run step inputs",
-          repository: { token: "text" },
-        },
         acceptedSourceRecords: {
           label: "Accepted source records",
           repository: { record: { reference: "sourceTransactionRecord" } },
@@ -1147,7 +1435,6 @@ export const { definition, readSchemas } = defineEntityModel(
         },
       },
       derived: {
-        runStepInput: { via: "runStepInputs.token" },
         sourceTransactionRecordId: { via: "acceptedSourceRecords.record" },
         merchant: { type: "text" },
         // Allocated to a live Purchase (not the mirror column, which is NULL
@@ -1298,18 +1585,7 @@ export const { definition, readSchemas } = defineEntityModel(
           deriveSchema: true,
           placeholder: "Filter by itemization expectation...",
         },
-        {
-          columnId: "runStepInput",
-          kind: "text",
-          label: "Run step input",
-          placeholder: "RUN shortcode:step key",
-          deriveSchema: true,
-          schemaRef: {
-            module: "@cubby/schemas/run-step-input",
-            export: "runStepInputFilterToken",
-          },
-          derived: true,
-        },
+
         {
           columnId: "sourceTransactionRecordId",
           kind: "idMulti",
@@ -1601,7 +1877,7 @@ export const { definition, readSchemas } = defineEntityModel(
       ],
     },
     capabilities: {
-      suggestions: ["statement_transaction", "transfer_pair"],
+      suggestions: ["transfer_pair"],
       images: {
         storage: false,
         displaySourceOverrides: [
@@ -2029,105 +2305,131 @@ export const { definition, readSchemas } = defineEntityModel(
 
 export default defineEntity(
   definition,
-  (r) => [
-    r
-      .derived("sourceTransactionRecord", "many", "transactionId", [
-        "SourceOccurrence.acceptedTransactionId",
-        "SourceTransactionRecord.occurrenceId",
-      ])
-      .named("sourceRecords", "Source transaction records", {
-        sources: [
-          r
-            .query("transactionSourceRecords", "many")
-            .source("accepted", "Accepted source observations"),
-        ],
-      }),
-    r
-      .field("spendingCategoryId")
-      .named("spendingCategory", "Spending category"),
-    r.field("accountId").named("account", "Financial account"),
-    r.field("ledgerTransferId").named("ledger-transfer", "Ledger transfer"),
-    r
-      .path("purchase", "many", [
-        {
-          edge: "FinancialTransactionAllocation.transactionId",
-          direction: "incoming",
-        },
-        {
-          edge: "FinancialTransactionAllocation.purchaseId",
-          direction: "outgoing",
-        },
-      ])
-      .named("purchase", "Purchase"),
-    r
-      .path("vendor", "many", [
-        {
-          edge: "FinancialTransactionAllocation.transactionId",
-          direction: "incoming",
-        },
-        {
-          edge: "FinancialTransactionAllocation.purchaseId",
-          direction: "outgoing",
-        },
-        { edge: "Purchase.vendorId", direction: "outgoing" },
-      ])
-      .named("vendor", "Vendor", {
-        view: { columnGroup: "Booking", defaultVisible: true },
-      }),
-    r
-      .path("expense", "many", [
-        {
-          edge: "FinancialTransactionAllocation.transactionId",
-          direction: "incoming",
-        },
-        {
-          edge: "FinancialTransactionAllocation.purchaseId",
-          direction: "outgoing",
-        },
-        { edge: "Expense.purchaseId", direction: "incoming" },
-      ])
-      .named("expenses", "Expenses", {
-        view: { columnGroup: "Booking", order: "newest" },
-      }),
-    // Explicit purchase links remain evidence before an Expense is itemized.
-    r
-      .path("product", "many", [
-        {
-          edge: "FinancialTransactionAllocation.transactionId",
-          direction: "incoming",
-        },
-        {
-          edge: "FinancialTransactionAllocation.purchaseId",
-          direction: "outgoing",
-        },
-        { edge: "Expense.purchaseId", direction: "incoming" },
-        { edge: "Expense.productId", direction: "outgoing" },
-      ])
-      .named("products", "Products", {
-        view: { columnGroup: "Booking" },
-        sources: [
-          r
-            .path("product", "many", [
-              {
-                edge: "FinancialTransactionAllocation.transactionId",
-                direction: "incoming",
-              },
-              {
-                edge: "FinancialTransactionAllocation.purchaseId",
-                direction: "outgoing",
-              },
-              {
-                edge: "EntityLink[purchaseProduct].from",
-                direction: "incoming",
-              },
-              {
-                edge: "EntityLink[purchaseProduct].to",
-                direction: "outgoing",
-              },
-            ])
-            .source("explicit", "Explicit purchase product link"),
-        ],
-      }),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r
+          .derived("sourceTransactionRecord", "many", "transactionId", [
+            "SourceOccurrence.acceptedTransactionId",
+            "SourceTransactionRecord.occurrenceId",
+          ])
+          .named("sourceRecords", "Source transaction records", {
+            sources: [
+              r
+                .query("transactionSourceRecords", "many")
+                .source("accepted", "Accepted source observations"),
+            ],
+          }),
+        "sourceTransactionRecord.transactions",
+      ),
+      r.declare(
+        r
+          .field("spendingCategoryId")
+          .named("spendingCategory", "Spending category"),
+        "spendingCategory.transactions",
+      ),
+      r.declare(
+        r.field("accountId").named("account", "Financial account"),
+        "financialAccount.transactions",
+      ),
+      r.declare(
+        r.field("ledgerTransferId").named("ledger-transfer", "Ledger transfer"),
+        "ledgerTransfer.evidence-transactions",
+      ),
+      r.declare(
+        r
+          .path("purchase", "many", [
+            {
+              edge: "FinancialTransactionAllocation.transactionId",
+              direction: "incoming",
+            },
+            {
+              edge: "FinancialTransactionAllocation.purchaseId",
+              direction: "outgoing",
+            },
+          ])
+          .named("purchase", "Purchase"),
+        "purchase.financial-transactions",
+      ),
+      r.declare(
+        r
+          .path("vendor", "many", [
+            {
+              edge: "FinancialTransactionAllocation.transactionId",
+              direction: "incoming",
+            },
+            {
+              edge: "FinancialTransactionAllocation.purchaseId",
+              direction: "outgoing",
+            },
+            { edge: "Purchase.vendorId", direction: "outgoing" },
+          ])
+          .named("vendor", "Vendor", {
+            view: { columnGroup: "Booking", defaultVisible: true },
+          }),
+        "vendor.transactions",
+      ),
+      r.declare(
+        r
+          .path("expense", "many", [
+            {
+              edge: "FinancialTransactionAllocation.transactionId",
+              direction: "incoming",
+            },
+            {
+              edge: "FinancialTransactionAllocation.purchaseId",
+              direction: "outgoing",
+            },
+            { edge: "Expense.purchaseId", direction: "incoming" },
+          ])
+          .named("expenses", "Expenses", {
+            view: { columnGroup: "Booking", order: "newest" },
+          }),
+        "expense.transactions",
+      ),
+      // Explicit purchase links remain evidence before an Expense is itemized.
+      r.declare(
+        r
+          .path("product", "many", [
+            {
+              edge: "FinancialTransactionAllocation.transactionId",
+              direction: "incoming",
+            },
+            {
+              edge: "FinancialTransactionAllocation.purchaseId",
+              direction: "outgoing",
+            },
+            { edge: "Expense.purchaseId", direction: "incoming" },
+            { edge: "Expense.productId", direction: "outgoing" },
+          ])
+          .named("products", "Products", {
+            view: { columnGroup: "Booking" },
+            sources: [
+              r
+                .path("product", "many", [
+                  {
+                    edge: "FinancialTransactionAllocation.transactionId",
+                    direction: "incoming",
+                  },
+                  {
+                    edge: "FinancialTransactionAllocation.purchaseId",
+                    direction: "outgoing",
+                  },
+                  {
+                    edge: "EntityLink[purchaseProduct].from",
+                    direction: "incoming",
+                  },
+                  {
+                    edge: "EntityLink[purchaseProduct].to",
+                    direction: "outgoing",
+                  },
+                ])
+                .source("explicit", "Explicit purchase product link"),
+            ],
+          }),
+        "product.financialTransaction.products",
+      ),
+    ],
+  }),
   readSchemas,
 );

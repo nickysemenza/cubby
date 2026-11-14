@@ -21,6 +21,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   email as emailTable,
@@ -32,7 +33,6 @@ import {
   orderMailAttachment,
   orderMailEvent,
 } from "~/server/db/schema";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { syntheticMailImportRun } from "../../service/gmail/execution.fixtures";
 import { ingestGmailMessages as acquireGmailMessages } from "../../service/gmail/ingest";
@@ -207,7 +207,7 @@ describe("Gmail ingestion and attachment storage", () => {
     expect(await attachments()).toHaveLength(1);
   });
 
-  it("invalidates created and changed metadata but leaves replayed Email unchanged", async () => {
+  it("keeps first observations while refreshing mutable search metadata", async () => {
     const party = await seedParty();
     const { mail } = normalizeMessage(
       "synthetic-google-subject",
@@ -232,17 +232,14 @@ describe("Gmail ingestion and attachment storage", () => {
 
     await saveMailboxMetadata(ctx.db, {
       ...metadata,
+      checksum: "b".repeat(64),
       mail: {
         ...mail,
         headers: { ...mail.headers, subject: "Synthetic changed receipt" },
       },
     });
     const changedEmail = await readEmail(ctx.db, identity);
-    expect(changedEmail).toEqual({
-      ...originalEmail,
-      subject: "Synthetic changed receipt",
-      updatedAt: expect.any(Date),
-    });
+    expect(changedEmail).toEqual(originalEmail);
     await saveMailboxMetadata(ctx.db, {
       ...metadata,
       mail: {

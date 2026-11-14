@@ -3,7 +3,7 @@ import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOu
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { addDays } from "date-fns";
-import { useId, useMemo, useRef, useState } from "react";
+import { useId, useMemo, useState } from "react";
 
 import { EntityQualityFact } from "~/entity/display/data-quality-value";
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
@@ -20,7 +20,6 @@ import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-p
 import { formatDateSpan } from "~/lib/date-span";
 import { formatCurrency } from "~/lib/number-format";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
-import { showErrorToast } from "~/ui/feedback/error-details";
 import { DateRangeField } from "~/ui/forms/date-span-field";
 import {
   FormWrapper,
@@ -216,9 +215,6 @@ function EditableCalendarItem({
         return { kind: item.kind };
     }
   }, [queryClient, item.kind]);
-  const receiptHandler = useRef<((recordId: string) => Promise<void>) | null>(
-    null,
-  );
   const formId = useId();
   const [submitting, setSubmitting] = useState(false);
   const busy = submitting || session.isPending;
@@ -234,13 +230,6 @@ function EditableCalendarItem({
       onSubmit={async () => {
         await session.submit().then(async (result) => {
           if (!result.ok) return;
-          if (item.kind === "meal") {
-            try {
-              await receiptHandler.current?.(item.id);
-            } catch (error) {
-              showErrorToast(error, "Saved, but suggestion receipt failed");
-            }
-          }
           await onSaved?.();
         });
       }}
@@ -281,7 +270,6 @@ function EditableCalendarItem({
         <FieldSuggestionProvider
           entity="meal"
           mode="edit"
-          receiptHandler={receiptHandler}
           fieldKeys={["mealType", "mealKind"]}
         >
           <PickerField

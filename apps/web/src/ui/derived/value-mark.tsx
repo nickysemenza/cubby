@@ -2,76 +2,22 @@ import {
   fieldDecisionOf,
   type ReadableFieldEnvelope,
 } from "@cubby/schemas/field-envelope";
-import { CircleDashedIcon } from "@phosphor-icons/react/dist/csr/CircleDashed";
+import {
+  FIELD_STALE_LABEL,
+  FIELD_WAITING_LABEL,
+} from "@cubby/schemas/field-envelope-presentation";
 import { cn } from "cn";
 import type { ReactNode } from "react";
 
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/ui/primitives/tooltip";
-
-function UpdatingDot({
-  label = "Updating",
-  active = true,
-}: {
-  label?: string;
-  active?: boolean;
-}) {
+/** A computed value Cubby has not published: the one missing-value phrase. */
+export function WaitingValue() {
   return (
-    <output
-      aria-label={label}
-      title={label}
-      className="inline-flex size-3 shrink-0 items-center justify-center"
+    <span
+      title={FIELD_WAITING_LABEL}
+      className="min-w-0 truncate font-sans text-muted-foreground"
     >
-      <span
-        aria-hidden="true"
-        className={cn(
-          "size-1.5 rounded-full bg-info",
-          active && "motion-safe:animate-pulse",
-        )}
-      />
-    </output>
-  );
-}
-
-/** Missing is not evidence that work is running. */
-export function MissingFieldValue({
-  interactive = true,
-}: {
-  interactive?: boolean;
-}) {
-  const label = "Not calculated yet";
-  const detail = "No refresh is currently queued.";
-  if (!interactive)
-    return (
-      <span
-        title={`${label}. ${detail}`}
-        aria-label={label}
-        className="inline-flex font-sans text-muted-foreground"
-      >
-        <CircleDashedIcon aria-hidden="true" className="size-3" />
-      </span>
-    );
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <button
-            type="button"
-            aria-label={label}
-            className="inline-flex shrink-0 items-center justify-center font-sans text-muted-foreground max-md:min-h-11 max-md:min-w-11 pointer-coarse:min-h-11 pointer-coarse:min-w-11"
-          />
-        }
-      >
-        <CircleDashedIcon aria-hidden="true" className="size-3" />
-      </TooltipTrigger>
-      <TooltipContent className="max-w-80 font-sans break-words">
-        <p>{label}</p>
-        <p>{detail}</p>
-      </TooltipContent>
-    </Tooltip>
+      {FIELD_WAITING_LABEL}
+    </span>
   );
 }
 
@@ -79,12 +25,9 @@ export function MissingFieldValue({
 export function FieldValueMark({
   envelope,
   children,
-  interactive = true,
 }: {
   envelope?: ReadableFieldEnvelope;
   children: ReactNode;
-  /** Event buttons expose full diagnostics in their inspector. */
-  interactive?: boolean;
 }) {
   const provenance = envelope
     ? fieldDecisionOf(envelope)?.provenance
@@ -102,18 +45,23 @@ export function FieldValueMark({
       )}
     >
       {inherited ? (
-        <span
-          className="w-3 shrink-0 text-muted-foreground"
-          aria-label="Inherited"
-        >
-          ↳
-        </span>
+        <>
+          <span
+            className="w-3 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          >
+            ↳
+          </span>
+          <span className="sr-only">Inherited, </span>
+        </>
       ) : null}
       <span className="min-w-0 truncate">
-        {missing ? <MissingFieldValue interactive={interactive} /> : children}
+        {missing ? <WaitingValue /> : children}
       </span>
       {!missing && stale ? (
-        <UpdatingDot label="Stale result" active={false} />
+        <span className="shrink-0 font-sans text-xs text-muted-foreground">
+          {FIELD_STALE_LABEL}
+        </span>
       ) : null}
     </span>
   );

@@ -7,13 +7,14 @@ import {
 import { entitySchema, type Entity } from "@cubby/schemas/entity";
 import { fieldDecisionOf, fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { ReadableFieldEnvelope } from "@cubby/schemas/field-envelope";
+import { explanationFactLabel } from "@cubby/schemas/field-envelope-presentation";
 import {
   fieldExplanationSource,
   fieldExplanationInput,
   type FieldExplanationOutput,
 } from "@cubby/schemas/field-explanation";
 import { resolvedListSchema } from "@cubby/schemas/field-resolution";
-import { humanize, parseShortcode } from "@cubby/shared";
+import { parseShortcode } from "@cubby/shared";
 import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
@@ -23,6 +24,10 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { ResolvedListValue } from "~/entity/display/resolved-list-value";
 import { isBrowserRoutedEntity } from "~/entity/entities";
 import { ExceptionControls } from "~/entity/fields/field-explanation-exception";
+import {
+  MachineryPanelFor,
+  useMachinery,
+} from "~/entity/machinery/record-machinery";
 import { useEntityMetadata } from "~/entity/metadata";
 import { useListQuery } from "~/entity/table/list-query-context";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
@@ -31,7 +36,6 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import { dataQualityStatusLabel } from "~/lib/data-quality-options";
 import { formatCurrency } from "~/lib/number-format";
 import { CELL_RAIL_BUTTON_CLASS } from "~/ui/data-table/cell-frame";
-import { DecisionLevels } from "~/ui/derived/decision-levels";
 import { SourceStack } from "~/ui/derived/source-stack";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";
@@ -57,7 +61,7 @@ import JsonRenderer from "~/ui/text/json-renderer";
 import { NoneValue } from "~/ui/text/none-value";
 import { DateDisplay } from "~/ui/values/date-display";
 
-import { DecisionChain, DerivedFreshness } from "./decision-chain";
+import { FieldChain } from "./decision-chain";
 import { ImageChain } from "./image-chain";
 import {
   ResolutionEvidence,
@@ -106,9 +110,7 @@ export function ReadableExplanationValue({
       ? boolean.data
         ? "Yes"
         : "No"
-      : textValue.success && /^[a-z]+(?:_[a-z]+)+$/.test(textValue.data)
-        ? humanize(textValue.data)
-        : scalar.data;
+      : scalar.data;
     return <span className="break-words">{display}</span>;
   }
   if (Array.isArray(value)) {
@@ -205,7 +207,7 @@ function ReadableExplanationRecord({
         {Object.entries(record.data).map(([key, item]) => (
           <div key={key} className="contents">
             <dt className="break-words text-muted-foreground">
-              {humanize(key)}
+              {explanationFactLabel(key) ?? <code>{key}</code>}
             </dt>
             <dd className="min-w-0">
               <ReadableExplanationValue
@@ -424,7 +426,7 @@ function QualityCheckRow({
 }) {
   return (
     <LedgerRow
-      title={`${humanize(check.facet)} · ${check.check}`}
+      title={`${check.label} · ${check.check}`}
       data-quality-check={check.check}
     >
       <LedgerCell slot="primary" className="font-medium">
@@ -610,6 +612,7 @@ export function WhyValueContents({
   });
   const metadata = useEntityMetadata(entity);
   const listQuery = useListQuery(entity);
+  const kernel = useMachinery({ entity, id, field });
   const bindings = z
     .object({ scopeFilters: z.record(z.string(), z.string()).optional() })
     .parse(
@@ -672,14 +675,34 @@ export function WhyValueContents({
       <PopoverTitle className="text-sm font-semibold">
         Why this value · {label}
       </PopoverTitle>
-      {/* Suggestion readiness is independent of the explanation request. */}
-      {!result.isSuccess && pendingSuggestion ? (
-        <DecisionLevels>
-          {(level) => (level === "pending" ? pendingSuggestion : null)}
-        </DecisionLevels>
+      {/* One chain at every load state: the row's envelope fills the deciding
+          level before the explanation arrives; suggestion review stays
+          available while it loads or fails. */}
+      <FieldChain
+        entity={entity}
+        id={id}
+        field={field}
+        envelope={result.data?.envelope ?? resolution ?? null}
+        data={result.data}
+        machinery={kernel.data?.machinery}
+        pending={pendingSuggestion}
+        onSet={onSet}
+      />
+      {kernel.data?.machinery ? (
+        <MachineryPanelFor
+          target={{ entity, id, field }}
+          read={kernel.data.machinery}
+          scope="field"
+        />
+      ) : kernel.isError ? (
+        <ErrorDisplay
+          error={kernel.error}
+          title="how Cubby worked this out"
+          onRetry={() => void kernel.refetch()}
+        />
       ) : null}
       {result.isPending ? (
-        <p className="text-muted-foreground">Loading…</p>
+        <p className="text-xs text-muted-foreground">Loading evidence…</p>
       ) : result.isError && result.data === undefined ? (
         <Stack gap="sm">
           <ErrorDisplay error={result.error} title="this explanation" />
@@ -724,11 +747,6 @@ export function WhyValueContents({
               </Button>
             </div>
           ) : null}
-          <DecisionChain
-            data={result.data}
-            onSet={onSet}
-            pending={pendingSuggestion}
-          />
           {result.data.interpretation ? (
             <div className="grid gap-1 text-xs leading-5">
               {!result.data.resolutionEvidence ? (
@@ -821,7 +839,6 @@ export function WhyValueContents({
             </p>
           ) : null}
           <ExplanationTechnicalDetails data={result.data} />
-          <ExplanationFooter data={result.data} />
         </>
       )}
     </div>
@@ -887,13 +904,5 @@ function ExplanationTechnicalDetails({
         <RawExplanationEvidence data={data} />
       </DisclosureBody>
     </DisclosureRoot>
-  );
-}
-
-function ExplanationFooter({ data }: { data: FieldExplanationOutput }) {
-  return (
-    <footer className="sticky bottom-0 z-10 -mx-3 -mb-3 border-t border-border bg-popover px-3 py-2">
-      <DerivedFreshness envelope={data.envelope} context={data} />
-    </footer>
   );
 }

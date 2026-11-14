@@ -1,4 +1,7 @@
-import { agentConversationSchema } from "@cubby/schemas/agent-conversation";
+import {
+  agentPromptSchema,
+  agentConversationSchema,
+} from "@cubby/schemas/agent-conversation";
 import { coordinatorModelsSchema } from "@cubby/schemas/coordinator-models";
 import { importRunIdFromAgentIdentity } from "@cubby/schemas/import-run-agent";
 import { aiGatewayId } from "@cubby/shared/ai/gateway-metadata";
@@ -22,7 +25,11 @@ import { DurableObject } from "cloudflare:workers";
 
 import { connectedChatGptInference } from "~/server/ai/chatgpt/client";
 import { gatewayEnvironment } from "~/server/ai/gateway";
-import { coordinatedGatewayRequest } from "~/server/ai/gateway-egress-client";
+import {
+  coordinatedGatewayRequest,
+  failedGatewaySend,
+  receivedGatewayResponse,
+} from "~/server/ai/gateway-egress-client";
 import type {
   DispatchInput,
   PurchaseAgentEnvironment,
@@ -33,10 +40,8 @@ import {
   isMaintenanceMode,
   maintenanceResponse,
 } from "~/server/http/maintenance";
-import {
-  annotateActiveSpan,
-  withInvocationTrace,
-} from "~/server/observability/tracing";
+import { markTransmitted } from "~/server/kernel/produce-ledger";
+import { withInvocationTrace } from "~/server/observability/tracing";
 import { workerSentryOptions } from "~/server/observability/worker-sentry";
 import { testDurationOverrideMs } from "~/server/testing/test-duration-override";
 
@@ -45,16 +50,11 @@ import {
   purchaseAgentMcpTools,
   runServicesFor,
   wakeWaitingDispatch,
+  fenceDispatch,
+  agentModelTurn,
 } from "./agent-services";
-import { COORDINATOR_GATE_NAME } from "./coordinator-gate";
-import {
-  CoordinatorTurn,
-  type CoordinatorTurnResult,
-} from "./coordinator-turn";
-
 type HostContext = { waitUntil(promise: Promise<unknown>): void };
 const retirementLog = createLogger("purchase-agent.retirement");
-const turnLog = createLogger("purchase-agent.turn");
 
 /**
  * One coordinator's whole environment, built from this Worker's bindings. Its
@@ -78,12 +78,18 @@ function purchaseAgentEnvironment(
     CUBBY_PURCHASE_AGENT_COORDINATOR_MODELS?: string;
   };
   return {
+    modelTurn: (request, send) =>
+      agentModelTurn(env, ctx, runId, request, send, fence),
+    // Every transport the coordinator sends through records itself in the
+    // model turn's produce ledger, so a refusal proves the turn unsent.
     chatGptInference: (body, options) =>
-      connectedChatGptInference(
-        env.CHATGPT_PLAN.getByName("household"),
-        body,
-        options,
-      ),
+      connectedChatGptInference(env.CHATGPT_PLAN.getByName("household"), body, {
+        ...options,
+        onSelected: () => {
+          markTransmitted();
+          options?.onSelected?.();
+        },
+      }),
     gateway: () => {
       const gateway = env.AI.gateway(aiGatewayId(gatewayEnvironment()));
       return {
@@ -94,7 +100,7 @@ function purchaseAgentEnvironment(
             provider,
             request,
             controls,
-          ),
+          ).then(receivedGatewayResponse, failedGatewaySend),
         environment: gatewayEnvironment(),
         run: (data, options) => gateway.run(data, options),
       };
@@ -102,7 +108,14 @@ function purchaseAgentEnvironment(
     // pi's database work runs only under a live coordinator turn.
     services: runServicesFor(env, ctx, runId, { fence }),
     mcpTools: purchaseAgentMcpTools,
-    ...(testModel && { testModel }),
+    ...(testModel && {
+      testModel: {
+        fetch: (request: Request) =>
+          testModel
+            .fetch(request)
+            .then(receivedGatewayResponse, failedGatewaySend),
+      },
+    }),
     ...(testModel &&
       fixedModel === "openai-responses" && {
         fixedModel,
@@ -120,15 +133,9 @@ function purchaseAgentEnvironment(
 }
 
 const RETIREMENT_FENCE = "cubby_retirement_fence";
-/** A dispatch was refused a turn; its Job waits for this coordinator to wake it. */
-const PENDING_DISPATCH = "cubby_pending_dispatch";
-/** How long a woken dispatch keeps the turn it was reserved before it arrives. */
-const DISPATCH_HANDOFF_MS = 2 * 60_000;
-/**
- * The refusal reaches the Job before its deferral commits; a wake that finds
- * no deferred Job looks once more after this.
- */
-const DISPATCH_RECHECK_MS = 5_000;
+/** Prompts wait in the coordinator's durable storage until its Pass holds a slot. */
+const PROMPT_PREFIX = "cubby_pending_prompt:";
+const ABORT_PENDING = "cubby_abort_pending";
 
 type RunAgent =
   import("~/server/domains/purchase-agent/service/run-agent").PurchaseImportRunAgent;
@@ -161,9 +168,12 @@ class PurchaseImportRunAgentHost
   /** Until when the last database fence read said this Run is live. */
   private liveUntil = 0;
   private readonly admitted = new Set<Promise<unknown>>();
-  private turn: CoordinatorTurn | undefined;
-  /** Until when the turn waits for a woken dispatch to arrive. */
-  private dispatchExpectedUntil = 0;
+  private claimToken: string | undefined;
+
+  private async executionFence(): Promise<void> {
+    if (!this.claimToken) throw new Error("Coordinator has no Pass claim");
+    await fenceDispatch(this.env, this.ctx, this.runId(), this.claimToken);
+  }
 
   /** Run `work` unless retirement began, tracked so `retire` can drain it. */
   private admit<T>(work: () => Promise<T>, refused: T): Promise<T> {
@@ -215,91 +225,13 @@ class PurchaseImportRunAgentHost
     return runServicesFor(this.env, this.ctx, this.runId());
   }
 
-  /**
-   * The household coordinator-turn cap (`./coordinator-turn.ts`): every entry
-   * that loads the agent runs inside a turn. The turn stays held while pi
-   * still works after the entry returns.
-   */
-  private turns(): CoordinatorTurn {
-    const runId = this.runId();
-    const gate = () =>
-      this.env.COORDINATOR_GATE.getByName(COORDINATOR_GATE_NAME);
-    this.turn ??= new CoordinatorTurn({
-      acquire: (token, options) =>
-        gate().acquire({
-          runId,
-          agent: this.ctx.id.name ?? "",
-          token,
-          ...(options && { queue: options.queue }),
-        }),
-      release: (token) =>
-        gate()
-          .release({ runId, token })
-          .then(
-            () => undefined,
-            (error: unknown) => {
-              turnLog.error("coordinator turn release failed", {
-                runId,
-                error,
-              });
-            },
-          ),
-      idle: async () => {
-        if (this.dispatchExpectedUntil > Date.now()) return false;
-        // An agent that failed to load runs nothing; that is decidably idle.
-        const agent = await this.agent?.catch(() => undefined);
-        return !agent || !(await agent.working());
-      },
-      reportIdleError: (error) => {
-        turnLog.error("coordinator idle check failed; keeping its turn", {
-          runId,
-          error,
-        });
-        Sentry.captureException(error);
-      },
-      reportGateError: (error) => {
-        turnLog.error("coordinator gate unavailable; waiting", {
-          runId,
-          error,
-        });
-        Sentry.captureException(error);
-      },
-    });
-    return this.turn;
-  }
-
-  /** Record a refused turn on the invocation span, its Sentry scope and the log. */
-  private turnWaited(
-    refused: Extract<CoordinatorTurnResult<unknown>, { ran: false }>,
-    entry: "alarm" | "dispatch" | "fetch",
-  ) {
-    annotateActiveSpan({
-      "cubby.coordinator.turn": refused.unavailable ? "unavailable" : "waiting",
-      "cubby.coordinator.turn.holders": refused.holders,
-      "cubby.coordinator.turn.position": refused.position,
-      "cubby.coordinator.turn.retry_ms": refused.retryAfterMs,
-    });
-    Sentry.getCurrentScope().setTag(
-      "cubby.coordinator.turn",
-      refused.unavailable ? "unavailable" : "waiting",
-    );
-    turnLog.info("coordinator turn wait", {
-      runId: this.runId(),
-      entry,
-      holders: refused.holders,
-      position: refused.position,
-      retryAfterMs: refused.retryAfterMs,
-      unavailable: refused.unavailable ?? false,
-    });
-  }
-
   private loaded(): Promise<RunAgent> {
     this.agent ??= import("~/server/domains/purchase-agent/service/run-agent")
       .then(({ PurchaseImportRunAgent }) => {
         return new PurchaseImportRunAgent(
           this.ctx,
           purchaseAgentEnvironment(this.env, this.ctx, this.runId(), () =>
-            this.turns().fence(),
+            this.executionFence(),
           ),
         );
       })
@@ -327,7 +259,7 @@ class PurchaseImportRunAgentHost
     }
     if (
       request.method === "GET" &&
-      (pathname === "/transcript" || pathname === "/stream")
+      (pathname === "/" || pathname === "/transcript" || pathname === "/stream")
     ) {
       return this.admit(
         async () => {
@@ -348,28 +280,40 @@ class PurchaseImportRunAgentHost
     }
     return this.admit(async () => {
       if (await this.fenced()) return retired();
-      // A member's stop never waits for a turn.
-      if (request.method === "POST" && pathname === "/abort")
-        return (await this.loaded()).fetch(request);
-      // A prompt answers 503 at once rather than joining the gate's queue.
-      const turn = await this.turns().turn(
-        async () => (await this.loaded()).fetch(request),
-        { queue: false },
+      if (request.method === "POST" && pathname === "/abort") {
+        if (this.agent) return (await this.agent).fetch(request);
+        await this.ctx.storage.put(ABORT_PENDING, true);
+        await wakeWaitingDispatch(this.env, this.ctx, this.runId());
+        return Response.json({ aborted: true });
+      }
+      if (request.method !== "POST" || pathname !== "/")
+        return new Response("Not found", { status: 404 });
+      const hasState =
+        this.ctx.storage.sql
+          .exec("SELECT 1 FROM sqlite_master WHERE name = 'cubby_state'")
+          .toArray().length > 0;
+      if (
+        !hasState ||
+        !this.ctx.storage.sql
+          .exec("SELECT 1 FROM cubby_state WHERE key = 'identity'")
+          .toArray().length
+      )
+        return Response.json(
+          { error: "The agent has not started for this run" },
+          { status: 409 },
+        );
+      const parsed = agentPromptSchema.safeParse(
+        await request.json().catch(() => null),
       );
-      if (turn.ran) return turn.value;
-      this.turnWaited(turn, "fetch");
-      return Response.json(
-        {
-          error:
-            "The coordinator is waiting for a free turn; try again shortly.",
-        },
-        {
-          status: 503,
-          headers: {
-            "retry-after": String(Math.ceil(turn.retryAfterMs / 1000)),
-          },
-        },
+      if (!parsed.success)
+        return Response.json({ error: parsed.error.message }, { status: 400 });
+      const operationId = `prompt:${crypto.randomUUID()}`;
+      await this.ctx.storage.put(
+        `${PROMPT_PREFIX}${operationId}`,
+        parsed.data.body,
       );
+      await wakeWaitingDispatch(this.env, this.ctx, this.runId());
+      return Response.json({ operationId }, { status: 202 });
     }, retired());
   }
 
@@ -455,100 +399,71 @@ class PurchaseImportRunAgentHost
       await this.ctx.storage.setAlarm(Date.now() + 300_000);
       return;
     }
-    return withInvocationTrace(
-      "purchase-agent.alarm",
-      () =>
-        this.admit(async () => {
-          if (await this.fenced()) return;
-          const turn = await this.turns().turn(async () => {
-            // The gate reserved this turn for a dispatch that was refused one:
-            // bring its Job forward and keep the turn until it arrives.
-            if (await this.ctx.storage.get<boolean>(PENDING_DISPATCH)) {
-              await this.ctx.storage.delete(PENDING_DISPATCH);
-              const wake = () =>
-                wakeWaitingDispatch(this.env, this.ctx, this.runId());
-              const woken =
-                (await wake()) ||
-                (await new Promise((resolve) =>
-                  setTimeout(resolve, DISPATCH_RECHECK_MS),
-                ).then(wake));
-              // Nothing to wake (the Job settled or its deferral never
-              // committed): run the agent's own alarm, which this alarm may
-              // have replaced, instead of holding the turn idle.
-              if (!woken) {
-                await (await this.loaded()).alarm();
-                return;
-              }
-              this.dispatchExpectedUntil = Date.now() + DISPATCH_HANDOFF_MS;
-              await this.alarmAt(this.dispatchExpectedUntil);
-              return;
-            }
-            await (await this.loaded()).alarm();
-          });
-          if (turn.ran) return;
-          this.turnWaited(turn, "alarm");
-          // No agent code ran, so its due Lifecycle jobs stay due. The gate
-          // wakes this object when it reserves a turn; this is the fallback.
-          await this.alarmAt(Date.now() + turn.retryAfterMs);
-        }, undefined),
-      {
-        "cubby.workload": "alarm",
-        "cubby.run.id":
-          importRunIdFromAgentIdentity(this.ctx.id.name) ?? undefined,
-      },
-    );
+    if (await this.fenced()) return;
+    // Lifecycle alarms remain durable; loading or resuming Pi requires a Pass slot.
+    await wakeWaitingDispatch(this.env, this.ctx, this.runId());
   }
 
-  /** The gate reserved a turn for this coordinator: take it on the next alarm. */
-  async turnReady(): Promise<void> {
-    if (isMaintenanceMode(this.env)) return;
-    await this.alarmAt(Date.now());
-  }
-
-  /** Arm the alarm for `at` unless one is already due sooner. */
-  private async alarmAt(at: number) {
-    const current = await this.ctx.storage.getAlarm();
-    if (current === null || current > at) await this.ctx.storage.setAlarm(at);
+  async work(token: string): Promise<boolean> {
+    assertNotInMaintenance(this.env);
+    return this.admit(async () => {
+      if (await this.fenced()) return false;
+      this.claimToken = token;
+      await this.executionFence();
+      const agent = await this.loaded();
+      await agent.__unsafe_ensureInitialized();
+      if (await this.ctx.storage.get(ABORT_PENDING)) {
+        await agent.fetch(
+          new Request("https://cubby.internal/abort", { method: "POST" }),
+        );
+        await this.ctx.storage.delete(ABORT_PENDING);
+      }
+      const prompts = await this.ctx.storage.list<string>({
+        prefix: PROMPT_PREFIX,
+      });
+      for (const [key, body] of prompts) {
+        await this.executionFence();
+        const response = await agent.fetch(
+          new Request("https://cubby.internal/", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-cubby-operation": key.slice(PROMPT_PREFIX.length),
+            },
+            body: JSON.stringify({ body }),
+          }),
+        );
+        if (!response.ok)
+          throw new Error(
+            `Coordinator refused durable prompt (${response.status}): ${await response.text()}`,
+          );
+        await this.ctx.storage.delete(key);
+      }
+      await agent.alarm();
+      return agent.working();
+    }, false);
   }
 
   async dispatch(
     input: DispatchInput,
+    token: string,
   ): ReturnType<PurchaseImportRunAgentRpc["dispatch"]> {
     assertNotInMaintenance(this.env);
-    const refused: Awaited<ReturnType<PurchaseImportRunAgentRpc["dispatch"]>> =
-      { accepted: false };
     return withInvocationTrace(
       "purchase-agent.dispatch",
       () =>
-        this.admit(async () => {
-          if (await this.fenced()) return refused;
-          const turn = await this.turns().turn(async () => {
-            // Admitted by itself: no reserved turn needs to wake this Job.
-            this.dispatchExpectedUntil = 0;
-            await this.ctx.storage.delete(PENDING_DISPATCH);
+        this.admit(
+          async () => {
+            if (await this.fenced()) return { accepted: false };
+            this.claimToken = token;
+            await this.executionFence();
             const agent = await this.loaded();
             await agent.__unsafe_ensureInitialized();
             return agent.dispatch(input);
-          });
-          if (turn.ran) return turn.value;
-          this.turnWaited(turn, "dispatch");
-          await this.ctx.storage.put(PENDING_DISPATCH, true);
-          // Keep asking, like a refused alarm, so this coordinator keeps its
-          // place in the gate's queue while its Job waits.
-          await this.alarmAt(Date.now() + turn.retryAfterMs);
-          return {
-            accepted: false,
-            waiting: {
-              holders: turn.holders,
-              ...(turn.unavailable && { unavailable: true }),
-            },
-          };
-        }, refused),
-      {
-        "cubby.workload": "rpc",
-        "cubby.run.id":
-          importRunIdFromAgentIdentity(this.ctx.id.name) ?? undefined,
-      },
+          },
+          { accepted: false },
+        ),
+      { "cubby.workload": "rpc", "cubby.run.id": this.runId() },
     );
   }
 }

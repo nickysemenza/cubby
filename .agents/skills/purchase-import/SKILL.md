@@ -21,16 +21,15 @@ ownership checks, retained-Email checksums, replay, money conservation and
 safe writes. Source-backed orders pass through `purchase_import` rather than
 generic entity mutation.
 
-Start backlog triage with `activity_read.queue`: it offers the connected
-member's current source/account work plus shared research, filterable by
-`family`, `executor`, `reason` and `owner`. Its household UI is the Work queue
-page, with an Owner filter. Pull agent work newest first with
-`activity_read.queue` `view: "agent"`, settle what the evidence allows, and
-when you cannot decide call `activity.resolve_run_finding` with
-`action: "ask_member"` and one specific `question` (for an Email, resolve it
-unresolved as `member_decision` or `identity_ambiguity`) instead of leaving the
-item open. Unknown private ownership requires review; queue membership does not
-authorize imports, paid execution or access to another member's originals.
+Start member-input triage with `machinery_read.needs_you` (`pageSize`, `cursor`);
+each record carries its stage, first gap and offered actions. Inspect the record
+with `machinery_read.read` before acting. Research backlog comes from the
+entity's `research-queue` saved view. Settle what the evidence allows; when you
+cannot decide, call `activity.resolve_run_finding` with `action: "ask_member"`
+and one specific `question` (for an Email, resolve it unresolved as
+`member_decision` or `identity_ambiguity`). Source ownership still governs
+private originals and accounts; a gap grants no paid-execution or source-access
+authority.
 Route paperwork and itemization research by source ownership. Paying for an
 order does not establish access to its originals; settlement reconciliation
 also requires the relevant financial-account authority.

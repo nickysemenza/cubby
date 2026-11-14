@@ -7,11 +7,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { advisoryLockKey, advisoryXactLock } from "~/server/db/advisory-lock";
-import {
-  getDb,
-  withTransactionDatabase,
-  withSnapshotWriteDatabase,
-} from "~/server/db/helpers";
+import { getDb } from "~/server/db/helpers";
 import { suggestionTable } from "~/server/db/schema";
 import type { EmailEvidenceWriteScope } from "~/server/domains/purchase-import/repo/email-evidence-write-scope";
 import { withEmailReviewBoundary } from "~/server/domains/purchase-import/repo/email-review-intent";
@@ -22,7 +18,6 @@ import {
 } from "~/server/generic/suggestions/repo/suggestion";
 import { decisionForOperation } from "~/server/generic/suggestions/repo/suggestion-decisions";
 import { suggestionFamilies } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
-import { acknowledgeSavedField } from "~/server/generic/suggestions/repo/suggestion-field-receipt";
 import {
   changedTerms,
   reviewKey,
@@ -32,8 +27,9 @@ import {
   suggestionStateColumns,
   transitionSuggestionStates,
 } from "~/server/generic/suggestions/repo/suggestion-state";
+import { householdWrite } from "~/server/kernel/gate";
 
-import type { Review, AutomaticReview } from "./review";
+import type { Review } from "./review";
 import {
   planApplicationReceipt,
   planApplicableState,
@@ -44,14 +40,13 @@ export function executeReviewApplication(
   db: Database,
   context: EntityKernelContext,
   input: Review,
-  automatic: AutomaticReview | null,
   emailScope: EmailEvidenceWriteScope | undefined,
   prediction: Prediction,
   name: ReviewFamily,
   family: (typeof suggestionFamilies)[ReviewFamily],
   writeReview: (db: Database) => Promise<{ event: FeedbackEvent }>,
 ) {
-  const authority = automatic ? "automatic" : "member";
+  const authority = "member" as const;
   const executeApplication = () => {
     const apply = async (transactionDb: Database) => {
       // The review and its application commit together: a refused or stale
@@ -65,7 +60,7 @@ export function executeReviewApplication(
         }) satisfies z.infer<typeof suggestionReviewOut>;
       // Serialize generic commands without taking projection locks ahead of the
       // domain's parent locks. Receipt and mutation commit in the same boundary.
-      // The subject lock comes first: an apply supersedes the subject's other
+      // The subject lock precedes the id lock: an apply supersedes the subject's other
       // live rows, so two of them applying at once would deadlock on each other.
       // The id lock is the key mail decision review shares. One statement
       // takes both, left to right.
@@ -101,15 +96,7 @@ export function executeReviewApplication(
       let applicationResult: z.infer<
         typeof suggestionReviewOut
       >["applicationResult"];
-      if (input.application?.kind === "saved_field") {
-        ({ event } = await writeReview(transactionDb));
-        await acknowledgeSavedField(transactionDb, context, prediction, {
-          recordId: input.application.recordId,
-          operationId: input.operationId,
-          correction: input.correction,
-          commandFeedback: event,
-        });
-      } else {
+      {
         if ("lockForApply" in family && family.lockForApply)
           await family.lockForApply(transactionDb, prediction);
         const query = getDb(transactionDb)
@@ -122,7 +109,7 @@ export function executeReviewApplication(
           family.transactionBound !== false
             ? await query.for("update")
             : await query;
-        const applicableState = planApplicableState(state, prediction.family);
+        const applicableState = planApplicableState(state);
         if (!input.expectedFingerprint)
           throw new Error(
             "An applying review needs expectedFingerprint; send the listed row's fingerprint",
@@ -155,12 +142,11 @@ export function executeReviewApplication(
           applicableState,
         );
         applicationResult =
-          (await family.apply(
+          (await family.apply!(
             transactionDb,
             { ...context, db: transactionDb },
             applicableState,
             input,
-            automatic,
           )) ?? undefined;
         // Domain parent locks precede the Suggestion row lock Feedback takes.
         ({ event } = await writeReview(transactionDb));
@@ -211,7 +197,6 @@ export function executeReviewApplication(
           kind: "assessment_application",
           commandFeedbackId: event.id,
           ...(fieldApplicationReceipt && { fieldApplicationReceipt }),
-          ...(automatic && { rule: automatic.rule }),
         },
       });
       return applied;
@@ -219,12 +204,7 @@ export function executeReviewApplication(
     return withEmailReviewBoundary(
       db,
       prediction,
-      (scopedDb) =>
-        "isolationLevel" in family && family.isolationLevel === "serializable"
-          ? withSnapshotWriteDatabase(scopedDb, apply, {
-              isolationLevel: "serializable",
-            })
-          : withTransactionDatabase(scopedDb, apply),
+      (scopedDb) => householdWrite(scopedDb, apply),
       emailScope,
     );
   };

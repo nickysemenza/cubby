@@ -4,14 +4,15 @@ import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import {
   product as productTable,
   orderMailEvent,
   user,
 } from "~/server/db/schema";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -82,7 +83,7 @@ describe("resolveArrivedFindingsForPurchase", () => {
       userId: ctx.actor.userId,
     });
     const vendorId = await findOrCreateVendor(ctx.db, "Findings Test Vendor");
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId,
       date: "2026-01-01",
       displayLabel: "Two-line delivered order",
@@ -100,19 +101,19 @@ describe("resolveArrivedFindingsForPurchase", () => {
       ),
     ]);
     await Promise.all([
-      insertWithShortcode(ctx.db, "expense", {
+      createPurchaseEventRecord(ctx.db, "expense", {
         lineKind: "principal",
         name: "Line A",
-        cost: 10,
+        cost: 1000n,
         date: "2026-01-01",
         costType: "materials",
         productId: productA.entityId,
         purchaseId: purchase.id,
       }),
-      insertWithShortcode(ctx.db, "expense", {
+      createPurchaseEventRecord(ctx.db, "expense", {
         lineKind: "principal",
         name: "Line B",
-        cost: 20,
+        cost: 2000n,
         date: "2026-01-01",
         costType: "materials",
         productId: productB.entityId,
@@ -222,7 +223,7 @@ describe("resolveArrivedFindingsForPurchase", () => {
       userId: ctx.actor.userId,
     });
     const vendorId = await findOrCreateVendor(ctx.db, "Findings Mixed Vendor");
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId,
       date: "2026-01-01",
       displayLabel: "Mixed delivered order",
@@ -250,10 +251,10 @@ describe("resolveArrivedFindingsForPurchase", () => {
       ["Tracked line", tracked],
       ["Untracked line", untracked],
     ] as const)
-      await insertWithShortcode(ctx.db, "expense", {
+      await createPurchaseEventRecord(ctx.db, "expense", {
         lineKind: "principal",
         name,
-        cost: 10,
+        cost: 1000n,
         date: "2026-01-01",
         costType: "materials",
         productId: product.entityId,
@@ -303,7 +304,7 @@ describe("resolveArrivedFindingsForPurchase", () => {
     const [decided, empty] = await Promise.all(
       ["Later decided order", "Order with no product line"].map(
         (displayLabel) =>
-          insertWithShortcode(ctx.db, "purchase", {
+          createPurchaseEventRecord(ctx.db, "purchase", {
             vendorId,
             date: "2026-01-01",
             displayLabel,
@@ -315,10 +316,10 @@ describe("resolveArrivedFindingsForPurchase", () => {
       makeProductInput({ name: "Arrived later untracked snack" }),
       ctx.actor,
     );
-    await insertWithShortcode(ctx.db, "expense", {
+    await createPurchaseEventRecord(ctx.db, "expense", {
       lineKind: "principal",
       name: "Snack line",
-      cost: 10,
+      cost: 1000n,
       date: "2026-01-01",
       costType: "materials",
       productId: snack.entityId,

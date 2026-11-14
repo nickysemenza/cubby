@@ -14,6 +14,7 @@ import { seedEntity, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { USDAClient } from "~/server/clients/usda";
 import { entityStoredDerivedDeclarations } from "~/server/db/derived-declarations";
 import { storedSourceSql } from "~/server/db/derived-source-sql";
@@ -35,10 +36,9 @@ import {
   type DerivedAdapter,
   derivedSink,
 } from "~/server/generic/derived/repo/compute";
-import { rebuildDerived } from "~/server/generic/derived/service/rebuild";
-import { readRebuildObservation as readDerivedRebuildStatus } from "~/server/generic/jobs/repo/observation";
+import { readSnapshotState as readDerivedRebuildStatus } from "~/server/generic/derived/repo/snapshot-state";
+import { runSnapshotPage } from "~/server/generic/derived/snapshot.fixtures";
 import { prepareProductConversionCoverage } from "~/server/generic/problems/service/problems.service";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture,
   makeProductInput,
@@ -213,7 +213,7 @@ describe("deterministic cache rebuild", () => {
     const adapters = Object.fromEntries(computes);
     const drain = async () => {
       for (let page = 0; page < 1_000; page++) {
-        if (!(await rebuildDerived(ctx.db, adapters, { force: page === 0 })))
+        if (!(await runSnapshotPage(ctx.db, adapters, { force: page === 0 })))
           return;
       }
       throw new Error("Synthetic deterministic pass exceeded its page bound");

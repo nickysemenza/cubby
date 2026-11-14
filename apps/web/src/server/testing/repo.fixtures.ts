@@ -33,21 +33,26 @@ import { rawProductList } from "@cubby/schemas/product-raw-read";
 import type { ExpenseCreateInput } from "@cubby/schemas/project";
 import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
 import type { SearchableEntity } from "@cubby/schemas/search";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql, getTableColumns } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { buildEntity } from "tooling/factories/build";
 import { z } from "zod";
 
 import { wasm } from "~/lib/wasm";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
+import { holdFieldsValues } from "~/server/ai/fields/repo/field-decisions";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import {
   entityAttachment,
   entityIdentity,
+  expense,
   type image,
   location,
   product,
   productCategory,
+  purchase,
   recipe,
   user,
   vendor,
@@ -57,7 +62,6 @@ import {
   type EntityPayloadValues,
 } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { getDb, notDeleted } from "../db/helpers";
 import {
@@ -84,16 +88,87 @@ import type { CookbookImportContext } from "../domains/recipe/repo/import-recipe
 // redefining a TEST_ACTOR constant per file. The `.fixtures.ts` suffix keeps
 // this file out of the test glob.
 
-/** Fixed-code fixtures use the same transactional identity writer as production. */
+/** Fixed-code fixtures use the identity writer and record field assignments as decisions. */
 export async function insertEntityFixtures<T extends PgTable>(
   db: Database,
   table: T,
   kind: ShortcodeEntity,
   rows: readonly EntityPayloadValues<T>[],
 ) {
-  return getDb(db).transaction((tx) =>
-    insertPayloadsWithIdentities(tx, table, kind, rows),
-  );
+  if (
+    kind === "purchase" ||
+    kind === "expense" ||
+    kind === "financialTransaction"
+  ) {
+    const { insertFieldsFixture } =
+      await import("~/server/ai/fields/fields.fixtures");
+    const { createPurchaseEventRecords } =
+      await import("~/server/domains/financial-transaction/repo/purchase-event-mutations");
+    // SAFETY: fixture callers provide the insert model for the same table and entity.
+    const inserted =
+      kind === "financialTransaction"
+        ? await Promise.all(
+            rows.map((row) =>
+              insertFieldsFixture(
+                db,
+                kind,
+                row as import("~/server/generic/shortcode/repo/shortcode-utils").ShortcodeInsertValues<
+                  "purchase" | "expense" | "financialTransaction"
+                >,
+              ),
+            ),
+          )
+        : kind === "purchase"
+          ? await createPurchaseEventRecords(
+              db,
+              "purchase",
+              rows as (typeof purchase.$inferInsert)[],
+            )
+          : await createPurchaseEventRecords(
+              db,
+              "expense",
+              rows as (typeof expense.$inferInsert)[],
+            );
+    for (const [index, saved] of inserted.entries())
+      Object.assign(rows[index]!, { id: saved.id, shortcode: saved.shortcode });
+    const columns = getTableColumns(table);
+    if (!("id" in columns)) throw new Error("Fixture table has no id");
+    return getDb(db)
+      .select()
+      .from(table)
+      .where(
+        inArray(
+          columns.id,
+          inserted.map((row) => row.id),
+        ),
+      );
+  }
+  return getDb(db).transaction(async (tx) => {
+    const prepared = rows.map((row) => {
+      const id = row.id ?? crypto.randomUUID();
+      return {
+        id,
+        input: row,
+        fields: holdFieldsValues(kind, { ...row, id }, "create"),
+      };
+    });
+    const created = await insertPayloadsWithIdentities(
+      tx,
+      table,
+      kind,
+      prepared.map((row) => row.fields.values),
+    );
+    for (const row of prepared)
+      await row.fields.settle(tx, systemActor(), row.id);
+    return created.map((row, index) => ({
+      ...row,
+      ...Object.fromEntries(
+        Object.entries(prepared[index]!.input).filter(([key]) =>
+          prepared[index]!.fields.held.includes(key),
+        ),
+      ),
+    }));
+  });
 }
 
 type Amount = { value: number; unit: string };
@@ -820,3 +895,9 @@ export const listInventoryFixture = async (
     data: page.data.map((row) => rawInventoryList.parse(row)),
   };
 };
+
+/** Full Expense rows with `cost` on the dollar wire, as entity reads return it. */
+export const dollarExpenseColumns = () => ({
+  ...getTableColumns(expense),
+  cost: expenseCostDollarsSql(),
+});

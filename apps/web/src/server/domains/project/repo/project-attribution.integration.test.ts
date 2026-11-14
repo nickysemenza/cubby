@@ -1,10 +1,11 @@
 import { rawProjectOut } from "@cubby/schemas/work-raw-read";
+import { nullableWholeCentToMinor } from "@cubby/shared";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { householdLocalDate } from "~/lib/household-date";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { loadRelatedPreviews } from "~/server/generic/entity-links/repo/related-view";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 
 import { projectDashboardSummary } from "./dashboard-summary";
@@ -55,7 +56,7 @@ describe("project dashboard attribution", () => {
         name: "Inherited date",
         purchaseId: purchase.id,
         date,
-        cost: 1,
+        cost: 100n,
         costType: "materials",
         lineKind: "principal",
       });
@@ -105,7 +106,7 @@ describe("project dashboard attribution", () => {
       name: "Leaf cost",
       projectId: leaf.id,
       date: "2026-01-01",
-      cost: 10,
+      cost: 1000n,
       trade: "building",
       costType: "materials",
       lineKind: "principal",
@@ -157,7 +158,7 @@ describe("project dashboard attribution", () => {
     ] as const) {
       await insertWithShortcode(ctx.db, "expense", {
         name,
-        cost,
+        cost: nullableWholeCentToMinor(cost),
         projectId,
         purchaseId: purchase.id,
         date,
@@ -168,7 +169,7 @@ describe("project dashboard attribution", () => {
     }
     const tax = await insertWithShortcode(ctx.db, "expense", {
       name: "Shared tax",
-      cost: 1,
+      cost: 100n,
       purchaseId: purchase.id,
       date,
       future: true,

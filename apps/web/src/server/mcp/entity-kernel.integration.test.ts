@@ -616,20 +616,19 @@ describe("MCP entity kernel boundary", () => {
     );
     const callEntity = (command: ToolArguments) =>
       callKernel(command, entityKernel);
-    const ids = await Promise.all(
-      [
-        { name: "Summary probe A", barcode: "012345678905", fdc_id: 2_000_001 },
-        { name: "Summary probe B", barcode: "036000291452" },
-        { name: "Summary probe C" },
-      ].map(async (overrides) => {
-        const created = await callEntity({
-          action: "create",
-          entity: "product",
-          data: mock(productCreateInput, { overrides }),
-        });
-        return idResultSchema.parse(created.structuredContent).item.id;
-      }),
-    );
+    const ids: string[] = [];
+    for (const overrides of [
+      { name: "Summary probe A", barcode: "012345678905", fdc_id: 2_000_001 },
+      { name: "Summary probe B", barcode: "036000291452" },
+      { name: "Summary probe C" },
+    ]) {
+      const created = await callEntity({
+        action: "create",
+        entity: "product",
+        data: mock(productCreateInput, { overrides }),
+      });
+      ids.push(idResultSchema.parse(created.structuredContent).item.id);
+    }
     const command = {
       action: "list",
       entity: "product",

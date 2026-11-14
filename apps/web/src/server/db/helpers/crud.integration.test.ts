@@ -3,10 +3,10 @@ import { eq, sql } from "drizzle-orm";
 import { TEST_HOME_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, expectTypeOf, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, withTransaction } from "~/server/db/helpers";
 import { updateManyAndReturn } from "~/server/db/helpers/crud";
 import { location } from "~/server/db/schema";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 describe("keyed updates", () => {
   const ctx = withTestDb();

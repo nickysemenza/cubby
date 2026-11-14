@@ -6,11 +6,11 @@ import {
   type ImageJobRawOut as RawImageJobOut,
   imageJobRawOut as rawImageJobOut,
 } from "@cubby/schemas/entity-contracts/imageJob";
+import { describeWorkWaitingOn } from "@cubby/schemas/execution";
 import {
   deviceShortcode,
   type DeviceShortcode,
 } from "@cubby/schemas/identifiers";
-import { describeJobWaitingOn } from "@cubby/schemas/job";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import {
@@ -20,8 +20,8 @@ import {
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { uuidArrayParam } from "~/server/db/helpers/query";
-import { imageProcessingAttempt } from "~/server/db/image-processing-schema";
 import { device, imageProcessingJob } from "~/server/db/schema";
+import { imageExecutionReceipts } from "~/server/domains/image-processing/repo/execution-receipts";
 import {
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
@@ -68,14 +68,14 @@ const loadFacts = async (
   }>(sql`
     SELECT j.id, j.state AS "storedState", cost.charged, cost.standard,
       coalesce(
-        (SELECT a.executor->>${"name"} FROM "ImageProcessingAttempt" a
+        (SELECT a.executor->>${"name"} FROM (SELECT * FROM ${imageExecutionReceipts}) a
           WHERE a."jobId" = j.id AND a.executor IS NOT NULL
           ORDER BY a.number DESC LIMIT 1),
         CASE WHEN (j.kind = ${imageProcessingJobKind.enum.describe_image} AND j."processorRevision" = ${IMAGE_DESCRIPTION_PROCESSOR_REVISION})
           OR (j.kind = ${imageProcessingJobKind.enum.identify_image} AND j."processorRevision" = ${IMAGE_IDENTIFICATION_PROCESSOR_REVISION})
           THEN 'AI Gateway' END
       ) AS executor,
-      EXISTS (SELECT 1 FROM "ImageProcessingAttempt" a
+      EXISTS (SELECT 1 FROM (SELECT * FROM ${imageExecutionReceipts}) a
         WHERE a."jobId" = j.id AND a.executor->>${"kind"} = ${"device"}) AS "deviceRan",
       ${imageJobActionStateSql("j")} AS state
     FROM "ImageProcessingJob" j
@@ -83,18 +83,10 @@ const loadFacts = async (
     -- An OR with an attempt-id IN list cannot, and scanned every attempt's
     -- usage once per job and sum (~775 ms for a 50-row page).
     CROSS JOIN LATERAL (
-      SELECT coalesce(sum(u."chargedCost"), 0) AS charged,
-        coalesce(sum(u."standardCost"), 0) AS standard
-      FROM (
-        SELECT u."chargedCost", u."standardCost"
-          FROM "ImageProcessingAttempt" a
-          JOIN "AiUsage" u ON u."jobKind" = ${"image_processing_attempt"}
-            AND u."jobId" = a.id::text
-          WHERE a."jobId" = j.id
-        UNION ALL
-        SELECT u."chargedCost", u."standardCost" FROM "AiUsage" u
-          WHERE u."jobKind" = j.kind AND u."jobId" = j.id::text
-      ) u
+      SELECT coalesce(sum(a."costMicros"),0)/1000000.0 AS charged,
+        coalesce(sum(coalesce((a.raw::jsonb->>'standardCostMicros')::bigint,a."costMicros")),0)/1000000.0 AS standard
+      FROM "Answer" a JOIN "Ask" owed ON owed.id=a."askId"
+      WHERE owed.input->'input'->>'receiptId'=j.id::text
     ) cost
     WHERE j.id = ANY(${uuidArrayParam(ids)})
   `);
@@ -132,22 +124,22 @@ const loadLeaseDevices = async (
   if (attemptIds.length === 0) return new Map();
   const rows = await unwrapDb(db)
     .select({
-      token: imageProcessingAttempt.id,
+      token: imageExecutionReceipts.id,
       shortcode: device.shortcode,
-      name: sql<string | null>`${imageProcessingAttempt.executor}->>${"name"}`,
+      name: sql<string | null>`${imageExecutionReceipts.executor}->>${"name"}`,
     })
-    .from(imageProcessingAttempt)
+    .from(imageExecutionReceipts)
     .leftJoin(
       device,
       and(
         eq(
           device.installationId,
-          sql`${imageProcessingAttempt.executor}->>${"deviceId"}`,
+          sql`${imageExecutionReceipts.executor}->>${"deviceId"}`,
         ),
         notDeleted(device),
       ),
     )
-    .where(inArray(imageProcessingAttempt.id, [...attemptIds]));
+    .where(inArray(imageExecutionReceipts.id, [...attemptIds]));
   return new Map(
     rows.map((row) => [
       row.token,
@@ -226,7 +218,7 @@ const imageJobRead = {
           return [
             row.id,
             {
-              waitingOn: describeJobWaitingOn(
+              waitingOn: describeWorkWaitingOn(
                 imageJobWaitingOn(row, now, {
                   name: holder?.name ?? null,
                   deviceId: holder?.device ?? null,

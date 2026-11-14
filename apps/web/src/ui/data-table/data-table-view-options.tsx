@@ -1,4 +1,3 @@
-import { humanize } from "@cubby/shared";
 import { GearSixIcon } from "@phosphor-icons/react/dist/csr/GearSix";
 import type { RowData } from "@tanstack/react-table";
 import { useState } from "react";
@@ -21,6 +20,7 @@ import type {
   CubbyTable as Table,
 } from "./table-features";
 import TableLayoutCustomizer from "./table-layout-customizer";
+import { mobileColumnLabel } from "./table-meta";
 
 const isStringHeader = (value: unknown): value is string =>
   typeof value === "string";
@@ -29,18 +29,12 @@ interface DataTableViewOptionsProps<TData extends RowData> {
   table: Table<TData>;
 }
 
-/**
- * Same derivation `LedgerFilters` uses: a column's own string `header` reads
- * better than its raw id ("Data quality", not "dataQuality"), and `humanize`
- * is only the fallback for headers that aren't plain strings (icons, JSX).
- * The customizer groups columns only by explicit `columnGroup` metadata;
- * phone-card slots do not classify column meaning.
- */
+/** Column controls share the declared label used by phone rows. */
 export function columnLabel<TData extends RowData>(
   column: Column<TData, unknown>,
 ): string {
   const header = column.columnDef.header;
-  return isStringHeader(header) ? header : humanize(column.id);
+  return isStringHeader(header) ? header : mobileColumnLabel(column);
 }
 
 export function DataTableViewOptions<TData extends RowData>({

@@ -26,7 +26,9 @@ import { raceUniqueInsert, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { emailRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.email.gen";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { account as googleAccount } from "~/server/db/auth.schema";
+import { entityStoredDerivedDeclarations } from "~/server/db/derived-declarations";
 import {
   databaseForTransaction,
   getDb,
@@ -46,8 +48,10 @@ import {
   run as runTable,
   vendorAccount,
 } from "~/server/db/schema";
+import { emailDerivedComputes } from "~/server/domains/email/repo/derived";
 import { emailScaffold } from "~/server/domains/email/repo/email";
 import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-sql";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   decideEmailPurchase,
   EXACT_ORDER_LINK_REVISION,
@@ -60,10 +64,10 @@ import {
   mergePurchases,
 } from "~/server/domains/purchase/repo/purchase";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { publishRebuiltValues } from "~/server/generic/derived/repo/rebuild";
 import { buildEntityReport } from "~/server/generic/entity-report/repo";
 import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { listAutomaticDecisions } from "~/server/generic/suggestions/repo/automatic-decisions";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { createMcpServer } from "~/server/mcp/server";
@@ -77,9 +81,7 @@ import {
 describe("Email Purchase links", () => {
   const ctx = withTestDb();
 
-  const list = async (filters: EmailFilters) => {
-    // Stable fixture reads settle publications; dedicated cases below exercise missing and stale results.
-    await drainStoredDerived(ctx.db);
+  const readList = async (filters: EmailFilters) => {
     return (
       await emailScaffold.read(ctx.db, {
         filters,
@@ -91,6 +93,12 @@ describe("Email Purchase links", () => {
         purchaseLinks: emailPurchaseLink.array().parse(row.purchaseLinks),
       }),
     );
+  };
+
+  const list = async (filters: EmailFilters) => {
+    // Stable fixture reads settle publications; dedicated cases below exercise missing and stale results.
+    await drainStoredDerived(ctx.db);
+    return readList(filters);
   };
 
   async function emailCode(orderMailId: string) {
@@ -243,19 +251,20 @@ describe("Email Purchase links", () => {
         linkedRetainedEmails: 0,
         linkedPurchases: 1,
       });
+      await drainStoredDerived(ctx.db);
       const coverageFilters = {
         coverageVendorId: parseShortcodeFor("vendor", vendor.shortcode),
         mailboxId: original.mailboxId,
         ledgerPartyId: parseShortcodeFor("ledgerParty", party.shortcode),
       };
       expect(
-        await list({ ...coverageFilters, coverageStage: "known" }),
+        await readList({ ...coverageFilters, coverageStage: "known" }),
       ).toHaveLength(1);
       expect(
-        await list({ ...coverageFilters, coverageStage: "linked" }),
+        await readList({ ...coverageFilters, coverageStage: "linked" }),
       ).toHaveLength(1);
       expect(
-        await list({ ...coverageFilters, coverageStage: "retained" }),
+        await readList({ ...coverageFilters, coverageStage: "retained" }),
       ).toEqual([]);
       // Another member's copy of the same message, accepted onto this
       // member's account Purchase, never relates.
@@ -290,6 +299,7 @@ describe("Email Purchase links", () => {
           checksum: "c".repeat(64),
           outputFingerprint: "synthetic-foreign-review-fingerprint",
         });
+      await drainStoredDerived(ctx.db);
       const before = await reviewSourceState();
       const expected = [
         expect.objectContaining({
@@ -314,14 +324,14 @@ describe("Email Purchase links", () => {
         }),
       ];
       const code = parseShortcodeFor("vendor", vendor.shortcode);
-      expect(await list({ vendorId: code })).toEqual(expected);
+      expect(await readList({ vendorId: code })).toEqual(expected);
       expect(
-        await list({
+        await readList({
           purchaseId: parseShortcodeFor("purchase", purchase.shortcode),
         }),
       ).toEqual(expected);
       expect(
-        await list({
+        await readList({
           vendorAccountId: parseShortcodeFor(
             "vendorAccount",
             account.shortcode,
@@ -329,7 +339,7 @@ describe("Email Purchase links", () => {
         }),
       ).toEqual(expected);
       expect(
-        await list({
+        await readList({
           vendorId: code,
           ledgerPartyId: [
             parseShortcodeFor("ledgerParty", foreignParty.shortcode),
@@ -339,10 +349,12 @@ describe("Email Purchase links", () => {
       expect(await reviewSourceState()).toEqual(before);
       // Purchaser inheritance must retain accepted aliases/attachments even
       // without a Vendor Account identifying the member.
-      await getDb(ctx.db)
-        .update(purchaseTable)
-        .set({ vendorAccountId: null })
-        .where(eq(purchaseTable.id, purchase.id));
+      await updatePurchaseEventWhere(
+        ctx.db,
+        "purchase",
+        { vendorAccountId: null },
+        eq(purchaseTable.id, purchase.id),
+      );
       expect(
         (await readPurchaseById(ctx.db, purchaseId.parse(purchase.id)))
           .purchaserId,
@@ -393,7 +405,21 @@ describe("Email Purchase links", () => {
         .where(eq(emailTable.orderMailId, original.id));
       if (!accepted || !originalEmail)
         throw new Error("Synthetic source-order identities missing");
-      const drainEmail = () => drainStoredDerived(ctx.db);
+      // These source variants share the same Email snapshot; the full Pass is exercised above.
+      const declaration = entityStoredDerivedDeclarations().find(
+        (entry) => entry.target === "email.relationshipFacts",
+      );
+      if (!declaration)
+        throw new Error("Email relationship snapshot is undeclared");
+      const drainEmail = async () => {
+        const ids = [originalEmail.id];
+        await publishRebuiltValues(
+          ctx.db,
+          declaration,
+          ids,
+          await emailDerivedComputes["email.relationshipFacts"](ctx.db, ids),
+        );
+      };
       const facts = async () => {
         const [row] = await getDb(ctx.db)
           .select({ value: emailReadSnapshot.relationshipFacts })
@@ -469,7 +495,10 @@ describe("Email Purchase links", () => {
    * An exact order-number match links automatically on the next derived pass;
    * `amount` keeps the pair a suggestion (no order id on the event).
    */
-  async function retainedReviewFixture(match: "order" | "amount" = "order") {
+  async function retainedReviewFixture(
+    match: "order" | "amount" = "order",
+    receivedAt: Date | null = new Date("2026-10-01T12:00:00Z"),
+  ) {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic retention reviewer",
       kind: "member",
@@ -506,7 +535,7 @@ describe("Email Purchase links", () => {
       threadId: "synthetic-retention-thread",
       sender: "receipts@retention.example.test",
       subject: "Synthetic retained receipt",
-      receivedAt: new Date("2026-10-01T12:00:00Z"),
+      receivedAt,
       rawChecksum: checksum,
       content: {
         bodyText: "Synthetic original retained receipt",
@@ -556,10 +585,12 @@ describe("Email Purchase links", () => {
     await getDb(ctx.db).execute(
       sql`DELETE FROM "EmailReadSnapshot" WHERE "entityId" IN (SELECT id FROM "Email" WHERE shortcode = ${f.email})`,
     );
-    await getDb(ctx.db)
-      .update(purchaseTable)
-      .set({ statedTotal: moneyToMinor(99) })
-      .where(eq(purchaseTable.id, f.purchase.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { statedTotal: moneyToMinor(99) },
+      eq(purchaseTable.id, f.purchase.id),
+    );
     const filters = {
       vendorId: parseShortcodeFor("vendor", f.vendor.shortcode),
     };
@@ -635,10 +666,12 @@ describe("Email Purchase links", () => {
       certain: true,
       possible: true,
     });
-    await getDb(ctx.db)
-      .update(purchaseTable)
-      .set({ statedTotal: moneyToMinor(25) })
-      .where(eq(purchaseTable.id, f.purchase.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { statedTotal: moneyToMinor(25) },
+      eq(purchaseTable.id, f.purchase.id),
+    );
     expect(await read()).toMatchObject({ linkState: "none" });
     await drainStoredDerived(ctx.db);
     expect(await read()).toMatchObject({
@@ -653,10 +686,12 @@ describe("Email Purchase links", () => {
       vendorId: f.vendor.id,
       ledgerPartyId: other.id,
     });
-    await getDb(ctx.db)
-      .update(purchaseTable)
-      .set({ vendorAccountId: account.id })
-      .where(eq(purchaseTable.id, f.purchase.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { vendorAccountId: account.id },
+      eq(purchaseTable.id, f.purchase.id),
+    );
     expect(await read()).toMatchObject({
       linkState: "none",
       purchaseLinks: [],
@@ -1341,7 +1376,7 @@ describe("Email Purchase links", () => {
   // Accepted sources, not a nullable sender hint, make a multi-merchant
   // original readable on every supported Purchase.
   it("places accepted multi-Vendor mail with no sender proof on each related Vendor and Purchase", async () => {
-    const f = await retainedReviewFixture();
+    const f = await retainedReviewFixture("order", null);
     const secondVendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic second receipt merchant",
     });
@@ -1353,10 +1388,7 @@ describe("Email Purchase links", () => {
       .update(orderMail)
       .set({ vendorId: null })
       .where(eq(orderMail.id, f.source.id));
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({ receivedAt: null })
-      .where(eq(emailTable.orderMailId, f.source.id));
+
     const [claim] = await getDb(ctx.db)
       .insert(importSourceClaim)
       .values({

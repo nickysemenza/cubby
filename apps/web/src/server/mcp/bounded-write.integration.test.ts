@@ -61,7 +61,7 @@ describe("bounded MCP writes", () => {
           Array.from({ length: 3 }, (_, index) => ({
             shortcode: `EXP-SYN${subject.entityId.replaceAll("-", "")}${index + 1}`,
             name: "Synthetic dependent expense",
-            cost: 1,
+            cost: 100n,
             date: "2026-01-01",
             costType: costTypeSchema.enum.materials,
             trade: tradeSchema.enum.other,

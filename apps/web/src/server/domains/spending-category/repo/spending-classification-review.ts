@@ -19,7 +19,6 @@ import {
   unwrapDb,
   uuidArrayParam,
   withTransactionDatabase,
-  withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
 import { product, productCategory, entityExternalId } from "~/server/db/schema";
 import {
@@ -55,6 +54,7 @@ import {
   resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { householdWrite } from "~/server/kernel/gate";
 
 import { lockLiveSpendingCategories } from "./spending-category";
 
@@ -402,7 +402,7 @@ async function scopedFacts(db: Database, expenseIds: readonly ExpenseId[]) {
   const result = await unwrapDb(db).execute(
     sql`
     WITH f AS (
-      SELECT e.id, jsonb_build_object('expense',to_jsonb(e),'product',to_jsonb(g),'purchase',(to_jsonb(p)-'statedTotalMinor')||jsonb_build_object('statedTotal',p."statedTotalMinor"::numeric/100)) AS facts
+      SELECT e.id, jsonb_build_object('expense',(to_jsonb(e)-'costMinor')||jsonb_build_object('cost',e."costMinor"::numeric/100),'product',to_jsonb(g),'purchase',(to_jsonb(p)-'statedTotalMinor')||jsonb_build_object('statedTotal',p."statedTotalMinor"::numeric/100)) AS facts
       FROM "Expense" e
       LEFT JOIN "Product" g ON g.id=e."productId" AND ${notDeleted("g")}
       LEFT JOIN "Purchase" p ON p.id=e."purchaseId" AND ${notDeleted("p")}
@@ -610,75 +610,67 @@ export async function applySpendingClassificationReview(
           ...input.request.mergeIds,
         ])
       : [];
-  return withSnapshotWriteDatabase(
-    ctx.db,
-    async (db) => {
-      if (mergedCategories.length)
-        await lockLiveSpendingCategories(db, mergedCategories);
-      const impact = await buildPreview(db, input.request);
-      if (impact.fingerprint !== input.fingerprint)
-        constraintViolation(
-          "Spending classification or history changed after preview; review a fresh preview before applying.",
-        );
-      const context = { ...ctx, db };
-      const request = input.request;
-      await withReviewedSpendingClassification(db, () =>
-        applyReviewedSpendingClassificationPolicy(context, request),
+  return householdWrite(ctx.db, async (db) => {
+    if (mergedCategories.length)
+      await lockLiveSpendingCategories(db, mergedCategories);
+    const impact = await buildPreview(db, input.request);
+    if (impact.fingerprint !== input.fingerprint)
+      constraintViolation(
+        "Spending classification or history changed after preview; review a fresh preview before applying.",
       );
-      // A new Vendor, mapping, or Expense category can put a Product where
-      // its effective spending category forbids one.
-      if (request.action === "products")
-        await validateProductPolicy(db, {
-          inherited: {
-            kind: "product",
-            ids: await resolveAllOrThrow(db, "product", request.productIds),
-          },
-        });
-      else if (request.action === "productCategory")
-        await validateProductPolicy(db, {
-          inherited: {
-            kind: "productCategory",
-            ids: [
-              await resolveOrThrow(
-                db,
-                "productCategory",
-                request.productCategoryId,
-              ),
-            ],
-          },
-        });
-      else if (request.action === "vendor")
-        await validateProductPolicy(db, {
-          vendorId: await resolveOrThrow(db, "vendor", request.vendorId),
-        });
-      else if (request.action === "spendingCategoryMerge")
-        await validateProductPolicy(db, {
-          inherited: {
-            kind: "spendingCategory",
-            ids: [await resolveOrThrow(db, "spendingCategory", request.keepId)],
-          },
-        });
-      else
-        await validateProductPolicy(db, {
-          expenseIds: await resolveAllOrThrow(
-            db,
-            "expense",
-            request.expenseIds,
-          ),
-        });
-      return {
-        applied: true as const,
-        updatedRecords:
-          request.action === "expenses"
-            ? request.expenseIds.length
-            : request.action === "products"
-              ? request.productIds.length
-              : request.action === "spendingCategoryMerge"
-                ? request.mergeIds.length
-                : 1,
-        impact,
-      };
-    },
-    { isolationLevel: "serializable" },
-  );
+    const context = { ...ctx, db };
+    const request = input.request;
+    await withReviewedSpendingClassification(db, () =>
+      applyReviewedSpendingClassificationPolicy(context, request),
+    );
+    // A new Vendor, mapping, or Expense category can put a Product where
+    // its effective spending category forbids one.
+    if (request.action === "products")
+      await validateProductPolicy(db, {
+        inherited: {
+          kind: "product",
+          ids: await resolveAllOrThrow(db, "product", request.productIds),
+        },
+      });
+    else if (request.action === "productCategory")
+      await validateProductPolicy(db, {
+        inherited: {
+          kind: "productCategory",
+          ids: [
+            await resolveOrThrow(
+              db,
+              "productCategory",
+              request.productCategoryId,
+            ),
+          ],
+        },
+      });
+    else if (request.action === "vendor")
+      await validateProductPolicy(db, {
+        vendorId: await resolveOrThrow(db, "vendor", request.vendorId),
+      });
+    else if (request.action === "spendingCategoryMerge")
+      await validateProductPolicy(db, {
+        inherited: {
+          kind: "spendingCategory",
+          ids: [await resolveOrThrow(db, "spendingCategory", request.keepId)],
+        },
+      });
+    else
+      await validateProductPolicy(db, {
+        expenseIds: await resolveAllOrThrow(db, "expense", request.expenseIds),
+      });
+    return {
+      applied: true as const,
+      updatedRecords:
+        request.action === "expenses"
+          ? request.expenseIds.length
+          : request.action === "products"
+            ? request.productIds.length
+            : request.action === "spendingCategoryMerge"
+              ? request.mergeIds.length
+              : 1,
+      impact,
+    };
+  });
 }

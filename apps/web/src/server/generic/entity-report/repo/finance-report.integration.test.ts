@@ -1,13 +1,14 @@
 import type { ReportBlock } from "@cubby/schemas/entity-report";
 import type { ProjectId, PurchaseId } from "@cubby/schemas/identifiers";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
-import { moneyToMinor } from "@cubby/shared";
+import { moneyToMinor, nullableWholeCentToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
@@ -16,13 +17,13 @@ import {
   transactionImport,
   transactionImportRecord,
 } from "~/server/db/schema";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   sourceObservationColumns,
   sourceObservationFrom,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { buildEntityReport, buildEntityReports } from ".";
 
@@ -71,7 +72,7 @@ describe("finance entity reports", () => {
     insertWithShortcode(ctx.db, "expense", {
       purchaseId,
       name,
-      cost,
+      cost: nullableWholeCentToMinor(cost),
       date: "2026-09-01",
       lineKind: "principal",
       costType: "materials",
@@ -357,7 +358,7 @@ describe("finance entity reports", () => {
     await insertWithShortcode(ctx.db, "expense", {
       purchaseId: purchase.id,
       name: "Household contribution",
-      cost: -100,
+      cost: -10000n,
       economicRole: "reimbursement",
       date: "2026-09-01",
       lineKind: "principal",
@@ -455,10 +456,12 @@ describe("finance entity reports", () => {
 
   it("rejects missing and deleted purchase identities for every finance slot", async () => {
     const purchase = await makePurchase("deleted identity", null);
-    await getDb(ctx.db)
-      .update(purchaseTable)
-      .set({ deletedAt: new Date() })
-      .where(eq(purchaseTable.id, purchase.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { deletedAt: new Date() },
+      eq(purchaseTable.id, purchase.id),
+    );
     for (const slot of [
       "purchase.reconciliation",
       "purchase.project-allocation",

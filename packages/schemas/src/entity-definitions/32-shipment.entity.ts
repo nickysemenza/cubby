@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { readOnly, timestampField } from "./field-policy";
 import type { ColorToken, EnumIcon } from "@cubby/shared/enum-palette";
 import { capitalize } from "@cubby/shared/text-case";
@@ -31,6 +32,147 @@ const SHIPMENT_PURPOSE_PRESENTATION = {
 /** @public The shortcode registry generator parses this module's `definition` and `readSchemas`. */
 export const { definition, readSchemas } = defineEntityModel({
   key: "shipment",
+  edges: [
+    defineEdge({
+      key: "ShipmentObservation.shipmentId",
+      from: "row:ShipmentObservation",
+      to: "shipment",
+      cardinality: "one",
+      inverse: {
+        key: "shipment.incoming.ShipmentObservation.shipmentId",
+        from: "shipment",
+        to: "row:ShipmentObservation",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "ShipmentObservation.shipmentId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason:
+          "Workflow evidence about entities, not a relationship between them.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "tracking observations",
+        description: "Retained tracking evidence for this package.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "A retired package keeps its source observations; package merging is unsupported.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "preserve-tracking-observations",
+              effect: "preserve",
+              description:
+                "A retired package keeps its retained observations and capture memberships.",
+            },
+            handler: null,
+            order: 0,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "ShipmentSourcePackage.shipmentId",
+      from: "row:ShipmentSourcePackage",
+      to: "shipment",
+      cardinality: "one",
+      inverse: {
+        key: "shipment.incoming.ShipmentSourcePackage.shipmentId",
+        from: "shipment",
+        to: "row:ShipmentSourcePackage",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "ShipmentSourcePackage.shipmentId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason:
+          "Workflow evidence about entities, not a relationship between them.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "source package identities",
+        description: "Stable source package associations for replay.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "A retired package's binding stops replay recreating it; package merging is unsupported.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "preserve-source-package-binding",
+              effect: "preserve",
+              description:
+                "A retired package keeps its source binding, so replay cannot recreate it.",
+            },
+            handler: null,
+            order: 1,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+  ],
+
   names: { singular: "Shipment", plural: "Shipments" },
   table: "Shipment",
   identifiers: { brand: "ShipmentId", shortcode: "SHIP-" },
@@ -695,23 +837,34 @@ export const { definition, readSchemas } = defineEntityModel({
 
 export default defineEntity(
   definition,
-  (r) => [
-    r
-      .path("email", "many", [
-        { edge: "ShipmentObservation.shipmentId", direction: "incoming" },
-        {
-          edge: "ShipmentObservationCapture.observationId",
-          direction: "incoming",
-        },
-        {
-          edge: "ShipmentObservationCapture.captureId",
-          direction: "outgoing",
-        },
-        { edge: "ShipmentSourceCapture.emailId", direction: "outgoing" },
-      ])
-      .named("tracking-emails", "Tracking evidence"),
-    r.field("purchaseId").named("purchase", "Purchase"),
-    r.field("carrierId").named("carrier", "Carrier"),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r
+          .path("email", "many", [
+            { edge: "ShipmentObservation.shipmentId", direction: "incoming" },
+            {
+              edge: "ShipmentObservationCapture.observationId",
+              direction: "incoming",
+            },
+            {
+              edge: "ShipmentObservationCapture.captureId",
+              direction: "outgoing",
+            },
+            { edge: "ShipmentSourceCapture.emailId", direction: "outgoing" },
+          ])
+          .named("tracking-emails", "Tracking evidence"),
+        "email.shipment.tracking-emails",
+      ),
+      r.declare(
+        r.field("purchaseId").named("purchase", "Purchase"),
+        "purchase.shipments",
+      ),
+      r.declare(
+        r.field("carrierId").named("carrier", "Carrier"),
+        "vendor.shipments",
+      ),
+    ],
+  }),
   readSchemas,
 );

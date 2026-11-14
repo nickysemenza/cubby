@@ -28,13 +28,19 @@ export async function registerLocationImageChange(
   ports: LocationImageChangePorts = productionPorts,
 ): Promise<void> {
   await recordChange(db, { kind: "source", categories: ["location"] });
+  await (
+    await import("~/server/kernel/api")
+  ).emitWrites(db, {
+    table: "Location",
+    entity: "location",
+    ids: [change.locationId],
+    columns: ["updatedAt"],
+    discovers: [{ kind: "fields", key: `location:${change.locationId}` }],
+  });
   const requestedAt = new Date().toISOString();
   await ports.publishTasks(
     db,
-    [
-      { kind: "location-ai.description.refresh", requestedAt, ...change },
-      { kind: "location-ai.inventory.refresh", requestedAt, ...change },
-    ],
+    [{ kind: "location-ai.inventory.refresh", requestedAt, ...change }],
     { source: "location.images" },
   );
 }

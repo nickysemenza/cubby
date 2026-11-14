@@ -130,7 +130,7 @@ export async function getMonthlyExpenseSpend(
     );
   const lines = routes.map(
     (route) => sql`
-    SELECT DISTINCT t."id", t."date", t."cost"
+    SELECT DISTINCT t."id", t."date", t."costMinor"
     FROM ${source.from} ${route.traversal.joins}
     WHERE ${source.where} AND ${sql.raw(actualExpenseSql("t"))}
   `,
@@ -141,7 +141,7 @@ export async function getMonthlyExpenseSpend(
       SELECT generate_series(date_trunc(${"month"}, ${today}::date) - interval '11 months', date_trunc(${"month"}, ${today}::date), interval '1 month')::date AS month
     ), lines AS (${sql.join(lines, sql` UNION `)})
     SELECT to_char(months.month, 'YYYY-MM') AS month,
-      coalesce(round(sum(lines."cost")::numeric * 100), 0)::float AS cents
+      coalesce(sum(lines."costMinor"), 0)::float AS cents
     FROM months LEFT JOIN lines ON lines."date" >= months.month AND lines."date" < months.month + interval '1 month'
     GROUP BY months.month ORDER BY months.month
   `,
@@ -178,7 +178,7 @@ export async function getDetailActivity(
           ${target}::text AS entity, t."shortcode", ${await labelSql(target, "t")} AS title,
           NULL::text AS subtitle, ${date}::timestamp AS date,
           ${allDay}::boolean AS "allDay",
-          ${target === "expense" ? sql`round(t."cost"::numeric * 100)::float` : sql`NULL::float`} AS "amountCents"
+          ${target === "expense" ? sql`t."costMinor"::float` : sql`NULL::float`} AS "amountCents"
         FROM ${source.from} ${route.traversal.joins}
         WHERE ${source.where} AND ${date} IS NOT NULL
       `);

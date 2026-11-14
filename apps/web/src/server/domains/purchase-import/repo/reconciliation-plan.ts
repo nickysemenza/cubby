@@ -29,6 +29,11 @@ import type {
 } from "./reconciliation-state";
 import { receiptProductQuantity } from "./writer-plan";
 
+/** Reconciliation state reads Expense cost on the dollar-number wire. */
+type DollarExpense = Omit<typeof expense.$inferSelect, "cost"> & {
+  cost: number | null;
+};
+
 export function foreignProductBinding(
   candidate: ReconciliationFix["proposedExtraction"]["candidate"],
   intent: "financial" | "product_binding",
@@ -181,8 +186,8 @@ export function originalExpenseQuantity(
 function planReconciledExpense(
   state: ReconciliationState,
   line: ExtractedPurchaseLine,
-  existing: typeof expense.$inferSelect | null,
-  selected: readonly (typeof expense.$inferSelect)[],
+  existing: DollarExpense | null,
+  selected: readonly DollarExpense[],
   productId: ProductId | null,
 ) {
   const template = existing ?? selected[0];

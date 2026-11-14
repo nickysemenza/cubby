@@ -44,6 +44,7 @@ const actionCapability = {
   "image.confirm_description": "member_decision",
   "suggestions.review": "member_decision",
   "suggestions.field_authority": "member_decision",
+  "finance.apply": "member_decision",
   "finance.commit_booking": "member_decision",
   "finance.commit_booking_correction": "member_decision",
   "finance.record": "generic_mutation",
@@ -120,7 +121,6 @@ const actionCapability = {
   "maintenance.repair_image_dimensions": "member_decision",
   "maintenance.run": "member_decision",
   "maintenance.rebuild_derived": "member_decision",
-  "maintenance.retry_now": "member_decision",
   "nutrition.copy_range": "member_decision",
   "nutrition.duplicate": "member_decision",
   "nutrition.remove_food": "member_decision",
@@ -135,6 +135,8 @@ const actionCapability = {
   "spending_classification_write.apply": "generic_mutation",
   "ai.apply_finance_category_suggestion": "member_decision",
   "entity_graph.discover": "member_decision",
+  "machinery.decide": "member_decision",
+  "machinery.approve_drift": "member_decision",
 } as const satisfies Record<CubbyMcpMutationAction, RunCapability>;
 
 const isMutationAction = (action: string): action is CubbyMcpMutationAction =>

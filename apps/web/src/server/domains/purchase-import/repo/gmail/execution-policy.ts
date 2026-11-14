@@ -15,7 +15,6 @@ import { and, eq } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
-import { currentRunEvaluation } from "~/server/domains/run/repo/execution-context";
 
 /** Caller options cannot elevate a missing or classification-only persisted Run. */
 export async function gmailExecutionPolicy(
@@ -24,7 +23,6 @@ export async function gmailExecutionPolicy(
   expected?: {
     ledgerPartyId: string;
     mailboxId: string;
-    evaluation?: { id: string; token: string };
   },
 ): Promise<EmailExecutionPolicy> {
   if (!runId) return "classification_only";
@@ -33,19 +31,7 @@ export async function gmailExecutionPolicy(
     .from(run)
     .where(and(eq(run.id, runEntityId.parse(runId)), notDeleted(run)))
     .limit(1);
-  const evaluation =
-    expected?.evaluation ?? (current && currentRunEvaluation(current.id));
-  const sharedExecutable =
-    current &&
-    evaluation &&
-    (await (
-      await import("~/server/ai/evaluation/repo/ai-evaluation-requests")
-    ).evaluationIsExecutable(db, evaluation, current.id));
-  if (
-    !current ||
-    current.retiredAt ||
-    (current.status !== "running" && !sharedExecutable)
-  )
+  if (!current || current.retiredAt || current.status !== "running")
     throw new Error("Gmail classification Run is no longer executable.");
   if (expected && current.ledgerPartyId !== expected.ledgerPartyId)
     throw new Error("Gmail classification Run belongs to a different member.");

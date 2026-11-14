@@ -1,6 +1,6 @@
 import type { VendorShortcode } from "@cubby/schemas/identifiers";
 import type { SenderAttribution } from "@cubby/schemas/mail-coverage";
-import { humanize } from "@cubby/shared";
+import { mailCoverageLabel } from "@cubby/schemas/mail-coverage";
 import { useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
@@ -46,7 +46,7 @@ export function SenderAttributionDetails({
     <section className="space-y-3" aria-label="Sender attribution">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-sm font-semibold">Seller attribution</h3>
-        <Badge variant="outline">{humanize(attribution.state)}</Badge>
+        <Badge variant="outline">{mailCoverageLabel(attribution.state)}</Badge>
       </div>
       <p className="text-sm break-all select-text">{attribution.sender}</p>
       {attribution.vendors.length > 0 ? (

@@ -7,10 +7,8 @@ import { asc, count, desc, eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import {
-  imageProcessingAttempt,
-  imageProcessingEvent,
-} from "~/server/db/image-processing-schema";
+import { imageProcessingEvent } from "~/server/db/image-processing-schema";
+import { imageExecutionReceipts } from "~/server/domains/image-processing/repo/execution-receipts";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 /** Events beyond this stay in storage; the report says how many it left out. */
@@ -67,9 +65,9 @@ export async function imageJobAttemptsReport(
   const [attempts, events, [total]] = await Promise.all([
     getDb(db)
       .select()
-      .from(imageProcessingAttempt)
-      .where(eq(imageProcessingAttempt.jobId, jobId))
-      .orderBy(desc(imageProcessingAttempt.number)),
+      .from(imageExecutionReceipts)
+      .where(eq(imageExecutionReceipts.jobId, jobId))
+      .orderBy(desc(imageExecutionReceipts.number)),
     getDb(db)
       .select()
       .from(imageProcessingEvent)

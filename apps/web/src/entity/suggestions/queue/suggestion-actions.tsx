@@ -6,7 +6,6 @@ import { useState, type ReactNode } from "react";
 
 import { isBrowserRoutedEntity } from "~/entity/entities";
 import { EntityMergeDialog } from "~/entity/merge/entity-merge-dialog";
-import { formatCurrency } from "~/lib/number-format";
 import type { CubbyRow } from "~/ui/data-table/table-features";
 import { MoreMenuTrigger } from "~/ui/navigation/more-menu-trigger";
 import { Overlay } from "~/ui/overlays/overlay";
@@ -16,10 +15,6 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuSubmenu,
-  DropdownMenuSubmenuContent,
-  DropdownMenuSubmenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
 import { Textarea } from "~/ui/primitives/textarea";
 
@@ -132,7 +127,7 @@ function FieldSuggestionActions({
   const proposedText = useRenderedText();
   const currentText = useRenderedText();
   const state = outcome(suggestion.id);
-  const busy = state?.state === "pending";
+  const busy = state?.state === "pending" || state?.state === "waiting";
   const run = (build: Parameters<typeof review>[1]) =>
     void review([suggestion], build);
   const { evidence } = suggestion;
@@ -196,6 +191,9 @@ function FieldSuggestionActions({
           Dismiss
         </Button>
       )}
+      <output className="text-xs text-muted-foreground">
+        {state?.state === "waiting" ? "Cubby is reworking this" : null}
+      </output>
       {never || (wrong && !keepsCurrent) ? (
         <DropdownMenu>
           <MoreMenuTrigger
@@ -234,33 +232,19 @@ function FamilySuggestionActions({
   const [correctionValue, setCorrectionValue] = useState(
     suggestion.review?.correction?.value ?? "",
   );
-  const { review, outcome, statementChoice, toggleOpen, setDraft } =
-    useSuggestionReview();
+  const { review, outcome } = useSuggestionReview();
   const state = outcome(suggestion.id);
-  const busy = state?.state === "pending";
+  const busy = state?.state === "pending" || state?.state === "waiting";
   const run = (build: Parameters<typeof review>[1]) =>
     void review([suggestion], build);
 
   const acceptOwnerOnly = suggestion.actions.some(
     (action) => action.verb === "accept" && action.ownerOnly,
   );
-  const statement =
-    suggestion.family === "statement_transaction" ? suggestion.evidence : null;
   const wrong = wrongItem(suggestion);
   const never = neverSuggestItem(suggestion);
   const merge = suggestion.review?.merge;
-  const alternatives = statement
-    ? statement.candidates.filter(
-        (_, index) => statement.recommended !== "attach" || index > 0,
-      )
-    : [];
-  const hasMenu =
-    wrong !== null ||
-    never !== null ||
-    (statement !== null &&
-      (statement.create !== null ||
-        alternatives.length > 0 ||
-        statement.candidates.some((candidate) => candidate.diff.length > 0)));
+  const hasMenu = wrong !== null || never !== null;
 
   return (
     <div className="flex min-w-0 items-center justify-end gap-1">
@@ -349,9 +333,7 @@ function FamilySuggestionActions({
           aria-description={
             acceptOwnerOnly ? "Only the record's owner can confirm" : undefined
           }
-          onClick={() =>
-            run((target) => acceptItem(target, statementChoice(target)))
-          }
+          onClick={() => run(acceptItem)}
         >
           {suggestion.family === "recommendation" ? "Confirm" : "Accept"}
         </Button>
@@ -372,73 +354,6 @@ function FamilySuggestionActions({
             aria-label="More review choices"
           />
           <DropdownMenuContent align="end" className="min-w-52">
-            <DropdownMenuGroup>
-              {statement?.create &&
-              statementChoice(suggestion)?.action === "create" ? (
-                // The kind is a value: its Picker lives in the evidence.
-                <DropdownMenuItem
-                  onClick={() => toggleOpen(suggestion.id, true)}
-                >
-                  Change kind…
-                </DropdownMenuItem>
-              ) : null}
-              {statement && alternatives.length ? (
-                <DropdownMenuSubmenu>
-                  <DropdownMenuSubmenuTrigger>
-                    Choose another candidate
-                    <CaretRightIcon className="ml-auto" />
-                  </DropdownMenuSubmenuTrigger>
-                  <DropdownMenuSubmenuContent>
-                    {alternatives.map((candidate) => (
-                      <DropdownMenuItem
-                        key={candidate.transactionId}
-                        onClick={() => {
-                          setDraft(suggestion.id, {
-                            action: "attach",
-                            transactionId: candidate.transactionId,
-                          });
-                          toggleOpen(suggestion.id, true);
-                        }}
-                      >
-                        Attach to{" "}
-                        {candidate.merchant ??
-                          candidate.rawDescription ??
-                          "transaction"}{" "}
-                        · {formatCurrency(candidate.amount)}
-                        {(candidate.postedDate ?? candidate.transactionDate)
-                          ? ` · ${candidate.postedDate ?? candidate.transactionDate}`
-                          : ""}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubmenuContent>
-                </DropdownMenuSubmenu>
-              ) : null}
-              {statement?.candidates.some(
-                (candidate) => candidate.diff.length > 0,
-              ) ? (
-                <DropdownMenuItem
-                  onClick={() => toggleOpen(suggestion.id, true)}
-                >
-                  Apply statement fields…
-                </DropdownMenuItem>
-              ) : null}
-              {statement?.create &&
-              statement.recommended !== "create" &&
-              statement.candidates.length ? (
-                <DropdownMenuItem
-                  onClick={() => {
-                    setDraft(suggestion.id, {
-                      action: "create",
-                      transactionId: undefined,
-                    });
-                    toggleOpen(suggestion.id, true);
-                  }}
-                >
-                  Preview new transaction
-                </DropdownMenuItem>
-              ) : null}
-            </DropdownMenuGroup>
-            {statement && (wrong || never) ? <DropdownMenuSeparator /> : null}
             <DropdownMenuGroup>
               {wrong ? (
                 <DropdownMenuItem

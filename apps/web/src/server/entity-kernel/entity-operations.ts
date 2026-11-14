@@ -25,7 +25,6 @@ import { getErrorMessage } from "@cubby/shared";
 import { z } from "zod";
 
 import { deleteStoredObjects } from "~/server/clients/s3";
-import { withTransactionDatabase } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
 import {
   canUpdateColumns,
@@ -55,6 +54,7 @@ import {
   withChildCounts,
   withDisplayImages,
 } from "~/server/generic/list/repo/list-read-adapters";
+import { householdWrite } from "~/server/kernel/gate";
 import { workflow } from "~/server/workflows/runtime/builder";
 import { mapWorkflowValue } from "~/server/workflows/runtime/definition";
 import { bindWorkflow } from "~/server/workflows/runtime/operation";
@@ -143,25 +143,22 @@ const writeWithChange = async <
   // this transaction holds and wait on it forever. Its Job intents are
   // saved in the same transaction; queue wakes wait for commit.
 
-  const result = await withTransactionDatabase(
-    context.db,
-    async (transactionDb) => {
-      const result = await write({
-        ...context,
-        db: transactionDb,
-        services: {
-          ...context.services,
-          recipeCosting: context.services.recipeCosting.bindTo(transactionDb),
-        },
-      });
-      // Known source intent is unconditional; the transaction key coalesces audit writes.
-      await recordChange(transactionDb, {
-        kind: "source",
-        categories: [binding.entity],
-      });
-      return result;
-    },
-  );
+  const result = await householdWrite(context.db, async (transactionDb) => {
+    const result = await write({
+      ...context,
+      db: transactionDb,
+      services: {
+        ...context.services,
+        recipeCosting: context.services.recipeCosting.bindTo(transactionDb),
+      },
+    });
+    // Known source intent is unconditional; the transaction key coalesces audit writes.
+    await recordChange(transactionDb, {
+      kind: "source",
+      categories: [binding.entity],
+    });
+    return result;
+  });
 
   return result;
 };
@@ -272,9 +269,11 @@ const buildUpdateOperation = <
           );
           await writeRecordEmoji(
             writeContext.db,
+            writeContext.actorContext,
             binding.entity,
             updated.entityId,
             validated.data,
+            previousEmoji ?? null,
           );
           await auditRecordEmoji(
             writeContext.db,
@@ -544,6 +543,7 @@ const buildEntityOperations = <
             );
             await writeRecordEmoji(
               writeContext.db,
+              writeContext.actorContext,
               binding.entity,
               created.entityId,
               validated.data,
@@ -655,113 +655,109 @@ const buildEntityOperations = <
         .commit("updated", async ({ context }, { validated }) => {
           let offending: string | undefined;
           try {
-            const updated = await withTransactionDatabase(
-              context.db,
-              async (db) => {
-                const writeContext = {
-                  ...context,
-                  db,
-                  services: {
-                    ...context.services,
-                    recipeCosting: context.services.recipeCosting.bindTo(db),
-                  },
-                };
-                const updatedReferences: { entity: E; id: string }[] = [];
-                const skipped: { entity: E; id: string; message: string }[] =
-                  [];
-                const fields = Object.keys(
-                  z.record(z.string(), z.unknown()).parse(validated.data),
+            const updated = await householdWrite(context.db, async (db) => {
+              const writeContext = {
+                ...context,
+                db,
+                services: {
+                  ...context.services,
+                  recipeCosting: context.services.recipeCosting.bindTo(db),
+                },
+              };
+              const updatedReferences: { entity: E; id: string }[] = [];
+              const skipped: { entity: E; id: string; message: string }[] = [];
+              const fields = Object.keys(
+                z.record(z.string(), z.unknown()).parse(validated.data),
+              );
+              const governed = fields.some(
+                (field) =>
+                  Object.values(declaredClassificationPolicies).some(
+                    (policy) =>
+                      policy.target.entity === binding.entity &&
+                      policy.fields.some((item) => item.field === field),
+                  ) ||
+                  (columnClassificationPolicy(
+                    "spendingCategory.productExpectation",
+                  ).target.entity === binding.entity &&
+                    field ===
+                      columnClassificationPolicy(
+                        "spendingCategory.productExpectation",
+                      ).target.field),
+              );
+              if (
+                !governed &&
+                canUpdateColumns(
+                  binding.entity,
+                  validated.data,
+                  binding.repository.updatePolicy,
+                )
+              ) {
+                await updateColumns(
+                  writeContext,
+                  binding.entity,
+                  validated.ids,
+                  validated.data,
                 );
-                const governed = fields.some(
-                  (field) =>
-                    Object.values(declaredClassificationPolicies).some(
-                      (policy) =>
-                        policy.target.entity === binding.entity &&
-                        policy.fields.some((item) => item.field === field),
-                    ) ||
-                    (columnClassificationPolicy(
-                      "spendingCategory.productExpectation",
-                    ).target.entity === binding.entity &&
-                      field ===
-                        columnClassificationPolicy(
-                          "spendingCategory.productExpectation",
-                        ).target.field),
+                updatedReferences.push(
+                  ...validated.ids.map((id) => ({
+                    entity: binding.entity,
+                    id,
+                  })),
                 );
-                if (
-                  !governed &&
-                  canUpdateColumns(
-                    binding.entity,
-                    validated.data,
-                    binding.repository.updatePolicy,
-                  )
-                ) {
-                  await updateColumns(
-                    writeContext,
-                    binding.entity,
-                    validated.ids,
-                    validated.data,
-                  );
-                  updatedReferences.push(
-                    ...validated.ids.map((id) => ({
+              } else {
+                for (const id of validated.ids) {
+                  offending = id;
+                  try {
+                    await householdWrite(db, async (rowDb) => {
+                      const rowContext = {
+                        ...writeContext,
+                        db: rowDb,
+                        services: {
+                          ...writeContext.services,
+                          recipeCosting:
+                            context.services.recipeCosting.bindTo(rowDb),
+                        },
+                      };
+                      const parsedId = parseSchema<S["id"], string>(
+                        binding.schemas.id,
+                        id,
+                      );
+                      const data = Object.assign(
+                        {},
+                        validated.data,
+                        Object.fromEntries(
+                          await resolveCollectionPatches(
+                            rowContext,
+                            binding,
+                            parsedId,
+                            validated.data,
+                            { bulk: true },
+                          ),
+                        ),
+                      );
+                      await updateRow(rowContext, { id, data });
+                    });
+                    updatedReferences.push({ entity: binding.entity, id });
+                  } catch (error) {
+                    const refusal = isPolicyRefusal(error)
+                      ? error
+                      : translateDatabaseError(error);
+                    if (!isPolicyRefusal(refusal)) throw error;
+                    skipped.push({
                       entity: binding.entity,
                       id,
-                    })),
-                  );
-                } else {
-                  for (const id of validated.ids) {
-                    offending = id;
-                    try {
-                      await withTransactionDatabase(db, async (rowDb) => {
-                        const rowContext = {
-                          ...writeContext,
-                          db: rowDb,
-                          services: {
-                            ...writeContext.services,
-                            recipeCosting:
-                              context.services.recipeCosting.bindTo(rowDb),
-                          },
-                        };
-                        const parsedId = parseSchema<S["id"], string>(
-                          binding.schemas.id,
-                          id,
-                        );
-                        const data = Object.assign(
-                          {},
-                          validated.data,
-                          Object.fromEntries(
-                            await resolveCollectionPatches(
-                              rowContext,
-                              binding,
-                              parsedId,
-                              validated.data,
-                              { bulk: true },
-                            ),
-                          ),
-                        );
-                        await updateRow(rowContext, { id, data });
-                      });
-                      updatedReferences.push({ entity: binding.entity, id });
-                    } catch (error) {
-                      const refusal = isPolicyRefusal(error)
-                        ? error
-                        : translateDatabaseError(error);
-                      if (!isPolicyRefusal(refusal)) throw error;
-                      skipped.push({
-                        entity: binding.entity,
-                        id,
-                        message: refusal.message,
-                      });
-                    }
+                      message: refusal.message,
+                    });
                   }
                 }
-                if (updatedReferences.length)
-                  await recordChange(db, {
-                    kind: "source",
-                    categories: [binding.entity],
-                  });
-                return { updatedReferences, skipped };
-              },
-            );
+              }
+              if (updatedReferences.length)
+                await recordChange(db, {
+                  kind: "source",
+                  categories: [binding.entity],
+                });
+              return { updatedReferences, skipped };
+            });
 
             return updated;
           } catch (error) {

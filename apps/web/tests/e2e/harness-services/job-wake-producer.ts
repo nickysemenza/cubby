@@ -1,8 +1,5 @@
 import type { DurableObjectNamespace } from "@cloudflare/workers-types";
 import { z } from "zod";
-import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
-import { purchaseAgentEvent } from "@cubby/schemas/purchase-import";
-import { dispatchInputForEvent } from "#web/src/server/domains/purchase-agent/service/dispatch-input.ts";
 import type { PurchaseImportRunAgent } from "#web/src/server/worker-bindings.ts";
 
 export default {
@@ -42,20 +39,6 @@ export default {
         .parse(await request.json());
       return Response.json(
         await env.PURCHASE_AGENT_RUN_CLIENT.getByName(input.agentId).retire(),
-      );
-    }
-    if (url.pathname === "/coordinator-dispatch") {
-      const input = z
-        .object({
-          agentId: z.string(),
-          purpose: agentImportRunPurpose,
-          event: purchaseAgentEvent,
-        })
-        .parse(await request.json());
-      return Response.json(
-        await env.PURCHASE_AGENT_RUN_CLIENT.getByName(input.agentId).dispatch(
-          dispatchInputForEvent(input.event, input.purpose),
-        ),
       );
     }
     return new Response("Not found", { status: 404 });

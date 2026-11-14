@@ -9,6 +9,8 @@ import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { setFieldsFixture } from "~/server/ai/fields/fields.fixtures";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
@@ -35,7 +37,6 @@ import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { createMcpServer } from "~/server/mcp/server";
 import { callMcpTool } from "~/server/testing/mcp-test-utils";
@@ -645,16 +646,12 @@ describe("product match review surfaces", () => {
       "Synthetic keeper lamp B",
     ]);
     // Row order would keep the lower id; quality must override it.
-    await getDb(ctx.db)
-      .update(productTable)
-      .set({ brandId: null })
-      .where(eq(productTable.id, sparse!.entityId));
-    await getDb(ctx.db)
-      .update(productTable)
-      .set({
-        brandId: await findOrCreateVendor(ctx.db, "Synthetic identified brand"),
-      })
-      .where(eq(productTable.id, rich!.entityId));
+    await setFieldsFixture(ctx.db, "product", sparse!.entityId, {
+      brandId: null,
+    });
+    await setFieldsFixture(ctx.db, "product", rich!.entityId, {
+      brandId: await findOrCreateVendor(ctx.db, "Synthetic identified brand"),
+    });
     await publishDetected([sparse!, rich!], {
       evidence: "Synthetic keeper quality",
       actionable: true,

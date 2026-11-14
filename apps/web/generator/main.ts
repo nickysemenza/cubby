@@ -1,5 +1,6 @@
+import { renderLinkCatalog } from "./entities/render/link-catalog.ts";
+import { renderDeclaredEdges } from "./entities/render/declared-edges.ts";
 import { rawSource } from "./artifacts.ts";
-import { modulesChildren } from "@cubby/schemas/compiler/child-tables/modules";
 import { retainedTableExports } from "@cubby/schemas/compiler/child-tables/retained";
 import { readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -100,6 +101,17 @@ const main = async () => {
   // Raw schema constructors consume shortcode schemas. Bootstrap their registry
   // before loading any compiler or renderer that can reach those constructors.
   await settle(await renderShortcodeRegistryArtifacts());
+  const { declaredLinkEdges } =
+    await import("@cubby/schemas/entity-definitions/link-edges");
+  await settle([renderLinkCatalog(declaredLinkEdges)]);
+  const { modulesChildren } =
+    await import("@cubby/schemas/compiler/child-tables/modules");
+  const {
+    collectEdgeDeclarations,
+    validateEdgeDeclarations,
+    validateEdgeStorageCoverage,
+    collectStructuralEdgePaths,
+  } = await import("./entities/edges.ts");
   const { validateEntityDeclarationImportBoundary } =
     await import("./entities/import-boundary.ts");
   const { validateRetainedTableBoundary } =
@@ -133,20 +145,31 @@ const main = async () => {
   );
   const { entities, declarations } = await loadEntityDeclarationBundle();
   validateConnectedViews(entities);
+  const edges = [
+    ...collectEdgeDeclarations(declarations),
+    ...declaredLinkEdges,
+  ];
   await settle([
     await renderAgentPromptArtifact(ROOT),
     await renderPlaybookArtifact(ROOT),
   ]);
   await settle([
     ...renderEntityArtifacts(entities, modulesChildren),
+    ...renderDeclaredEdges(edges, entities, modulesChildren),
     renderOverrideComparisonArtifact(declarations, entities),
     ...renderRelationArtifacts(entities),
-    ...renderKernelBindingsArtifacts(entities),
+    ...renderKernelBindingsArtifacts(entities, edges),
     ...renderFilterArtifacts(entities),
     ...renderSearchArtifacts(entities),
     ...renderTimelineArtifacts(entities),
     ...renderBrowserRouteArtifacts(entities),
   ]);
+  const { drizzleSchema } = await import("~/server/db/drizzle-schema");
+  validateEdgeDeclarations(
+    edges,
+    collectStructuralEdgePaths(entities, drizzleSchema),
+  );
+  validateEdgeStorageCoverage(edges, entities, drizzleSchema);
   // Detector schemas depend on the entity artifacts above. Emit their lean
   // browser classification only after those canonical schemas can initialize.
   const { PROBLEM_CLASS } = await import("@cubby/schemas/problems");

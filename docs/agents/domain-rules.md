@@ -22,14 +22,14 @@ iOS/macOS, HTTP, MCP connections), so change contracts in place:
   it until the client reconnects. A client that cached an older closed schema
   must reconnect once to load the open schema. Input schemas stay closed.
 - Household data is real: carry it through a migration that transforms it.
-- Merged-away codes refuse reads as well as writes, naming the survivor; no
-  client redirects ([ADR 0024](../adr/0024-repository-read-declaration.md)).
-- Queued work stores frozen snapshots (`AiEvaluation.snapshot`, provenance
-  fingerprints). Changing a fingerprinted snapshot's shape makes every queued
-  row fail its evidence check at execution, one full page each. In the same
-  change, mark those rows `obsolete` in a custom migration so discovery
-  re-admits them under the new shape; otherwise the stale rows drain one page
-  at a time and delay other evaluations.
+- An absorbed (merged-away) code resolves to its survivor on reads; writes
+  addressed to it are refused and name the survivor. Web, native and MCP
+  resolve through `resolveForRead`/`resolveForWrite` in the shared get path
+  ([ADR 0029](../adr/0029-evidence-facts-and-reconcilers.md) section 9).
+- A queued Ask stores its frozen envelope (`Ask.input`), keyed by
+  `inputHash`. A `promptVersion` change re-keys a queued Ask when it is
+  claimed and carries its requesters (`AskScope`); do not rewrite stored
+  envelopes in a migration.
 
 ## Production changes
 
@@ -122,8 +122,9 @@ capabilities, and platform folders (`db/`, `http/`, `operation-runtime/`,
 `workflows/`, …). Inside a domain the role is the path segment: `repo`,
 `service`, `operations` — a `<role>.ts` file, or a `<role>/` folder once it
 holds more than one module; tests sit beside their file. `cubby/domain-layers`
-keeps imports flowing operations → service → repo → db (`http/`, `mcp/`, and
-`workflows/` import like operations), keeps `ai/` out of repos, keeps `db/`
+keeps imports flowing operations → service → repo → db (`http/`, `mcp/`,
+`workflows/` and the kernel's module list `kernel/modules.ts` import like
+operations), keeps `ai/` out of repos, keeps `db/`
 out of services, and keeps platform and generic code off a domain's service
 and operations. It has no baseline, so a new violation is fixed by moving
 code to the right role, never by an exemption. No `index.ts` barrels in
@@ -170,11 +171,11 @@ credits and reconcile visible breakdowns against totals before shipping a chart.
 Major entities soft-delete. Use `notDeleted`, including `exists`/`notExists`
 subqueries unless an `includes-deleted: <reason>` comment makes the exception
 intentional. Removal paths clean `SearchDocument` and `EntityEmbedding` in the
-same transaction and propagate dependent staleness. Declare exhaustive,
-operation-specific incoming-edge policy from `entity-incoming-edges.ts`.
-Every new entity-targeting FK needs a stable `ENTITY_EDGES` declaration and
-graph coverage or an explicit non-graph metadata classification. A non-entity
-source table also needs `ENTITY_EDGE_OWNERS`, even when excluded from the graph.
+same transaction and propagate dependent staleness. Declare each relationship with `defineEdge`, including storage, inverse, ownership, liveness
+and separate delete/merge policies with named executable hooks. The generator emits
+`ENTITY_EDGES` and `ENTITY_EDGE_OWNERS` from those declarations. Every entity-targeting FK
+needs graph coverage or an explicit non-graph metadata classification; non-entity source tables
+declare ownership even when excluded from the graph.
 Run both `entity-manifest-fk.unit.test.ts` and `entity-edge-owners.unit.test.ts`
 after adding an FK, including ledger child tables; the owner guard loads the
 actual graph projection and catches module-initialization failures. Populate new
@@ -183,6 +184,14 @@ matrix exercises their real block, detach or cascade behavior.
 Deletes and merges have no live preview — attempt the mutation and read its
 structured refusal. Attach/detach previews stay advisory, and mutations
 re-check transactionally regardless.
+
+Only the kernel's apply step writes a column a registered reconciler owns
+(ADR 0029 section 2): every traced pool refuses any other statement that
+writes one (`db/owned-columns.ts`), so a writer appends evidence or records a
+decision instead. The refusal covers the reconcilers listed in
+`kernel/modules.ts` and switches on per domain as each module is added. The
+shared entity writers emit kernel keys for the columns they write; a bespoke
+writer of a column a reconciler reads calls `emitWrites` in its transaction.
 
 Take as few locks as possible: coordinate through a constraint or a
 compare-and-set update. When a lock is needed, make it narrow, shared

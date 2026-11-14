@@ -1,16 +1,14 @@
 import type { ExpenseFlowSankeyOut } from "@cubby/schemas/project";
+import { nullableWholeCentToMinor } from "@cubby/shared";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { unwrapDb } from "~/server/db/helpers";
-import {
-  type expense,
-  expenseAttribution,
-  ledgerParty,
-} from "~/server/db/schema";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
+import { type expense, ledgerParty } from "~/server/db/schema";
 import { expenseAnalyzeWorkflow } from "~/server/domains/expense/operations/expense.server";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { loadExpenseAllocations } from "~/server/domains/household-contribution/repo/allocation";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 
 import { expenseFlowSankey } from "./flow-sankey";
@@ -22,9 +20,9 @@ const principal = (
   cost: number,
   links: Pick<typeof expense.$inferInsert, "projectId" | "spendingCategoryId">,
 ) =>
-  insertWithShortcode(ctx.db, "expense", {
+  createPurchaseEventRecord(ctx.db, "expense", {
     name: `synthetic flow ${name}`,
-    cost,
+    cost: nullableWholeCentToMinor(cost),
     lineKind: "principal",
     date: "2026-09-20",
     costType: "materials",
@@ -79,28 +77,26 @@ describe("expenseFlowSankey", () => {
     await principal("refund without funder", -10, {
       spendingCategoryId: travel.id,
     });
-    await unwrapDb(ctx.db)
-      .insert(expenseAttribution)
-      .values([
-        {
-          expenseId: shared.id,
-          role: "funder",
-          ledgerPartyId: first.id,
-          weight: 3,
-        },
-        {
-          expenseId: shared.id,
-          role: "funder",
-          ledgerPartyId: second.id,
-          weight: 1,
-        },
-        {
-          expenseId: credit.id,
-          role: "funder",
-          ledgerPartyId: first.id,
-          weight: 1,
-        },
-      ]);
+    await insertPurchaseEventRows(ctx.db, "ExpenseAttribution", [
+      {
+        expenseId: shared.id,
+        role: "funder",
+        ledgerPartyId: first.id,
+        weight: 3,
+      },
+      {
+        expenseId: shared.id,
+        role: "funder",
+        ledgerPartyId: second.id,
+        weight: 1,
+      },
+      {
+        expenseId: credit.id,
+        role: "funder",
+        ledgerPartyId: first.id,
+        weight: 1,
+      },
+    ]);
 
     const filters = { search: "synthetic flow" };
     const sankey = await expenseFlowSankey(ctx.db, filters);
@@ -176,7 +172,7 @@ describe("expenseFlowSankey", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic flow vendor",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-20",
     });
@@ -184,9 +180,9 @@ describe("expenseFlowSankey", () => {
       const category = await insertWithShortcode(ctx.db, "spendingCategory", {
         name,
       });
-      await insertWithShortcode(ctx.db, "expense", {
+      await createPurchaseEventRecord(ctx.db, "expense", {
         name: `${name} line`,
-        cost: 10,
+        cost: 1000n,
         spendingCategoryId: category.id,
         purchaseId: purchase.id,
         date: "2026-09-20",
@@ -197,25 +193,25 @@ describe("expenseFlowSankey", () => {
       });
     }
     // 2 cents of tax round to 1 cent per category path.
-    const tax = await insertWithShortcode(ctx.db, "expense", {
+    const tax = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "synthetic flow split tax",
-      cost: 0.02,
+      cost: 2n,
       purchaseId: purchase.id,
       date: "2026-09-20",
       costType: "materials",
       trade: "other",
       lineKind: "tax",
     });
-    await unwrapDb(ctx.db)
-      .insert(expenseAttribution)
-      .values(
-        funders.map((funder) => ({
-          expenseId: tax.id,
-          role: "funder" as const,
-          ledgerPartyId: funder!.id,
-          weight: 1,
-        })),
-      );
+    await insertPurchaseEventRows(
+      ctx.db,
+      "ExpenseAttribution",
+      funders.map((funder) => ({
+        expenseId: tax.id,
+        role: "funder" as const,
+        ledgerPartyId: funder!.id,
+        weight: 1,
+      })),
+    );
 
     const ledger = (
       await loadExpenseAllocations(ctx.db, { expenseIds: [tax.id] })

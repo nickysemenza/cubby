@@ -5,7 +5,6 @@ import {
 } from "@cubby/schemas/entities/recipe";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type CookbookId,
   parseEntityId,
@@ -31,7 +30,8 @@ import {
 } from "~/lib/recipe-graph";
 import { recipeOutSignature } from "~/lib/recipe-signature";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
+import { DECLARED_EDGE_DELETE_HOOKS } from "~/server/db/generated/declared-edges.gen";
 import {
   associatePendingImages,
   getDb,
@@ -57,8 +57,22 @@ import {
   recipeSectionIngredient,
 } from "~/server/db/schema";
 import { recipeHasImages } from "~/server/domains/image/repo/image";
+import {
+  mapRecipeSections,
+  dbRecipeToAPIGraph,
+  liveMealCountForRecipeSql,
+  liveSectionCountForRecipeSql,
+  recipeProvenanceFields,
+  recipeTotalsFields,
+} from "~/server/domains/recipe/repo/helpers";
+import { recipeMetaToColumns } from "~/server/domains/recipe/repo/meta";
 import { recipeSearch } from "~/server/domains/recipe/repo/search-read-recipe";
 import { resolveRecipeServings } from "~/server/domains/recipe/repo/servings";
+import {
+  type RecipeProvenance,
+  recipeSourceToColumns,
+  webProvenance,
+} from "~/server/domains/recipe/repo/source";
 import {
   recipeCompositionLabel,
   recipeTotalsLabel,
@@ -89,60 +103,6 @@ import {
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
-
-export const RECIPE_DELETE_EDGE_POLICY = {
-  "RecipeSection.recipeId": {
-    code: "soft-delete-owned-row",
-    effect: "soft-delete",
-    description:
-      "A recipe's sections, and their ingredient lines, are soft-deleted along with it.",
-  },
-  "Ingredient.recipeId": {
-    code: "preserve-sub-recipe-pointer",
-    effect: "preserve",
-    description:
-      "A deleted recipe's sub-recipe pointer is left untouched — parent recipes are recomputed and re-resolved rather than having this edge cascaded or guarded.",
-  },
-  "MealRecipe.recipeId": {
-    code: "soft-delete-association",
-    effect: "soft-delete",
-    description:
-      "Meal-plan associations are soft-deleted with the recipe; the meals themselves are not.",
-  },
-  "EntityAttachment.entityId": {
-    code: "soft-delete-association",
-    effect: "soft-delete",
-    description:
-      "Image associations are soft-deleted with the recipe, and each file is\n      deleted too unless something else still references it.",
-  },
-  "Recipe.forkedFromRecipeId": {
-    code: "clear-fork-pointer",
-    effect: "detach",
-    description:
-      "A deleted recipe's forks have their forkedFromRecipeId pointer nulled out — a fork is a full independent recipe, so it survives its parent's deletion, just without the lineage pointer.",
-  },
-  "EntityExternalId.entityId": {
-    code: "soft-delete-metadata",
-    effect: "soft-delete",
-    description:
-      "Outside identifiers (a Notion page, a Drive folder) are soft-deleted with the record, releasing them to be recorded again.",
-  },
-} as const satisfies IncomingEdgePolicy<"recipe", OperationDisposition>;
-
-import {
-  mapRecipeSections,
-  dbRecipeToAPIGraph,
-  liveMealCountForRecipeSql,
-  liveSectionCountForRecipeSql,
-  recipeProvenanceFields,
-  recipeTotalsFields,
-} from "~/server/domains/recipe/repo/helpers";
-import { recipeMetaToColumns } from "~/server/domains/recipe/repo/meta";
-import {
-  type RecipeProvenance,
-  recipeSourceToColumns,
-  webProvenance,
-} from "~/server/domains/recipe/repo/source";
 
 import {
   createSectionWithIngredients,
@@ -1005,7 +965,7 @@ export const updateRecipe = defineMutationWriter({
  * sub-recipe pointer (`Ingredient.recipeId`) is `preserve`: the recipe Job
  * recomputes parents.
  */
-const removeRecipeGrandchildren = async (
+export const removeRecipeGrandchildren = async (
   tx: DrizzleTransaction,
   ids: RecipeId[],
 ) => {
@@ -1051,10 +1011,10 @@ export const deleteRecipes = (
 ) =>
   deleteByPolicy(dbOrTx, {
     entity: "recipe",
-    policy: RECIPE_DELETE_EDGE_POLICY,
+    policy: DECLARED_EDGE_DELETE_POLICIES.recipe,
     ids,
     actor,
-    beforeDelete: removeRecipeGrandchildren,
+    ...DECLARED_EDGE_DELETE_HOOKS.recipe,
   });
 
 export const deleteRecipesByCookbookTx = async (

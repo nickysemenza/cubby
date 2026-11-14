@@ -48,9 +48,10 @@ export async function snapshotStoredEmailPrediction(
     .from(emailClassificationObservation)
     .where(eq(emailClassificationObservation.emailId, email.id))
     .orderBy(desc(emailClassificationObservation.createdAt));
+  // A stored prediction can describe re-retrieved bytes rather than Email’s
+  // first observation; do not fabricate a duplicate at the original checksum.
   const previous = history.find(
     (row) =>
-      row.checksum === email.checksum &&
       row.classification === email.classification &&
       row.stage === (stage.success ? stage.data : null) &&
       row.reason === email.classificationReason &&
@@ -352,7 +353,7 @@ export async function recordEmailCandidateObservation(
       },
       "update",
     );
-    if (!original)
+    if (!original || original.rawChecksum !== preview.checksum)
       throw new Error("Email candidate source changed before persistence");
     const content =
       original.content.bodyHtml ?? original.content.bodyText ?? "";

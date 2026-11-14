@@ -1,5 +1,3 @@
-import { AsyncLocalStorage } from "node:async_hooks";
-
 import {
   decisionConfidence,
   financeCategoryReviewSchema,
@@ -63,7 +61,6 @@ import {
 import { fieldPrecedents } from "~/server/ai/field-suggest/precedents";
 import {
   fieldSuggestSpecFor,
-  withFieldSuggestionPreparation,
   type FieldSuggestSpec,
 } from "~/server/ai/field-suggest/registry";
 import { type AiCallOwner } from "~/server/ai/policy/call-owner";
@@ -119,12 +116,19 @@ export interface SuggestFieldsPorts {
   recordId?: string;
   /** False replays a question without household precedents. */
   precedents?: boolean;
+  /**
+   * The precedent lines a kernel Ask declared in its input; the prompt reads
+   * them instead of loading its own, so the answer is keyed by them.
+   */
+  precedentText?: string | null;
   /** Pure model evaluations and isolated unit mechanics may bypass correction lookup. */
   /** One accounting group per operation within a finite list batch. */
   usageFor?: (operation: string) => AiSelectionUsage;
   decisionPort?: DecisionPort;
   resolveLabels?: LabelResolverPort;
   force?: boolean;
+  /** A kernel Ask already owns the response-cache claim. */
+  applicationCache?: boolean;
   /** Pins the decision model (a Suggestion sweep or eval); otherwise routing samples. */
   decisionModel?: SupportedDecisionModel;
   /** Keep usage persistence disabled for read-only decision evaluations. */
@@ -157,6 +161,7 @@ function suggestionUsage(
     operation,
     cacheStatus: "none",
     force: ports?.force,
+    applicationCache: ports?.applicationCache,
   };
 }
 
@@ -1017,28 +1022,8 @@ async function savedSuggestionContext(
   db: Database,
   input: FieldSuggestionsInput,
 ) {
-  const batch = savedContexts.getStore();
-  if (!batch) return loadSavedSuggestionContext(db, input);
-  const key = JSON.stringify([
-    input.entity,
-    input.entityId,
-    requestsReview(input, "finance"),
-    requestsReview(input, "vendor"),
-  ]);
-  let result = batch.get(key);
-  if (!result) {
-    result = loadSavedSuggestionContext(db, input);
-    batch.set(key, result);
-  }
-  return result;
+  return loadSavedSuggestionContext(db, input);
 }
-
-const savedContexts = new AsyncLocalStorage<
-  Map<string, ReturnType<typeof loadSavedSuggestionContext>>
->();
-
-export const withFieldSuggestionBatch = <T>(work: () => Promise<T>) =>
-  savedContexts.run(new Map(), () => withFieldSuggestionPreparation(work));
 
 const requestsReview = (
   input: FieldSuggestionsInput,
@@ -1291,9 +1276,13 @@ export async function suggestFields(
         );
       // Saved records learn from what people set on similar records.
       const precedents =
-        ports?.recordId && ports.precedents !== false && spec.kind !== "prune"
-          ? await fieldPrecedents(db, input.entity, target, ports.recordId)
-          : null;
+        ports?.precedentText !== undefined
+          ? ports.precedentText
+          : ports?.recordId &&
+              ports.precedents !== false &&
+              spec.kind !== "prune"
+            ? await fieldPrecedents(db, input.entity, target, ports.recordId)
+            : null;
       const { suggestion, rawValue, outcome } = await resolve();
       if (
         suggestion &&

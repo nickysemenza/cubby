@@ -4,6 +4,7 @@ import { workQueueInput } from "@cubby/schemas/work-queue";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { updatePurchase } from "~/server/domains/purchase/repo/purchase";
 import {
   readRecordWorkQueue as readCurrentRecordWorkQueue,
@@ -12,7 +13,6 @@ import {
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
 import { loadRelatedPreviews } from "~/server/generic/entity-links/repo/related-view";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { publishAllQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createImageFixture,

@@ -85,7 +85,7 @@ export type ImageSourceFingerprint = z.infer<
 /**
  * Bumps to invalidate every stored `Image.embeddedMetadata` row and the
  * `metadataRevision` stale marker that guards it, forcing the
- * `image-metadata.extract` background task to re-read and re-parse every
+ * `image.metadata` Ask to re-read and re-parse every
  * image's bytes (see `image-metadata-revision.service.ts`).
  */
 export const IMAGE_METADATA_REVISION = 1;
@@ -93,7 +93,7 @@ export const IMAGE_METADATA_REVISION = 1;
 /**
  * The storage/wire shape of embedded EXIF/GPS metadata cached on
  * `Image.embeddedMetadata`. `capturedAt` is an ISO string — jsonb has no
- * native Date type, so the background task (`image-metadata.ts`'s parser
+ * native Date type, so the image Ask (`image-metadata.ts`'s parser
  * returns a `Date`) converts at the storage boundary, and
  * `image-capture-derivation.ts` converts back when it reads this column as
  * `DeriveImageCaptureExif`.

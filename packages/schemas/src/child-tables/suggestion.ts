@@ -52,7 +52,6 @@ export const suggestionChildren = [
       {
         key: "evaluationId",
         kind: "uuid",
-        reference: { table: "aiEvaluation", column: "id" },
       },
       { key: "provenance", kind: "jsonb", type: "AiProvenance" },
       {

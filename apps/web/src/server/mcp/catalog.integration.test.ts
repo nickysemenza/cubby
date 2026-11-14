@@ -4,11 +4,13 @@ import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-trans
 import { sql } from "drizzle-orm";
 import { StatusCodes } from "http-status-codes";
 import { createRepoEntity } from "tooling/factories/repo";
+import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { aiAnalysis, photoRunImage } from "~/server/db/schema";
 import { startPhotoInventoryRun } from "~/server/domains/photo-import/repo/run/photo-run";
@@ -18,8 +20,8 @@ import { recordSourceTransactionRecords } from "~/server/domains/transaction-imp
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
+import { decide, recordSubject } from "~/server/kernel/api";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
@@ -224,9 +226,9 @@ describe("MCP catalog", () => {
     const snapshot = async () =>
       await getDb(ctx.db).execute(
         sql`
-      SELECT (SELECT count(*) FROM "Run") AS runs, (SELECT count(*) FROM "Job") AS jobs,
+      SELECT (SELECT count(*) FROM "Run") AS runs, (SELECT count(*) FROM "Pass") AS passes,
         (SELECT count(*) FROM "Suggestion") AS suggestions,
-        (SELECT coalesce(sum(cost),0) FROM "Expense" WHERE "deletedAt" IS NULL) AS money
+        (SELECT coalesce(sum("costMinor"),0) FROM "Expense" WHERE "deletedAt" IS NULL) AS money
     `,
         "objects",
       );
@@ -631,16 +633,25 @@ describe("MCP catalog", () => {
       trigger: "manual",
       status: "completed",
     });
+    await decide(ctx.db, ctx.actor, [
+      {
+        channel: "assignment",
+        kind: "set",
+        subject: recordSubject("product", product.id),
+        field: "categoryId",
+        value: null,
+      },
+    ]);
     await seedFieldSuggestion(
       ctx.db,
       {
         runId,
         entity: "product",
         recordId: product.id,
-        field: "model",
+        field: "categoryId",
         // A Disagreement: the queue lists what needs a person.
-        currentValue: "Synthetic current model",
-        suggestedValue: "Synthetic model",
+        currentValue: null,
+        suggestedValue: taxonomyShortcode("food"),
         confidence: 0.9,
         model: "typesafe/jev",
         kind: "correction",

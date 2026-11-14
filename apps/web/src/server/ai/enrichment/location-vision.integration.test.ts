@@ -8,11 +8,7 @@ import { aiAnalysis, location as locationTable } from "~/server/db/schema";
 import { deleteImages } from "~/server/domains/image/repo/image";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { buildEntityReport } from "~/server/generic/entity-report/repo";
-import { withJobExecution } from "~/server/generic/jobs/context";
-import { claimJob } from "~/server/generic/jobs/jobs.fixtures";
-import { cancelJob } from "~/server/generic/jobs/repo/operator";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
-import { claimContext } from "~/server/generic/jobs/service/jobs";
+import { seedPass, claimPassFixture } from "~/server/kernel/pass.fixtures";
 import {
   createImageFixture,
   createLocationFixture,
@@ -60,17 +56,17 @@ describe("describeLocation previous description", () => {
         purpose: "background",
         trigger: "manual",
       });
-      const saved = await enqueueJob(ctx.db, {
+      const saved = await seedPass(ctx.db, {
         key: `synthetic-location:${location.entityId}`,
-        kind: "location-ai.description.refresh",
-        input: {},
+        name: "location-ai.description.refresh",
+        cursor: {},
       });
-      const claim = await claimJob(ctx.db, saved.id);
+      const claim = await claimPassFixture(ctx.db, saved);
       if (!claim) throw new Error("Expected location Job");
       const ai: LocationVisionAiPort = {
         ...portSaying("Synthetic stale answer"),
         describeLocation: async () => {
-          if (change === "cancelled") await cancelJob(ctx.db, saved.id);
+          if (change === "cancelled") await claim.cancel();
           else
             await getDb(ctx.db)
               .update(locationTable)
@@ -80,18 +76,18 @@ describe("describeLocation previous description", () => {
         },
       };
       await expect(
-        withJobExecution(ctx.db, claim, () =>
+        claim.owned(() =>
           describeLocation(
             ctx.db,
             location.entityId,
             { runId },
             ai,
-            claimContext(ctx.db, claim).fenced,
+            claim.fenced,
           ),
         ),
       ).rejects.toThrow(
         change === "cancelled"
-          ? "Job generation or lease is obsolete"
+          ? "Work claim is obsolete"
           : "Location inputs changed",
       );
       expect(
@@ -124,12 +120,12 @@ describe("describeLocation previous description", () => {
       purpose: "background",
       trigger: "manual",
     });
-    const saved = await enqueueJob(ctx.db, {
+    const saved = await seedPass(ctx.db, {
       key: `synthetic-location-overlap:${location.entityId}`,
-      kind: "location-ai.description.refresh",
-      input: {},
+      name: "location-ai.description.refresh",
+      cursor: {},
     });
-    const claim = await claimJob(ctx.db, saved.id);
+    const claim = await claimPassFixture(ctx.db, saved);
     if (!claim) throw new Error("Expected location Job");
     const deleted = Promise.withResolvers<void>();
     const allowCommit = Promise.withResolvers<void>();
@@ -140,24 +136,26 @@ describe("describeLocation previous description", () => {
     });
     await deleted.promise;
     let settled = false;
-    const analysis = withJobExecution(ctx.db, claim, () =>
-      describeLocation(
-        ctx.db,
-        location.entityId,
-        { runId },
-        portSaying("Synthetic removed-photo answer"),
-        claimContext(ctx.db, claim).fenced,
-      ),
-    ).then(
-      () => {
-        settled = true;
-        return null;
-      },
-      (error: unknown) => {
-        settled = true;
-        return error;
-      },
-    );
+    const analysis = claim
+      .owned(() =>
+        describeLocation(
+          ctx.db,
+          location.entityId,
+          { runId },
+          portSaying("Synthetic removed-photo answer"),
+          claim.fenced,
+        ),
+      )
+      .then(
+        () => {
+          settled = true;
+          return null;
+        },
+        (error: unknown) => {
+          settled = true;
+          return error;
+        },
+      );
     try {
       await expect
         .poll(async () => {

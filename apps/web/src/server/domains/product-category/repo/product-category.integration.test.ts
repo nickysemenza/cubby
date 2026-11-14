@@ -6,6 +6,7 @@ import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { holdFieldsValues } from "~/server/ai/fields/repo/field-decisions";
 import { getDb } from "~/server/db/helpers";
 import {
   product as productTable,
@@ -703,13 +704,24 @@ describe("product category hierarchy", () => {
       },
       ctx.actor,
     );
-    await getDb(ctx.db).transaction((tx) =>
-      insertPayloadWithIdentity(tx, project, "project", {
-        shortcode: testShortcode("project", "PRJ-HSHD"),
-        name: "Household project",
-        defaultTrade: "building",
-      }),
-    );
+    await getDb(ctx.db).transaction(async (tx) => {
+      const held = holdFieldsValues(
+        "project",
+        {
+          shortcode: testShortcode("project", "PRJ-HSHD"),
+          name: "Household project",
+          defaultTrade: "building",
+        } satisfies typeof project.$inferInsert,
+        "create",
+      );
+      const row = await insertPayloadWithIdentity(
+        tx,
+        project,
+        "project",
+        held.values,
+      );
+      await held.settle(tx, ctx.actor, row.id);
+    });
     const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({

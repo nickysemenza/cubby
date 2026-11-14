@@ -135,9 +135,10 @@ async function loadToolMatrixPage(
         shortcode: product.shortcode,
         name: product.name,
         brandName: productBrandNameSql(product.brandId),
-        netLifetimeCost: sql<number>`coalesce(sum(${expense.cost}), 0)`.mapWith(
-          Number,
-        ),
+        netLifetimeCost:
+          sql<number>`(coalesce(sum(${expense.cost}), 0) / 100.0)`.mapWith(
+            Number,
+          ),
       })
       .from(product)
       // LEFT join, and every expense predicate lives in the ON clause. Moving
@@ -173,9 +174,12 @@ async function loadToolMatrixPage(
         productBrandNameSql(product.brandId),
       )
       .having(
-        sql`coalesce(sum(${expense.cost}), 0) >= ${filters.minNetLifetimeCost}`,
+        sql`(coalesce(sum(${expense.cost}), 0) / 100.0) >= ${filters.minNetLifetimeCost}`,
       )
-      .orderBy(desc(sql`coalesce(sum(${expense.cost}), 0)`), asc(product.name)),
+      .orderBy(
+        desc(sql`(coalesce(sum(${expense.cost}), 0) / 100.0)`),
+        asc(product.name),
+      ),
   ]);
 
   // Columns. `buildDashboardProjectWhere` is reused verbatim: the matrix's
@@ -206,7 +210,7 @@ async function loadToolMatrixPage(
           eq(expense.costType, "tools"),
           eq(expense.lineKind, "principal"),
           actualExpense(),
-          gt(expense.cost, 0),
+          gt(expense.cost, 0n),
           notDeleted(expense),
         ),
       )
@@ -294,7 +298,9 @@ async function loadToolMatrix(
               trade: effectiveExpenseTrade,
               expenseCount: count(),
               grossSpend:
-                sql<number>`coalesce(sum(${expense.cost}), 0)`.mapWith(Number),
+                sql<number>`(coalesce(sum(${expense.cost}), 0) / 100.0)`.mapWith(
+                  Number,
+                ),
             })
             .from(expense)
             .where(
@@ -302,7 +308,7 @@ async function loadToolMatrix(
                 inArray(effectiveExpenseProject, columnIds),
                 eq(expense.lineKind, "principal"),
                 actualExpense(),
-                gt(expense.cost, 0),
+                gt(expense.cost, 0n),
                 ne(effectiveExpenseTrade, "planning"),
                 ne(effectiveExpenseTrade, "other"),
                 notDeleted(expense),
@@ -343,7 +349,7 @@ async function loadToolMatrix(
                 eq(expense.lineKind, "principal"),
                 actualExpense(),
                 eq(expense.costType, "tools"),
-                gt(expense.cost, 0),
+                gt(expense.cost, 0n),
                 notDeleted(expense),
               ),
             )

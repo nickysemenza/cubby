@@ -30,4 +30,3 @@ export { UsdaReleaseDurableObject } from "~/server/domains/usda-release/operatio
 
 export { AiGatewayEgressDurableObject } from "~/server/ai/gateway-egress-durable-object";
 export { PurchaseImportRunAgent } from "~/server/domains/purchase-import/operations/agent-host";
-export { CoordinatorGateDurableObject } from "~/server/domains/purchase-import/operations/coordinator-gate-durable-object";

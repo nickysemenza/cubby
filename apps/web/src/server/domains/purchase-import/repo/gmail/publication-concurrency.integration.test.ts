@@ -5,6 +5,7 @@ import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { account } from "~/server/db/auth.schema";
 import {
   databaseForTransaction,
@@ -19,15 +20,13 @@ import {
   emailCandidateObservation,
 } from "~/server/db/schema";
 import { startMailImport } from "~/server/domains/purchase-import/repo/mail-import-run";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { findPgError } from "~/server/errors/db-errors";
-import { withJobExecution } from "~/server/generic/jobs/context";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
-import { classifyJobFailure } from "~/server/generic/jobs/failure";
-import { claimJob } from "~/server/generic/jobs/jobs.fixtures";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { classifyWorkFailure } from "~/server/kernel/failure";
+import { readPasses } from "~/server/kernel/pass.fixtures";
+import { WorkDeferredError } from "~/server/kernel/work-errors";
 import { mailDiscoveryBackpressure } from "~/server/workflows/runs/lifecycle";
+import { withRunPassFixture } from "~/server/workflows/runs/pass.fixtures";
 
 import { syntheticMailImportRun } from "../../service/gmail/execution.fixtures";
 import { ingestGmailMessages } from "../../service/gmail/ingest";
@@ -57,7 +56,7 @@ function signal<T>() {
 describe("Gmail final publication concurrency", () => {
   const ctx = withTestDb();
   afterEach(() => vi.restoreAllMocks());
-  async function fixture() {
+  async function fixture(sameChecksum = false) {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic publication member",
       kind: "member",
@@ -71,20 +70,6 @@ describe("Gmail final publication concurrency", () => {
       accountId: mailboxId,
       userId: ctx.actor.userId,
       updatedAt: new Date(),
-    });
-    const source = await syntheticRetainedMail(ctx.db, {
-      ledgerPartyId: party.id,
-      mailboxId,
-      messageId,
-      sender: null,
-      subject: null,
-      receivedAt: null,
-      rawChecksum: "a".repeat(64),
-      content: {
-        snippet: null,
-        bodyText: "Synthetic frozen original",
-        bodyHtml: null,
-      },
     });
     const message: GmailMessage = {
       id: messageId,
@@ -109,6 +94,22 @@ describe("Gmail final publication concurrency", () => {
         ],
       },
     };
+    const source = await syntheticRetainedMail(ctx.db, {
+      ledgerPartyId: party.id,
+      mailboxId,
+      messageId,
+      sender: null,
+      subject: null,
+      receivedAt: null,
+      rawChecksum: sameChecksum
+        ? await originalChecksum(normalizeMessage(mailboxId, message))
+        : "a".repeat(64),
+      content: {
+        snippet: null,
+        bodyText: "Synthetic frozen original",
+        bodyHtml: null,
+      },
+    });
     const part = normalizeMessage(mailboxId, message).attachments[0];
     if (!part) throw new Error("Synthetic attachment descriptor missing");
     await getDb(ctx.db)
@@ -234,7 +235,7 @@ describe("Gmail final publication concurrency", () => {
         expect(f.storage.delete).not.toHaveBeenCalled();
         expect(f.provider.getAttachment).not.toHaveBeenCalled();
         expect(
-          await readJobs(ctx.db, { kind: "purchase.dispatch" }).then((rows) =>
+          await readPasses(ctx.db, { name: "purchase.dispatch" }).then((rows) =>
             rows.map(({ runId }) => ({ runId })),
           ),
         ).toEqual([{ runId: admitted[0]?.runId }]);
@@ -245,14 +246,11 @@ describe("Gmail final publication concurrency", () => {
     },
   );
   it("preserves a newer same-checksum member resolution while unrelated triage is paused", async () => {
-    const f = await fixture();
+    const f = await fixture(true);
     const checksum = await originalChecksum(
       normalizeMessage(f.mailboxId, await f.provider.getMessage(f.messageId)),
     );
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({ checksum })
-      .where(eq(emailTable.orderMailId, f.source.id));
+
     await getDb(ctx.db)
       .update(orderMail)
       .set({ rawChecksum: checksum })
@@ -386,14 +384,11 @@ describe("Gmail final publication concurrency", () => {
     }
   });
   async function disposalFixture(keyless = false) {
-    const f = await fixture();
+    const f = await fixture(true);
     const checksum = await originalChecksum(
       normalizeMessage(f.mailboxId, await f.provider.getMessage(f.messageId)),
     );
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({ checksum })
-      .where(eq(emailTable.orderMailId, f.source.id));
+
     await getDb(ctx.db)
       .update(orderMail)
       .set({ rawChecksum: checksum })
@@ -467,20 +462,16 @@ describe("Gmail final publication concurrency", () => {
       kind: "member",
       userId: ctx.actor.userId,
     });
-    await enqueueJob(ctx.db, {
-      key: "maintenance.purchase-discovery",
-      kind: "maintenance.purchase-discovery",
+    const execution = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "mail_discovery",
+      status: "running",
+      trigger: "manual",
       input: {
-        kind: "maintenance.purchase-discovery",
-        requestedAt: "2026-01-15T14:00:00.000Z",
+        mailboxId: "synthetic-lock-timeout",
+        scopedQueries: [],
+        executionPolicy: "classification_only",
       },
     });
-    const [queued] = await readJobs(ctx.db, {
-      key: "maintenance.purchase-discovery",
-    });
-    if (!queued) throw new Error("Missing discovery job");
-    const claim = await claimJob(ctx.db, queued.id);
-    if (!claim) throw new Error("Missing discovery claim");
     const held = signal<void>();
     const release = signal<void>();
     const holder = withTransaction(ctx.db, async (tx) => {
@@ -494,7 +485,7 @@ describe("Gmail final publication concurrency", () => {
     let caught: unknown;
     let deferred: Error | undefined;
     try {
-      await withJobExecution(ctx.db, claim, async () => {
+      await withRunPassFixture(ctx.db, execution, async () => {
         try {
           await publishGmailEvidence(
             ctx.db,
@@ -509,7 +500,7 @@ describe("Gmail final publication concurrency", () => {
             async () => null,
           );
         } catch (error) {
-          // The drain classifies this wait while the Job execution is current.
+          // The Pass classifies this wait while its Run execution is current.
           caught = error;
           deferred = mailDiscoveryBackpressure(error as Error);
           throw error;
@@ -522,9 +513,9 @@ describe("Gmail final publication concurrency", () => {
       await holder;
     }
     expect(findPgError(caught)?.code).toBe("55P03");
-    expect(classifyJobFailure(caught as Error).kind).toBe("transient");
-    expect(deferred).toBeInstanceOf(JobDeferredError);
-    if (!(deferred instanceof JobDeferredError))
+    expect(classifyWorkFailure(caught as Error).kind).toBe("transient");
+    expect(deferred).toBeInstanceOf(WorkDeferredError);
+    if (!(deferred instanceof WorkDeferredError))
       throw new Error("Expected a deferred lock wait");
     expect(deferred.reason).toBe("provider_capacity");
     expect(deferred.until.getTime()).toBeGreaterThan(Date.now() + 10_000);

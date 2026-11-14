@@ -23,7 +23,10 @@ import { householdLocalDate } from "~/lib/household-date";
 import type { ProductOwnershipTimeline } from "~/lib/tool-timeline";
 import { UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import type { DrizzleClient } from "~/server/db";
-import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
+import {
+  actualExpense,
+  expenseCostDollarsSql,
+} from "~/server/db/computed/expense-aggregate-sql";
 import { notDeleted } from "~/server/db/helpers";
 import { expense, purchase } from "~/server/db/schema";
 import {
@@ -55,7 +58,7 @@ export const disposalPurchaseIds = () =>
 
 /** A zero-cost negative quantity records an ownership exit, not an acquisition. */
 export const zeroCostOwnershipExitExpensePredicate = (): SQL =>
-  and(eq(expense.cost, 0), lt(expense.productQuantity, 0))!;
+  and(eq(expense.cost, 0n), lt(expense.productQuantity, 0))!;
 
 /**
  * Expenses that close ownership for the stale-stock detector.
@@ -68,7 +71,7 @@ export const zeroCostOwnershipExitExpensePredicate = (): SQL =>
  */
 export const ownershipExitExpensePredicate = (): SQL =>
   or(
-    and(lt(expense.cost, 0), purchaseNetsNegative(expense.purchaseId)),
+    and(lt(expense.cost, 0n), purchaseNetsNegative(expense.purchaseId)),
     zeroCostOwnershipExitExpensePredicate(),
   )!;
 
@@ -79,7 +82,7 @@ export const ownershipExitExpensePredicate = (): SQL =>
  * transactions.
  */
 const purchaseNetsNegative = (purchaseId: SQL | PgColumn): SQL =>
-  sql`(SELECT sum(net."cost") FROM ${expense} net
+  sql`(SELECT sum(net."costMinor") FROM ${expense} net
     WHERE net."purchaseId" = ${purchaseId} AND ${notDeleted("net")} AND net."future" = false) < 0`;
 
 type OwnershipLoadOptions = {
@@ -108,7 +111,7 @@ export async function loadProductOwnershipTimelines(
       productId: expense.productId,
       expenseDate: expense.date,
       purchaseDate: purchase.date,
-      cost: expense.cost,
+      cost: expenseCostDollarsSql(),
       quantity: expense.productQuantity,
       lineKind: expense.lineKind,
     })

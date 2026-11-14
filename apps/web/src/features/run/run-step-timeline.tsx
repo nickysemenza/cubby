@@ -17,7 +17,6 @@ import {
 } from "~/ui/records/record-list";
 import { InspectableValue } from "~/ui/values/inspectable-value";
 
-import { WaitNotice } from "../job/job-status";
 import {
   humanizeKey,
   INPUT_MODE_LABEL,
@@ -26,6 +25,7 @@ import {
   type StepPhase,
 } from "./run-view-model";
 import { StepPurpose } from "./work-definition";
+import { WaitNotice } from "./work-status";
 
 const DOT_STATE = {
   done: "done",

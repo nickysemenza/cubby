@@ -38,6 +38,10 @@ domains between `src/app/` and `src/features/` under different names.
   and capability folders contain only role entries, feature domains
   included. Tests sit beside their file.
   Existing `.server.ts` suffixes stay; nothing keys on them.
+- **Pure policy.** A domain may keep a `policy/` folder beside `repo/`. Policy
+  takes typed plain data and returns decisions without a database handle,
+  network, locks or an implicit clock. Repository code loads its inputs and
+  applies its output. Table imports used only for row types are erased.
 - **Layer direction.** `cubby/domain-layers` (oxlint) allows imports only to the
   same or a lower role — `operations` → `service` → `repo` → `db` — in any
   domain. The entry points `http/`, `mcp/`, `worker/`, and `workflows/` import like

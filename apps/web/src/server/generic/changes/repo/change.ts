@@ -8,7 +8,6 @@ import {
   repositoryTransaction,
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
-import { markWorkPublicationDirty } from "~/server/generic/work-queue/repo/work-publication";
 
 /**
  * Reader notifications. Derived work needs no registration here: generated
@@ -45,8 +44,6 @@ export async function recordChange(
     return;
   }
   if (change.ringFromBackground || inHttpRequest()) {
-    // The member's next Work read republishes from this write's results.
-    await repositoryAfterCommit(db, markWorkPublicationDirty);
     await recordCommittedChanges(
       db,
       Object.fromEntries(
@@ -62,9 +59,9 @@ export async function recordChange(
     db,
     async (tx) => {
       await repositoryAfterCommit(tx, async () => {
-        const { wakeJobs } =
+        const { wakeKernel } =
           await import("~/server/workflows/background-tasks/publish");
-        await wakeJobs({ source: "repository.change" });
+        await wakeKernel({ source: "repository.change" });
       });
     },
     { key: "derived:wake" },

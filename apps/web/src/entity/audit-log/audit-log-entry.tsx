@@ -106,7 +106,7 @@ function isChangeFieldLabel(
   return field in CHANGE_FIELD_LABELS;
 }
 
-function humanizeChangeField(field: string): string {
+export function auditChangeFieldLabel(field: string): string {
   return (
     (isChangeFieldLabel(field) ? CHANGE_FIELD_LABELS[field] : undefined) ??
     field
@@ -253,7 +253,7 @@ function LedgerChangeSummary({
       {shown.map(({ field, from, to }) => (
         <Row key={field} align="baseline" gap="tight" className="min-w-0">
           <span className="shrink-0 text-muted-foreground">
-            {humanizeChangeField(field)}
+            {auditChangeFieldLabel(field)}
           </span>
           {from && (
             <LedgerValueText
@@ -495,16 +495,23 @@ export function AuditRecordRow({
         </span>
       }
       detail={
-        changes && changedCount > shownCount ? (
+        entry.provenance || (changes && changedCount > shownCount) ? (
           <RecordDetail
             summary={
-              shownCount > 0
-                ? `${countLabel(changedCount - shownCount, "more field")}`
-                : `${countLabel(changedCount, "field")} changed`
+              entry.provenance
+                ? "How Cubby changed this"
+                : shownCount > 0
+                  ? `${countLabel(changedCount - shownCount, "more field")}`
+                  : `${countLabel(changedCount, "field")} changed`
             }
           >
             <Panel tone="muted">
-              <ChangesList changes={changes} />
+              {changes ? <ChangesList changes={changes} /> : null}
+              {entry.provenance ? (
+                <pre className="min-w-0 text-xs break-all whitespace-pre-wrap">
+                  {JSON.stringify(entry.provenance, null, 2)}
+                </pre>
+              ) : null}
             </Panel>
           </RecordDetail>
         ) : null

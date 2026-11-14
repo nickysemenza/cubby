@@ -6,7 +6,7 @@ import type {
 } from "@cubby/schemas/photo-import-run";
 import { getErrorMessage } from "@cubby/shared";
 import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
@@ -14,11 +14,8 @@ import {
   notDeleted,
   withTransactionDatabase,
 } from "~/server/db/helpers";
-import { suggestionTable, product } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
-import { assessRecommendation } from "~/server/generic/suggestions/repo/suggestion-recommendation";
 
 import {
   photoProductCandidates,
@@ -55,27 +52,25 @@ export async function rejectPhotoProductCandidate(
     );
     if (!proposal || proposal.state !== "proposed")
       throw new Error("Proposed photo group was not found");
-    await resolveOrThrow(txDb, "product", input.productId);
+    const productId = await resolveOrThrow(txDb, "product", input.productId);
+    const runId = await resolveOrThrow(txDb, "run", input.runId);
+    const { decide } = await import("~/server/kernel/api");
     for (const scope of scopes(proposal)) {
-      const reference = await assessRecommendation(
+      const imageId = await resolveOrThrow(
         txDb,
-        input.runId,
-        scope,
-        [input.productId],
-        { productId: input.productId },
-        "run",
+        "image",
+        scope.slice("photo-group-image:".length),
       );
-      await reviewSuggestion(
-        txDb,
-        { ...context, db: txDb },
+      await decide(txDb, context.actorContext, [
         {
-          ...reference,
-          operationId: `${input.operationId}:${scope}`,
-          verdict: "wrong",
-          intent: "history",
-          reason: "Not this one",
+          channel: "veto",
+          kind: "veto",
+          subject: `photo-candidate/${runId}/${imageId}`,
+          field: "product",
+          value: productId,
+          proposalHash: `${input.operationId}:${scope}`,
         },
-      );
+      ]);
     }
     return { ...review, results: [], frozenGroupKeys: [] };
   });
@@ -83,29 +78,18 @@ export async function rejectPhotoProductCandidate(
 
 async function loadRunRejections(db: Database, runId: string) {
   const runUuid = await resolveOrThrow(db, "run", runId);
-  return getDb(db)
-    .select({
-      scope: suggestionTable.suppression,
-      id: product.shortcode,
-      name: product.name,
-    })
-    .from(suggestionTable)
-    .innerJoin(
-      product,
-      and(
-        sql`${suggestionTable.evidence}->>'productId' = ${product.shortcode}`,
-        notDeleted(product),
-      ),
-    )
-    .where(
-      and(
-        eq(suggestionTable.entity, "run"),
-        eq(suggestionTable.recordId, runUuid),
-        eq(suggestionTable.family, "recommendation"),
-        eq(suggestionTable.active, true),
-        isNotNull(suggestionTable.suppression),
-      ),
-    );
+  const rows = await getDb(db).execute<{
+    scope: { scope: string };
+    id: string;
+    name: string;
+  }>(sql`
+    SELECT jsonb_build_object(${"scope"}::text, ${"photo-group-image:"} || image.shortcode) AS scope,
+      p.shortcode AS id, p.name
+    FROM (SELECT DISTINCT ON (subject, slot) * FROM "Decision" WHERE subject LIKE ${`photo-candidate/${runUuid}/%`}
+      AND channel=${"veto"} AND field=${"product"} ORDER BY subject, slot, at DESC, id DESC) d
+    JOIN "Product" p ON p.id::text=d.value #>> '{}' JOIN "Image" image ON image.id::text=split_part(d.subject, '/', 3)
+    WHERE d.kind=${"veto"} AND ${notDeleted("p")}`);
+  return rows.rows;
 }
 
 export async function loadRejectedPhotoProductCandidates(

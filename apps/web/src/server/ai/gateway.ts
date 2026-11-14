@@ -19,8 +19,16 @@ import type { GatewayProvider } from "@cubby/shared/ai/models";
 import { env } from "~/env";
 import { chatGptInference } from "~/server/ai/chatgpt/client";
 import { getTestAiGateway, getAiGatewayEgress } from "~/server/cf-env";
+import {
+  markTransmitted,
+  refusedBeforeSending,
+} from "~/server/kernel/produce-ledger";
 
-import { coordinatedGatewayRequest } from "./gateway-egress-client";
+import {
+  coordinatedGatewayRequest,
+  failedGatewaySend,
+  receivedGatewayResponse,
+} from "./gateway-egress-client";
 
 /**
  * A call's gateway labels (`feature`, `operation`, optional `entityKind`);
@@ -113,6 +121,15 @@ export function gatewayEnvironment(): AiGatewayEnvironment {
   });
 }
 
+/** A pre-request admission refusal sent nothing; the Ask that waits on it re-queues. */
+async function admission<T>(admit: () => Promise<T>): Promise<T> {
+  try {
+    return await admit();
+  } catch (error) {
+    throw refusedBeforeSending(error);
+  }
+}
+
 /**
  * The one AI Gateway transport: a `fetch` any provider SDK can be handed.
  *
@@ -145,29 +162,39 @@ export function gatewayFetch(
     onRecoveredErrorResponse: opts.onRecoveredErrorResponse,
     onTransport: opts.onTransport,
     requestTimeoutMs: opts.requestTimeoutMs,
-    chatGpt: chatGptInference,
+    chatGpt: (body, options) =>
+      chatGptInference(body, {
+        ...options,
+        onSelected: () => {
+          markTransmitted();
+          options?.onSelected?.();
+        },
+      }),
     subscriptionRequired: opts.subscriptionRequired,
     subscriptionFallback: opts.subscriptionFallback,
     flex: opts.flex,
-    beforePaidRequest: async (request) => {
-      await (
-        await import("~/server/workflows/runs/execution")
-      ).assertWorkflowCurrent();
-      await opts.beforePaidRequest?.(request);
-    },
-    beforePlanRequest: async (request) => {
-      await (
-        await import("~/server/workflows/runs/execution")
-      ).assertWorkflowCurrent();
-      return (await opts.beforePlanRequest?.(request)) ?? null;
-    },
+    beforePaidRequest: (request) =>
+      admission(async () => {
+        await (
+          await import("~/server/workflows/runs/execution")
+        ).assertWorkflowCurrent();
+        await opts.beforePaidRequest?.(request);
+      }),
+    beforePlanRequest: (request) =>
+      admission(async () => {
+        await (
+          await import("~/server/workflows/runs/execution")
+        ).assertWorkflowCurrent();
+        return (await opts.beforePlanRequest?.(request)) ?? null;
+      }),
     // Credits have no budget, but a workflow that lost its Job still must not
     // transmit on them.
-    beforeCreditRequest: async () => {
-      await (
-        await import("~/server/workflows/runs/execution")
-      ).assertWorkflowCurrent();
-    },
+    beforeCreditRequest: () =>
+      admission(async () => {
+        await (
+          await import("~/server/workflows/runs/execution")
+        ).assertWorkflowCurrent();
+      }),
     testPeer: () => {
       const testGateway = getTestAiGateway();
       if (!testGateway) return undefined;
@@ -179,14 +206,13 @@ export function gatewayFetch(
           "cf-aig-metadata",
           JSON.stringify(controls.metadata),
         );
-        return testGateway.fetch(
-          `https://ai-gateway.test/${provider}/${request.endpoint}`,
-          {
+        return testGateway
+          .fetch(`https://ai-gateway.test/${provider}/${request.endpoint}`, {
             method: request.init?.method ?? "POST",
             headers: request.headers,
             body: request.init?.body,
-          },
-        );
+          })
+          .then(receivedGatewayResponse, failedGatewaySend);
       };
     },
     // Every runtime binds the egress object; it owns admission and holds.
@@ -196,7 +222,12 @@ export function gatewayFetch(
       );
       if (!egress)
         throw new Error("AI Gateway requires the AI_GATEWAY_EGRESS binding");
-      return coordinatedGatewayRequest(egress, provider, request, controls);
+      return coordinatedGatewayRequest(
+        egress,
+        provider,
+        request,
+        controls,
+      ).then(receivedGatewayResponse, failedGatewaySend);
     },
   });
 }

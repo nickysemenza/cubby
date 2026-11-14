@@ -65,7 +65,6 @@ import {
   resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { nameOrAliasSql } from "~/server/lib/name-alias-match";
 
 /**
@@ -362,22 +361,32 @@ async function resolveProduct(
         changes,
         actor,
       );
-      for (const suggestion of suggestions) {
-        await reviewSuggestion(
-          txDb,
-          { ...crud, actorContext: actor },
-          {
-            suggestionId: suggestion.id,
-            operationId: `photo-approval:${input.runId}:${input.groupKey}:${suggestion.field}`,
-            verdict: "correct",
-            intent: "apply",
-            application: {
-              kind: "saved_field",
-              recordId: input.product.existingId,
-            },
-          },
-        );
-      }
+      const { fieldPlan } = await import("~/server/ai/fields/repo/plan");
+      const decisions = await Promise.all(
+        Object.entries(changes)
+          .filter(([, value]) => value !== undefined)
+          .map(async ([field, value]) => {
+            const reference = fieldPlan("product", field)?.field.reference;
+            const stored =
+              reference &&
+              typeof value === "string" &&
+              !z.uuid().safeParse(value).success
+                ? await resolveOrThrow(txDb, reference, value)
+                : value;
+            return {
+              channel: "assignment" as const,
+              kind: stored === null ? ("none" as const) : ("set" as const),
+              subject: `product:${id}`,
+              field,
+              value: z.json().parse(stored),
+              proposalHash:
+                suggestions.find((item) => item.field === field)?.id ?? null,
+            };
+          }),
+      );
+      await (
+        await import("~/server/kernel/api")
+      ).decide(txDb, actor, decisions);
       return { id: input.product.existingId, fieldSuggestions: suggestions };
     }
     return { id: input.product.existingId };
@@ -623,6 +632,14 @@ async function completeRunIfDone(
         endedAt: now,
       })
       .where(eq(runTable.id, scope.public.runId));
+    await (
+      await import("~/server/kernel/api")
+    ).emitWrites(txDb, {
+      table: runTable,
+      entity: "run",
+      ids: [scope.public.runId],
+      columns: ["status", "endedAt", "failureCode"],
+    });
   } else {
     await getDb(txDb)
       .update(runTable)
@@ -857,6 +874,11 @@ export async function commitPhotoGroup(
     },
     () =>
       withTransactionDatabase(db, async (transactionDb) => {
+        // The commit's record writes dirty kernel scopes: the gate before
+        // its Run and target row locks.
+        await (
+          await import("~/server/kernel/api")
+        ).enterHouseholdGate(transactionDb);
         const result = await doCommit(
           transactionDb,
           servicesFor,

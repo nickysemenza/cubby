@@ -10,7 +10,7 @@ import type { RawRecipeOutput as RecipeOut } from "@cubby/schemas/recipe-raw-rea
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
-import { validateRecipeFlowPlan } from "./validation";
+import { validateRecipeFlowPlan } from "../../repo/recipe-flow-validation";
 
 const SECTION_ID = "00000000-0000-4000-8000-000000000001";
 const FLOUR_USAGE = "00000000-0000-4000-8000-000000000002";

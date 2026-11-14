@@ -920,14 +920,25 @@ export const { definition, readSchemas } = defineEntityModel({
 
 export default defineEntity(
   definition,
-  (r) => [
-    r.field("plantId").named("plant", "Plant"),
-    r.field("sourceProductId").named("source-product", "Source product"),
-    r.field("locationId").named("location", "Current location"),
-    r.field("taskId").named("task", "Task"),
-    r
-      .link("gardenEntryPlanting", "incoming")
-      .named("entries", "Journal entries"),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(r.field("plantId").named("plant", "Plant"), "plant.plantings"),
+      r.declare(
+        r.field("sourceProductId").named("source-product", "Source product"),
+        "product.plantings",
+      ),
+      r.declare(
+        r.field("locationId").named("location", "Current location"),
+        "location.plantings",
+      ),
+      r.declare(r.field("taskId").named("task", "Task"), "task.plantings"),
+      r.declare(
+        r
+          .link("gardenEntryPlanting", "incoming")
+          .named("entries", "Journal entries"),
+        "gardenEntry.plantings",
+      ),
+    ],
+  }),
   readSchemas,
 );

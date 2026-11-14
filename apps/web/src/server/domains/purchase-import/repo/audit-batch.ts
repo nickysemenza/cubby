@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import type { PurchaseAuditRenderedBatch } from "~/server/ai/policy/prompts/purchase-import";
 import type { Database } from "~/server/db";
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
@@ -77,7 +78,7 @@ export async function loadPurchaseAuditBatch(
         purchaseId: expense.purchaseId,
         id: expense.id,
         name: expense.name,
-        amount: expense.cost,
+        amount: expenseCostDollarsSql(),
         lineKind: expense.lineKind,
         lineBasis: expense.lineBasis,
         costType: expense.costType,

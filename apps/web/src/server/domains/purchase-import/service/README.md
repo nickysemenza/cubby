@@ -31,8 +31,8 @@ pending: nothing here starts Product research.
    held work for review.
 
 Mailbox admission, paging and recovery semantics are in
-[Mailbox admission and coverage](#mailbox-admission-and-coverage); the Job
-contract underneath is [Durable Jobs](../../../../../../../docs/jobs.md).
+[Mailbox admission and coverage](#mailbox-admission-and-coverage); the kernel
+claim contract is [Durable Jobs](../../../../../../../docs/jobs.md).
 
 ### Discovery and classification
 
@@ -90,7 +90,7 @@ coverage settles its processed messages without rewinding or crediting that
 search twice. Member-controlled scans still refuse changed selected coverage.
 Fresh automatic discovery and its continuations yield the mailbox slot to a
 retained scheduled discovery whose failed execution has a runnable recovery
-Job. The existing Job keeps its backoff, frozen scope and evidence; only its
+Pass. The existing Pass keeps its backoff, frozen scope and evidence; only its
 current fenced claim restores the Run. Paused, cancelled, retired or superseded
 work does not reserve this recovery admission, and explicit paid launches keep
 their funding admission.
@@ -105,9 +105,9 @@ guard preserves the capacity and exclusion rules. Only current
 connected-mailbox discovery reconciles the canonical query roster; individual
 query lanes cannot prune or restore other objectives.
 
-An accepted retained Retry keeps its Run, frozen page and canonical Job. If its
+An accepted retained Retry keeps its Run, frozen page and canonical Pass. If its
 resource is occupied it reads as queued automatic work, using the paused state
-with a specific admission reason, and its fenced Job claim admits it later.
+with a specific admission reason, and its fenced Pass claim admits it later.
 Repeated capacity deferrals consume no failure attempts.
 
 - Eligible recovery or an older yielded query reserves one vacancy; fresh
@@ -120,8 +120,8 @@ Repeated capacity deferrals consume no failure attempts.
   Normal history demand coalesces into one queued Run; its older exclusive
   request also drains query owners instead of waiting behind recovery
   callbacks.
-- Running owners renew admission at the next Job claim, without interrupting
-  an in-flight request. An owner restored from the queue performs one Job
+- Running owners renew admission at the next Pass claim, without interrupting
+  an in-flight request. An owner restored from the queue performs one Pass
   quantum before renewing again, preventing pause/resume livelock.
 - A targeted page can park between five-message batches while retaining its
   position against same-query demand; ambiguous or same-query waiters keep that
@@ -137,24 +137,24 @@ Repeated capacity deferrals consume no failure attempts.
 
 Creation, generation and wake intent commit together. A manual paid-start
 action grants one Run's allowance and never duplicates it across parallel
-lanes. Cancellation removes demand, and a missing or terminal Job leaves the
+lanes. Cancellation removes demand, and a missing or terminal Pass leaves the
 Run visible for recovery instead of hiding it as an automatic wait.
 
-Discovery acquires at most five messages from its frozen provider page per Job
+Discovery acquires at most five messages from its frozen provider page per Pass
 claim. Each lane fetches and publishes in source order without buffering
-several full originals, and each claim runs in its own permit with that
-permit's two database sockets. A durable message offset resumes the remaining
+several full originals; the kernel runner owns its invocation
+and database resources. A durable message offset resumes the remaining
 messages without replaying the completed prefix; an absent offset on a
 retained page means zero.
 
 Gmail throttling and transient provider failures retain their raw diagnostics
 and retry time. The mailbox cursor shares that cooldown across independent
-clients; a Job defers before another provider request without spending
+clients; the Pass waits before another provider request without spending
 attempts. Throttling and server responses with Retry-After reach the shared
 cooldown owner before any further HTTP attempt, beyond the client's short
 in-call retry bound; only server failures without a deadline retry within the
 client. An aborted discovery database snapshot or lock/capacity conflict defers
-the canonical Job with its original cursor and failure allowance. Raw database
+the canonical Pass with its original cursor and failure allowance. Raw database
 diagnostics remain in workflow logs; cancellation and lease loss still stop
 that invocation instead of creating new demand.
 
@@ -181,23 +181,17 @@ Import admission commits child dispatch intent atomically. An already-failed
 child remains visible for its own retry and does not fail discovery or rewind
 the mailbox page. Automatic continuations defer to an existing funding-paused
 discovery for the same member and mailbox. Completing a retained page leaves the
-next acquisition with that owner and its existing resume Job. Continuation
+next acquisition with that owner and its retained funding wait. Continuation
 idempotency uses `mailbox-continuation:<completed Run id>`; descendant
 readbacks must follow that key as well as explicit parent links. The Run
 completes its one page, not the whole query. Targeted pages carry no history
 events, so history recovery still requires its numeric coverage proof.
-Discovery page and completion receipts use the universal Job generation,
+Discovery page and completion receipts use the Run Pass generation,
 matching the progress owner's fence.
 
-Job logs report Mail phase durations for listing, fetching, acquisition,
-classification, attachments, candidate previews, evidence publication,
-progress, import admission and checkpointing. Acquisition includes its nested
-classification, attachment and publication phases, so these durations must not
-be added together. Timings accumulate across the messages one claim handles,
-include awaited I/O and failed work, and contain only static phase names and
-milliseconds; they measure neither Worker CPU nor heap. Job `dueLagMs` is claim
-time minus the stored `availableAt`, clamped to zero; on an expired-lease
-reclaim it includes the previous invocation and lease wait.
+Run progress keeps the frozen page's counts and acquisition phase. The Pass
+keeps its next time, wait cause, attempts, claim deadline and raw failure.
+Bounded successful-page duration samples supply Run queue pace and ETA.
 
 ### Reclassification
 
@@ -234,7 +228,7 @@ hydration.
 
 Admission (`mail-import-run.ts`) freezes up to 50 Emails' checksums into one
 `mail_import` Run with a RunTarget per Email, assigns ownership through
-`Email.runId`, and dispatches `start_or_resume` to a `purchase.dispatch` Job in
+`Email.runId`, and dispatches `start_or_resume` to the `purchase.dispatch` Pass in
 the admission transaction (`dispatch.ts`). Each paid call checks the Run is
 still executable and draws from the household AI budget
 (`execution-transport.ts`, `server/ai/budget.ts`).
@@ -261,11 +255,12 @@ actions its manifest mounts (`packages/schemas/src/import-run-agent.ts`), called
 in process through the MCP handler with a run-bound delegation
 (`agent-services.ts` `mcpFetch`). Instructions:
 `.agents/skills/purchase-import/references/mail-import.md` via
-`server/domains/purchase-agent/service/import-run-workflows.ts`. The host runs
-every alarm, dispatch and prompt inside a household coordinator turn
-(`coordinator-turn.ts`) granted by the `COORDINATOR_GATE` Durable Object
-(`coordinator-gate.ts`); without a free turn it loads nothing and waits in the
-gate's queue, and pi's services refuse database work once the turn is lost
+`server/domains/purchase-agent/service/import-run-workflows.ts`. The host runs agent work under the Run's `purchase.dispatch` kernel Pass.
+Its six-slot `household.agent-turns` partition bounds the household's live
+coordinators. Every model turn uses a hosted `withAsk` with Run and Pass
+identity. The Pass holds its slot through tools and lifecycle work; host
+services fence on its claim token. The Durable Object retains Pi's transcript,
+alarms and durable prompts, and an alarm requests a Pass before loading Pi
 ([budget](../../../../../../../docs/infrastructure.md#background-connection-budget)).
 
 Memoized claims publish host-owned progress, heartbeat and work samples.
@@ -498,7 +493,7 @@ still holding a `researching` Email.
 ### Transcript retention
 
 Transcripts are preserved until an explicit member-authorized retirement
-([policy](../../../../../../../docs/jobs.md#coordinator-transcript-retention)).
+([policy](../../../../../../../docs/jobs.md#wakes-and-progress)).
 Authorized disposal destroys settled Runs' transcripts (`run-retirement.ts`),
 oldest first in bounded batches; the destroying call and an immediate
 follow-up that reaches a fresh, empty coordinator let one pass stamp
@@ -531,16 +526,14 @@ cache. Bindings, the OAuth client and deploy constraints are in
   `photo-inventory:<Run.id>` per Run (`importRunAgentIdentity`). pi keeps the
   transcript, inbox and tasks in the object's SQLite, and lifecycle jobs wake it
   through its alarm after eviction.
-- The `purchase.dispatch` Job handler, admitted in the Run transaction, fences
+- The `purchase.dispatch` Pass is admitted in the Run transaction and fences
   duplicate and late starts with the Run's dispatch generation and
-  `coordinatorStartedAt`; stable operation IDs survive lost replies. The Job
-  completes once the coordinator accepts a stable operation identity, so an
-  acknowledged coordinator is never submitted again by retrying a start Job.
-  The Job owns bounded retries and raw terminal errors; the coordinator owns
-  conversation settlement and its SDK lifecycle alarms. Funding pauses use the
-  [funding-resume Job](../../../../../../../docs/jobs.md#funding-waits); domain
-  resumption regenerates funding-paused purchase dispatches, and manual pauses
-  stay stopped.
+  `coordinatorStartedAt`. Stable operation IDs survive lost replies. Its cursor
+  retains pending events, and its live claim spans active coordinator work.
+  The Pass owns bounded retries and raw errors; the coordinator keeps its
+  transcript, settlement and SDK alarms. Funding pauses use kernel
+  [funding waits](../../../../../../../docs/jobs.md#waits-and-limits); domain
+  resumption regenerates funding-paused dispatches. Manual pauses stay stopped.
 - Every model call goes through AI Gateway `cubby` on the Worker's `AI`
   binding, by the shared pi-ai providers (`@cubby/shared/ai/pi-providers`). The
   gateway shim disables parallel tool calls: pi ends a run on a terminating

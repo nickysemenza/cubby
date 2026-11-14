@@ -1,3 +1,5 @@
+import { insertFieldsFixture } from "~/server/ai/fields/fields.fixtures";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { and, eq, isNull } from "drizzle-orm";
 
 import { expense } from "~/server/db/schema";
@@ -26,14 +28,14 @@ test.describe("split and attach, with the server's rules", () => {
     const vendor = await insertWithShortcode(db, "vendor", {
       name: `Synthetic split vendor ${stamp}`,
     });
-    const target = await insertWithShortcode(db, "purchase", {
+    const target = await insertFieldsFixture(db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-01",
     });
-    const source = await insertWithShortcode(db, "expense", {
+    const source = await insertFieldsFixture(db, "expense", {
       ...line,
       name: `Synthetic kit ${stamp}`,
-      cost: 30,
+      cost: 3000n,
       purchaseId: target.id,
     });
 
@@ -73,7 +75,7 @@ test.describe("split and attach, with the server's rules", () => {
     await expect(page).toHaveURL(new RegExp(`/purchases/${target.shortcode}`));
 
     const live = await getDb(db)
-      .select({ cost: expense.cost })
+      .select({ cost: minorToDollarsSql(expense.cost, "float8") })
       .from(expense)
       .where(and(eq(expense.purchaseId, target.id), isNull(expense.deletedAt)));
     expect(live.map((row) => row.cost).sort()).toEqual([10, 20]);
@@ -93,19 +95,19 @@ test.describe("split and attach, with the server's rules", () => {
     const vendor = await insertWithShortcode(db, "vendor", {
       name: `Synthetic attach vendor ${stamp}`,
     });
-    const target = await insertWithShortcode(db, "purchase", {
+    const target = await insertFieldsFixture(db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-01",
     });
-    const free = await insertWithShortcode(db, "expense", {
+    const free = await insertFieldsFixture(db, "expense", {
       ...line,
       name: `Synthetic loose board ${stamp}`,
-      cost: 12.5,
+      cost: 1250n,
     });
-    const untouched = await insertWithShortcode(db, "expense", {
+    const untouched = await insertFieldsFixture(db, "expense", {
       ...line,
       name: `Synthetic other board ${stamp}`,
-      cost: 3,
+      cost: 300n,
     });
 
     await gotoDetailActions(

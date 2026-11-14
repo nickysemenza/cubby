@@ -52,9 +52,9 @@ const projectExpenseStats = async (
     .execute<ProjectExpenseStatsRow>(sql`
       SELECT allocation."projectId",
         (coalesce(sum(allocation."attributedCents"::bigint), 0) / 100.0)::double precision AS "spent",
-        (coalesce(sum(allocation."attributedCents"::bigint) filter (where ${sql.raw(actualExpenseSql("e"))} and e."cost" >= 0), 0) / 100.0)::double precision AS "actualSpent",
+        (coalesce(sum(allocation."attributedCents"::bigint) filter (where ${sql.raw(actualExpenseSql("e"))} and e."costMinor" >= 0), 0) / 100.0)::double precision AS "actualSpent",
         (coalesce(sum(allocation."attributedCents"::bigint) filter (where ${sql.raw(plannedExpenseSql("e"))}), 0) / 100.0)::double precision AS "committedSpent",
-        (coalesce(sum(-allocation."attributedCents"::bigint) filter (where ${sql.raw(actualExpenseSql("e"))} and e."cost" < 0), 0) / 100.0)::double precision AS "credits",
+        (coalesce(sum(-allocation."attributedCents"::bigint) filter (where ${sql.raw(actualExpenseSql("e"))} and e."costMinor" < 0), 0) / 100.0)::double precision AS "credits",
         count(distinct allocation."expenseId")::int AS "expenseCount",
         min(e."date") AS "contentStart", max(e."date") AS "contentEnd"
       FROM (${expenseDerivedReadSql("projects")}) allocation

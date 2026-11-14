@@ -21,7 +21,7 @@ import type { EdgeRole } from "@cubby/schemas/entity-integrity";
 import {
   ENTITY_LINK_KINDS,
   entityLinkKinds,
-} from "@cubby/schemas/entity-links";
+} from "@cubby/schemas/entity-link-catalog";
 import {
   generatedEntityListFields,
   type GeneratedRowSet,
@@ -43,12 +43,10 @@ import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import {
-  ENTITY_EDGE_OWNERS,
-  type EntityEdgeOwner,
-} from "~/server/db/entity-edge-owners";
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
+import type { EntityEdgeOwner } from "~/server/db/entity-edge-types";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
+import { ENTITY_EDGE_OWNERS } from "~/server/db/generated/declared-edges.gen";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { uuidArrayParam } from "~/server/db/helpers/query";

@@ -1,17 +1,10 @@
-import {
-  seedFieldSuggestion,
-  stampCurrentFieldProvenance,
-} from "tooling/shared-suggestion-fixtures";
+import { applyFieldAnswerFixture } from "~/server/ai/fields/fields.fixtures";
 import { eq, inArray } from "drizzle-orm";
-
 import { getDb } from "~/server/db/helpers";
+import { decision } from "~/server/db/kernel-schema";
 import { product as productTable } from "~/server/db/schema";
-
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
-import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { applyAutomaticRules } from "~/server/generic/suggestions/repo/automatic-application";
-import { buildCrudServices } from "~/server/http/request-context";
 
 import {
   createEntityFixture,
@@ -21,69 +14,100 @@ import {
 import { gotoAuthenticatedPage, uniqueName } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
-// Failure modes: Changes by Cubby omits a value Cubby set on its own, or
-// "Wrong, clear it" leaves the wrong value saved.
-test("Changes by Cubby lists a value Cubby set and Wrong, clear it empties the field", async ({
+// Kernel field applies retain their exact scope, rule version and inputs in the audit feed.
+test("Changes by Cubby lists a reconciled field and its provenance", async ({
   page,
 }, testInfo) => {
-  test.slow();
-  const { db, actor } = await createEvidenceHarnessContext(page);
-  const categoryName = uniqueName(testInfo, "Synthetic cleared category");
+  const { db } = await createEvidenceHarnessContext(page);
+  const categoryName = uniqueName(testInfo, "Synthetic category");
   const category = await createEntityFixture(page, "productCategory", {
     name: categoryName,
   });
-  const productName = uniqueName(testInfo, "Synthetic cleared drill");
+  const productName = uniqueName(testInfo, "Synthetic drill");
   const item = await createEntityFixture(page, "product", {
     name: productName,
   });
   const itemId = await resolveOrThrow(db, "product", item.id);
-  const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
-  const suggestion = await seedFieldSuggestion(db, {
-    runId,
+  await applyFieldAnswerFixture(db, {
     entity: "product",
     recordId: itemId,
     field: "categoryId",
-    currentValue: null,
-    suggestedValue: category.id,
-    confidence: 0.97,
-    runnerUpValue: null,
-    runnerUpConfidence: null,
-    model: "typesafe/jev",
-    kind: "addition",
-    status: "pending",
+    value: await resolveOrThrow(db, "productCategory", category.id),
   });
-  const categoryOf = async () =>
+  expect(
     (
       await getDb(db)
         .select({ categoryId: productTable.categoryId })
         .from(productTable)
         .where(eq(productTable.id, itemId))
-    )[0]?.categoryId ?? null;
-  await stampCurrentFieldProvenance(db, suggestion, "product", "categoryId");
-  const applied = await applyAutomaticRules(db, [suggestion.id], {
-    context: buildCrudServices,
-  });
-  expect(applied.applied).toHaveLength(1);
-  expect(await categoryOf()).toBe(
-    await resolveOrThrow(db, "productCategory", category.id),
-  );
-
+    )[0]?.categoryId,
+  ).toBe(await resolveOrThrow(db, "productCategory", category.id));
   await gotoAuthenticatedPage(page, `/automatic-decisions?record=${item.id}`);
-  const feed = page.getByRole("region", {
-    name: "Changes by Cubby",
+  const feed = page.getByRole("list", {
+    name: "Activity",
     exact: true,
   });
   await expect(feed.getByRole("link", { name: productName })).toBeVisible();
-  await expect(feed).toContainText(categoryName);
-  await expect(feed).toContainText("97%");
   await feed
-    .getByRole("button", { name: /^Wrong, clear it/ })
+    .getByText("How Cubby changed this", { exact: true })
     .first()
     .click();
+  await expect(feed).toContainText("fields");
+  await expect(feed).toContainText("version");
   await expect(
-    feed.getByText("Cleared. Cubby will try again.", { exact: true }),
+    page.getByRole("combobox", { name: "Change family" }),
   ).toBeVisible();
-  await expect.poll(categoryOf).toBeNull();
+  await page.screenshot({
+    path: testInfo.outputPath("changes-by-cubby.png"),
+    fullPage: true,
+  });
+  await feed.getByRole("button", { name: "Keep", exact: true }).first().click();
+  await expect(feed).toContainText("Decision recorded.");
+  const kept = await getDb(db)
+    .select()
+    .from(decision)
+    .where(eq(decision.subject, `product:${itemId}`));
+  expect(kept).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        channel: "assignment",
+        kind: "set",
+        field: "categoryId",
+      }),
+    ]),
+  );
+  const rejected = await createEntityFixture(page, "product", {
+    name: uniqueName(testInfo, "Synthetic incorrect category"),
+  });
+  const rejectedId = await resolveOrThrow(db, "product", rejected.id);
+  await applyFieldAnswerFixture(db, {
+    entity: "product",
+    recordId: rejectedId,
+    field: "categoryId",
+    value: await resolveOrThrow(db, "productCategory", category.id),
+  });
+  await gotoAuthenticatedPage(
+    page,
+    `/automatic-decisions?record=${rejected.id}`,
+  );
+  await feed
+    .getByRole("button", { name: "Wrong, clear it", exact: true })
+    .click();
+  await expect(feed).toContainText("Decision recorded.");
+  expect(
+    (
+      await getDb(db)
+        .select({ categoryId: productTable.categoryId })
+        .from(productTable)
+        .where(eq(productTable.id, rejectedId))
+    )[0]?.categoryId,
+  ).toBeNull();
+  expect(
+    await getDb(db)
+      .select({ channel: decision.channel, kind: decision.kind })
+      .from(decision)
+      .where(eq(decision.subject, `product:${rejectedId}`)),
+  ).toContainEqual({ channel: "veto", kind: "veto" });
 });
 
 // Identity conflicts cannot merge; matching pairs still require survivor and impact confirmation.

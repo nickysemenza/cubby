@@ -3,7 +3,6 @@ import {
   imageRawDetailOut as rawImageDetail,
   type ImageRawDetailOut as RawImageDetail,
 } from "@cubby/schemas/entity-contracts/image";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   isGalleryEntity,
   type GalleryEntity,
@@ -96,8 +95,9 @@ import {
   INCOMING_EDGES,
   type IncomingEdge,
   type IncomingEdgeKey,
-  type IncomingEdgePolicy,
 } from "~/server/db/entity-incoming-edges";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
+import { DECLARED_EDGE_DELETE_HOOKS } from "~/server/db/generated/declared-edges.gen";
 import {
   associatePendingImages,
   countWhere,
@@ -120,7 +120,6 @@ import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   imageDerivative,
   imageProcessingOrphan,
-  imageProcessingAttempt,
   imageProcessingJob,
 } from "~/server/db/image-processing-schema";
 import {
@@ -137,6 +136,7 @@ import {
   photoGroupProposal,
   purchase,
 } from "~/server/db/schema";
+import { imageExecutionReceipts } from "~/server/domains/image-processing/repo/execution-receipts";
 import { loadImageRepresentations } from "~/server/domains/image-processing/repo/image-processing";
 import {
   imageProcessingIssueExpression,
@@ -1688,69 +1688,9 @@ export const cullPendingImages = async (
  * - `detach` (`clearFk`) — a direct FK column (import workflow evidence today):
  *   null it so the parent row survives, just without a cover.
  */
-export const IMAGE_HARD_DELETE = {
-  "SourceOrderObservation.primaryDocumentImageId": {
-    code: "clearFk",
-    effect: "detach",
-    description:
-      "Explicit Image deletion clears optional media only; extraction, bindings, checksum and captured fingerprint remain immutable.",
-  },
-  "SourceOrderObservation.screenshotImageId": {
-    code: "clearFk",
-    effect: "detach",
-    description:
-      "Explicit Image deletion clears optional media only; extraction, bindings, checksum and captured fingerprint remain immutable.",
-  },
-  "PhotoRunImage.imageId": {
-    code: "deleteRow",
-    effect: "hard-delete",
-    description:
-      "A photo-inventory worklist row cannot outlive its image: a target always names an entity, so the link is never cleared.",
-  },
-  "ImageProcessingJob.imageId": {
-    code: "deleteRow",
-    effect: "hard-delete",
-    description:
-      "The original image's durable processing attempts are removed before the original row.",
-  },
-  "ImageDerivative.imageId": {
-    code: "deleteRow",
-    effect: "hard-delete",
-    description:
-      "Non-gallery derivative records are removed with their original image.",
-  },
-  "ImageSighting.imageId": {
-    code: "deleteRow",
-    effect: "hard-delete",
-    description: "A sighting cannot outlive the image it reports on.",
-  },
-  "ImportPreparedOrder.primaryDocumentImageId": {
-    code: "clearFk",
-    effect: "detach",
-    description:
-      "Prepared import evidence remains while its deleted primary document link is cleared.",
-  },
-  "ImportPreparedOrder.screenshotImageId": {
-    code: "clearFk",
-    effect: "detach",
-    description:
-      "Prepared import evidence remains while its deleted screenshot link is cleared.",
-  },
-  "OrderMailAttachment.imageId": {
-    code: "clearFk",
-    effect: "detach",
-    description:
-      "The normalized mail attachment remains while its optional stored image is cleared.",
-  },
-  "EntityAttachment.imageId": {
-    code: "deleteRow",
-    effect: "hard-delete",
-    description:
-      "Every entity's association with the image — gallery photo, document, cookbook cover, or vendor logo — is removed along with the image; the subjects survive.",
-  },
-} satisfies IncomingEdgePolicy<"image", OperationDisposition>;
 
 type ImageEdgeOperation = {
+  key: string;
   clear: (tx: DrizzleTransaction, imageIds: ImageId[]) => Promise<void>;
   findReferenced: (
     dbc: DrizzleClient | DrizzleTransaction,
@@ -1800,14 +1740,14 @@ const dropFromProposedGroups = async (
 
 /**
  * One operation per incoming image edge, generated from the edge and its
- * {@link IMAGE_HARD_DELETE} disposition: `hard-delete` removes the
+ * {@link DECLARED_EDGE_DELETE_POLICIES.image} disposition: `hard-delete` removes the
  * referencing row, `detach` clears the FK. Job rows refer to derivatives as
  * well as originals, so policy order (jobs before derivatives) is kept.
  */
 const imageEdgeOperations: ImageEdgeOperation[] = Object.entries(
-  IMAGE_HARD_DELETE,
+  DECLARED_EDGE_DELETE_POLICIES.image,
 ).map(([key, disposition]) => {
-  // SAFETY: IMAGE_HARD_DELETE `satisfies` IncomingEdgePolicy<"image">, and
+  // SAFETY: generation checks every policy key against its physical declaration, and
   // INCOMING_EDGES is built only from Postgres schema columns.
   const edge = (INCOMING_EDGES.image as Record<string, IncomingEdge>)[key]!;
   // SAFETY: every image incoming edge is built from a Postgres schema column.
@@ -1823,6 +1763,7 @@ const imageEdgeOperations: ImageEdgeOperation[] = Object.entries(
         notDeleted(table as PgTable & { deletedAt: PgColumn })
       : undefined;
   return {
+    key,
     countsAsOwnership: !PROCESSING_EDGES.has(key),
     joinColumn: table === entityAttachment ? column : undefined,
     clear: async (tx, imageIds) => {
@@ -1908,7 +1849,7 @@ type DeletedImages = {
  * restore was never implemented for any entity, so "delete" here means the row
  * is gone — matching how the pending cull already works. Reads still go through
  * `notDeleted(image)` so the column stays honest if that ever changes.
- * Every incoming edge is cleared first, per {@link IMAGE_HARD_DELETE}'s
+ * Every incoming edge is cleared first, per {@link DECLARED_EDGE_DELETE_POLICIES.image}'s
  * disposition — they FK the image, so this also detaches it from whatever
  * entity owned it. Missing ids are skipped; the returned keys are only those
  * actually removed.
@@ -1972,11 +1913,11 @@ const deleteImagesTx = async (
       .onConflictDoNothing();
   }
   const inputs = await tx
-    .select({ key: imageProcessingAttempt.inputKey })
-    .from(imageProcessingAttempt)
+    .select({ key: imageExecutionReceipts.inputKey })
+    .from(imageExecutionReceipts)
     .innerJoin(
       imageProcessingJob,
-      eq(imageProcessingJob.id, imageProcessingAttempt.jobId),
+      eq(imageProcessingJob.id, imageExecutionReceipts.jobId),
     )
     .where(inArray(imageProcessingJob.imageId, ids));
   const inputKeys = inputs.flatMap((input) => (input.key ? [input.key] : []));
@@ -1996,7 +1937,11 @@ const deleteImagesTx = async (
     );
 
   for (const operation of imageEdgeOperations) {
-    await operation.clear(tx, ids);
+    const handler = Object.entries(
+      DECLARED_EDGE_DELETE_HOOKS.image.overrides,
+    ).find(([key]) => key === operation.key)?.[1];
+    if (!handler) throw new Error(`Unknown image edge ${operation.key}`);
+    await handler(tx, ids);
   }
 
   await softDeleteEntitySearchArtifactsTx(tx, "image", ids);
@@ -2109,7 +2054,7 @@ export const reapUnreferencedImages = async (
 
 /**
  * The `imageId` column, if this table is one of `image`'s join tables — i.e. an
- * edge {@link IMAGE_HARD_DELETE} disposes of by deleting the row rather than
+ * edge {@link DECLARED_EDGE_DELETE_POLICIES.image} disposes of by deleting the row rather than
  * nulling an FK. Read from `INCOMING_EDGES.image` rather than a hand-kept list,
  * so a new gallery entity is picked up here the moment it is declared there.
  *
@@ -2342,7 +2287,7 @@ export const countImagesMissingDimensions = async (
 };
 
 /** `Image.metadataRevision IS DISTINCT FROM IMAGE_METADATA_REVISION` is the
- * `image-metadata.extract` stale marker: `NULL` (never extracted) and any
+ * image metadata stale marker: `NULL` (never extracted) and any
  * older revision number are both candidates, and `IS DISTINCT FROM` (not
  * `<>`) is what makes `NULL` compare as distinct rather than unknown. A row
  * with a terminal `metadataOutcome` has left the backlog until a retry clears
@@ -2359,6 +2304,7 @@ export interface ImageMetadataExtractionRow {
   id: ImageId;
   key: string;
   contentType: string;
+  sourceRevision: string;
 }
 
 export type ImageMetadataCursor = { createdAt: string; id: string };
@@ -2384,6 +2330,7 @@ export async function selectImagesForMetadataExtraction(
       id: image.id,
       key: image.key,
       contentType: image.contentType,
+      sourceRevision: sql<string>`to_char(${image.updatedAt},'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
       createdAt: sql<string>`${image.createdAt}::text`,
     })
     .from(image)
@@ -2438,7 +2385,11 @@ export async function clearImageMetadataOutcomes(
   if (!imageIds.length) return [];
   const rows = await getDb(db)
     .update(image)
-    .set({ metadataOutcome: null, metadataError: null })
+    .set({
+      metadataOutcome: null,
+      metadataError: null,
+      updatedAt: sql`greatest(clock_timestamp(),${image.updatedAt}+interval '1 millisecond')`,
+    })
     .where(
       and(inArray(image.id, [...imageIds]), isNotNull(image.metadataOutcome)),
     )
@@ -2547,9 +2498,15 @@ export async function getImageMetadataExtractionRow(
           and(eq(image.id, imageId), metadataExtractionCandidateWhere),
         ),
     },
-    columns: { id: true, key: true, contentType: true },
+    columns: { id: true, key: true, contentType: true, updatedAt: true },
   });
-  return row ? { ...row, id: parseEntityId("image", row.id) } : undefined;
+  if (!row) return undefined;
+  const { updatedAt, ...source } = row;
+  return {
+    ...source,
+    id: parseEntityId("image", row.id),
+    sourceRevision: updatedAt.toISOString(),
+  };
 }
 
 /** Writes the extracted EXIF (or `null`, when none was found) and advances
@@ -2821,4 +2778,16 @@ export const cullPendingImageStorage = async (
   const result = await cullPendingImages(db, olderThanHours, createdBefore);
   await deleteStoredObjects(result.deletedKeys);
   return result;
+};
+
+export const clearImageEdge = async (
+  tx: DrizzleTransaction,
+  ids: ImageId[],
+  edge: string,
+): Promise<void> => {
+  const operation = imageEdgeOperations.find(
+    (candidate) => candidate.key === edge,
+  );
+  if (!operation) throw new Error(`Unknown image edge ${edge}`);
+  await operation.clear(tx, ids);
 };

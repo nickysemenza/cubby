@@ -32,11 +32,15 @@ async function softDeleteEntityEmbeddingsTx(
       ),
     )
     .returning({ id: entityEmbedding.id });
-  if (changed.length)
+  if (changed.length) {
+    const { databaseForTransaction } = await import("~/server/db/helpers");
+    const { scheduleVectorCleanup } = await import("./embedding-work");
+    await scheduleVectorCleanup(databaseForTransaction(tx));
     await recordChange(tx, {
       kind: "projection",
       categories: ["search", "relatedData", "problems"],
     });
+  }
 }
 
 /** Revalidate persisted candidates and retire both artifacts atomically. */

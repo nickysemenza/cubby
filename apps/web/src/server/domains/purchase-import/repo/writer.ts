@@ -21,6 +21,7 @@ import { and, eq, isNotNull, or, sql } from "drizzle-orm";
 
 import type { DecisionChoiceResult } from "~/server/ai/decision-model";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import {
   databaseForTransaction,
   getDb,
@@ -48,6 +49,8 @@ import {
   vendorAccount,
 } from "~/server/db/schema";
 import { validateExpenseInheritances } from "~/server/domains/expense/repo/expense-inheritance";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import {
   externalIdKey,
@@ -66,6 +69,17 @@ import {
   type findExactProductNameMatches,
   type findProductIdentityReviewCandidates,
 } from "~/server/domains/product/repo/resolve-names";
+import {
+  changedAcceptedProductChoice,
+  planLineMatch,
+  planLearnedTender,
+  planTenderUpdates,
+  planFinancialProjection,
+  planAcceptedPaymentReview,
+  planTargetReview,
+} from "~/server/domains/purchase-import/policy/accepted-source";
+import { type ExistingExpenseSnapshot } from "~/server/domains/purchase-import/policy/import-lines";
+import { importLineWritePolicy } from "~/server/domains/purchase-import/policy/import-plan";
 import { linkExactOrderEmails } from "~/server/domains/purchase-import/repo/email-purchase-decision";
 import {
   type LiveSourceOrder,
@@ -73,7 +87,31 @@ import {
   readSourceFamilyOrder,
 } from "~/server/domains/purchase-import/repo/source-claim-family";
 import { sourceOrderKey } from "~/server/domains/purchase-import/repo/source-order-key";
-import { type ExistingExpenseSnapshot } from "~/server/domains/purchase-import/repo/writer-policy";
+import {
+  purchaseDateFor,
+  lineIdentifiers,
+  lineIdentifierRequests,
+  lineExternalIdentity,
+  explicitLineDecisions,
+  type ExplicitDistinctFrom,
+  type LineIdentityDecision,
+} from "~/server/domains/purchase-import/repo/writer-decisions";
+import {
+  planSourceAssociation,
+  planOriginalBindings,
+  planAttachments,
+  planRunWrites,
+  planFallbackExpenses,
+  planPurchaseNote,
+  planLineMode,
+  planPurchaseHeader,
+  planPaymentEvidence,
+  planPurchaseTarget,
+  planLockedPurchase,
+  planSourceIdentity,
+  planSourceKey,
+  planSourceOrder,
+} from "~/server/domains/purchase-import/repo/writer-plan";
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
 import { assertRunCapabilityById } from "~/server/domains/run/repo/purpose-policy";
 import { publishRunFinding } from "~/server/domains/run/repo/run-finding";
@@ -87,6 +125,7 @@ import {
 } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 
 import {
   learnPurchaseProductExternalId,
@@ -110,16 +149,6 @@ import {
 } from "./retained-settlement";
 import { recordRunWrites } from "./run-audit";
 import { recordImportedShipmentEvidence } from "./shipment-intake";
-import {
-  purchaseDateFor,
-  buildPurchaseImportPlan,
-  lineIdentifiers,
-  lineIdentifierRequests,
-  lineExternalIdentity,
-  explicitLineDecisions,
-  type ExplicitDistinctFrom,
-  type LineIdentityDecision,
-} from "./writer-decisions";
 import { writePurchaseLines } from "./writer-lines";
 import {
   loadAcceptedProductChoices,
@@ -141,29 +170,6 @@ import {
   loadOriginalLineBindings,
   loadTargetReviewFacts,
 } from "./writer-load";
-import {
-  changedAcceptedProductChoice,
-  planLineMatch,
-  planSourceAssociation,
-  planOriginalBindings,
-  planAttachments,
-  planLearnedTender,
-  planTenderUpdates,
-  planRunWrites,
-  planFinancialProjection,
-  planFallbackExpenses,
-  planPurchaseNote,
-  planLineMode,
-  planAcceptedPaymentReview,
-  planPurchaseHeader,
-  planPaymentEvidence,
-  planPurchaseTarget,
-  planLockedPurchase,
-  planSourceIdentity,
-  planSourceKey,
-  planSourceOrder,
-  planTargetReview,
-} from "./writer-plan";
 
 async function assertImportOwnership(
   db: Database,
@@ -237,7 +243,7 @@ export async function existingExpenses(
     .select({
       id: expense.id,
       title: expense.name,
-      amount: expense.cost,
+      amount: expenseCostDollarsSql(),
       lineKind: expense.lineKind,
       lineBasis: expense.lineBasis,
       productQuantity: expense.productQuantity,
@@ -1066,42 +1072,14 @@ export async function importVendorOrder(
       : null;
   if (fallbackAt && input.extraction.candidate)
     input.extraction.candidate.orderedAt = fallbackAt;
-  const semanticPlan = buildPurchaseImportPlan(input.extraction);
-
-  const skipsLineWrites = semanticPlan.writeBlockReason !== null;
-  const foreignReversal =
-    input.extraction.candidate?.currency !== "USD" &&
-    (input.extraction.candidate?.sourceEvent === "refunded" ||
-      input.extraction.candidate?.sourceEvent === "cancelled" ||
-      input.extraction.candidate?.lines.some(
-        (line) =>
-          line.lineKind === "principal" &&
-          line.amount !== null &&
-          line.amount < 0,
-      ));
-  const unpricedForeign =
-    semanticPlan.writeBlockReason === "foreign_currency" &&
-    /^[A-Z]{3}$/.test(input.extraction.candidate?.currency ?? "") &&
-    !foreignReversal &&
-    (input.extraction.status === "ready" ||
-      (input.extraction.status === "needs_review" &&
-        input.extraction.reason === "foreign_currency"));
-  // A USD order with a printed total and unpriced items: the total books as
-  // one aggregate Expense and the items as unpriced lines beside it.
-  const unpricedItemization =
-    semanticPlan.writeBlockReason === "unpriced_itemization";
-  const unpriced = unpricedForeign || unpricedItemization;
-  const writesLines = !skipsLineWrites || unpriced;
-  const valuation = unpriced ? "unknown" : "USD";
-  const identityOnly =
-    !unpricedForeign &&
-    !foreignReversal &&
-    [
-      "missing_currency",
-      "foreign_currency",
-      "missing_date",
-      "missing_total",
-    ].includes(semanticPlan.writeBlockReason ?? "");
+  const {
+    skipsLineWrites,
+    unpricedForeign,
+    unpriced,
+    writesLines,
+    valuation,
+    identityOnly,
+  } = importLineWritePolicy(input.extraction);
   const explicitResolutions = input.productResolutions ?? [];
   const identityDecisions =
     skipsLineWrites && !identityOnly && !unpriced
@@ -1119,6 +1097,7 @@ export async function importVendorOrder(
         );
   // eslint-disable-next-line complexity
   return withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     const identityProposals: Parameters<typeof upsertAgentProductMatch>[1][] =
       [];
     const onIdentifierCollision = (
@@ -1376,12 +1355,14 @@ export async function importVendorOrder(
       replacesNoticeDate,
     );
     if (header.kind === "create")
-      target = await insertWithShortcode(tx, "purchase", header.values);
+      target = await createPurchaseEventRecord(tx, "purchase", header.values);
     else {
-      await tx
-        .update(purchase)
-        .set(header.values)
-        .where(eq(purchase.id, header.target.id));
+      await updatePurchaseEventWhere(
+        tx,
+        "purchase",
+        header.values,
+        eq(purchase.id, header.target.id),
+      );
       target = header.target;
     }
     const purchaseId = parseEntityId("purchase", target.id);
@@ -1397,12 +1378,14 @@ export async function importVendorOrder(
       usedFallbackDate,
     );
     if (note) {
-      await tx
-        .update(purchase)
-        .set({
+      await updatePurchaseEventWhere(
+        tx,
+        "purchase",
+        {
           notes: sql`concat_ws(E'\n\n', nullif(${purchase.notes}, ''), ${note.research}::text)`,
-        })
-        .where(eq(purchase.id, note.purchaseId));
+        },
+        eq(purchase.id, note.purchaseId),
+      );
       await recordChange(tx, { kind: "source", categories: ["purchase"] });
     }
 
@@ -1471,11 +1454,12 @@ export async function importVendorOrder(
         const fallback = planFallbackExpenses(
           createdExpenses.map((mutation) => mutation.targetId),
         );
-        const filled = await tx
-          .update(expense)
-          .set({ trade: "other" })
-          .where(fallback.where)
-          .returning({ id: expense.id });
+        const filled = await updatePurchaseEventWhere(
+          tx,
+          "expense",
+          { trade: "other" },
+          fallback.where,
+        );
         for (const mutation of createdExpenses)
           if (filled.some((line) => line.id === mutation.targetId))
             mutation.fields.push("trade");

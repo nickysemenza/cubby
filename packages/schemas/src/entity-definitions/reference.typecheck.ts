@@ -26,47 +26,48 @@ const reference = <const Schema extends z.ZodType>(read: Schema) => ({
   validation: { read, create: null, update: null },
 });
 
-defineEntity(
-  fixture(reference(z.array(projectShortcode).optional())),
-  () => [],
-);
+defineEntity(fixture(reference(z.array(projectShortcode).optional())), () => ({
+  edges: [],
+}));
 defineEntity(
   fixture(
     reference(z.array(z.object({ id: projectShortcode, name: z.string() }))),
   ),
-  () => [],
+  () => ({ edges: [] }),
 );
 // @ts-expect-error The original regression: Project dependencies declared as Task references.
-defineEntity(fixture(reference(z.array(taskShortcode))), () => []);
+defineEntity(fixture(reference(z.array(taskShortcode))), () => ({ edges: [] }));
 // @ts-expect-error Multiple references cannot read a scalar identifier.
-defineEntity(fixture(reference(projectShortcode)), () => []);
+defineEntity(fixture(reference(projectShortcode)), () => ({ edges: [] }));
 defineEntity(
   // @ts-expect-error An enriched reference must carry the target entity's identifier.
   fixture(reference(z.array(z.object({ id: taskShortcode })))),
-  () => [],
+  () => ({ edges: [] }),
 );
 // @ts-expect-error Plain strings discard the target entity's brand.
-defineEntity(fixture(reference(z.array(z.string()))), () => []);
+defineEntity(fixture(reference(z.array(z.string()))), () => ({ edges: [] }));
 
 const single = {
   ...reference(projectShortcode.nullable()),
   reference: { entity: "project" as const },
 };
-defineEntity(fixture(single), () => []);
+defineEntity(fixture(single), () => ({ edges: [] }));
 defineEntity(
   // @ts-expect-error Singular references cannot read identifier arrays.
   fixture({ ...single, validation: { read: z.array(projectShortcode) } }),
-  () => [],
+  () => ({ edges: [] }),
 );
 // @ts-expect-error A misspelled target is not a referenceable entity.
-defineEntity(fixture({ ...single, reference: { entity: "projet" } }), () => []);
+defineEntity(fixture({ ...single, reference: { entity: "projet" } }), () => ({
+  edges: [],
+}));
 defineEntity(
   // @ts-expect-error Create schemas must agree with the reference target too.
   fixture({
     ...single,
     validation: { read: projectShortcode, create: taskShortcode },
   }),
-  () => [],
+  () => ({ edges: [] }),
 );
 defineEntity(
   // @ts-expect-error Update schemas must agree with the reference target too.
@@ -74,13 +75,13 @@ defineEntity(
     ...single,
     validation: { read: projectShortcode, update: taskShortcode.optional() },
   }),
-  () => [],
+  () => ({ edges: [] }),
 );
 
 // Reference counts and expanded records are supported read projections.
 defineEntity(
   fixture({ ...single, kind: "number", validation: { read: z.number() } }),
-  () => [],
+  () => ({ edges: [] }),
 );
 defineEntity(
   fixture({
@@ -88,7 +89,7 @@ defineEntity(
     kind: "json",
     validation: { read: z.object({ id: projectShortcode }).nullable() },
   }),
-  () => [],
+  () => ({ edges: [] }),
 );
 // Storage-only references have no public validation schema to correlate.
 defineEntity(
@@ -97,7 +98,7 @@ defineEntity(
     kind: "identifier",
     reference: { entity: "project" },
   }),
-  () => [],
+  () => ({ edges: [] }),
 );
 
 // Paths retain the identity of each endpoint instead of accepting unrelated UUID-shaped references.

@@ -88,7 +88,7 @@ describe("discardProductUnits", () => {
 
       const row = await loadExpense(result.expenseShortcode);
       expect(row).toMatchObject({
-        cost: 0,
+        cost: 0n,
         date,
         productQuantity: -1,
         lineKind: "principal",

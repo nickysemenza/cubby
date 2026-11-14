@@ -12,6 +12,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { cents } from "@cubby/shared";
 import { uniqBy } from "es-toolkit";
 
+import { withinPostingDateWindow } from "~/server/domains/financial-transaction/policy/settlement-window";
 import {
   normalizeMerchant,
   type merchantVendorInferences,
@@ -22,7 +23,6 @@ import type {
   FinancialStatementPreviewOptions,
   FinancialStatementPreviewPreparation,
 } from "./financial-statement-preview";
-import { withinPostingDateWindow } from "./settlement-window";
 
 /**
  * Deliberately *not* the identity module's canonicalizer, despite being the
@@ -40,7 +40,7 @@ const pairKey = (source: string, identity: string) =>
  * for it: the same direction within the posting window, and the same amount,
  * statement description or merchant. `amount` uses the Transaction sign.
  */
-export function nearbyStatementCandidate(
+function nearbyStatementCandidate(
   transaction: {
     amount: number | string;
     transactionDate: string | null;

@@ -16,6 +16,7 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import * as runFeature from "~/server/ai/run-feature";
 import { getDb } from "~/server/db/helpers";
 import {
@@ -24,7 +25,6 @@ import {
   expense,
   purchase,
 } from "~/server/db/schema";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { resolveMail } from "./mail-tool";
 import {

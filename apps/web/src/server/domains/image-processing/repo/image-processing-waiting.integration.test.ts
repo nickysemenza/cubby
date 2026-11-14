@@ -5,14 +5,10 @@ import { describe, expect, it } from "vitest";
 
 import { fundingWaiters } from "~/server/ai/funding-wait";
 import { getDb } from "~/server/db/helpers";
-import {
-  imageProcessingAttempt,
-  imageProcessingEvent,
-  imageProcessingJob,
-} from "~/server/db/image-processing-schema";
+import { imageProcessingJob } from "~/server/db/image-processing-schema";
 import { image } from "~/server/db/schema";
+import { imageExecutionReceipts } from "~/server/domains/image-processing/repo/execution-receipts";
 import { readImageExecutions } from "~/server/domains/image-processing/repo/image-execution.fixtures";
-import { cloudImageDrain } from "~/server/domains/image-processing/service/cloud-drain";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 
 import {
@@ -25,7 +21,6 @@ import {
   createTransparentDerivativeAndJob,
 } from "./image-processing";
 import { assignImageProcessingExecutor } from "./image-processing-history";
-import { pruneExecutorlessWaitingAttempts } from "./image-processing-maintenance";
 
 describe("device work waits parked and records no attempt", () => {
   const ctx = withTestDb();
@@ -53,8 +48,8 @@ describe("device work waits parked and records no attempt", () => {
   const attemptsOf = (jobId: ImageJobId) =>
     getDb(ctx.db)
       .select()
-      .from(imageProcessingAttempt)
-      .where(eq(imageProcessingAttempt.jobId, jobId));
+      .from(imageExecutionReceipts)
+      .where(eq(imageExecutionReceipts.jobId, jobId));
   const jobOf = async (jobId: ImageJobId) => {
     const [job] = await getDb(ctx.db)
       .select()
@@ -63,14 +58,7 @@ describe("device work waits parked and records no attempt", () => {
     if (!job) throw new Error("Missing job");
     return job;
   };
-  const eventsOf = (jobId: ImageJobId) =>
-    getDb(ctx.db)
-      .select()
-      .from(imageProcessingEvent)
-      .where(eq(imageProcessingEvent.jobId, jobId));
 
-  // Production finding: ~4k device-waiting jobs were re-claimed by the server
-  // drain every 60 s. Device work is now parked: the drain never claims it.
   it("parks device work out of the server drain without attempts or polling", async () => {
     const jobId = await subjectLiftJob();
     const [execution] = await readImageExecutions(ctx.db, jobId);
@@ -80,7 +68,7 @@ describe("device work waits parked and records no attempt", () => {
       state: "queued",
       attempts: 0,
     });
-    await cloudImageDrain.page(ctx.db, cloudImageDrain.name);
+
     expect(await readImageExecutions(ctx.db, jobId)).toMatchObject([
       { state: "queued", attempts: 0 },
     ]);
@@ -182,55 +170,6 @@ describe("device work waits parked and records no attempt", () => {
       sourceContentHash: lease.sourceContentHash,
       sourceKey: lease.originalKey,
     });
-    expect((await jobOf(jobId)).attempts).toBe(1);
-  });
-
-  it("prunes executor-less waiting attempts with their events and fixes job.attempts", async () => {
-    const jobId = await subjectLiftJob();
-    const db = getDb(ctx.db);
-    // Legacy rows: two idle waiting attempts, then one real (numbered 3).
-    const [a, b, c] = [
-      crypto.randomUUID(),
-      crypto.randomUUID(),
-      crypto.randomUUID(),
-    ];
-    await db.insert(imageProcessingAttempt).values([
-      { id: a, jobId, number: 1, state: "waiting" },
-      { id: b, jobId, number: 2, state: "waiting" },
-      {
-        id: c,
-        jobId,
-        number: 3,
-        state: "failed",
-        executor: {
-          kind: "device",
-          deviceId: parseEntityId("device", crypto.randomUUID()),
-          name: "Test Mac",
-          platform: "macos",
-          appVersion: "1",
-          osVersion: "26",
-        },
-      },
-    ]);
-    await db.insert(imageProcessingEvent).values([
-      { jobId, eventKey: `${a}:claimed`, event: "attempt.claimed" },
-      { jobId, eventKey: `${a}:waiting`, event: "dispatch.waiting" },
-      { jobId, eventKey: `${b}:claimed`, event: "attempt.claimed" },
-      { jobId, eventKey: `${b}:waiting`, event: "dispatch.waiting" },
-      { jobId, eventKey: `${c}:claimed`, event: "attempt.claimed" },
-    ]);
-    await db
-      .update(imageProcessingJob)
-      .set({ attempts: 3 })
-      .where(eq(imageProcessingJob.id, jobId));
-
-    expect(await pruneExecutorlessWaitingAttempts(ctx.db, 100)).toBe(2);
-    expect(await pruneExecutorlessWaitingAttempts(ctx.db, 100)).toBe(0);
-
-    expect((await attemptsOf(jobId)).map((row) => row.id)).toEqual([c]);
-    expect((await eventsOf(jobId)).map((e) => e.eventKey)).toEqual([
-      `${c}:claimed`,
-    ]);
     expect((await jobOf(jobId)).attempts).toBe(1);
   });
 });

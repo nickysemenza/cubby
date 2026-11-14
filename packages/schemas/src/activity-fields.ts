@@ -63,7 +63,7 @@ export type RunKindDeclaration = {
    */
   historical?: true;
   /**
-   * What the universal `run.execute` Job runs: the RunStep ledger, the Run's
+   * What the universal `run.execute` Pass runs: the RunStep ledger, the Run's
    * AI evaluations, or mailbox discovery. Absent: another owner executes it
    * (an agent, an import, an inline call).
    */
@@ -222,7 +222,7 @@ export const RUN_KINDS = {
         "Current inputs, evaluation policy and configured AI models.",
       cost: "Uses AI funding and pauses or waits under the existing funding policy.",
       recovery:
-        "Inspect failed evaluations and Job diagnostics; use the supported Run recovery action.",
+        "Inspect failed Asks and kernel machinery; use the supported Run recovery action.",
     },
     label: "AI refresh",
     description: "AI evaluations whose inputs or policy changed.",
@@ -554,7 +554,7 @@ export const RUN_KINDS = {
       exclusions:
         "Unselected families and candidates rejected by their owning eligibility rules are excluded.",
       effects:
-        "Checks statement matches and fields, and publishes Suggestions under each family’s policy.",
+        "Checks fields and publishes Suggestions under their declared policy.",
       dependencies:
         "Current financial and record evidence, declared family rules and configured decision models.",
       cost: "AI labeling and evaluation steps use the configured funding policy.",
@@ -567,35 +567,6 @@ export const RUN_KINDS = {
     execution: "steps",
     progress: "steps",
     steps: [
-      {
-        key: "statement_generate",
-        label: "Statements: match",
-        purpose: "Matches unmatched statement charges to ledger evidence.",
-        action: "Matching charges",
-        unit: "charges",
-        input: counted,
-        family: "statement_transaction",
-        results: { family: "statement_transaction" },
-      },
-      {
-        key: "statement_holds",
-        label: "Statements: vanished holds",
-        purpose: "Rechecks pending holds that disappeared from statements.",
-        action: "Checking holds",
-        unit: "holds",
-        input: counted,
-        family: "statement_transaction",
-      },
-      {
-        key: "statement_label",
-        label: "Statements: label",
-        purpose: "Asks the decision model to label each statement Suggestion.",
-        action: "Labelling suggestions",
-        unit: "suggestions",
-        input: counted,
-        family: "statement_transaction",
-        results: { family: "statement_transaction" },
-      },
       {
         key: "field_roster",
         label: "Fields: roster",
@@ -633,7 +604,7 @@ const purposesWhere = <P extends RunPurpose>(
   // SAFETY: each caller's `P` names exactly the kinds its `test` admits.
   purposes.filter((purpose) => test(RUN_KINDS[purpose])) as P[];
 
-/** Kinds whose `run.execute` Job pages an ordered RunStep ledger. */
+/** Kinds whose `run.execute` Pass pages an ordered RunStep ledger. */
 export type StepRunPurpose = {
   [P in RunPurpose]: RunKinds[P] extends { steps: readonly unknown[] }
     ? P
@@ -653,7 +624,7 @@ export type RunStepKey<P extends StepRunPurpose> =
 export type RunStepDeclarationOf<P extends StepRunPurpose> =
   RunKinds[P]["steps"][number];
 
-/** Kinds the universal `run.execute` Job executes. */
+/** Kinds executed through the Run execution runtime. */
 export type ExecutedRunPurpose = {
   [P in RunPurpose]: RunKinds[P] extends { execution: string } ? P : never;
 }[RunPurpose];
@@ -756,3 +727,26 @@ export const runTargetState = z.enum([
   "unavailable",
 ]);
 export type RunTargetState = z.infer<typeof runTargetState>;
+
+/** Declared target presentation for every client. */
+export const runTargetStateOptions = [
+  { value: "pending", label: "Pending", stage: "waiting" },
+  { value: "prepared", label: "Prepared", stage: "working" },
+  { value: "completed", label: "Completed", stage: "done" },
+  { value: "skipped", label: "Skipped", stage: "ended" },
+  { value: "unresolved", label: "Unresolved", stage: "needs_you" },
+  { value: "needs_evidence", label: "Needs evidence", stage: "waiting" },
+  { value: "unavailable", label: "Unavailable", stage: "stuck" },
+] as const;
+export const imageProcessingJobStateOptions = [
+  { value: "pending", label: "Queued", stage: "waiting" },
+  {
+    value: "waiting_for_device",
+    label: "Waiting for Apple device",
+    stage: "waiting",
+  },
+  { value: "leased", label: "Processing", stage: "working" },
+  { value: "ready", label: "Done", stage: "done" },
+  { value: "skipped", label: "Skipped", stage: "ended" },
+  { value: "failed", label: "Needs attention", stage: "stuck" },
+] as const;

@@ -1,3 +1,4 @@
+import type { KernelStage } from "./kernel/stage";
 import { z } from "zod";
 import {
   entityIdSchema,
@@ -132,7 +133,7 @@ export const emailImportOutcome = z.enum([
   "not_imported",
 ]);
 export type EmailImportOutcome = z.infer<typeof emailImportOutcome>;
-export const EMAIL_IMPORT_OUTCOME_LABEL = {
+export const EMAIL_IMPORT_OUTCOME_DETAIL_LABEL = {
   imported: "Imported",
   linked: "Linked",
   waiting: "Waiting",
@@ -142,6 +143,32 @@ export const EMAIL_IMPORT_OUTCOME_LABEL = {
   failed: "Import failed",
   unrelated: "Unrelated",
   not_imported: "Not imported",
+} as const satisfies Record<EmailImportOutcome, string>;
+
+/** The declared stage of each ordinary import outcome option. */
+export const EMAIL_IMPORT_OUTCOME_STAGE = {
+  imported: "done",
+  linked: "done",
+  waiting: "waiting",
+  needs_research: "waiting",
+  needs_member: "needs_you",
+  importing: "working",
+  failed: "stuck",
+  unrelated: "ended",
+  not_imported: "waiting",
+} as const satisfies Record<EmailImportOutcome, KernelStage>;
+
+/** The import's stage; the detailed outcome remains its own filter. */
+export const EMAIL_IMPORT_OUTCOME_LABEL = {
+  imported: "Done",
+  linked: "Done",
+  waiting: "Waiting",
+  needs_research: "Waiting",
+  needs_member: "Needs you",
+  importing: "Working",
+  failed: "Stuck",
+  unrelated: "Ended",
+  not_imported: "Waiting",
 } as const satisfies Record<EmailImportOutcome, string>;
 
 /** Who settles an unresolved import gap. Hands-off: automatic unless only an agent or the member can. */

@@ -26,7 +26,6 @@ import { describe, expect, expectTypeOf, it, vi } from "vitest";
 
 import { databaseForTransaction, getDb } from "~/server/db/helpers";
 import { entityIdentity, location, product } from "~/server/db/schema";
-import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { findPgError } from "~/server/errors/db-errors";
 import {
   createLocationFixture as createLocation,
@@ -172,10 +171,6 @@ describe("insertWithShortcode", () => {
           {
             id,
             name: "Retried",
-            brandId: await findOrCreateVendor(
-              mode === "facade" ? databaseForTransaction(tx) : tx,
-              "ACME",
-            ),
           },
           generator.port,
         );

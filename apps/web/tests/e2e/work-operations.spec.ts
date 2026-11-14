@@ -52,8 +52,16 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
 
   await page.setViewportSize({ width: 1440, height: 1100 });
   await gotoAuthenticatedPage(page, "/activity");
-  await expect(page.getByTestId("work-health")).toContainText(/background/i);
+  await expect(
+    page.getByRole("heading", { name: "Needs you", exact: false }),
+  ).toBeVisible();
+  await expect(page.getByTestId("work-health")).toContainText(
+    /stuck|Catching up/i,
+  );
   await expect(page.getByRole("tab")).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Queue and evaluations" }),
+  ).toBeVisible();
   const more = page.getByRole("navigation", { name: "More work" });
   await expect(more.getByRole("link", { name: "Suggestions" })).toBeVisible();
   await expect(more.getByRole("link", { name: "Missing facts" })).toBeVisible();
@@ -169,7 +177,11 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
   for (const retired of ["/jobs", "/jobs/JOB-SYNTH12345", "/JOB-SYNTH12345"]) {
     await page.goto(retired);
     await expect(page).toHaveURL(/\/activity\?from=jobs/);
-    await expect(page.getByText("The Jobs page is gone.")).toBeVisible();
+    await expect(
+      page.getByText(
+        "Open a record's machinery to inspect its scopes, Asks and Passes.",
+      ),
+    ).toBeVisible();
   }
   await page.goto("/activity?tab=maintenance");
   await expect(page).toHaveURL(/\/settings#maintenance/);
@@ -215,7 +227,9 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
 
   await page.setViewportSize({ width: 390, height: 844 });
   await gotoAuthenticatedPage(page, "/activity");
-  await expect(page.getByTestId("work-health")).toContainText(/background/i);
+  await expect(page.getByTestId("work-health")).toContainText(
+    /stuck|Catching up/i,
+  );
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,

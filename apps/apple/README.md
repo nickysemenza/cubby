@@ -162,7 +162,7 @@ Image descriptions require all structured fields; partial descriptions are never
 A parsing failure with an incomplete response at its output cap retries once with a larger
 bounded budget. Other parsing failures remain terminal `structured_output_invalid`, preserving
 the model's raw diagnostic. Context exhaustion keeps its smaller-image recovery; both paths
-share the [two-attempt limit](../../docs/jobs.md#image-processing).
+share the [two-attempt limit](../../docs/jobs.md#scopes-asks-and-passes).
 `--once` exits after the worker has been connected for `--idle-seconds` (default 10) with no
 outstanding job and no unacknowledged result. A job counts as outstanding while it is queued,
 running, or being recorded, and it stays outstanding across a reconnect. It exits 1 if any job
@@ -178,7 +178,7 @@ still unacknowledged stay in the outbox and replay on the next connection.
 While the companion processes images, one **Processing image queue** activity feeds
 Activity, the macOS sidebar and the iOS bottom accessory through the shared activity
 summary and aggregate progress. It shows **N running · M done**, plus **about X at this
-pace** when `job.deviceBacklog` supplies an ETA. Tapping opens Activity. User-started
+pace** when `imageBacklog.deviceBacklog` supplies an ETA. Tapping opens Activity. User-started
 work keeps first priority.
 
 On iOS the same queue activity appears on the Lock Screen and Dynamic Island, with
@@ -216,7 +216,7 @@ slot refills and result recording until the drain settles or processing stops.
 Completed commands count only after the server adopts a successful completed result;
 failed, skipped, normalized, superseded, released and cancelled attempts do not count.
 Recorded results waiting to deliver have their own count and diagnostic. At session start the worker
-requests `job.deviceBacklog`, then refreshes it every 45 seconds while processing.
+requests `imageBacklog.deviceBacklog`, then refreshes it every 45 seconds while processing.
 The first successful response freezes a total estimate from completed results, waiting
 jobs and outstanding local work; later responses refresh only the ETA, so newly queued
 images do not move the baseline. Until the first response arrives, progress is
@@ -264,13 +264,13 @@ worker's life, latches the app's update banner (the worker's client shares the a
 observer), and Activity shows "Update required to process images". Activity's "This device" row
 always names the worker phase (idle, connected, pulling, processing N, update required, paused
 from the web, automatic work off, asleep, disconnected with the last error). While image work
-waits for a device, a banner at the top reads `job.deviceBacklog` ("N images waiting for an Apple
+waits for a device, a banner at the top reads `imageBacklog.deviceBacklog` ("N images waiting for an Apple
 device · M working · about X at the current pace", the pace omitted without a server ETA) and, when
 no device claimed work recently and this one is not processing, says to keep Cubby open on a Mac.
 Below the device, Work lists Runs in progress and Runs needing attention (the manifest's
 `in-progress` and `attention` saved views, which exclude system AI passes, each bounded to 10) and
 reloads every 15 s while on screen. The household job queue is web's
-([Work hands off the job queue](DESIGN.md#work-hands-off-the-job-queue)).
+([Work hands off household diagnostics](DESIGN.md#work-hands-off-household-diagnostics)).
 
 On iOS, a `BGProcessingTaskRequest` (`com.nickysemenza.cubby.image-queue`)
 requires external power and network connectivity for opportunistic overnight

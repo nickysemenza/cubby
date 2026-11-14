@@ -16,8 +16,6 @@ import { email as emailTable, ledgerParty, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
-import { prepareReclassification } from "./reclassification-work";
-
 /** Member-owned Gmail Emails and the Runs that hold a member-requested rerun. */
 
 export type OwnedEmail = typeof emailTable.$inferSelect;
@@ -77,16 +75,28 @@ export async function finishReclassifyRun(
   notes: readonly string[],
   receiptFailure = false,
 ) {
-  // A budget pause (`needs_review`) keeps its status and failure code.
-  await getDb(db)
-    .update(run)
-    .set({
-      status: receiptFailure ? "failed" : "completed",
-      endedAt: new Date(),
-      notes: notes.length ? notes.join("\n").slice(0, 2_000) : null,
-      updatedAt: new Date(),
-    })
-    .where(and(eq(run.id, runId), eq(run.status, "running")));
+  const kernel = await import("~/server/kernel/api");
+  const write = {
+    table: run,
+    entity: "run",
+    ids: [runId],
+    columns: ["status", "endedAt", "failureCode"],
+  };
+  await withTransactionDatabase(db, async (tx) => {
+    // The gate before the Run row, the order a kernel apply takes.
+    await kernel.lockWrites(tx, write);
+    // A budget pause (`needs_review`) keeps its status and failure code.
+    await getDb(tx)
+      .update(run)
+      .set({
+        status: receiptFailure ? "failed" : "completed",
+        endedAt: new Date(),
+        notes: notes.length ? notes.join("\n").slice(0, 2_000) : null,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(run.id, runId), eq(run.status, "running")));
+    await kernel.emitWrites(tx, write);
+  });
 }
 
 /**
@@ -156,7 +166,6 @@ export async function startPreparedReclassifyRuns(
     const runs = [];
     for (const group of groups) {
       const started = await startReclassifyRun(tx, actor, "relevance", group);
-      await prepareReclassification(tx, started.id, group);
       runs.push(started);
     }
     return runs;
@@ -176,7 +185,6 @@ export async function queueSearchClassification(
     [email],
     `mail-search-classification:${email.id}:${email.checksum}`,
   );
-  await prepareReclassification(db, started.id, [email]);
   // Funding/auth waits can outlive the retired seven-day caller-judged search cache.
   await getDb(db)
     .update(emailTable)

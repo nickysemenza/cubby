@@ -8,6 +8,8 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
@@ -20,11 +22,11 @@ import {
   vendor as vendorTable,
 } from "~/server/db/schema";
 import { financialSourceRefsFor } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { memberImport } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import { resolveRunFinding } from "~/server/domains/purchase-import/repo/findings";
 import { prepareSourceOrderReconciliation } from "~/server/domains/purchase-import/repo/reconciliation";
 import { prepareMailFinancialEvent } from "~/server/domains/purchase-import/service/mail-financial-event";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
 
 import {
@@ -77,7 +79,7 @@ describe("server verified financial convergence", () => {
   }
   async function liveCosts() {
     return getDb(ctx.db)
-      .select({ cost: expense.cost })
+      .select({ cost: expenseCostDollarsSql() })
       .from(expense)
       .where(notDeleted(expense));
   }
@@ -156,10 +158,12 @@ describe("server verified financial convergence", () => {
       await convergeFinancialTransaction(ctx.db, input, ctx.actor),
     ).toMatchObject({ status: "already_recorded" });
     expect(await liveCosts()).toEqual([{ cost: 25 }]);
-    await getDb(ctx.db)
-      .update(expense)
-      .set({ cost: 30 })
-      .where(eq(expense.bookingTransactionCode, transaction.output.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { cost: 3000n },
+      eq(expense.bookingTransactionCode, transaction.output.id),
+    );
     expect(
       await convergeFinancialTransaction(ctx.db, input, ctx.actor),
     ).toMatchObject({ status: "review_required" });
@@ -472,10 +476,12 @@ describe("server verified financial convergence", () => {
       purchaseId: purchase.output.id,
     });
     expect(await liveCosts()).toEqual([{ cost: 25 }]);
-    await getDb(ctx.db)
-      .update(expense)
-      .set({ cost: 30 })
-      .where(eq(expense.bookingTransactionCode, transaction.output.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { cost: 3000n },
+      eq(expense.bookingTransactionCode, transaction.output.id),
+    );
     expect(
       await convergeFinancialTransaction(
         ctx.db,
@@ -507,10 +513,12 @@ describe("server verified financial convergence", () => {
       ),
     ).toMatchObject({ status: "applied", expenseId: null });
     expect(await liveCosts()).toEqual([{ cost: 25 }]);
-    await getDb(ctx.db)
-      .update(expense)
-      .set({ cost: 27 })
-      .where(eq(expense.purchaseId, purchase.entityId));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { cost: 2700n },
+      eq(expense.purchaseId, purchase.entityId),
+    );
     expect(
       await convergeFinancialTransaction(
         ctx.db,

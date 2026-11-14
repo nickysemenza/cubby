@@ -22,6 +22,10 @@ import {
 } from "~/entity/entities";
 import { isGeneratedBrowserCrudEntity } from "~/entity/entity-contracts";
 import { entityDetailFor } from "~/entity/entity-detail";
+import {
+  RecordMachineryHeader,
+  MachineryStateFallback,
+} from "~/entity/machinery/record-machinery";
 import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import { PreviewQuery } from "~/entity/preview/preview-query";
 import { RecordWorkQueue } from "~/entity/work-queue/record-work-queue";
@@ -195,7 +199,10 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
               {/* Work rows are not all warnings: the citron rule is the
                     sparse needs-input signal, absent with no work. */}
               <div className="border-s border-signal ps-3 empty:hidden">
-                <RecordWorkQueue id={record.id} />
+                <RecordMachineryHeader entity={entity} id={record.id} />
+                <MachineryStateFallback entity={entity} id={record.id}>
+                  <RecordWorkQueue id={record.id} />
+                </MachineryStateFallback>
               </div>
               <InspectorFieldSections
                 entity={entity}

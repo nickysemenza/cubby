@@ -24,6 +24,7 @@ import { and, count, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { aiCallOwner } from "~/server/ai/policy/call-owner";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import {
   productBrandCodeSql,
   productBrandNameSql,
@@ -65,8 +66,8 @@ const SUGGESTION_LIMIT = 20;
 
 type AssociationExpense = Pick<
   typeof expense.$inferSelect,
-  "id" | "purchaseId" | "name" | "cost" | "lineKind"
->;
+  "id" | "purchaseId" | "name" | "lineKind"
+> & { cost: number | null };
 
 /** Read selectors only; the shared prepare/commit path rechecks ownership and the ledger. */
 export async function loadPhotoAcceptedSourceLines(
@@ -712,7 +713,7 @@ export async function loadPhotoProductEvidence(
           vendorCode: sql<
             string | null
           >`(SELECT v.shortcode FROM "Vendor" v WHERE v.id = ${purchase.vendorId} AND ${notDeleted("v")})`,
-          cost: expense.cost,
+          cost: expenseCostDollarsSql(),
           productQuantity: expense.productQuantity,
           lineKind: expense.lineKind,
         })

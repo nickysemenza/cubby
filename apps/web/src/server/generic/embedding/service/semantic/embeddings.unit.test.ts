@@ -1,9 +1,20 @@
 import { fromPartial } from "@total-typescript/shoehorn";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { AI_CACHE_TTL_SECONDS } from "~/server/ai/adapters";
 import { gatewayEgressEnv } from "~/server/testing/ai-gateway-egress";
+
+let embedTexts: typeof import("./embeddings").embedTexts;
+beforeEach(async () => {
+  vi.stubEnv("CI", "");
+  vi.resetModules();
+  (await import("~/server/cf-env")).setCfEnv(
+    fromPartial<Env>(gatewayEgressEnv("test-gateway-key")),
+  );
+  // Cold module setup must finish before a test owns a fetch response or starts its timers.
+  ({ embedTexts } = await import("./embeddings"));
+});
 
 afterEach(() => {
   vi.useRealTimers();
@@ -32,11 +43,6 @@ interface OpenAiEmbeddingsResponse {
  * bills and attributes it — unobserved.
  */
 async function embedTextsOverFakeGateway(response: OpenAiEmbeddingsResponse) {
-  vi.stubEnv("CI", "");
-  vi.resetModules();
-  (await import("~/server/cf-env")).setCfEnv(
-    fromPartial<Env>(gatewayEgressEnv("test-gateway-key")),
-  );
   const sent: Array<{ url: string; init: RequestInit | undefined }> = [];
   vi.stubGlobal("fetch", (url: string | URL, init?: RequestInit) => {
     sent.push({ url: String(url), init });
@@ -47,7 +53,6 @@ async function embedTextsOverFakeGateway(response: OpenAiEmbeddingsResponse) {
       }),
     );
   });
-  const { embedTexts } = await import("./embeddings");
   return { embedTexts, sent };
 }
 

@@ -5,6 +5,7 @@ import { seedEmailLinkDecision } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import {
   user,
@@ -19,10 +20,10 @@ import {
   run,
 } from "~/server/db/schema";
 import { emailReviewReport } from "~/server/domains/email/repo/report-email";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { queueSearchClassification } from "~/server/domains/purchase-import/repo/gmail/reclassify-state";
 import { startAgentRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture,
   makeProductInput,
@@ -123,7 +124,7 @@ describe("Email review report", () => {
       purchaseId: purchase.id,
       productId: item.entityId,
       name: item.name,
-      cost: 12,
+      cost: 1200n,
       date: "2026-09-01",
       lineKind: "principal",
       costType: "materials",
@@ -322,10 +323,12 @@ describe("Email review report", () => {
           : [],
       ),
     ).toEqual([]);
-    await getDb(ctx.db)
-      .update(purchaseTable)
-      .set({ deletedAt: new Date() })
-      .where(eq(purchaseTable.id, purchase.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { deletedAt: new Date() },
+      eq(purchaseTable.id, purchase.id),
+    );
     const historical = await report(selected.email.shortcode);
     expect(rows(historical, "Purchase links")).toContainEqual(
       expect.objectContaining({

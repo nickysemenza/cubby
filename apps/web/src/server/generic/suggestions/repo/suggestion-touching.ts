@@ -73,7 +73,12 @@ export function suggestionStateAdmission(
       eligibility.family ? eq(s.family, eligibility.family) : undefined,
     );
   return and(
-    inArray(s.family, [...eligibility.families]),
+    inArray(
+      s.family,
+      eligibility.families.filter(
+        (family) => family !== "field" && family !== "recommendation",
+      ),
+    ),
     eq(s.status, eligibility.status),
     eligibility.status === suggestionStatus.enum.pending ? s.active : undefined,
     eligibility.runCode
@@ -113,8 +118,8 @@ function referenceMatches(
     guard?.field ? eq(reviewSuggestion.field, guard.field) : undefined,
     guard?.scope
       ? guard.negate
-        ? sql`(s.subject->>'scope' LIKE ${`${guard.scope}.%`}) IS NOT TRUE`
-        : sql`s.subject->>'scope' LIKE ${`${guard.scope}.%`}`
+        ? sql`(s.subject->>${"scope"} LIKE ${`${guard.scope}.%`}) IS NOT TRUE`
+        : sql`s.subject->>${"scope"} LIKE ${`${guard.scope}.%`}`
       : undefined,
   );
   const match = (entity: string | SQL, token: SQL<string>) => {
@@ -219,10 +224,7 @@ function referenceMatches(
 }
 
 /** Scope identities before expensive automatic receipts; retain a statement-local barrier. */
-export function touchingSuggestionQuery(
-  db: Database,
-  scope: SuggestionRecordScope,
-) {
+function touchingSuggestionQuery(db: Database, scope: SuggestionRecordScope) {
   const client = unwrapDb(db);
   const s = reviewSuggestion;
   const families =

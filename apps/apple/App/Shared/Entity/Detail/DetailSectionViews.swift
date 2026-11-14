@@ -10,9 +10,12 @@ import SwiftUI
 struct EntityHeroView<Actions: View>: View {
     let descriptor: EntityDescriptor
     let row: EntityRow
+    let requestedID: String?
     @ViewBuilder let actions: Actions
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(AppModel.self) private var app
+    @State private var machinery = MachineryModel()
     @State private var showingPhoto = false
     @State private var showingImageChain = false
 
@@ -21,11 +24,12 @@ struct EntityHeroView<Actions: View>: View {
     let showsTitle: Bool
 
     init(
-        descriptor: EntityDescriptor, row: EntityRow, showsTitle: Bool? = nil,
+        descriptor: EntityDescriptor, row: EntityRow, showsTitle: Bool? = nil, requestedID: String? = nil,
         @ViewBuilder actions: () -> Actions
     ) {
         self.descriptor = descriptor
         self.row = row
+        self.requestedID = requestedID
         self.showsTitle = showsTitle ?? true
         self.actions = actions()
     }
@@ -80,7 +84,12 @@ struct EntityHeroView<Actions: View>: View {
             }
             let facts = RecordHeaderFacts(descriptor: descriptor, row: row)
             if facts.hasContent { facts }
+            RecordMachineryHeader(model: machinery, subject: imageSubject)
             actions
+        }
+        .task(id: imageSubject) {
+            machinery = MachineryModel()
+            await machinery.load(app, subject: .init(entity: descriptor.key, id: requestedID ?? row.id))
         }
         .onChange(of: imageSubject) { _, _ in showingImageChain = false }
         .popover(isPresented: $showingImageChain) {
@@ -145,7 +154,7 @@ struct EntityHeroView<Actions: View>: View {
             if kind != nil || state != nil {
                 WrappingFactsLayout(spacing: FieldGuideTokens.Space.sm) {
                     if let kind { KindTag(option: kind) }
-                    if let state { StateBadge(state: state, size: .header) }
+                    if machinery.read == nil, let state { StateBadge(state: state, size: .header) }
                 }
                 .padding(.vertical, 2)
             }

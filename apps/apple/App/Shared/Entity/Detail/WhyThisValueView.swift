@@ -3,13 +3,11 @@ import SwiftUI
 
 // MARK: - Value marks
 
-/// The envelope's refresh state beside a value: a pulsing dot while work is queued or the cached
-/// result is stale, the raw refresh error, and a visible diagnostic for an unknown state.
+/// Published values retain their stale wording; unsupported states remain visible.
 struct FieldValueStatus: View {
     let raw: JSONValue
     /// `nil` summarizes every envelope the row carries.
     var field: FieldDescriptor? = nil
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static func envelopes(in raw: JSONValue, field: FieldDescriptor? = nil) -> [FieldEnvelope] {
         if let field { return FieldEnvelope.of(raw, field: field).map { [$0] } ?? [] }
@@ -23,12 +21,9 @@ struct FieldValueStatus: View {
     var body: some View {
         let envelopes = Self.envelopes(in: raw, field: field)
         if envelopes.contains(where: \.isUpdating) {
-            Image(systemName: "circle.fill")
-                .font(.system(size: 6))
-                .foregroundStyle(FieldGuideTokens.info)
-                .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion)
-                .accessibilityLabel("Updating")
-                .help("Updating")
+            Text(FieldEnvelopePresentation.staleLabel)
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         let unsupported = envelopes.flatMap(\.unsupportedKinds)
         if !unsupported.isEmpty {
@@ -158,6 +153,7 @@ struct WhyThisValueView: View {
     let onClose: () -> Void
 
     @Environment(AppModel.self) private var appModel
+    @State private var machinery = MachineryModel()
     @State private var resolved: FieldExplanationOutput?
     @State private var loadError: String?
     @State private var editor: EditorRequest?
@@ -173,7 +169,13 @@ struct WhyThisValueView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
                 header
-                if notAssessed {
+                if machinery.read == nil, machinery.error != nil {
+                    MachineryPanel(
+                        model: machinery, subject: subject, field: field.key, allowsActions: allowsActions)
+                }
+                if let read = machinery.read {
+                    machineryContent(read)
+                } else if notAssessed {
                     notAssessedContent
                 } else if let resolved {
                     content(resolved)
@@ -198,7 +200,11 @@ struct WhyThisValueView: View {
         #endif
         .accessibilityIdentifier("field.explanation.popover")
         .presentationCompactAdaptation(.sheet)
-        .task { await load() }
+        .task(id: subject.stableKey + field.key) {
+            machinery = MachineryModel()
+            await machinery.load(appModel, subject: subject, field: field.key)
+            await load()
+        }
         .sheet(item: $editor) { request in
             EntityEditorSheet(
                 key: subject.entity, mode: .update(id: subject.id), resolutionAction: request.action,
@@ -223,6 +229,66 @@ struct WhyThisValueView: View {
             .keyboardShortcut(.cancelAction)
             .accessibilityLabel("Close field explanation")
             .accessibilityIdentifier("field.explanation.close")
+        }
+    }
+
+    @ViewBuilder private func machineryContent(_ read: Machinery) -> some View {
+        if let resolved {
+            let envelope = (try? JSONValue(encoding: resolved.envelope)).flatMap(FieldEnvelope.init)
+            if let envelope {
+                effectiveResult(envelope)
+                if let origin = resolved.origin, let line = Self.originLine(origin) {
+                    Text(line).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+        if let preview = read.resetPreview {
+            Text("If you let Cubby decide").font(.caption).foregroundStyle(.secondary)
+            if let result = try? JSONValue(encoding: preview.result) {
+                let envelope: JSONValue = [
+                    "current": (try? resolved.map { try JSONValue(encoding: $0.envelope) })?["current"]
+                        ?? .null,
+                    "result": result,
+                ]
+                if let value = result["decision"]?["outcome"]?["value"], value != .null {
+                    ExplanationEvidenceValue(value: value)
+                } else if let resultEnvelope = FieldEnvelope(envelope) {
+                    Text(resultEnvelope.emptyLabel(field: field))
+                }
+            }
+            if let note = FieldEnvelopePresentation.resetPendingNote(preview.pendingAnswers) {
+                Text(note).font(.caption)
+            }
+            if allowsActions {
+                Button(FieldEnvelopePresentation.resetLabel) {
+                    Task {
+                        await machinery.decide(
+                            appModel, subject: subject, field: field.key,
+                            decision: .init(channel: .assignment, kind: .release, field: .value(field.key)))
+                        resolved = nil
+                        await load()
+                    }
+                }.disabled(machinery.pending || !machinery.supported)
+            }
+        }
+        if allowsActions, resolved?.origin?.holder == .cubby {
+            Button(FieldEnvelopePresentation.vetoLabel) {
+                Task {
+                    await machinery.decide(
+                        appModel, subject: subject, field: field.key,
+                        decision: .init(channel: .veto, kind: .veto, field: .value(field.key)))
+                    resolved = nil
+                    await load()
+                }
+            }.disabled(machinery.pending || !machinery.supported)
+        }
+        MachineryPanel(model: machinery, subject: subject, field: field.key, allowsActions: allowsActions)
+        if let resolved {
+            DisclosureGroup("Field details") { content(resolved, showsChoice: false) }
+        }
+        if let loadError {
+            MachineryRaw(label: "Raw error", value: loadError)
+            Button("Retry explanation") { Task { await load() } }
         }
     }
 
@@ -256,9 +322,9 @@ struct WhyThisValueView: View {
     }
 
     @ViewBuilder
-    private func content(_ explanation: FieldExplanationOutput) -> some View {
+    private func content(_ explanation: FieldExplanationOutput, showsChoice: Bool = true) -> some View {
         let envelope = (try? JSONValue(encoding: explanation.envelope)).flatMap(FieldEnvelope.init)
-        if let envelope {
+        if showsChoice, let envelope {
             effectiveResult(envelope)
             if let origin = explanation.origin, let line = Self.originLine(origin) {
                 Text(line).font(.caption).foregroundStyle(.secondary)
@@ -271,7 +337,7 @@ struct WhyThisValueView: View {
                 )
                 .font(.caption).foregroundStyle(.secondary)
             }
-        } else {
+        } else if showsChoice {
             Text("Unsupported field state").font(.headline).foregroundStyle(FieldGuideTokens.warning)
             ExplanationEvidenceValue(value: (try? JSONValue(encoding: explanation.envelope)) ?? .null)
         }
@@ -423,7 +489,7 @@ struct WhyThisValueView: View {
         }
     }
 
-    /// Use inherited shows only the server's ready preview; otherwise the value is still updating.
+    /// Let Cubby decide shows only the server's ready preview; otherwise the value is still updating.
     /// The removed override's value is never presented as the inherited fallback.
     private func resetPreview(_ envelope: FieldEnvelope) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.xs) {
@@ -694,7 +760,7 @@ struct WhyThisValueView: View {
                 HStack(spacing: FieldGuideTokens.Space.xs) {
                     switch freshness {
                     case .fresh: Text("Cached result ·")
-                    case .stale: Text("Stale result ·")
+                    case .stale: Text(FieldEnvelopePresentation.staleLabel)
                     case .unsupported(let kind): Text("Cached result (unsupported freshness: \(kind)) ·")
                     }
                     DateDisplay(computedAt)

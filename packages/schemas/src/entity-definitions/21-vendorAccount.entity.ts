@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { idField, readOnly, timestampField } from "./field-policy";
 import { z } from "zod";
 import { dateTime } from "../codec";
@@ -12,6 +13,230 @@ import { defineEntity, defineEntityModel } from "./definition.js";
 /** @public The shortcode registry generator parses this module's `definition` and `readSchemas`. */
 export const { definition, readSchemas } = defineEntityModel({
   key: "vendorAccount",
+  edges: [
+    defineEdge({
+      key: "Purchase.vendorAccountId",
+      from: "purchase",
+      to: "vendorAccount",
+      cardinality: "one",
+      inverse: {
+        key: "vendorAccount.incoming.Purchase.vendorAccountId",
+        from: "vendorAccount",
+        to: "purchase",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "Purchase.vendorAccountId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "purchase",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "reference",
+        label: "purchases",
+        description:
+          "A purchase fetched through this member-owned vendor login.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-purchases",
+              effect: "block",
+              description:
+                "Fetched purchases retain the vendor account that supplied their evidence.",
+            },
+            handler: null,
+            order: 0,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "repoint-purchases",
+              effect: "repoint",
+              description:
+                "Purchases fetched through the duplicate account name the surviving account.",
+            },
+            handler: null,
+            order: 0,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "Run.vendorAccountId",
+      from: "run",
+      to: "vendorAccount",
+      cardinality: "one",
+      inverse: {
+        key: "vendorAccount.incoming.Run.vendorAccountId",
+        from: "vendorAccount",
+        to: "run",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "Run.vendorAccountId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "run",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "import runs",
+        description: "A durable run executed for this vendor account.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-runs",
+              effect: "block",
+              description: "Import runs retain their vendor-account scope.",
+            },
+            handler: null,
+            order: 1,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "repoint-runs",
+              effect: "repoint",
+              description:
+                "Import runs move their scope to the surviving account.",
+            },
+            handler: null,
+            order: 1,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "ImportSourceClaim.vendorAccountId",
+      from: "row:ImportSourceClaim",
+      to: "vendorAccount",
+      cardinality: "one",
+      inverse: {
+        key: "vendorAccount.incoming.ImportSourceClaim.vendorAccountId",
+        from: "vendorAccount",
+        to: "row:ImportSourceClaim",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "ImportSourceClaim.vendorAccountId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason:
+          "Workflow evidence about entities, not a relationship between them.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "import source claims",
+        description:
+          "An idempotent source claim scoped to this vendor account.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-source-claims",
+              effect: "block",
+              description:
+                "Replay-safe source claims retain their vendor-account scope.",
+            },
+            handler: null,
+            order: 2,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "repoint-source-claims",
+              effect: "repoint",
+              description:
+                "Replay-safe source claims scope to the surviving account.",
+            },
+            handler: null,
+            order: 2,
+          },
+        },
+      },
+    }),
+  ],
+
   names: { singular: "Vendor Account", plural: "Vendor Accounts" },
   route: {
     basePath: "vendor-accounts",
@@ -392,35 +617,49 @@ export const { definition, readSchemas } = defineEntityModel({
 
 export default defineEntity(
   definition,
-  (r) => [
-    r
-      .path("purchase", "many", [
-        { edge: "Purchase.vendorAccountId", direction: "incoming" },
-      ])
-      .named("purchases", "Purchases", {
-        view: {
-          columnGroup: "Imports",
-          order: "newest",
-          defaultVisible: true,
-          filter: false,
-        },
-      }),
-    // Its Vendor's Emails owned by the account's member (ADR 0011).
-    r
-      .derived("email", "many", "vendorAccountId", [
-        "ImportSourceOrder",
-        "EmailPurchaseDecision",
-        "OrderMailEvent",
-      ])
-      .named("emails", "Emails", {
-        sources: [
-          r
-            .query("vendorAccountEmails", "many")
-            .source("accepted", "Account Email evidence"),
-        ],
-      }),
-    r.field("vendorId").named("vendor", "Vendor"),
-    r.field("ledgerPartyId").named("ledger-party", "Member"),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r
+          .path("purchase", "many", [
+            { edge: "Purchase.vendorAccountId", direction: "incoming" },
+          ])
+          .named("purchases", "Purchases", {
+            view: {
+              columnGroup: "Imports",
+              order: "newest",
+              defaultVisible: true,
+              filter: false,
+            },
+          }),
+        "purchase.vendor-account",
+      ),
+      // Its Vendor's Emails owned by the account's member (ADR 0011).
+      r.declare(
+        r
+          .derived("email", "many", "vendorAccountId", [
+            "ImportSourceOrder",
+            "EmailPurchaseDecision",
+            "OrderMailEvent",
+          ])
+          .named("emails", "Emails", {
+            sources: [
+              r
+                .query("vendorAccountEmails", "many")
+                .source("accepted", "Account Email evidence"),
+            ],
+          }),
+        "email.vendorAccount.emails",
+      ),
+      r.declare(
+        r.field("vendorId").named("vendor", "Vendor"),
+        "vendor.vendor-accounts",
+      ),
+      r.declare(
+        r.field("ledgerPartyId").named("ledger-party", "Member"),
+        "ledgerParty.vendor-accounts",
+      ),
+    ],
+  }),
   readSchemas,
 );

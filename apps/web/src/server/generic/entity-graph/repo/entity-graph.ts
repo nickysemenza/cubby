@@ -139,7 +139,7 @@ const metadataFor = (entity: Entity, alias = "t") => {
     sql.raw(`${alias ? `${alias}.` : ""}"${name}"`);
   switch (entity) {
     case "expense":
-      return sql`jsonb_strip_nulls(jsonb_build_object('date', ${column("date")}::text, 'amount', ${column("cost")}::text))`;
+      return sql`jsonb_strip_nulls(jsonb_build_object('date', ${column("date")}::text, 'amount', (${column("costMinor")}::float8 / 100)::text))`;
     case "purchase":
       return sql`jsonb_strip_nulls(jsonb_build_object('date', ${column("date")}::text))`;
     case "inventory":

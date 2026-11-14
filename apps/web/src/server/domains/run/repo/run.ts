@@ -33,13 +33,13 @@ import {
 } from "~/server/db/helpers";
 import { email as emailTable, run as runTable } from "~/server/db/schema";
 import { aiUsage } from "~/server/db/schema";
-import { defineRepository } from "~/server/entity-kernel/repo/repository";
-import { createEntityReader } from "~/server/entity-kernel/repo/repository";
 import {
   readRunRollups,
   runStalledSql,
   runNeedsAttentionSql,
-} from "~/server/generic/jobs/repo/job-queue";
+} from "~/server/domains/run/repo/run-rollup";
+import { defineRepository } from "~/server/entity-kernel/repo/repository";
+import { createEntityReader } from "~/server/entity-kernel/repo/repository";
 import { listReadValue } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import { runCostLabel } from "~/server/generic/list/repo/list-display-labels";
@@ -182,7 +182,7 @@ const runRead = {
           : Promise.resolve([]),
         readRunRollups(
           isTransaction(db) ? databaseForTransaction(db) : db,
-          rows,
+          rows.map((row) => row.id),
         ),
       ]);
       const successorOf = new Map<string, string>();
@@ -237,7 +237,8 @@ const runRead = {
           (entry) => entry.family === "statement_transaction",
         );
         const importId =
-          statement?.family === "statement_transaction"
+          statement?.family === "statement_transaction" &&
+          typeof statement.scope.importId === "string"
             ? statement.scope.importId
             : undefined;
         return importId ? [importId] : [];
@@ -321,7 +322,9 @@ const runRead = {
       const importId = sweepRunInput
         .safeParse(row.input)
         .data?.families.flatMap((entry) =>
-          entry.family === "statement_transaction" && entry.scope.importId
+          entry.family === "statement_transaction" &&
+          typeof entry.scope.importId === "string" &&
+          entry.scope.importId
             ? [entry.scope.importId]
             : [],
         )[0];

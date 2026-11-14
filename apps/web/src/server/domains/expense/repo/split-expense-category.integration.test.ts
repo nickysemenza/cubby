@@ -4,12 +4,14 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { expense } from "~/server/db/schema";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { splitExpense } from "~/server/domains/purchase/repo/purchase";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 describe("atomic split classification intent", () => {
   const ctx = withTestDb();
@@ -27,13 +29,13 @@ describe("atomic split classification intent", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic split vendor",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-01",
     });
-    const original = await insertWithShortcode(ctx.db, "expense", {
+    const original = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Unitemized fixture charge",
-      cost: 60,
+      cost: 6000n,
       date: "2026-09-01",
       purchaseId: purchase.id,
       spendingCategoryId: originalCategory.id,
@@ -83,7 +85,7 @@ describe("atomic split classification intent", () => {
     const rows = await getDb(ctx.db)
       .select({
         name: expense.name,
-        cost: expense.cost,
+        cost: expenseCostDollarsSql(),
         category: expense.spendingCategoryId,
         basis: expense.lineBasis,
       })
@@ -155,7 +157,7 @@ describe("atomic split classification intent", () => {
       ),
     ).rejects.toMatchObject({ reason: "CLASSIFICATION_POLICY_REFUSED" });
     const live = await getDb(ctx.db)
-      .select({ id: expense.id, cost: expense.cost })
+      .select({ id: expense.id, cost: expenseCostDollarsSql() })
       .from(expense)
       .where(and(eq(expense.purchaseId, purchase.id), notDeleted(expense)));
     expect(live).toEqual([{ id: original.id, cost: 60 }]);

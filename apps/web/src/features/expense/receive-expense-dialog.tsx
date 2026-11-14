@@ -28,7 +28,7 @@ import {
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Fragment, useRef, useState, type FC } from "react";
+import { Fragment, useState, type FC } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -39,7 +39,6 @@ import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-p
 import { AmountFieldGroup } from "~/features/inventory/amount-field-group";
 import { inventory as inventoryOperations } from "~/integrations/tanstack-query/generated/domains/inventory.gen";
 import { FieldRecordValue } from "~/ui/derived/record-value";
-import { showErrorToast } from "~/ui/feedback/error-details";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { NumberInput } from "~/ui/forms/number-input";
 import { Row, Stack } from "~/ui/layout";
@@ -159,19 +158,11 @@ const ReceiveBody: FC<ReceiveBodyProps> = ({
   });
   const locationId = locationShortcode.safeParse(form.watch("location")).data;
   const addQuantity = form.watch("addQuantity");
-  const receiptHandler = useRef<((recordId: string) => Promise<void>) | null>(
-    null,
-  );
 
   const receive = useActionMutation({
     mutationFn: inventoryOperations.receiveExpense.mutationOptions,
     success: "Received into Inventory",
-    onSuccess: async (data) => {
-      try {
-        await receiptHandler.current?.(data.item.id);
-      } catch (error) {
-        showErrorToast(error, "Received, but suggestion receipt failed");
-      }
+    onSuccess: async () => {
       onDone();
     },
   });
@@ -397,7 +388,6 @@ const ReceiveBody: FC<ReceiveBodyProps> = ({
       <FieldSuggestionProvider
         entity="inventory"
         mode="create"
-        receiptHandler={receiptHandler}
         staticBasis={{ productId }}
         fieldKeys={["locationId"]}
         paths={{ locationId: "location" }}

@@ -22,7 +22,6 @@ import {
   financialTransaction,
   sourceOccurrence,
   sourceTransactionRecord,
-  suggestionTable,
 } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import {
@@ -30,18 +29,19 @@ import {
   lockFinancialEvidenceKeys,
 } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
-import { providerIdentityClaims } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
-import { constraintViolation } from "~/server/errors/app-error";
-import { recordChange } from "~/server/generic/changes/repo/change";
-import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
-
-import { auditEvidenceRows } from "./intake-audit";
 import {
   checkLockedIdentity,
   selectIdentityOwner,
   type SourceIdentityLoaded,
   type SourceIdentityPlan,
-} from "./source-identity-plan";
+} from "~/server/domains/transaction-import/policy/source-identity-plan";
+import { providerIdentityClaims } from "~/server/domains/transaction-import/policy/source-transaction-record-identity";
+import { constraintViolation } from "~/server/errors/app-error";
+import { recordChange } from "~/server/generic/changes/repo/change";
+import { emitWrites } from "~/server/kernel/api";
+
+import { auditEvidenceRows } from "./intake-audit";
+import { dirtySourceOccurrences } from "./source-event-dirty";
 
 const sameSet = (left: readonly string[], right: readonly string[]) =>
   JSON.stringify([...new Set(left)].sort()) ===
@@ -351,29 +351,23 @@ export async function applySourceIdentity(
           return constraintViolation("The retired owner disappeared.");
         break;
       }
-      case "move_evidence":
-        await db
+      case "move_evidence": {
+        const moved = await db
           .update(sourceTransactionRecord)
           .set({ occurrenceId: write.to })
-          .where(eq(sourceTransactionRecord.occurrenceId, write.from));
+          .where(eq(sourceTransactionRecord.occurrenceId, write.from))
+          .returning({ id: sourceTransactionRecord.id });
+        await emitWrites(databaseForTransaction(tx), {
+          table: sourceTransactionRecord,
+          ids: moved.map((row) => row.id),
+          columns: ["occurrenceId"],
+        });
         await db
           .update(financialEvidenceAlias)
           .set({ occurrenceId: write.to })
           .where(eq(financialEvidenceAlias.occurrenceId, write.from));
         break;
-      case "supersede_suggestions":
-        await transitionSuggestionStates(
-          databaseForTransaction(tx),
-          and(
-            eq(suggestionTable.family, "statement_transaction"),
-            eq(suggestionTable.status, "pending"),
-            suggestionTable.active,
-            inArray(suggestionTable.recordId, write.recordIds),
-            sql`${suggestionTable.data}->>'chargeKey'=${write.chargeKey}`,
-          ),
-          { active: false, status: "superseded" },
-        );
-        break;
+      }
       case "set_owner": {
         const overlaps = write.overlap
           ? (
@@ -405,6 +399,16 @@ export async function applySourceIdentity(
           })
           .where(eq(sourceOccurrence.id, write.id))
           .returning();
+        await emitWrites(databaseForTransaction(tx), {
+          table: sourceOccurrence,
+          ids: [write.id],
+          columns: [
+            "acceptedTransactionId",
+            "reviewState",
+            "currentObservationId",
+            "accountId",
+          ],
+        });
         break;
       }
       case "audit_resolution": {
@@ -478,5 +482,9 @@ export async function applySourceIdentity(
       }
     }
   }
+  await dirtySourceOccurrences(
+    tx,
+    [retired?.id, updatedOwner?.id].flatMap((id) => (id ? [id] : [])),
+  );
   return plan.result;
 }

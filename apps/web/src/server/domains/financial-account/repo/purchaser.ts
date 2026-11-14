@@ -1,5 +1,3 @@
-import { financialAccountIdentityKind } from "@cubby/schemas/financial-account";
-import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
 import { eq, sql, type SQL } from "drizzle-orm";
 
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
@@ -8,6 +6,7 @@ import { notDeleted } from "~/server/db/helpers/predicates";
 import { requestedRows } from "~/server/db/helpers/requested";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { financialAccount, ledgerParty } from "~/server/db/retained-tables";
+import { accountPurchaserKey } from "~/server/domains/financial-account/policy/purchaser";
 
 /** Any authorized access covering the date, including either bound, defeats sole use. */
 export const soleCardAccessSql = (
@@ -20,9 +19,6 @@ export const soleCardAccessSql = (
       AND (membership->>'validTo' IS NULL OR ${date} <= (membership->>'validTo')::date)
   )
 )`;
-
-export const accountPurchaserKey = (accountId: string, date: string | null) =>
-  `${accountId}:${date ?? ""}`;
 
 /** Batch raw holder evidence, including invalid holders so null-to-null changes invalidate approval. */
 export async function loadAccountPurchaserProofs(
@@ -77,81 +73,4 @@ export async function loadAccountPurchaserProofs(
   return new Map(
     rows.map((row) => [accountPurchaserKey(row.accountId, row.date), row]),
   );
-}
-
-/** Household spending authority does not identify an individual purchaser. */
-export function liveHouseholdSpendingAccount(
-  account:
-    | (typeof financialAccount.$inferSelect & {
-        ledgerParty: typeof ledgerParty.$inferSelect | null;
-      })
-    | null
-    | undefined,
-): boolean {
-  return (
-    !!account &&
-    !account.deletedAt &&
-    householdSpendingKinds.has(account.identity.kind) &&
-    account.ledgerParty?.kind === ledgerPartyKind.enum.household &&
-    !account.ledgerParty.deletedAt
-  );
-}
-
-/** Loan escrow can spend household funds without identifying a purchaser. */
-export function liveHouseholdLoan(
-  account: Parameters<typeof liveHouseholdSpendingAccount>[0],
-): boolean {
-  return (
-    !!account &&
-    !account.deletedAt &&
-    account.identity.kind === financialAccountIdentityKind.enum.loan &&
-    account.ledgerParty?.kind === ledgerPartyKind.enum.household &&
-    !account.ledgerParty.deletedAt
-  );
-}
-
-// Loans and other liabilities hold payments, not spending.
-const householdSpendingKinds = new Set<string>([
-  financialAccountIdentityKind.enum.credit_card,
-  financialAccountIdentityKind.enum.bank_account,
-  financialAccountIdentityKind.enum.stored_value,
-]);
-
-/** Household-card authority does not identify an individual purchaser. */
-function liveHouseholdCard(
-  account: typeof financialAccount.$inferSelect & {
-    ledgerParty: typeof ledgerParty.$inferSelect | null;
-  },
-): boolean {
-  return (
-    !account.deletedAt &&
-    account.identity.kind === financialAccountIdentityKind.enum.credit_card &&
-    account.ledgerParty?.kind === ledgerPartyKind.enum.household &&
-    !account.ledgerParty.deletedAt
-  );
-}
-
-/** Purchaser authority is independent of dated funding attribution. */
-export function financialAccountPurchaser(
-  account: typeof financialAccount.$inferSelect & {
-    ledgerParty: typeof ledgerParty.$inferSelect | null;
-  },
-  proof: ReturnType<
-    Awaited<ReturnType<typeof loadAccountPurchaserProofs>>["get"]
-  >,
-) {
-  if (account.deletedAt) return null;
-  if (
-    account.ledgerParty?.kind === ledgerPartyKind.enum.member &&
-    !account.ledgerParty.deletedAt
-  )
-    return account.ledgerParty;
-  if (
-    liveHouseholdCard(account) &&
-    proof?.soleAccess &&
-    proof.primaryCardholder?.kind === ledgerPartyKind.enum.member &&
-    !proof.primaryCardholder.deletedAt
-  )
-    return proof.primaryCardholder;
-  return null;
 }

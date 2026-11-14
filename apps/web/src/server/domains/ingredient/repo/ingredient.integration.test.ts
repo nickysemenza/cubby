@@ -693,7 +693,7 @@ describe("deleteIngredients", () => {
   });
 
   /**
-   * `Plant.ingredientId` is informational-only (INGREDIENT_DELETE_EDGE_POLICY
+   * `Plant.ingredientId` is informational-only (DECLARED_EDGE_DELETE_POLICIES.ingredient
    * declares it `detach`), so deleting the ingredient must clear the link
    * rather than block or leave a dangling FK.
    */

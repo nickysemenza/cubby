@@ -172,6 +172,10 @@ interface AgentFetchOptions extends Pick<
   | "beforePaidRequest"
   | "beforePlanRequest"
 > {
+  modelTurn?: (
+    input: z.JSONType,
+    send: () => Promise<Response>,
+  ) => Promise<Response>;
   funding?: InferenceFunding;
   fundingFallback?: boolean;
   fixedModel?: PurchaseAgentEnvironment["fixedModel"];
@@ -382,7 +386,18 @@ export function cubbyAgentProviders(
     return withContextCapture(
       async (request, init) => {
         finalTransport = undefined;
-        const response = await routedFetch(request, init);
+        const wire = input.modelTurn ? new Request(request, init) : undefined;
+        const response =
+          input.modelTurn && wire
+            ? await input.modelTurn(
+                {
+                  provider: route,
+                  funding: funding ?? null,
+                  body: await wire.clone().text(),
+                },
+                () => routedFetch(wire),
+              )
+            : await routedFetch(request, init);
         // Selection can precede quota fallback. Only the final successful
         // plan response is unbilled; HTTP refusals can trigger SDK retries.
         if (response.ok && finalTransport === "chatgpt") onUnbilledResponse?.();

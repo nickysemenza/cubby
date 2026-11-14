@@ -127,7 +127,7 @@ describe("recipe totals cascade", () => {
       parent: await resolve(parent.id),
       grandparent: await resolve(grandparent.id),
     };
-    // Settle saved recipe intent through the production Job before checking changes.
+    // Settle saved recipe intent through the snapshot Pass before checking changes.
     await costing().recompute([ids.child, ids.parent, ids.grandparent]);
     await drainRecipeRefreshJobs(ctx.db, costing());
     return { ...ids, product, ingredient };
@@ -150,7 +150,7 @@ describe("recipe totals cascade", () => {
 
   const drainRecipes = () => drainRecipeRefreshJobs(ctx.db, costing());
 
-  it("refreshes a parent chain through the bounded recipe Job", async () => {
+  it("refreshes a parent chain through the bounded snapshot Pass", async () => {
     const tree = await seedTree();
     await drainRecipes();
     queue.messages.length = 0;
@@ -199,6 +199,7 @@ describe("recipe totals cascade", () => {
     expect(await stale(tree.parent)).toBe(false);
     queue.messages.length = 0;
     await drainRecipes();
-    expect(queue.messages).toEqual([]);
+    expect(await stale(tree.child)).toBe(false);
+    expect(await stale(tree.parent)).toBe(false);
   });
 });

@@ -1,15 +1,18 @@
 import type { ExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import type { ExpenseAnalyzeOut, ExpenseFilters } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
+import { nullableWholeCentToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { unwrapDb } from "~/server/db/helpers";
 import { expense, product, productCategory } from "~/server/db/schema";
 import { expenseAnalyzeWorkflow } from "~/server/domains/expense/operations/expense.server";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   createProductIdentityFixture,
   makeProductInput,
@@ -28,9 +31,9 @@ const line = (
     "purchaseId" | "spendingCategoryId"
   > = {},
 ) =>
-  insertWithShortcode(ctx.db, "expense", {
+  createPurchaseEventRecord(ctx.db, "expense", {
     name: `synthetic root ${name}`,
-    cost,
+    cost: nullableWholeCentToMinor(cost),
     lineKind,
     date: "2026-09-20",
     costType: "materials",
@@ -53,11 +56,11 @@ const fixture = async () => {
   const vendor = await insertWithShortcode(ctx.db, "vendor", {
     name: "Synthetic root vendor",
   });
-  const order = await insertWithShortcode(ctx.db, "purchase", {
+  const order = await createPurchaseEventRecord(ctx.db, "purchase", {
     vendorId: vendor.id,
     date: "2026-09-20",
   });
-  const shippingOnly = await insertWithShortcode(ctx.db, "purchase", {
+  const shippingOnly = await createPurchaseEventRecord(ctx.db, "purchase", {
     vendorId: vendor.id,
     date: "2026-09-20",
   });
@@ -307,7 +310,7 @@ describe("expense.analyze root Spending Category roll-up", () => {
       });
       expect(
         await unwrapDb(ctx.db)
-          .select({ cost: expense.cost })
+          .select({ cost: expenseCostDollarsSql() })
           .from(expense)
           .where(where),
       ).toEqual([{ cost: 2 }]);

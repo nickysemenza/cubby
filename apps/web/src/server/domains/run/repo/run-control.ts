@@ -42,7 +42,12 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { advisoryXactLock } from "~/server/db/advisory-lock";
 import { vendorAccountLabelSql } from "~/server/db/computed/vendor-account-label";
-import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
+import {
+  databaseForTransaction,
+  getDb,
+  notDeleted,
+  withTransaction,
+} from "~/server/db/helpers";
 import { outer, related } from "~/server/db/helpers/related";
 import {
   ledgerParty,
@@ -64,6 +69,7 @@ import {
   readRunPurpose,
   runPurposePolicy,
 } from "~/server/domains/run/repo/purpose-policy";
+import { cancelRunWork } from "~/server/domains/run/repo/run-execution";
 import { failOperationsForRun } from "~/server/domains/run/repo/run-operation";
 import { recordRunProgress } from "~/server/domains/run/repo/run-progress";
 import {
@@ -393,6 +399,15 @@ export async function markRunFailed(
 ) {
   const runId = runEntityId.parse(input.runId);
   const run = await withTransaction(db, async (tx) => {
+    const kernel = await import("~/server/kernel/api");
+    const write = {
+      table: runTable,
+      entity: "run",
+      ids: [runId],
+      columns: ["status", "endedAt", "failureCode"],
+    };
+    // Revisions before the Run row, the order a kernel apply takes.
+    await kernel.lockWrites(databaseForTransaction(tx), write);
     const [failed] = await tx
       .update(runTable)
       .set({
@@ -420,6 +435,7 @@ export async function markRunFailed(
         ledgerPartyId: runTable.ledgerPartyId,
       });
     if (!failed) return failed;
+    await kernel.emitWrites(databaseForTransaction(tx), write);
     await recordChange(tx, {
       kind: "source",
       categories: ["run"],
@@ -523,8 +539,18 @@ export async function controlRun(
   )
     throw new Error("Only the member this Run belongs to can control it");
   return withTransaction(db, async (tx) => {
+    const kernel = await import("~/server/kernel/api");
+    // Every action ends or creates a Run, which dirties kernel scopes: the
+    // gate before the vendor-account and Run locks below.
+    await kernel.enterHouseholdGate(databaseForTransaction(tx));
     if (scope.vendorAccountId)
       await advisoryXactLock(tx, "run-vendor-account", scope.vendorAccountId);
+    const ended = {
+      table: runTable,
+      entity: "run",
+      ids: [scope.runId],
+      columns: ["status", "endedAt", "failureCode"],
+    };
     const [locked] = await tx
       .select({
         status: runTable.status,
@@ -792,6 +818,8 @@ export async function controlRun(
           updatedAt: new Date(),
         })
         .where(eq(runTable.id, scope.runId));
+      await cancelRunWork(tx, scope.runId);
+      await kernel.emitWrites(databaseForTransaction(tx), ended);
       await failOperationsForRun(
         tx,
         scope.runId,
@@ -814,6 +842,7 @@ export async function controlRun(
         .update(runTable)
         .set({ status: "paused", updatedAt: new Date() })
         .where(eq(runTable.id, scope.runId));
+      await cancelRunWork(tx, scope.runId);
       return {
         publicId: input.runPublicId,
         status: "paused" as const,

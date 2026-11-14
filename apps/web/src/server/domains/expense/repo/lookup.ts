@@ -3,6 +3,7 @@ import { type ExpenseId, parseEntityId } from "@cubby/schemas/identifiers";
 import { expenseCostSign } from "@cubby/schemas/project";
 import type { ExpenseFilters } from "@cubby/schemas/project";
 import { rawExpenseListItemOut } from "@cubby/schemas/work-raw-read";
+import { nullableMinorToMoney } from "@cubby/shared";
 import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { QueryBuilder } from "drizzle-orm/pg-core";
@@ -456,6 +457,7 @@ const loadExpenseJoinedRows = async (
         row.id,
         {
           ...row,
+          cost: nullableMinorToMoney(row.cost),
           project: row.project ?? null,
           product: row.product ?? null,
           purchase: row.purchase ?? null,

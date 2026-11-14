@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { borrowedImagesField } from "./image-fields";
 import { aliasList, idField, readOnly, timestampField } from "./field-policy";
 import {
@@ -13,6 +14,310 @@ import { z } from "zod";
 export const { definition, readSchemas } = defineEntityModel(
   {
     key: "ingredient",
+    edges: [
+      defineEdge({
+        key: "Product.ingredientId",
+        from: "product",
+        to: "ingredient",
+        cardinality: "one",
+        inverse: {
+          key: "ingredient.incoming.Product.ingredientId",
+          from: "ingredient",
+          to: "product",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "Product.ingredientId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "entity",
+          entity: "product",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "reference",
+          label: "products",
+          description:
+            "A purchasable product mapped to this ingredient — the one hop nutrition and costing resolve through (ingredient → product → fdc_id), never a direct link.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "block-live-product",
+                effect: "block",
+                description:
+                  "An ingredient linked to a product can't be deleted — unlink or delete the product first.",
+              },
+              handler: null,
+              order: 0,
+            },
+            merge: {
+              kind: "disposition",
+              disposition: {
+                code: "repoint-to-survivor",
+                effect: "repoint",
+                description:
+                  "A merged ingredient's linked products are re-pointed onto the surviving ingredient.",
+              },
+              handler: null,
+              order: 0,
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "Plant.ingredientId",
+        from: "plant",
+        to: "ingredient",
+        cardinality: "one",
+        inverse: {
+          key: "ingredient.incoming.Plant.ingredientId",
+          from: "ingredient",
+          to: "plant",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "Plant.ingredientId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "entity",
+          entity: "plant",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "reference",
+          label: "plants",
+          description:
+            "A plant can name the cooking ingredient its harvest usually becomes; informational only.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "clearFk",
+                effect: "detach",
+                description:
+                  "A plant's ingredient link is informational; deleting the ingredient clears it.",
+              },
+              handler: null,
+              order: 1,
+            },
+            merge: {
+              kind: "disposition",
+              disposition: {
+                code: "repoint-to-survivor",
+                effect: "repoint",
+                description:
+                  "Plants linked to a merged ingredient move to the survivor.",
+              },
+              handler: null,
+              order: 1,
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "MealFoodEntry.ingredientId",
+        from: "row:MealFoodEntry",
+        to: "ingredient",
+        cardinality: "one",
+        inverse: {
+          key: "ingredient.incoming.MealFoodEntry.ingredientId",
+          from: "ingredient",
+          to: "row:MealFoodEntry",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "MealFoodEntry.ingredientId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "column",
+          column: "MealFoodEntry.mealId",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "usage",
+          label: "meal food entries",
+          description:
+            "A recorded ingredient quantity assigned to an eater at a meal, retaining the ingredient as its authored source.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "block-live-meal-food-entry",
+                effect: "block",
+                description:
+                  "An ingredient recorded in a live meal food entry cannot be deleted.",
+              },
+              handler: null,
+              order: 2,
+            },
+            merge: {
+              kind: "disposition",
+              disposition: {
+                code: "repoint-to-survivor",
+                effect: "repoint",
+                description:
+                  "Meal food entries retain their entered amounts while moving to the surviving ingredient.",
+              },
+              handler: null,
+              order: 2,
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "RecipeSectionIngredient.ingredientId",
+        from: "row:RecipeSectionIngredient",
+        to: "ingredient",
+        cardinality: "one",
+        inverse: {
+          key: "ingredient.incoming.RecipeSectionIngredient.ingredientId",
+          from: "ingredient",
+          to: "row:RecipeSectionIngredient",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "RecipeSectionIngredient.ingredientId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "via",
+          column: "RecipeSectionIngredient.recipeSectionId",
+          table: "RecipeSection",
+          owner: "RecipeSection.recipeId",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "usage",
+          label: "recipe ingredient lines",
+          description:
+            "A line in a recipe section that calls for this ingredient with its own amount, unit, and note — a recipe reference, never an inventory decrement (nothing consumes stock as a side effect).",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "block-live-recipe-usage",
+                effect: "block",
+                description:
+                  "An ingredient still used in a live recipe can't be deleted — remove it from every recipe first.",
+              },
+              handler: {
+                module: "~/server/domains/ingredient/repo/deletion",
+                export: "refuseLiveRecipeUsage",
+              },
+              order: 3,
+            },
+            merge: {
+              kind: "disposition",
+              disposition: {
+                code: "repoint-to-survivor",
+                effect: "repoint",
+                description:
+                  "A merged ingredient's recipe lines are re-pointed onto the surviving ingredient.",
+              },
+              handler: null,
+              order: 3,
+            },
+          },
+        },
+      }),
+    ],
+
     names: { singular: "Ingredient", plural: "Ingredients" },
     route: {
       listColumns: {
@@ -686,54 +991,74 @@ export const { definition, readSchemas } = defineEntityModel(
 
 export default defineEntity(
   definition,
-  (r) => [
-    r
-      .path("product", "many", [
-        { edge: "Product.ingredientId", direction: "incoming" },
-      ])
-      .named("products", "Products"),
-    r
-      .path("plant", "many", [
-        { edge: "Plant.ingredientId", direction: "incoming" },
-      ])
-      .named("plants", "Plants"),
-    r
-      .path("recipe", "many", [
-        {
-          edge: "RecipeSectionIngredient.ingredientId",
-          direction: "incoming",
-        },
-        {
-          edge: "RecipeSectionIngredient.recipeSectionId",
-          direction: "outgoing",
-        },
-        { edge: "RecipeSection.recipeId", direction: "outgoing" },
-      ])
-      .named("recipes", "Recipes"),
-    r.field("recipeId").named("recipe", "Recipe", {
-      inverseOmit:
-        "The recipe page is custom; its workflow slot shows where a recipe is used as an ingredient.",
-    }),
-    r
-      .path("meal", "many", [
-        { edge: "MealFoodEntry.ingredientId", direction: "incoming" },
-        { edge: "MealFoodEntry.mealId", direction: "outgoing" },
-      ])
-      .named("meals", "Eaten at meals", {
-        view: {
-          columnGroup: "Use",
-          order: "newest",
-          inverseKey: "meal.foodIngredients",
-        },
-      }),
-    r
-      .path("ledgerParty", "many", [
-        { edge: "MealFoodEntry.ingredientId", direction: "incoming" },
-        { edge: "MealFoodEntry.ledgerPartyId", direction: "outgoing" },
-      ])
-      .named("eaters", "Eaten by", {
-        view: { columnGroup: "Use", filterPrefix: "eater" },
-      }),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r
+          .path("product", "many", [
+            { edge: "Product.ingredientId", direction: "incoming" },
+          ])
+          .named("products", "Products"),
+        "product.ingredient",
+      ),
+      r.declare(
+        r
+          .path("plant", "many", [
+            { edge: "Plant.ingredientId", direction: "incoming" },
+          ])
+          .named("plants", "Plants"),
+        "plant.ingredient",
+      ),
+      r.declare(
+        r
+          .path("recipe", "many", [
+            {
+              edge: "RecipeSectionIngredient.ingredientId",
+              direction: "incoming",
+            },
+            {
+              edge: "RecipeSectionIngredient.recipeSectionId",
+              direction: "outgoing",
+            },
+            { edge: "RecipeSection.recipeId", direction: "outgoing" },
+          ])
+          .named("recipes", "Recipes"),
+        "recipe.ingredients",
+      ),
+      r.declare(
+        r.field("recipeId").named("recipe", "Recipe", {
+          inverseOmit:
+            "The recipe page is custom; its workflow slot shows where a recipe is used as an ingredient.",
+        }),
+        "recipe.ingredient.recipe",
+      ),
+      r.declare(
+        r
+          .path("meal", "many", [
+            { edge: "MealFoodEntry.ingredientId", direction: "incoming" },
+            { edge: "MealFoodEntry.mealId", direction: "outgoing" },
+          ])
+          .named("meals", "Eaten at meals", {
+            view: {
+              columnGroup: "Use",
+              order: "newest",
+              inverseKey: "meal.foodIngredients",
+            },
+          }),
+        "meal.foodIngredients",
+      ),
+      r.declare(
+        r
+          .path("ledgerParty", "many", [
+            { edge: "MealFoodEntry.ingredientId", direction: "incoming" },
+            { edge: "MealFoodEntry.ledgerPartyId", direction: "outgoing" },
+          ])
+          .named("eaters", "Eaten by", {
+            view: { columnGroup: "Use", filterPrefix: "eater" },
+          }),
+        "ledgerParty.ingredient.eaters",
+      ),
+    ],
+  }),
   readSchemas,
 );

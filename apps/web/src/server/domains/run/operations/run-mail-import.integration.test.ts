@@ -1,20 +1,20 @@
 import { userId } from "@cubby/schemas/identifiers";
 import { mailboxDiscoveryInput } from "@cubby/schemas/mailbox-research";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 import type { JSONType } from "zod";
 
 import { browserOperationPath } from "~/lib/browser-operation-path";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { setCfEnv } from "~/server/cf-env";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
+import { kernelPass } from "~/server/db/kernel-schema";
 import { appSettings, run, user } from "~/server/db/schema";
 import { startMailDiscovery } from "~/server/domains/purchase-import/operations/gmail/discovery";
 import { checkpointMailboxCoverage } from "~/server/domains/purchase-import/repo/gmail/persistence";
-import { deleteJobs } from "~/server/generic/jobs/jobs.fixtures";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { readRunPass } from "~/server/domains/run/repo/run-execution";
 import { systemPrincipal } from "~/server/http/authenticate";
 import { requireActor } from "~/server/http/request-context";
 import { createOperationDispatch } from "~/server/operation-runtime/operation-dispatch.server";
@@ -22,7 +22,7 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 
 // Failures: an unauthenticated or foreign toggle; discovery running while the
 // switch is off; a launch fanning out to another mailbox or duplicating an
-// active Job; Vendor names widening targeted search beyond verified
+// active Pass; Vendor names widening targeted search beyond verified
 // senders and website domains. Real PostgreSQL backs every step.
 describe("automatic Mail import switch", () => {
   const ctx = withTestDb();
@@ -205,13 +205,18 @@ describe("automatic Mail import switch", () => {
     expect(
       mailboxDiscoveryInput.parse(classification?.input).executionPolicy,
     ).toBe("classification_only");
-    await deleteJobs(ctx.db, { kind: "run.execute" });
+    await getDb(ctx.db)
+      .delete(kernelPass)
+      .where(eq(kernelPass.name, "run.execute"));
     await getDb(ctx.db).delete(run);
 
     await invoke("setMailImport", { mailboxId, enabled: true });
     expect(
-      await readJobs(ctx.db, { kind: "maintenance.purchase-discovery" }),
-    ).toMatchObject([{ state: "queued" }]);
+      await getDb(ctx.db).execute(
+        sql`SELECT name FROM "Pass" WHERE name = 'purchase.discovery'`,
+        "objects",
+      ),
+    ).toMatchObject([{ name: "purchase.discovery" }]);
     expect(
       await invoke("discoverMail", { mailboxId: "synthetic-foreign-mailbox" }),
     ).toMatchObject({ ok: false });
@@ -227,14 +232,11 @@ describe("automatic Mail import switch", () => {
       .select()
       .from(run)
       .where(eq(run.purpose, "mail_discovery"));
-    expect(await readJobs(ctx.db, { kind: "run.execute" })).toMatchObject([
-      {
-        key: `run:${discovery!.id}`,
-        state: "queued",
-        runId: discovery!.id,
-        input: { runId: discovery!.id, purpose: "mail_discovery" },
-      },
-    ]);
+    expect(await readRunPass(ctx.db, discovery!.id)).toMatchObject({
+      runId: discovery!.id,
+      state: "due",
+      generation: 1,
+    });
     const input = mailboxDiscoveryInput.parse(discovery?.input);
     expect(input).toMatchObject({ mailboxId, executionPolicy: "import" });
     expect(input.scopedQueries.map((query) => query.query).sort()).toEqual([

@@ -11,6 +11,7 @@ import {
   purchase,
 } from "~/server/db/schema";
 import { createExpense } from "~/server/domains/expense/repo/crud";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
 import { getProductMovementTimeline } from "~/server/domains/product/repo/movement-timeline";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
@@ -19,7 +20,6 @@ import {
   linkValues,
   liveLinks,
 } from "~/server/generic/entity-links/repo/entity-links";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -48,7 +48,7 @@ describe("explicit purchase acquisition", () => {
       ctx.db,
       "Acquisition Test Vendor",
     );
-    const order = await insertWithShortcode(ctx.db, "purchase", {
+    const order = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId,
       date: "2026-02-01",
       displayLabel: "Acquisition test order",

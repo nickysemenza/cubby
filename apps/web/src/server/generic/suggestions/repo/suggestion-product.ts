@@ -2,7 +2,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import { getDb } from "~/server/db/helpers";
 import { suggestionTable, product } from "~/server/db/schema";
 import { prepareProductIdentityPair } from "~/server/domains/product/repo/match/product-identity-snapshot";
 import { loadProductImageOrderFacts } from "~/server/domains/product/repo/match/product-match";
@@ -17,6 +17,7 @@ import {
 import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { suggestionStateColumns } from "~/server/generic/suggestions/repo/suggestion-state";
+import { householdWrite } from "~/server/kernel/gate";
 
 /**
  * The product_pair family's apply: lock both Products, recheck current identity
@@ -45,7 +46,7 @@ export async function mergeReviewedProductPair(
     resolveOrThrow(context.db, "product", input.keepId),
     resolveOrThrow(context.db, "product", input.mergeId),
   ]);
-  return withTransactionDatabase(context.db, async (transactionDb) => {
+  return householdWrite(context.db, async (transactionDb) => {
     await getDb(transactionDb)
       .select({ id: product.id })
       .from(product)

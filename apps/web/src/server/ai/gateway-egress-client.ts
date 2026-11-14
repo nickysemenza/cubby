@@ -1,4 +1,4 @@
-import { jobWaitReason } from "@cubby/schemas/job";
+import { executionWaitReason } from "@cubby/schemas/execution";
 import {
   classifyFundingRefusal,
   paidFundingRefusal,
@@ -12,10 +12,17 @@ import { sleep } from "@cubby/shared/retry";
 
 import { findErrorCause } from "~/lib/error-diagnostics";
 import type { UnparsedError } from "~/lib/error-utils";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
+import {
+  markTransmitted,
+  refusedBeforeSending,
+} from "~/server/kernel/produce-ledger";
+import { WorkDeferredError } from "~/server/kernel/work-errors";
 
 import { fundingResumeAt } from "./budget-window";
-import { deferCooperativeAiWork } from "./cooperative-work";
+import {
+  AiWorkDeferredError,
+  deferCooperativeAiWork,
+} from "./cooperative-work";
 import type { AiGatewayEgressRpc } from "./gateway-egress-contract";
 
 export class GatewayAdmissionWaitError extends Error {
@@ -23,7 +30,7 @@ export class GatewayAdmissionWaitError extends Error {
     super("AI Gateway admission is waiting for shared capacity");
   }
 }
-export const gatewayAdmissionWait = (error: UnparsedError) =>
+const gatewayAdmissionWait = (error: UnparsedError) =>
   findErrorCause(
     error,
     (cause): cause is GatewayAdmissionWaitError =>
@@ -39,7 +46,7 @@ export const isGatewayAdmissionWait = (error: UnparsedError) =>
  * egress Durable Object holds the refusal an earlier probe is refused locally
  * anyway. A configuration stop probes again in 15 minutes.
  */
-export class GatewayProviderStopError extends JobDeferredError {
+export class GatewayProviderStopError extends WorkDeferredError {
   constructor(
     readonly kind: "funding" | "configuration",
     readonly status: number,
@@ -51,8 +58,8 @@ export class GatewayProviderStopError extends JobDeferredError {
         ? fundingResumeAt()
         : new Date(Date.now() + 15 * 60_000),
       kind === "funding"
-        ? jobWaitReason.enum.ai_funding_window
-        : jobWaitReason.enum.provider_capacity,
+        ? executionWaitReason.enum.ai_funding_window
+        : executionWaitReason.enum.provider_capacity,
     );
   }
 }
@@ -107,4 +114,53 @@ export async function coordinatedGatewayRequest(
     if (retryAt >= deadline) throw new GatewayAdmissionWaitError(retryAt);
     await sleep(delay, request.signal);
   }
+}
+
+/**
+ * Record a provider response in the produce ledger (ADR 0029 section 8). A
+ * classified funding or configuration stop is the provider refusing the
+ * request without paid work; every other response may have been billed.
+ */
+export async function receivedGatewayResponse(
+  response: Response,
+): Promise<Response> {
+  if (!response.ok) {
+    const body = await response
+      .clone()
+      .text()
+      .catch(() => "");
+    const stop = gatewayProviderStop(response.status, body);
+    if (stop) {
+      refusedBeforeSending(stop);
+      return response;
+    }
+  }
+  markTransmitted();
+  return response;
+}
+
+/**
+ * Record a failed send in the produce ledger and rethrow it. The egress
+ * object's shared-capacity wait refuses before the provider sees the request;
+ * any other failure may have left.
+ */
+export function failedGatewaySend(error: UnparsedError): never {
+  const until =
+    error instanceof GatewayAdmissionWaitError
+      ? error.retryAt
+      : error instanceof AiWorkDeferredError
+        ? error.until
+        : null;
+  if (until === null) {
+    markTransmitted();
+    throw error;
+  }
+  throw refusedBeforeSending(
+    error,
+    new WorkDeferredError(
+      "AI Gateway admission is waiting for shared capacity",
+      new Date(until),
+      "provider_capacity",
+    ),
+  );
 }

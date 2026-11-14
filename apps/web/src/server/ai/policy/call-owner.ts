@@ -11,7 +11,7 @@ export type AiCallOwner =
   | { runId?: undefined; interactive: boolean };
 
 /** Nobody is waiting: the call stops at its window budget. */
-export const AUTOMATIC_AI_CALL: AiCallOwner = { interactive: false };
+const AUTOMATIC_AI_CALL: AiCallOwner = { interactive: false };
 
 /** The session this work already belongs to, else automatic work. */
 export const aiRunOwner = (runId: RunId | null | undefined): AiCallOwner =>

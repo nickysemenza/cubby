@@ -17,8 +17,8 @@ export {
   unwrapDb,
   withTransaction,
   withTransactionDatabase,
-  withSnapshotWrite,
-  withSnapshotWriteDatabase,
+  withHouseholdWrite,
+  withHouseholdWriteDatabase,
   withTransactionOn,
 } from "./core";
 export {

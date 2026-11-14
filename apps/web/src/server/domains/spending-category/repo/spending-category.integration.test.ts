@@ -10,6 +10,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { unwrapDb } from "~/server/db/helpers";
 import {
   auditLog,
@@ -26,7 +27,6 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import { findReferentialLivenessViolations } from "~/server/generic/problems/repo/detectors-integrity";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductIdentityFixture,
   makeProductInput,
@@ -122,7 +122,7 @@ describe("spending category merge", () => {
       lineKind: "principal",
       purchaseId: order.id,
       name: "Synthetic kibble",
-      cost: 18,
+      cost: 1800n,
       date: "2026-09-02",
       costType: "materials",
       trade: "other",
@@ -293,6 +293,18 @@ describe("spending category merge", () => {
     const child = await category("Synthetic pet toys");
     await merge(pets.shortcode, [pet.shortcode]);
     const late = await referencesTo(pet.id);
+    // Reconciled money references resolve an absorbed category to its survivor.
+    for (const [table, row] of [
+      [expense, late.line],
+      [purchase, late.order],
+      [financialTransaction, late.transaction],
+    ] as const) {
+      const [saved] = await unwrapDb(ctx.db)
+        .select({ category: table.spendingCategoryId })
+        .from(table)
+        .where(eq(table.id, row.id));
+      expect(saved?.category).toBe(pets.id);
+    }
     await unwrapDb(ctx.db)
       .update(spendingCategory)
       .set({ parentId: pet.id })
@@ -302,9 +314,6 @@ describe("spending category merge", () => {
       .map((row) => [row.edgeKey, row.sourceId]);
     expect(reported).toEqual(
       expect.arrayContaining([
-        ["Expense.spendingCategoryId", late.line.id],
-        ["Purchase.spendingCategoryId", late.order.id],
-        ["FinancialTransaction.spendingCategoryId", late.transaction.id],
         ["Vendor.defaultSpendingCategoryId", late.shop.id],
         ["ProductCategory.spendingCategoryId", late.mapping.id],
         ["SpendingCategory.parentId", child.id],
@@ -353,7 +362,7 @@ describe("spending category merge", () => {
       lineKind: "principal",
       purchaseId: order.id,
       name: "Synthetic chili crisp",
-      cost: 9,
+      cost: 900n,
       date: "2026-09-03",
       costType: "materials",
       trade: "other",
@@ -415,7 +424,7 @@ describe("spending category stock tracking", () => {
 
   // Failure: a child that stores no decision under a parent storing false
   // reads null while the arrival gate treats it as false, provenance names no
-  // parent, and "Use inherited" has no reset to apply.
+  // parent, and "Let Cubby decide" has no reset to apply.
   it("reads, explains, resets, and gates arrivals on the inherited decision", async () => {
     const parent = await insertWithShortcode(ctx.db, "spendingCategory", {
       name: `Synthetic groceries ${crypto.randomUUID()}`,
@@ -496,7 +505,7 @@ describe("spending category stock tracking", () => {
       purchaseId: order.id,
       productId: apples.entityId,
       name: "Synthetic apples",
-      cost: 4,
+      cost: 400n,
       date: "2026-09-03",
       costType: "materials",
       trade: "other",
