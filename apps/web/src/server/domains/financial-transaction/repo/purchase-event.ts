@@ -281,10 +281,19 @@ function decidedBooking(c: Pure, subject: string) {
 function ownKey(c: Pure, target: ColumnRef, fallback: string) {
   return c.existing(target)[0] ?? fallback;
 }
-function graph(input: Input, purchaseId: string): CapacityRead {
+function graph(
+  input: Input,
+  purchaseId: string,
+  without: ReadonlySet<string | null> = new Set(),
+): CapacityRead {
   return {
     lines: input.expenses
-      .filter((row) => !row.deletedAt && row.purchaseId === purchaseId)
+      .filter(
+        (row) =>
+          !row.deletedAt &&
+          row.purchaseId === purchaseId &&
+          !without.has(row.id),
+      )
       .map((row) => ({ ...row, costMinor: row.cost })),
     settlements: input.allocations
       .filter((row) => !row.deletedAt && row.purchaseId === purchaseId)
@@ -1472,8 +1481,15 @@ export function createPurchaseEvent({
       }
       // A charge joins an existing Purchase only where its lines leave room
       // for it; a lump beside priced or unpriced lines counts spending twice.
+      // The lump this scope booked there is its own answer, not a line that
+      // leaves room, or the next pass would retire it and the one after rebook it.
+      const ownExpenses = new Set(
+        c
+          .existing(expenseRecords)
+          .map((key) => c.recordId(expenseRecords, key)),
+      );
       const targetGraph = existingTarget
-        ? graph(input, existingTarget.id)
+        ? graph(input, existingTarget.id, ownExpenses)
         : undefined;
       const targetLines = (targetGraph?.lines ?? []).filter(
         (line) => !line.future && line.economicRole === "vendor",

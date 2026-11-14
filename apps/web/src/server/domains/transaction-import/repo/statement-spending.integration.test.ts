@@ -948,6 +948,40 @@ describe("statement spending review and re-import", () => {
         .reduce((sum, row) => sum + row.amountMinor, 0n),
     };
   };
+  /** A rerun over unchanged inputs is a fixed point: it writes and proposes nothing. */
+  const expectFixedPoint = async () => {
+    const scopes = [
+      ...(await getDb(ctx.db).select().from(sourceOccurrence)).map((row) => ({
+        kind: "bankEvent",
+        key: row.id,
+      })),
+      ...(await getDb(ctx.db).select().from(financialTransaction)).map(
+        (row) => ({ kind: "purchaseEvent", key: row.id }),
+      ),
+    ];
+    const state = async () => ({
+      ledger: await ledgerRows(),
+      vendors: await getDb(ctx.db).select().from(vendorTable),
+      bindings: await getDb(ctx.db).select().from(evidenceBinding),
+      keys: await getDb(ctx.db).select().from(recordKey),
+      drift: (await getDb(ctx.db).select().from(drift)).map((row) => ({
+        scope: `${row.scopeKind}:${row.scopeKey}`,
+        proposalHash: row.proposalHash,
+      })),
+    });
+    const settled = await reconcileNow(ctx.db, scopes);
+    const before = await state();
+    const rerun = await reconcileNow(ctx.db, scopes);
+    expect(await state()).toEqual(before);
+    const gaps = (outcomes: typeof rerun) =>
+      Object.fromEntries(
+        outcomes.map((outcome) => [
+          `${outcome.scope.kind}:${outcome.scope.key}`,
+          outcome.gaps.map((gap) => gap.input),
+        ]),
+      );
+    expect(gaps(rerun)).toEqual(gaps(settled));
+  };
   const recordRow = async (
     providerTransactionId: string,
     statementDate: string,
@@ -1069,6 +1103,44 @@ describe("statement spending review and re-import", () => {
       cost: 4350n,
       allocated: 4350n,
     });
+  });
+  it("keeps the lump it booked on an empty Purchase a member names", async () => {
+    const setup = await fixture("lump-fixed-point", "member", 12.34);
+    const [seller] = await getDb(ctx.db)
+      .select()
+      .from(vendorTable)
+      .where(eq(vendorTable.name, "Synthetic Orchard"));
+    const target = await createRepoIdentity(ctx, "purchase", {
+      vendorId: seller!.shortcode,
+      date: "2026-05-04",
+    });
+    const [observation] = await getDb(ctx.db)
+      .select()
+      .from(sourceTransactionRecord);
+    const applied = await decideStatement(
+      ctx.db,
+      ctx.actor,
+      statementDecisionInput.parse({
+        observationId: observation!.shortcode,
+        accountId: setup.account.output.id,
+        application: {
+          action: "book",
+          kindOverride: "purchase",
+          booking: { purchaseId: target.output.id },
+        },
+      }),
+    );
+    expect(applied).toMatchObject({ status: "applied", gaps: [] });
+    const money = {
+      transactions: 1,
+      purchases: 1,
+      cost: 1234n,
+      allocated: 1234n,
+    };
+    expect(await liveMoney()).toEqual(money);
+    await expectFixedPoint();
+    expect(await liveMoney()).toEqual(money);
+    expect(await getDb(ctx.db).select().from(drift)).toEqual([]);
   });
   it("books a weekly same-vendor charge past last week's provably settled Purchase", async () => {
     const setup = await fixture("weekly-one");
