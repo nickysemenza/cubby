@@ -4,6 +4,8 @@ import { capturedFieldInput } from "@cubby/schemas/ai-evaluation";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { z } from "zod";
 
+import { canonicalJson } from "~/server/kernel/keys";
+import { refusedBeforeSending } from "~/server/kernel/produce-ledger";
 import { WorkEvidenceObsoleteError } from "~/server/kernel/work-errors";
 
 import type { AiFeature } from "./policy/features";
@@ -71,11 +73,13 @@ export async function captureAiInput(
   if (
     current.expected &&
     !current.expected.some(
-      (expected) => JSON.stringify(expected) === JSON.stringify(question),
+      (expected) => canonicalJson(expected) === canonicalJson(question),
     )
   )
-    throw new WorkEvidenceObsoleteError(
-      "The prepared field question changed before send",
+    throw refusedBeforeSending(
+      new WorkEvidenceObsoleteError(
+        "The prepared field question changed before send",
+      ),
     );
   current.questions.push(question);
   current.inputs.push({
