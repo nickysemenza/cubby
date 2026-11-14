@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { fieldAnswer } from "~/server/ai/fields/repo/field-answer";
 import { fieldReviewPlan } from "~/server/ai/fields/repo/plan";
-import { readStoredColumns } from "~/server/ai/fields/repo/stored-field";
+import { readStoredRows } from "~/server/ai/fields/repo/stored-field";
 import type { Database } from "~/server/db";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { uuidArrayParam } from "~/server/db/helpers/query";
@@ -54,9 +54,9 @@ export async function readFieldSuggestions(
   for (const item of parsed) {
     const plan = fieldReviewPlan(item.entity, item.field);
     if (!plan) continue;
-    const stored = await readStoredColumns(db, plan.entity, item.recordId, [
-      item.field,
-    ]);
+    const stored = (
+      await readStoredRows(db, plan.entity, [item.recordId], [item.field])
+    ).get(item.recordId);
     const reference = plan.field.reference;
     const refs = reference
       ? [

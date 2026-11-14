@@ -26,7 +26,7 @@ import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-reso
 import { recordSubject } from "~/server/kernel/keys";
 
 import { fieldPlan, type FieldsRow } from "./plan";
-import { readStoredColumns } from "./stored-field";
+import { readStoredRows } from "./stored-field";
 
 const ASSIGNMENT = sqlEnumConstant(decisionChannel, "assignment");
 
@@ -129,11 +129,12 @@ export async function readFieldGuess(
 ): Promise<FieldGuess | null> {
   const plan = fieldPlan(entity, field);
   if (!plan) return null;
-  const [assignment, answer, stored] = await Promise.all([
+  const [assignment, answer, storedRows] = await Promise.all([
     readAssignment(db, entity, recordId, field),
     readUsedAnswer(db, entity, recordId, field),
-    readStoredColumns(db, plan.entity, recordId, [field]),
+    readStoredRows(db, plan.entity, [recordId], [field]),
   ]);
+  const stored = storedRows.get(recordId);
   const guess = answer?.output.proposal;
   if (
     !guess ||
@@ -166,11 +167,12 @@ export async function describeFieldOrigin(
 ): Promise<FieldOrigin | null> {
   const plan = fieldPlan(entity, field);
   if (!plan) return null;
-  const [assignment, answer, stored] = await Promise.all([
+  const [assignment, answer, storedRows] = await Promise.all([
     readAssignment(db, entity, recordId, field),
     readUsedAnswer(db, entity, recordId, field),
-    readStoredColumns(db, plan.entity, recordId, [field]),
+    readStoredRows(db, plan.entity, [recordId], [field]),
   ]);
+  const stored = storedRows.get(recordId);
   const value = stored?.[field] ?? null;
   const base = {
     apply: plan.field.apply,

@@ -140,8 +140,13 @@ describe("fields scope", () => {
       name: "Synthetic cordless tool",
       tags: ["M18"],
     });
+    const other = await insertFieldsFixture(ctx.db, "product", {
+      name: "Synthetic work light",
+      tags: ["M12"],
+    });
     const kernel = createKernel([fieldsKernelModule]);
     await kernel.reconcileNow(ctx.db, [
+      { kind: FIELDS_SCOPE, key: `product:${other.id}` },
       { kind: FIELDS_SCOPE, key: `product:${record.id}` },
     ]);
     const { ask } = await import("~/server/db/kernel-schema");
@@ -157,6 +162,20 @@ describe("fields scope", () => {
         (input) => input.recordId === record.id && input.field === "tags",
       )?.questions,
     ).toEqual(expect.any(Array));
+    expect(
+      inputs
+        .filter((input) => input.field === "tags")
+        .map((input) => ({
+          id: input.recordId,
+          tags: input.row.tags,
+          questions: input.questions,
+        })),
+    ).toEqual(
+      expect.arrayContaining([
+        { id: record.id, tags: ["M18"], questions: expect.any(Array) },
+        { id: other.id, tags: ["M12"], questions: expect.any(Array) },
+      ]),
+    );
     expect(rows.every((row) => row.sentAt === null)).toBe(true);
   });
 

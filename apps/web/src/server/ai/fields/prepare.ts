@@ -1,5 +1,5 @@
 /**
- * The canonical basis of one saved field question: the record read through
+ * The canonical basis of saved field questions: records read through
  * the selected-detail reader, so the prompt sees effective values, reference
  * identities and assignment intent exactly as Why this value does.
  */
@@ -51,42 +51,69 @@ export type PreparedField = {
 };
 
 /**
- * The provided basis `suggestFields` reads for one saved record's field, or
- * null when the record is gone or the field's result is still missing.
+ * The provided bases in request order. Canonical detail reads share one
+ * projection per entity; each field keeps only its own policy's context.
  */
-export async function prepareSavedField(
+export async function prepareSavedFields(
   db: Database,
-  entity: string,
-  recordId: string,
-  field: string,
-): Promise<PreparedField | null> {
-  const request = fieldRequest(entity, field);
-  if (!request) return null;
-  const codes = await lookupShortcodes(db, [
-    parseEntityRef(request.entity, recordId),
-  ]);
-  const publicId = codes.get(entityRefKey(request.entity, recordId));
-  if (!publicId) return null;
-  const [record] = await readSelectedEntityRecords({
-    context: systemContext(db),
-    entity: request.entity,
-    ids: [publicId],
-    fields: request.keys,
-  });
-  if (!record) return null;
-  const governed = entityFieldEnvelopeFields[request.entity];
-  const valueOf = (key: string) => {
-    if (!Object.hasOwn(governed, key)) return record[key];
-    const envelope = fieldEnvelopeFor(record, key);
-    return envelope ? fieldValueOf(envelope) : null;
-  };
-  // Effective values drive the question; the envelope keeps assignment intent.
-  const basis: Record<string, string | null> = Object.fromEntries(
-    request.keys.map((key) => [key, basisValueOf(valueOf(key))]),
-  );
-  basis.__resolutionContext = fieldSuggestionResolutionContext(
-    record.fields,
-    request.policyKeys,
-  );
-  return { entity: request.entity, publicId, basis };
+  inputs: readonly { entity: string; recordId: string; field: string }[],
+): Promise<(PreparedField | null)[]> {
+  const result: (PreparedField | null)[] = inputs.map(() => null);
+  const groups = new Map<
+    PreparedField["entity"],
+    {
+      index: number;
+      id: string;
+      request: NonNullable<ReturnType<typeof fieldRequest>>;
+    }[]
+  >();
+  for (const [index, input] of inputs.entries()) {
+    const request = fieldRequest(input.entity, input.field);
+    if (!request) continue;
+    const group = groups.get(request.entity) ?? [];
+    group.push({ index, id: input.recordId, request });
+    groups.set(request.entity, group);
+  }
+  for (const [entity, requests] of groups) {
+    const ids = [...new Set(requests.map((entry) => entry.id))];
+    const codes = await lookupShortcodes(
+      db,
+      ids.map((id) => parseEntityRef(entity, id)),
+    );
+    const publicIds = ids.flatMap((id) => {
+      const code = codes.get(entityRefKey(entity, id));
+      return code ? [code] : [];
+    });
+    if (!publicIds.length) continue;
+    const records = await readSelectedEntityRecords({
+      context: systemContext(db),
+      entity,
+      ids: publicIds,
+      fields: [...new Set(requests.flatMap((entry) => entry.request.keys))],
+    });
+    const byCode = new Map(
+      records.map((record) => [String(record.id), record]),
+    );
+    const governed = entityFieldEnvelopeFields[entity];
+    for (const { index, id, request } of requests) {
+      const publicId = codes.get(entityRefKey(entity, id));
+      const record = publicId ? byCode.get(publicId) : null;
+      if (!record || !publicId) continue;
+      const valueOf = (key: string) => {
+        if (!Object.hasOwn(governed, key)) return record[key];
+        const envelope = fieldEnvelopeFor(record, key);
+        return envelope ? fieldValueOf(envelope) : null;
+      };
+      // Effective values drive the question; the envelope keeps assignment intent.
+      const basis: Record<string, string | null> = Object.fromEntries(
+        request.keys.map((key) => [key, basisValueOf(valueOf(key))]),
+      );
+      basis.__resolutionContext = fieldSuggestionResolutionContext(
+        record.fields,
+        request.policyKeys,
+      );
+      result[index] = { entity, publicId, basis };
+    }
+  }
+  return result;
 }
