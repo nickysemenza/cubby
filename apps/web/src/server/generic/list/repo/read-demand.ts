@@ -57,7 +57,6 @@ export function compileReadDemand(
   }
   if (!keys.size)
     return { projection: [...projection], envelope: [], facts: null };
-  if (supported.has("fieldResolutions")) projection.add("fieldResolutions");
   const assignments = new Set<string>();
   const stored = new Set<string>();
   const assignmentKeys: readonly string[] =
@@ -68,6 +67,8 @@ export function compileReadDemand(
     const field = model.fields.find((field) => field.key === key);
     if (!field)
       throw new Error(`Missing declared envelope field: ${entity}.${key}`);
+    if (field.resolution && supported.has("fieldResolutions"))
+      projection.add("fieldResolutions");
     const readKey = field.readKey ?? key;
     if (supported.has(readKey)) projection.add(readKey);
     if (assignmentKeys.includes(key)) assignments.add(key);

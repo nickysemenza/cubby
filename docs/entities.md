@@ -1733,7 +1733,10 @@ compiled from the declared rollup. The shortcode table registry stays independen
 ### Projections and envelopes
 
 Browser rosters can send an explicit `fields` projection through the selected reader narrow
-consumers use. The result carries `selectedFields` and honestly partial rows with canonical
+consumers use. Resolver evidence (`fieldResolutions`) joins a selected read only when a demanded
+field or its declared dependencies has a resolution policy. A plain identity envelope must not
+admit unrelated stock, valuation or placement loaders; resolver-backed fields retain their effective
+values, stored assignment and provenance. The result carries `selectedFields` and honestly partial rows with canonical
 envelopes. The pure read plan is shared by SSR and the mounted list. Named list renderers contribute
 inputs from the shared renderer coverage catalog (visible fields, identity and image requirements,
 specialist and action dependencies); membership, sorting, grouping and totals keep independent server
