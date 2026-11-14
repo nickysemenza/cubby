@@ -57,9 +57,9 @@ export function findPgError(
 
 const DROPPED_SOCKET_CODES = new Set(["ECONNRESET", "EPIPE", "ETIMEDOUT"]);
 // node-postgres raises these without a SQLSTATE: the socket closed mid-query,
-// or the pool could not open a connection in time.
+// the client is unusable after a drop, or the pool could not connect in time.
 const DROPPED_CONNECTION_MESSAGE =
-  /Connection terminated unexpectedly|timeout exceeded when trying to connect/iu;
+  /Connection terminated unexpectedly|timeout exceeded when trying to connect|^Client has encountered a connection error and is not queryable$/iu;
 
 /** Walk an error's `cause` chain for a code-less driver or socket drop. */
 function isDroppedConnection(error: UnparsedDatabaseError, depth = 0): boolean {

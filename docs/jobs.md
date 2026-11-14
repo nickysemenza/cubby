@@ -12,6 +12,8 @@ Publication requires the current live claim. A Pass claim lasts 90 seconds;
 Run execution renews every 30 seconds; the kernel arranges a recovery wake at
 each claim deadline. Expired claims admit another worker. A funding or provider wait
 keeps its deadline and cause without spending a failure attempt.
+Database connection loss, including an unusable client after a drop, backs off
+without spending a failure attempt.
 A sent Ask whose producer call failed is `unknown` unless the call proves it sent
 nothing: an admission hook refused it before the request, or the provider
 answered with a classified funding or configuration stop. That Ask returns to
