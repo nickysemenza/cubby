@@ -131,6 +131,15 @@ export interface ScopeReads {
  */
 export interface Reads extends ScopeReads {
   for(scopeKey: string): ScopeReads;
+  /**
+   * One predicate statement for the batch; each scope records only its own
+   * keys, so a batchmate's input never wakes it.
+   */
+  selectEach<T extends PgTable>(
+    table: T,
+    keys: ReadonlyMap<string, readonly Key[]>,
+    where: SQL,
+  ): Promise<InferSelectModel<T>[]>;
 }
 
 type Q = Pick<RepositoryQueryClient, "select" | "execute">;
@@ -483,7 +492,24 @@ export function createReads(
     },
   });
 
-  return { ...scopeReads(batch), for: (scopeKey) => scopeReads([scopeKey]) };
+  return {
+    ...scopeReads(batch),
+    for: (scopeKey) => scopeReads([scopeKey]),
+    async selectEach<T extends PgTable>(
+      table: T,
+      keys: ReadonlyMap<string, readonly Key[]>,
+      where: SQL,
+    ) {
+      requireTable(table);
+      const all = [...new Set([...keys.values()].flat())];
+      if (!all.length) return [];
+      const revs = await revisions(all);
+      const rows = await q.select().from(table).where(where);
+      for (const [scope, own] of keys) ledger.record(scope, revs, own);
+      // SAFETY: rows come from `select().from(table)` of this same table.
+      return rows as InferSelectModel<T>[];
+    },
+  };
 }
 
 /** The strongest binding per fact: decision, then baseline, then proven. */

@@ -192,11 +192,16 @@ export async function decide(
         if (decision.kind === "reject") {
           const owners = await markRejected(q, record.entity, record.id);
           discovered.push(...owners);
-          const target = [...registry.reconcilers.values()]
-            .flatMap((reconciler) => reconciler.writes)
-            .find((ref) => (ref.entity ?? ref.name) === record.entity);
-          if (target && owners.length) {
-            const owner = owners[0]!;
+          // The owning scope's target names the record's delete policy.
+          const owner = owners[0];
+          const target = owner
+            ? registry.reconcilers
+                .get(owner.kind)
+                ?.writes.find(
+                  (ref) => (ref.entity ?? ref.name) === record.entity,
+                )
+            : undefined;
+          if (owner && target) {
             // The kernel removes its own record; the delete rows carry the decision.
             await withKernelApply(
               {

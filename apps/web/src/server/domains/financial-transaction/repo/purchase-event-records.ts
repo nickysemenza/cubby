@@ -1,3 +1,5 @@
+import { systemActor } from "@cubby/schemas/context";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 
 import {
@@ -7,7 +9,7 @@ import {
   purchase,
   vendor,
 } from "~/server/db/schema";
-import { writes, type Pure } from "~/server/kernel/api";
+import { policyRemoval, writes, type Pure } from "~/server/kernel/api";
 
 export const purchaseRecords = writes(
   purchase,
@@ -26,7 +28,18 @@ export const purchaseRecords = writes(
     "statedTotal",
     "notes",
   ],
-  { entity: "purchase", createOnly: ["runId"] },
+  {
+    entity: "purchase",
+    createOnly: ["runId"],
+    remove: async (tx, ids) =>
+      void (await (
+        await import("~/server/domains/purchase/repo/purchase")
+      ).removePurchases(
+        tx,
+        ids.map((id) => parseEntityId("purchase", id)),
+        systemActor(),
+      )),
+  },
 );
 
 export const expenseRecords = writes(
@@ -50,7 +63,17 @@ export const expenseRecords = writes(
     "economicRole",
     "bookingTransactionCode",
   ],
-  { entity: "expense" },
+  {
+    entity: "expense",
+    remove: async (tx, ids) =>
+      void (await (
+        await import("~/server/domains/expense/repo/crud")
+      ).removeExpensesWithPurchaseEffects(
+        tx,
+        ids.map((id) => parseEntityId("expense", id)),
+        systemActor(),
+      )),
+  },
 );
 
 export const allocationRecords = writes(financialTransactionAllocation, [
@@ -72,6 +95,7 @@ const vendorCreation = z.object({
 
 export const bookingVendors = writes(vendor, [], {
   entity: "vendor",
+  remove: policyRemoval("vendor"),
   createOnly: ["name", "aliases"],
   coalesceCreation(values) {
     const proposed = values.map((value) => vendorCreation.parse(value));

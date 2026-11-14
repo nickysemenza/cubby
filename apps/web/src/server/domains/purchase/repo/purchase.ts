@@ -79,6 +79,7 @@ import {
   touchUpdatedAt,
   unwrapDb,
   withTransaction,
+  withTransactionOn,
 } from "~/server/db/helpers";
 import { outer, related } from "~/server/db/helpers/related";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
@@ -2352,7 +2353,20 @@ export const deletePurchases = (
 ) =>
   withTransaction(db, async (tx) => {
     await enterWriteTransaction(tx, { lane: "money", mode: "member" });
-    const ids = await resolveAllOrThrow(tx, "purchase", shortcodes);
+    return removePurchases(
+      tx,
+      await resolveAllOrThrow(tx, "purchase", shortcodes),
+      actor,
+    );
+  });
+
+/** The Purchase delete policy by id; the kernel's removal of a Purchase runs it too. */
+export const removePurchases = (
+  db: Database | DrizzleTransaction,
+  ids: PurchaseId[],
+  actor: ActorContext,
+) =>
+  withTransactionOn(db, async (tx) => {
     const detaching = await tx
       .select({ id: expense.id })
       .from(expense)

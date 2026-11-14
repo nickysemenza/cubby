@@ -311,9 +311,9 @@ export type ColumnRef = {
   readonly discovers?: (row: ColumnValues) => ScopeRef[];
   readonly merge?: MergePort;
   /**
-   * The entity's transactional delete policy (`entityRemoval` for an entity
-   * table); without one a record is soft deleted, or deleted when the table
-   * has no `deletedAt`.
+   * The entity's transactional delete policy: a domain's delete-by-policy
+   * with its hooks. Without one a record is soft deleted, or deleted when the
+   * table has no `deletedAt`; only tables that are not entities omit it.
    */
   readonly remove?: RemovePort;
 };

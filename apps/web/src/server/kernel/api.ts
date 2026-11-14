@@ -90,7 +90,7 @@ export {
 export { OwnedColumnWriteError } from "~/server/db/owned-columns";
 export {
   entityMerge,
-  entityRemoval,
+  policyRemoval,
   resolveForRead,
   resolveForWrite,
   type MergeVerdict,

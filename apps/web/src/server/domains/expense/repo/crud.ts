@@ -36,6 +36,7 @@ import {
   notDeleted,
   unwrapDb,
   withTransaction,
+  withTransactionOn,
   touchUpdatedAt,
 } from "~/server/db/helpers";
 import { outer } from "~/server/db/helpers/related";
@@ -1182,7 +1183,24 @@ export const deleteExpensesWithPurchaseEffects = async (
 
   return await withTransaction(db, async (tx) => {
     await enterWriteTransaction(tx, { lane: "money", mode: "member" });
-    const ids = await resolveAllOrThrow(tx, "expense", shortcodes);
+    return removeExpensesWithPurchaseEffects(
+      tx,
+      await resolveAllOrThrow(tx, "expense", shortcodes),
+      actor,
+    );
+  });
+};
+
+/** The Expense delete policy by id; the kernel's removal of an Expense runs it too. */
+export const removeExpensesWithPurchaseEffects = async (
+  db: Database | DrizzleTransaction,
+  ids: ExpenseId[],
+  actor: ActorContext,
+): Promise<{
+  priceAffectedProductIds: ProductId[];
+  result: DeleteExpensesWithPurchaseEffectsOut;
+}> =>
+  withTransactionOn(db, async (tx) => {
     const qualityTargets = await tx.query.expense.findMany({
       where: {
         RAW: (table: PgTable) =>
@@ -1289,7 +1307,6 @@ export const deleteExpensesWithPurchaseEffects = async (
       },
     };
   });
-};
 
 export const deleteExpenses = async (
   db: Database,

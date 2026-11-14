@@ -70,6 +70,7 @@ import {
   type Binding,
   type ColumnRef,
   type Pure,
+  type ScopeReads,
 } from "~/server/kernel/api";
 import { askEnvelope, inputHashOf } from "~/server/kernel/envelope";
 import { decisionKey, answerKey } from "~/server/kernel/keys";
@@ -214,9 +215,34 @@ const tableReads = [
   source.table(decision, ["subject", "channel", "kind", "value", "at"]),
   source.table(answer, ["inputHash", "output"]),
 ];
-function retained(c: Pure) {
+/**
+ * Keep a record this scope does not re-derive. A member's decisions on its
+ * own fields still apply, so a gap never swallows an edit.
+ */
+function keep(c: Pure, input: Input, target: ColumnRef, key: string) {
+  const id = c.recordId(target, key);
+  const rows: readonly { id: string; deletedAt: Date | null }[] =
+    target === purchaseRecords
+      ? input.purchases
+      : target === expenseRecords
+        ? input.expenses
+        : target === allocationRecords
+          ? input.allocations
+          : target === attributionRecords
+            ? input.attributions
+            : [];
+  const decided =
+    !!id &&
+    rows.some((row) => row.id === id && !row.deletedAt) &&
+    [
+      ...c.assignments(recordSubject(target.entity ?? target.name, id)).keys(),
+    ].some((field) => target.columns.includes(field));
+  if (decided) record(c, target, key, {});
+  else c.retire(target, key, "keep");
+}
+function retained(c: Pure, input: Input) {
   for (const target of targets)
-    for (const key of c.existing(target)) c.retire(target, key, "keep");
+    for (const key of c.existing(target)) keep(c, input, target, key);
 }
 function record(
   c: Pure,
@@ -275,6 +301,26 @@ function decidedBooking(c: Pure, subject: string) {
             0
         );
       }),
+    )
+  );
+}
+/** Whether a Purchase this scope created holds spending of another charge or author. */
+function holdsOtherSpending(c: Pure, input: Input, purchaseId: string | null) {
+  const own = new Set(
+    targets.flatMap((target) =>
+      c.existing(target).map((key) => c.recordId(target, key)),
+    ),
+  );
+  return (
+    input.expenses.some(
+      (row) =>
+        !row.deletedAt && row.purchaseId === purchaseId && !own.has(row.id),
+    ) ||
+    input.allocations.some(
+      (row) =>
+        !row.deletedAt &&
+        row.purchaseId === purchaseId &&
+        row.transactionId !== input.key,
     )
   );
 }
@@ -352,56 +398,76 @@ export function createPurchaseEvent({
       const unique = <T extends { id: string }>(rows: T[]) => [
         ...new Map(rows.map((row) => [row.id, row])).values(),
       ];
-      const transactions = [
-        ...(await reads.rows(financialTransaction, keys)).values(),
-      ];
-      const subjects = keys.map((key) => `purchaseEvent:${key}`);
-      const [
-        manuals,
-        choices,
-        initialVendors,
-        bankOwners,
-        ownAllocationEntries,
-      ] = await Promise.all([
-        reads.facts(
-          manualTransactionEvidence,
-          keys.map((key) => `purchaseEvent:${key}`),
-        ),
-        reads.select(
-          decision,
-          subjects.map(decisionKey),
-          sql`${decision.subject} = ANY(${textArrayParam(subjects)})`,
-        ),
-        reads.lookup(
-          vendor,
-          vendorNames,
-          transactions.flatMap((row) =>
-            [row.merchant, row.rawDescription]
-              .filter((name): name is string => !!name)
-              .map((name) => name.trim().toLowerCase()),
+      // Every read records its keys for the scope that needs them, so a
+      // batchmate's charge, decision or new Vendor never wakes this scope.
+      const each = async <T>(
+        run: (key: string, scoped: ScopeReads) => Promise<T>,
+      ) =>
+        new Map(
+          await Promise.all(
+            keys.map(
+              async (key) => [key, await run(key, reads.for(key))] as const,
+            ),
           ),
+        );
+      const subjectsOf = (key: string) => [
+        `purchaseEvent:${key}`,
+        recordSubject("financialTransaction", key),
+      ];
+      const allSubjects = keys.flatMap(subjectsOf);
+      const [
+        transactionRows,
+        manuals,
+        decisions,
+        bankOwners,
+        ownAllocationsByScope,
+      ] = await Promise.all([
+        each(async (key, scoped) =>
+          (await scoped.rows(financialTransaction, [key])).get(key),
         ),
-        reads.select(
+        each(
+          async (key, scoped) =>
+            (
+              await scoped.facts(manualTransactionEvidence, [
+                `purchaseEvent:${key}`,
+              ])
+            ).get(`purchaseEvent:${key}`) ?? [],
+        ),
+        reads.selectEach(
+          decision,
+          new Map(keys.map((key) => [key, subjectsOf(key).map(decisionKey)])),
+          sql`${decision.subject} = ANY(${textArrayParam(allSubjects)}) OR ${decision.other} = ANY(${textArrayParam(allSubjects)})`,
+        ),
+        reads.selectEach(
           recordKey,
-          keys.map((key) => `record:financialTransaction:${key}`),
+          new Map(
+            keys.map((key) => [key, [`record:financialTransaction:${key}`]]),
+          ),
           sql`${recordKey.scopeKind}='bankEvent' AND ${recordKey.entity}=${"financialTransaction"} AND ${recordKey.entityId}=ANY(${textArrayParam(keys)}::uuid[])`,
         ),
-        Promise.all(
-          keys.map(
-            async (key) =>
-              [
-                key,
-                await reads
-                  .for(key)
-                  .lookup(
-                    financialTransactionAllocation,
-                    transactionAllocations,
-                    [key],
-                  ),
-              ] as const,
+        each((key, scoped) =>
+          scoped.lookup(
+            financialTransactionAllocation,
+            transactionAllocations,
+            [key],
           ),
         ),
       ]);
+      const choicesOf = (key: string) =>
+        decisions.filter((row) => row.subject === `purchaseEvent:${key}`);
+      // Purchases a member's identity decision names, booked or not.
+      const decidedPurchasesOf = (key: string) =>
+        decisions.flatMap((row) =>
+          [row.subject, row.other].includes(
+            recordSubject("financialTransaction", key),
+          )
+            ? [row.subject, row.other].flatMap((subject) =>
+                subject?.startsWith("purchase:")
+                  ? [subject.slice("purchase:".length)]
+                  : [],
+              )
+            : [],
+        );
       const strings = (value: unknown): string[] =>
         typeof value === "string"
           ? [value]
@@ -410,123 +476,177 @@ export function createPurchaseEvent({
             : value && typeof value === "object"
               ? Object.values(value).flatMap(strings)
               : [];
-      const references = choices.flatMap((row) => strings(row.value));
-      const identities = references.length
-        ? await reads.select(
-            entityIdentity,
-            subjects.map(decisionKey),
-            sql`${entityIdentity.id}::text = ANY(${textArrayParam(references)}) OR ${entityIdentity.shortcode} = ANY(${textArrayParam(references)})`,
-          )
-        : [];
-      let redirects = identities.flatMap((row) =>
-        row.mergedIntoId ? [row.mergedIntoId] : [],
+      const referencesOf = new Map(
+        keys.map((key) => [
+          key,
+          choicesOf(key).flatMap((row) => strings(row.value)),
+        ]),
       );
-      const visited = new Set(identities.map((row) => row.id));
-      while (redirects.length) {
-        const rows = await reads.rows(
-          entityIdentity,
-          redirects.filter((id) => !visited.has(id)),
+      const allReferences = [...new Set([...referencesOf.values()].flat())];
+      const hashes = new Map(
+        await Promise.all(
+          keys.map(async (key) => {
+            const row = transactionRows.get(key);
+            return [
+              key,
+              row
+                ? await inputHashOf(
+                    askEnvelope(
+                      merchantIdentityAsk,
+                      merchantIdentityRequest(
+                        statementMerchantIdentityInput({
+                          ...row,
+                          amount: minorToMoney(row.amount),
+                        }) ?? { merchant: "" },
+                      ),
+                    ),
+                  )
+                : null,
+            ] as const;
+          }),
+        ),
+      );
+      const allHashes = [...hashes.values()].filter(
+        (hash): hash is string => !!hash,
+      );
+      const [referenced, saved] = await Promise.all([
+        allReferences.length
+          ? reads.selectEach(
+              entityIdentity,
+              new Map(
+                keys.map((key) => [
+                  key,
+                  referencesOf.get(key)!.length
+                    ? [decisionKey(`purchaseEvent:${key}`)]
+                    : [],
+                ]),
+              ),
+              sql`${entityIdentity.id}::text = ANY(${textArrayParam(allReferences)}) OR ${entityIdentity.shortcode} = ANY(${textArrayParam(allReferences)})`,
+            )
+          : [],
+        reads.selectEach(
+          answer,
+          new Map(
+            keys.map((key) => {
+              const hash = hashes.get(key);
+              return [key, hash ? [answerKey(hash)] : []];
+            }),
+          ),
+          sql`${answer.inputHash} = ANY(${textArrayParam(allHashes)})`,
+        ),
+      ]);
+      // Each scope follows the merge redirects of the records it references.
+      const identitiesByScope = await each(async (key, scoped) => {
+        const own = new Set(referencesOf.get(key));
+        const identities = referenced.filter(
+          (row) =>
+            own.has(row.id) || (!!row.shortcode && own.has(row.shortcode)),
         );
-        for (const row of rows.values()) {
-          identities.push(row);
-          visited.add(row.id);
-        }
-        redirects = [...rows.values()].flatMap((row) =>
+        const visited = new Set(identities.map((row) => row.id));
+        let redirects = identities.flatMap((row) =>
           row.mergedIntoId && !visited.has(row.mergedIntoId)
             ? [row.mergedIntoId]
             : [],
         );
-      }
-      const referenceIds = (kind: string) =>
-        identities
+        while (redirects.length) {
+          const rows = await scoped.rows(entityIdentity, redirects);
+          for (const row of rows.values()) {
+            identities.push(row);
+            visited.add(row.id);
+          }
+          redirects = [...rows.values()].flatMap((row) =>
+            row.mergedIntoId && !visited.has(row.mergedIntoId)
+              ? [row.mergedIntoId]
+              : [],
+          );
+        }
+        return identities;
+      });
+      const referenceIdsOf = (key: string, kind: string) =>
+        identitiesByScope
+          .get(key)!
           .filter(
             (row) => row.kind === kind && !row.deletedAt && !row.mergedIntoId,
           )
           .map((row) => row.id);
-      const hashes = await Promise.all(
-        transactions.map((row) =>
-          inputHashOf(
-            askEnvelope(
-              merchantIdentityAsk,
-              merchantIdentityRequest(
-                statementMerchantIdentityInput({
-                  ...row,
-                  amount: minorToMoney(row.amount),
-                }) ?? { merchant: "" },
+      const answerNameOf = (key: string) =>
+        merchantAnswer(
+          saved.find((row) => row.inputHash === hashes.get(key))?.output,
+        )?.name ?? null;
+      const namesOf = (key: string) => {
+        const transaction = transactionRows.get(key);
+        return new Set(
+          [
+            transaction?.merchant,
+            transaction?.rawDescription,
+            answerNameOf(key),
+            ...choicesOf(key)
+              .filter(
+                (row) =>
+                  row.field === "vendorName" && typeof row.value === "string",
+              )
+              .map((row) => String(row.value)),
+          ]
+            .filter((name): name is string => !!name?.trim())
+            .map((name) => name.trim().toLowerCase()),
+        );
+      };
+      const [namedVendors, retainedPurchases, referencedVendors] =
+        await Promise.all([
+          each((key, scoped) =>
+            scoped.lookup(vendor, vendorNames, [...namesOf(key)]),
+          ),
+          each((key, scoped) =>
+            scoped.rows(
+              purchase,
+              (ownAllocationsByScope.get(key) ?? []).map(
+                (row) => row.purchaseId,
               ),
             ),
           ),
+          each((key, scoped) =>
+            scoped.rows(vendor, referenceIdsOf(key, "vendor")),
+          ),
+        ]);
+      const retainedVendors = await each((key, scoped) =>
+        scoped.rows(
+          vendor,
+          [...retainedPurchases.get(key)!.values()].flatMap((row) =>
+            row.vendorId ? [row.vendorId] : [],
+          ),
         ),
       );
-      const saved = await reads.select(
-        answer,
-        hashes.map(answerKey),
-        sql`${answer.inputHash} = ANY(${textArrayParam(hashes)})`,
-      );
-      const names = saved.flatMap((row) => {
-        const name = merchantAnswer(row.output)?.name;
-        return name ? [name.trim().toLowerCase()] : [];
-      });
-      for (const row of choices)
-        if (row.field === "vendorName" && typeof row.value === "string")
-          names.push(row.value.trim().toLowerCase());
-      const namedVendors = await reads.lookup(vendor, vendorNames, names);
-      const seeded = [...manuals.values()].flat().flatMap((row) => {
-        const parsed = row.payload;
-        return parsed &&
-          typeof parsed === "object" &&
-          !Array.isArray(parsed) &&
-          typeof parsed.table === "string" &&
-          parsed.values &&
-          typeof parsed.values === "object" &&
-          !Array.isArray(parsed.values)
-          ? [{ id: row.id, table: parsed.table, values: parsed.values }]
-          : [];
-      });
-      const ownAllocationsByScope = new Map(ownAllocationEntries);
-      const retainedPurchases = await reads.rows(
-        purchase,
-        [...ownAllocationsByScope.values()].flat().map((row) => row.purchaseId),
-      );
-      const retainedVendors = await reads.rows(
-        vendor,
-        [...retainedPurchases.values()].flatMap((row) =>
-          row.vendorId ? [row.vendorId] : [],
-        ),
-      );
-      const vendors = unique([
-        ...initialVendors,
-        ...namedVendors,
-        ...retainedVendors.values(),
-        ...(await reads.rows(vendor, referenceIds("vendor"))).values(),
-      ]);
       const inputs = await Promise.all(
         keys.map(async (key): Promise<readonly [string, Input]> => {
           const scoped = reads.for(key);
-          const transaction = transactions.find((row) => row.id === key);
-          const ownSeeds = seeded.filter((row) =>
-            (manuals.get(`purchaseEvent:${key}`) ?? []).some(
-              (manual) => manual.id === row.id,
-            ),
-          );
+          const transaction = transactionRows.get(key);
+          const ownManuals = manuals.get(key) ?? [];
+          const ownSeeds = ownManuals.flatMap((row) => {
+            const parsed = row.payload;
+            return parsed &&
+              typeof parsed === "object" &&
+              !Array.isArray(parsed) &&
+              typeof parsed.table === "string" &&
+              parsed.values &&
+              typeof parsed.values === "object" &&
+              !Array.isArray(parsed.values)
+              ? [{ id: row.id, table: parsed.table, values: parsed.values }]
+              : [];
+          });
           const ownIds = (table: string) =>
             ownSeeds.filter((row) => row.table === table).map((row) => row.id);
           const currentAllocations = ownAllocationsByScope.get(key) ?? [];
-          const currentChoices = choices.filter(
-            (row) => row.subject === `purchaseEvent:${key}`,
-          );
-          const matchedAnswer = saved.find(
-            (row) =>
-              row.inputHash ===
-              hashes[transactions.findIndex((row) => row.id === key)],
-          );
-          const answerName =
-            merchantAnswer(matchedAnswer?.output)?.name ?? null;
+          const currentChoices = choicesOf(key);
+          const vendors = unique([
+            ...namedVendors.get(key)!,
+            ...retainedVendors.get(key)!.values(),
+            ...referencedVendors.get(key)!.values(),
+          ]);
           const names = new Set(
             [
               transaction?.merchant?.trim() ||
                 transaction?.rawDescription?.trim(),
-              answerName,
+              answerNameOf(key),
               ...currentChoices
                 .filter(
                   (row) =>
@@ -539,7 +659,7 @@ export function createPurchaseEvent({
           );
           const retainedIds = new Set(
             currentAllocations.flatMap((row) => {
-              const purchase = retainedPurchases.get(row.purchaseId);
+              const purchase = retainedPurchases.get(key)!.get(row.purchaseId);
               return purchase?.vendorId ? [purchase.vendorId] : [];
             }),
           );
@@ -559,8 +679,12 @@ export function createPurchaseEvent({
                 names.has(name.trim().toLowerCase()),
               ),
           );
+          // A booked charge reads no candidates: its decision needs only its
+          // own booking and the Purchases a member names, so a new Purchase
+          // never wakes settled history.
+          const booked = currentAllocations.some((row) => !row.deletedAt);
+          const date = transaction?.transactionDate ?? transaction?.postedDate;
           const [
-            ownAllocations,
             candidatePurchases,
             openPurchases,
             exactPayments,
@@ -569,37 +693,36 @@ export function createPurchaseEvent({
             occurrences,
             accounts,
           ] = await Promise.all([
-            Promise.resolve(currentAllocations),
             scoped.lookup(
               purchase,
               vendorPurchases,
-              relevantVendors.flatMap((row) =>
-                transaction &&
-                (transaction.transactionDate ?? transaction.postedDate)
-                  ? Array.from(
+              booked || !date
+                ? []
+                : relevantVendors.flatMap((row) =>
+                    Array.from(
                       { length: 29 },
                       (_, index) =>
-                        `${row.id}:${shiftPlainDate((transaction.transactionDate ?? transaction.postedDate)!, index - 14)}`,
-                    )
-                  : [],
-              ),
+                        `${row.id}:${shiftPlainDate(date, index - 14)}`,
+                    ),
+                  ),
             ),
             scoped.lookup(
               purchase,
               partlyPaidPurchases,
-              transaction?.kind === "refund"
+              booked || transaction?.kind === "refund"
                 ? []
                 : relevantVendors.map((row) => row.id),
             ),
             scoped.lookup(
               purchasePaymentEvidence,
               amountPayments,
-              transaction ? [String(transaction.amount)] : [],
+              transaction && !booked ? [String(transaction.amount)] : [],
             ),
             scoped.rows(purchase, [
               key,
               ...ownIds("Purchase"),
-              ...referenceIds("purchase"),
+              ...referenceIdsOf(key, "purchase"),
+              ...decidedPurchasesOf(key),
             ]),
             scoped.bindings({
               events: [key],
@@ -629,7 +752,7 @@ export function createPurchaseEvent({
               ...openPurchases.map((row) => row.id),
               ...ownedPurchases.keys(),
               ...exactPayments.map((row) => row.purchaseId),
-              ...ownAllocations.map((row) => row.purchaseId),
+              ...currentAllocations.map((row) => row.purchaseId),
             ]),
           ];
           const [purchases, expenses, allocations, payments] =
@@ -665,7 +788,7 @@ export function createPurchaseEvent({
               ),
             ]);
           const allTransactions = unique([
-            ...transactions.filter((row) => row.id === key),
+            ...(transaction ? [transaction] : []),
             ...settlementTransactions.values(),
           ]);
           const moreAccounts = await scoped.rows(
@@ -681,17 +804,15 @@ export function createPurchaseEvent({
             ...(
               await scoped.rows(
                 vendor,
-                purchases.size
-                  ? [...purchases.values()].flatMap((row) =>
-                      row.vendorId ? [row.vendorId] : [],
-                    )
-                  : [],
+                [...purchases.values()].flatMap((row) =>
+                  row.vendorId ? [row.vendorId] : [],
+                ),
               )
             ).values(),
           ]);
           const [parties, categories] = await Promise.all([
             scoped.rows(ledgerParty, [
-              ...referenceIds("ledgerParty"),
+              ...referenceIdsOf(key, "ledgerParty"),
               ...allAccounts.flatMap((row) =>
                 [row.ledgerPartyId, row.primaryCardholderId].filter(
                   (id): id is NonNullable<typeof id> => !!id,
@@ -702,7 +823,7 @@ export function createPurchaseEvent({
               ),
             ]),
             scoped.rows(spendingCategory, [
-              ...referenceIds("spendingCategory"),
+              ...referenceIdsOf(key, "spendingCategory"),
               ...allTransactions.flatMap((row) =>
                 row.spendingCategoryId ? [row.spendingCategoryId] : [],
               ),
@@ -723,7 +844,7 @@ export function createPurchaseEvent({
               purchases: [...purchases.values()],
               expenses,
               allocations: unique([
-                ...ownAllocations,
+                ...currentAllocations,
                 ...allocations,
                 ...settlementAllocations,
               ]),
@@ -738,61 +859,84 @@ export function createPurchaseEvent({
                   binding.scope.key === key,
               ),
               settlementOccurrences: [],
-              manuals: manuals.get(`purchaseEvent:${key}`) ?? [],
+              manuals: ownManuals,
             } satisfies Input,
           ] as const;
         }),
       );
       // Settlement proof reads the occurrences behind every other charge that
-      // settles a loaded Purchase, once for the batch.
-      const settling = [
-        ...new Set(
-          inputs.flatMap(([key, input]) =>
-            input.allocations
-              .filter((row) => !row.deletedAt && row.transactionId !== key)
-              .map((row) => row.transactionId),
-          ),
-        ),
-      ];
+      // settles a loaded Purchase, in one statement per source for the batch.
+      const settlingOf = new Map(
+        inputs.map(([key, input]) => [
+          key,
+          [
+            ...new Set(
+              input.allocations
+                .filter((row) => !row.deletedAt && row.transactionId !== key)
+                .map((row): string => row.transactionId),
+            ),
+          ],
+        ]),
+      );
+      const settling = [...new Set([...settlingOf.values()].flat())];
       const [settlingOwners, settlingAccepted] = settling.length
         ? await Promise.all([
-            reads.select(
+            reads.selectEach(
               recordKey,
-              settling.map((id) => `record:financialTransaction:${id}`),
+              new Map(
+                [...settlingOf].map(([key, ids]) => [
+                  key,
+                  ids.map((id) => `record:financialTransaction:${id}`),
+                ]),
+              ),
               sql`${recordKey.scopeKind}='bankEvent' AND ${recordKey.entity}=${"financialTransaction"} AND ${recordKey.entityId}=ANY(${textArrayParam(settling)}::uuid[])`,
             ),
-            reads.lookup(sourceOccurrence, acceptedOccurrences, settling),
+            each((key, scoped) =>
+              scoped.lookup(
+                sourceOccurrence,
+                acceptedOccurrences,
+                settlingOf.get(key)!,
+              ),
+            ),
           ])
-        : [[], []];
-      const ownedOccurrences = await reads.rows(
-        sourceOccurrence,
-        settlingOwners
-          .filter((row) => !row.scopeKey.startsWith("manual:"))
-          .map((row) => row.scopeKey),
-      );
-      const settlementOccurrences = [
-        ...settlingOwners.flatMap((row) => {
-          const occurrence = ownedOccurrences.get(row.scopeKey);
-          return occurrence
-            ? [{ transactionId: row.entityId, occurrence }]
-            : [];
-        }),
-        ...settlingAccepted.flatMap((occurrence) =>
-          occurrence.acceptedTransactionId
-            ? [{ transactionId: occurrence.acceptedTransactionId, occurrence }]
-            : [],
-        ),
-      ];
+        : [[], new Map<string, (typeof sourceOccurrence.$inferSelect)[]>()];
+      const ownersOf = (key: string) =>
+        settlingOwners.filter(
+          (row) =>
+            settlingOf.get(key)!.includes(row.entityId) &&
+            !row.scopeKey.startsWith("manual:"),
+        );
+      const ownedOccurrences = settling.length
+        ? await each((key, scoped) =>
+            scoped.rows(
+              sourceOccurrence,
+              ownersOf(key).map((row) => row.scopeKey),
+            ),
+          )
+        : new Map<string, Map<string, typeof sourceOccurrence.$inferSelect>>();
       return new Map(
         inputs.map(([key, input]) => [
           key,
           {
             ...input,
-            settlementOccurrences: settlementOccurrences.filter((entry) =>
-              input.allocations.some(
-                (row) => row.transactionId === entry.transactionId,
+            settlementOccurrences: [
+              ...ownersOf(key).flatMap((row) => {
+                const occurrence = ownedOccurrences.get(key)?.get(row.scopeKey);
+                return occurrence
+                  ? [{ transactionId: row.entityId, occurrence }]
+                  : [];
+              }),
+              ...(settlingAccepted.get(key) ?? []).flatMap((occurrence) =>
+                occurrence.acceptedTransactionId
+                  ? [
+                      {
+                        transactionId: occurrence.acceptedTransactionId,
+                        occurrence,
+                      },
+                    ]
+                  : [],
               ),
-            ),
+            ],
           },
         ]),
       );
@@ -801,7 +945,7 @@ export function createPurchaseEvent({
     reconcile(input, c) {
       const subject = `purchaseEvent:${input.key}`;
       if (c.decision("rejection", subject)?.kind === "reject") {
-        retained(c);
+        retained(c, input);
         return c.done();
       }
       // Manual entries and the later order-evidence writer's reviewed record decisions
@@ -958,7 +1102,7 @@ export function createPurchaseEvent({
         for (const target of targets)
           for (const key of c.existing(target))
             if (!seeded.has(`${target.name}:${key}`))
-              c.retire(target, key, "keep");
+              keep(c, input, target, key);
         return c.done();
       }
       const transaction = input.transactions.find(
@@ -982,22 +1126,28 @@ export function createPurchaseEvent({
           (survivor !== null && survivor !== input.key) ||
           !targets.some((target) => c.existing(target).length)
         ) {
-          retained(c);
+          retained(c, input);
           return c.done();
         }
         if (decidedBooking(c, subject)) {
           c.gap.unsupported(
             "the charge no longer supports this spending, and the booking carries member decisions",
           );
-          retained(c);
+          retained(c, input);
           return c.done();
         }
+        // The Purchase it created stays while it holds other spending: its
+        // delete policy would unbook the other charges.
         for (const target of targets)
           for (const key of c.existing(target))
             c.retire(
               target,
               key,
-              target === bookingVendors ? "keep" : "remove",
+              target === bookingVendors ||
+                (target === purchaseRecords &&
+                  holdsOtherSpending(c, input, c.recordId(target, key)))
+                ? "keep"
+                : "remove",
             );
         return c.done();
       }
@@ -1044,7 +1194,7 @@ export function createPurchaseEvent({
         !recorded.every((row) => ownAllocations.has(row.id))
       ) {
         if (prior?.kind === "review") c.gap.decision(prior.reason);
-        retained(c);
+        retained(c, input);
         return c.done();
       }
       const account = input.accounts.find(
@@ -1052,7 +1202,7 @@ export function createPurchaseEvent({
       );
       if (!account) {
         c.gap.decision("a live financial account");
-        retained(c);
+        retained(c, input);
         return c.done();
       }
       const accountParty =
@@ -1156,13 +1306,14 @@ export function createPurchaseEvent({
         };
       };
       const checked = [[resolve(merchant), resolve(cleanName)]];
-      const selectedId =
-        typeof value("vendorId") === "string"
-          ? c.reference("vendor", String(value("vendorId")))
-          : (existingPurchase?.vendorId ?? null);
+      const selectedFromDecision = typeof value("vendorId") === "string";
+      const selectedId = selectedFromDecision
+        ? c.reference("vendor", String(value("vendorId")))
+        : (existingPurchase?.vendorId ?? null);
       const selected = input.vendors.find(
         (row) => row.id === selectedId && !row.deletedAt,
       );
+      const rawResolved = !!checked[0]![0]!.row;
       const resolvedVendor =
         selected ?? checked[0]!.find((result) => result.row)?.row ?? null;
       const sources = input.occurrences.filter((row) => !row.deletedAt);
@@ -1217,7 +1368,7 @@ export function createPurchaseEvent({
               label: `Use ${row.name}`,
             })),
         });
-        retained(c);
+        retained(c, input);
         return c.done();
       }
       const bookings = [
@@ -1231,7 +1382,7 @@ export function createPurchaseEvent({
       const creations = bookingVendorCreations(bookings, checked);
       if (creations.kind !== "ready") {
         c.gap.decision(creations.reason);
-        retained(c);
+        retained(c, input);
         return c.done();
       }
       const vendorNaturalKey = ownKey(
@@ -1252,7 +1403,7 @@ export function createPurchaseEvent({
       );
       if (selection.kind !== "ready") {
         c.gap.decision(selection.reason);
-        retained(c);
+        retained(c, input);
         return c.done();
       }
       const vendorRow = selection.rows[0]!;
@@ -1406,6 +1557,31 @@ export function createPurchaseEvent({
         typeof value("purchaseId") === "string"
           ? c.reference("purchase", String(value("purchaseId")))
           : null;
+      // A chosen Purchase that is gone is the member's to replace; booking a
+      // new one would override their choice.
+      if (
+        typeof value("purchaseId") === "string" &&
+        !input.purchases.some(
+          (row) => row.id === explicitPurchase && !row.deletedAt,
+        )
+      ) {
+        c.gap.decision(
+          "the Purchase chosen for this charge was removed; choose another Purchase or book it on its own",
+          {
+            actions: [
+              {
+                channel: "assignment",
+                kind: "none",
+                subject,
+                field: "purchaseId",
+                label: "Book it on its own",
+              },
+            ],
+          },
+        );
+        retained(c, input);
+        return c.done();
+      }
       const targetPurchase =
         explicitPurchase ?? (same.length === 1 ? same[0]!.id : null);
       if (
@@ -1433,7 +1609,7 @@ export function createPurchaseEvent({
             ]),
           },
         );
-        retained(c);
+        retained(c, input);
         return c.done();
       }
       const existingTarget = input.purchases.find(
@@ -1460,7 +1636,7 @@ export function createPurchaseEvent({
             },
           ],
         });
-        retained(c);
+        retained(c, input);
         return c.done();
       }
       const selectedCategory =
@@ -1476,7 +1652,7 @@ export function createPurchaseEvent({
         : undefined;
       if (selectedCategory && !category) {
         c.gap.decision("a live spending category");
-        retained(c);
+        retained(c, input);
         return c.done();
       }
       // A charge joins an existing Purchase only where its lines leave room
@@ -1520,36 +1696,20 @@ export function createPurchaseEvent({
             ? "the chosen Purchase has an unpriced or unclassified line or an uncertain payment, so its remaining capacity for this charge is unknown"
             : "the chosen Purchase's remaining capacity cannot cover this charge",
         );
-        retained(c);
+        retained(c, input);
         return c.done();
       }
       // Moving the charge retires the Purchase this scope created for it, which
       // must not hold anyone else's spending.
-      const ownRecords = new Set(
-        targets.flatMap((target) =>
-          c.existing(target).map((key) => c.recordId(target, key)),
-        ),
-      );
       if (
         existingTarget &&
         existingPurchaseId &&
-        (input.expenses.some(
-          (row) =>
-            !row.deletedAt &&
-            row.purchaseId === existingPurchaseId &&
-            !ownRecords.has(row.id),
-        ) ||
-          input.allocations.some(
-            (row) =>
-              !row.deletedAt &&
-              row.purchaseId === existingPurchaseId &&
-              row.transactionId !== transaction.id,
-          ))
+        holdsOtherSpending(c, input, existingPurchaseId)
       ) {
         c.gap.decision(
           "the Purchase this charge booked holds other spending; reconcile it before moving the charge",
         );
-        retained(c);
+        retained(c, input);
         return c.done();
       }
       const rows = statementBookingRows({
@@ -1600,7 +1760,7 @@ export function createPurchaseEvent({
       });
       if (violation) {
         c.gap.decision(violation);
-        retained(c);
+        retained(c, input);
         return c.done();
       }
       // The member's attach decision carries the whole move: what it points at
@@ -1617,48 +1777,99 @@ export function createPurchaseEvent({
           )?.id
         : undefined;
       const moves = attach && existingPurchaseId ? attach : undefined;
+      // Each value a member decision supplied cites it, so a held baseline
+      // still applies the decision. An explicit Book also covers every other
+      // value of the records it creates; it never authorizes changes to
+      // records that already exist.
+      const decided = (field: string, applies = true) =>
+        applies ? chosen(field)?.id : undefined;
+      const authority = value("book") === true ? chosen("book")?.id : undefined;
+      const vendorChoice =
+        selected && selectedFromDecision
+          ? decided("vendorId")
+          : rawResolved
+            ? undefined
+            : (decided("vendorName", !!reviewedName) ??
+              decided(
+                "advice",
+                value("advice") !== undefined && !!advice?.vendorName,
+              ));
       const declared = new Set<string>();
       const book = (
         target: ColumnRef,
         naturalKey: string,
         values: Parameters<Pure["record"]>[2],
+        cites: Record<string, string | undefined> = {},
       ) => {
         declared.add(`${target.name}:${naturalKey}`);
-        return record(
-          c,
-          target,
-          naturalKey,
-          values,
-          attach && "purchaseId" in values ? { purchaseId: attach } : {},
-        );
+        const created = !c.existing(target).includes(naturalKey);
+        const provenance: Record<string, string> = {};
+        for (const field of Object.keys(values)) {
+          const id =
+            (field === "purchaseId" ? attach : undefined) ??
+            cites[field] ??
+            (created ? authority : undefined);
+          if (id) provenance[field] = id;
+        }
+        return record(c, target, naturalKey, values, provenance);
       };
       if (!resolvedVendor)
-        book(bookingVendors, vendorNaturalKey, {
-          name: cleanName,
-          aliases: merchant && merchant !== cleanName ? [merchant] : [],
-        });
+        book(
+          bookingVendors,
+          vendorNaturalKey,
+          {
+            name: cleanName,
+            aliases: merchant && merchant !== cleanName ? [merchant] : [],
+          },
+          { name: vendorChoice, aliases: vendorChoice },
+        );
       if (rows.purchase)
-        book(purchaseRecords, purchaseKey, {
-          ...rows.purchase,
-          vendorId: vendorRow.id,
-          purchaserOverrideId: purchaserChoice,
-        });
+        book(
+          purchaseRecords,
+          purchaseKey,
+          {
+            ...rows.purchase,
+            vendorId: vendorRow.id,
+            purchaserOverrideId: purchaserChoice,
+          },
+          {
+            vendorId: vendorChoice,
+            purchaserOverrideId: decided(
+              "purchaserId",
+              typeof value("purchaserId") === "string",
+            ),
+          },
+        );
       if (rows.expense) {
         const expenseKey = ownKey(c, expenseRecords, "expense");
-        const expenseId = book(expenseRecords, expenseKey, {
-          name: rows.expense.name,
-          cost: rows.expense.costMinor,
-          date: rows.expense.date,
-          spendingCategoryId: category?.id ?? null,
-          economicRole: rows.expense.economicRole,
-          costType: rows.expense.costType,
-          trade: rows.expense.trade,
-          lineKind: rows.expense.lineKind,
-          lineBasis: rows.expense.lineBasis,
-          bookingTransactionCode: transaction.shortcode,
-          purchaseId,
-          future: false,
-        });
+        const expenseId = book(
+          expenseRecords,
+          expenseKey,
+          {
+            name: rows.expense.name,
+            cost: rows.expense.costMinor,
+            date: rows.expense.date,
+            spendingCategoryId: category?.id ?? null,
+            economicRole: rows.expense.economicRole,
+            costType: rows.expense.costType,
+            trade: rows.expense.trade,
+            lineKind: rows.expense.lineKind,
+            lineBasis: rows.expense.lineBasis,
+            bookingTransactionCode: transaction.shortcode,
+            purchaseId,
+            future: false,
+          },
+          {
+            spendingCategoryId: decided(
+              "spendingCategoryId",
+              typeof value("spendingCategoryId") === "string",
+            ),
+            costType: decided(
+              "costType",
+              value("costType") === "services" || value("costType") === "tools",
+            ),
+          },
+        );
         const beneficiary = value("beneficiaries");
         const shares = Array.isArray(beneficiary) ? beneficiary : [];
         for (const [index, share] of shares.entries()) {
@@ -1668,21 +1879,43 @@ export function createPurchaseEvent({
             typeof share.partyId === "string"
               ? c.reference("ledgerParty", share.partyId)
               : null;
-          if (typeof share.weight === "number")
-            book(attributionRecords, `beneficiary:${index}`, {
-              expenseId,
-              role: "beneficiary",
-              ledgerPartyId: partyId,
-              weight: share.weight,
-            });
+          if (typeof share.weight === "number") {
+            const shareDecision = decided("beneficiaries");
+            book(
+              attributionRecords,
+              `beneficiary:${index}`,
+              {
+                expenseId,
+                role: "beneficiary",
+                ledgerPartyId: partyId,
+                weight: share.weight,
+              },
+              {
+                expenseId: shareDecision,
+                role: shareDecision,
+                ledgerPartyId: shareDecision,
+                weight: shareDecision,
+              },
+            );
+          }
         }
       }
-      book(allocationRecords, ownKey(c, allocationRecords, "allocation"), {
-        transactionId: transaction.id,
-        purchaseId,
-        amountMinor: rows.allocation.amountMinor,
-        confirmsMerchant: rows.allocation.confirmsMerchant,
-      });
+      book(
+        allocationRecords,
+        ownKey(c, allocationRecords, "allocation"),
+        {
+          transactionId: transaction.id,
+          purchaseId,
+          amountMinor: rows.allocation.amountMinor,
+          confirmsMerchant: rows.allocation.confirmsMerchant,
+        },
+        {
+          confirmsMerchant: decided(
+            "confirmsMerchant",
+            value("confirmsMerchant") !== undefined,
+          ),
+        },
+      );
       // A charge that moved to another Purchase, or no longer needs its lump or
       // a beneficiary share, removes what this scope booked for it before.
       for (const target of targets)
@@ -1698,7 +1931,7 @@ export function createPurchaseEvent({
         c.bind(
           { kind: "sourceOccurrence", id: occurrence.id },
           purchaseId,
-          existingTarget ? "decision" : "proven",
+          existingTarget || authority ? "decision" : "proven",
         );
         if (occurrence.currentObservationId)
           c.bind(
@@ -1707,7 +1940,7 @@ export function createPurchaseEvent({
               id: occurrence.currentObservationId,
             },
             purchaseId,
-            existingTarget ? "decision" : "proven",
+            existingTarget || authority ? "decision" : "proven",
           );
       }
       return c.done();

@@ -5,7 +5,7 @@ import {
   type StatementDecisionInput,
   type StatementDecisionOut,
 } from "@cubby/schemas/statement-decision";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, ne } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { recordKey } from "~/server/db/kernel-schema";
@@ -108,10 +108,44 @@ export async function decideStatement(
               ),
             )
         : [];
+      // Another statement row attached to the transaction keeps it: rejecting
+      // this row withdraws only this row's evidence.
+      const [attached, coOwned] = recorded
+        ? await Promise.all([
+            q
+              .select({ id: sourceOccurrence.id })
+              .from(sourceOccurrence)
+              .where(
+                and(
+                  eq(
+                    sourceOccurrence.acceptedTransactionId,
+                    parseEntityId("financialTransaction", recorded.id),
+                  ),
+                  ne(sourceOccurrence.id, occurrence.id),
+                  isNull(sourceOccurrence.deletedAt),
+                  isNull(sourceOccurrence.withdrawnAt),
+                  isNull(sourceOccurrence.supersededByOccurrenceId),
+                ),
+              ),
+            q
+              .select({ key: recordKey.scopeKey })
+              .from(recordKey)
+              .where(
+                and(
+                  eq(recordKey.scopeKind, scope.kind),
+                  eq(recordKey.entity, "financialTransaction"),
+                  eq(recordKey.entityId, recorded.id),
+                  ne(recordKey.scopeKey, scope.key),
+                ),
+              ),
+          ])
+        : [[], []];
       const removable =
         recorded &&
         owner?.minted &&
         !owner.mergedAt &&
+        !attached.length &&
+        !coOwned.length &&
         !slices.length &&
         !transaction?.ledgerTransferId;
       if (removable)
@@ -152,6 +186,17 @@ export async function decideStatement(
         subject,
         field: "kind",
         value: input.application.kindOverride,
+        scopes: [scope],
+      });
+    // The member's explicit acceptance covers the transaction it creates,
+    // also on a scope whose accepted baseline holds automatic changes.
+    if (["create", "book", "void"].includes(input.application.action))
+      assignments.push({
+        channel: "assignment",
+        kind: "set",
+        subject,
+        field: "accept",
+        value: true,
         scopes: [scope],
       });
     await decide(tx, actor, assignments);

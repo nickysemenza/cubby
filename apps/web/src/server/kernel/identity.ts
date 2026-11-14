@@ -32,13 +32,11 @@ import {
 } from "~/server/entity-kernel/repo/entity-identity";
 import { createAppError } from "~/server/errors/app-error";
 import { finalizeMerge } from "~/server/generic/merge/repo/core";
-import {
-  cascadeRemoval,
-  type RemovableEntity,
-} from "~/server/generic/removal/repo/core";
+import type { RemovableEntity } from "~/server/generic/removal/repo/core";
+import type { DeleteHooks } from "~/server/generic/removal/repo/dispositions";
 import { applyMergePolicy } from "~/server/generic/removal/repo/dispositions";
 
-import type { ColumnRef, KeyedTable, MergePort, ScopeRef } from "./define";
+import type { ColumnRef, MergePort, RemovePort, ScopeRef } from "./define";
 import {
   bindingEventKey,
   bindingFactKey,
@@ -148,48 +146,57 @@ export async function resolveForWrite(
 }
 
 /**
- * The removal port for a reconciled entity table: soft delete, then the
- * generic removal cascade (identity tombstone, search artifacts, review
- * targets). A domain with its own delete policy passes that instead.
+ * The removal port of an entity whose delete is its declared policy and
+ * hooks: dispositions, the soft delete and the cascade (identity tombstone,
+ * search artifacts, review targets). Purchase and Expense name their own.
  */
-export function entityRemoval(
-  entity: RemovableEntity,
-  table: KeyedTable,
-): NonNullable<ColumnRef["remove"]> {
+export function policyRemoval<E extends "financialTransaction" | "vendor">(
+  entity: E,
+): RemovePort {
   return async (tx, ids) => {
-    if (!ids.length) return;
-    await withTransaction(tx, async (drizzleTx) => {
-      const columns = getTableColumns(table);
-      if (columns.deletedAt)
-        await drizzleTx
-          .update(table)
-          .set({ deletedAt: new Date() })
-          .where(
-            and(
-              inArray(idColumn(table), [...ids]),
-              sql`${columns.deletedAt} IS NULL`,
-            ),
-          );
-      await cascadeRemoval(drizzleTx, {
-        entity,
-        ids: ids.map((id) => parseEntityId(entity, id)),
-        // Inside an apply, the delete rows carry its provenance.
-        audit: { actor: systemActor() },
-      });
+    const { DECLARED_EDGE_DELETE_HOOKS, DECLARED_EDGE_DELETE_POLICIES } =
+      await import("~/server/db/generated/declared-edges.gen");
+    const { deleteByPolicy } =
+      await import("~/server/generic/removal/repo/dispositions");
+    await deleteByPolicy(tx, {
+      entity,
+      policy: DECLARED_EDGE_DELETE_POLICIES[entity],
+      ids: ids.map((id) => parseEntityId(entity, id)),
+      actor: systemActor(),
+      // SAFETY: the generated hooks of this same entity.
+      ...(DECLARED_EDGE_DELETE_HOOKS[entity] as DeleteHooks<E>),
     });
   };
 }
 
-/** Remove records through their table's removal port, or the plain fallback. */
+/**
+ * Remove records through their table's delete policy, or the plain fallback.
+ * A record already deleted elsewhere is left to the delete that removed it.
+ */
 export async function removeRecords(
   tx: Database,
   target: ColumnRef,
   ids: readonly string[],
 ): Promise<void> {
   if (!ids.length) return;
-  if (target.remove) return target.remove(tx, ids);
   const q = repositoryQueries(tx);
   const deletedAt = getTableColumns(target.table).deletedAt;
+  if (target.remove) {
+    const live = deletedAt
+      ? (
+          await q
+            .select({ id: sql<string>`${idColumn(target.table)}::text` })
+            .from(target.table)
+            .where(
+              and(
+                inArray(idColumn(target.table), [...ids]),
+                sql`${deletedAt} IS NULL`,
+              ),
+            )
+        ).map((row) => row.id)
+      : ids;
+    return live.length ? target.remove(tx, live) : undefined;
+  }
   if (deletedAt)
     await q
       .update(target.table)

@@ -40,6 +40,7 @@ import {
 import {
   defineReconciler,
   defineReadIndex,
+  policyRemoval,
   recordSubject,
   source,
   writes,
@@ -72,6 +73,7 @@ export const bankTransactionWrites = writes(
   {
     entity: "financialTransaction",
     merge: mergeBankEvents,
+    remove: policyRemoval("financialTransaction"),
     discovers: (row) => [{ kind: "purchaseEvent", key: row.id }],
   },
 );
@@ -119,9 +121,35 @@ type BankInput = {
   shared: boolean;
 };
 
+/** A member's decisions on the record's own fields still apply during a gap. */
 const retained = (c: Pure) => {
-  for (const key of c.existing(bankTransactionWrites))
-    c.retire(bankTransactionWrites, key, "keep");
+  for (const key of c.existing(bankTransactionWrites)) {
+    const id = c.recordId(bankTransactionWrites, key);
+    const decided = id
+      ? [...c.assignments(recordSubject("financialTransaction", id))].filter(
+          ([field]) => bankTransactionWrites.columns.includes(field),
+        )
+      : [];
+    if (key.startsWith("accepted:") || !decided.length) {
+      c.retire(bankTransactionWrites, key, "keep");
+      continue;
+    }
+    const values: Parameters<Pure["record"]>[2] = {};
+    const provenance: Record<string, string> = {};
+    for (const [field, decision] of decided) {
+      const value = decision.kind === "none" ? null : decision.value;
+      values[field] =
+        typeof value === "string" && field === "accountId"
+          ? c.reference("financialAccount", value)
+          : typeof value === "string" && field === "spendingCategoryId"
+            ? c.reference("spendingCategory", value)
+            : typeof value === "string" && field === "amount"
+              ? BigInt(value)
+              : value;
+      provenance[field] = decision.id;
+    }
+    c.record(bankTransactionWrites, key, values, { provenance });
+  }
   return c.done();
 };
 
@@ -699,6 +727,12 @@ export function createBankEvent({
         });
         provenance[field] = decision.id;
       }
+      // A member's explicit acceptance covers every value of the transaction
+      // it creates; it never authorizes later changes to an existing one.
+      const acceptance = c.decision("assignment", subject, "accept");
+      if (!existing && acceptance?.value === true)
+        for (const field of Object.keys(values))
+          provenance[field] ??= acceptance.id;
       if (!existing && owner && !owner.acceptedTransactionId) {
         const date = values.transactionDate ?? values.postedDate;
         const candidates = input.candidates.filter(
