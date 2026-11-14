@@ -23,7 +23,7 @@ import { recordSubject } from "~/server/kernel/keys";
 
 import { assignmentsInForce } from "./field-decisions";
 import { fieldPlan } from "./plan";
-import { readStoredColumns } from "./stored-field";
+import { readStoredRows } from "./stored-field";
 
 export async function applyFieldAuthorityAction(
   db: Database,
@@ -37,10 +37,11 @@ export async function applyFieldAuthorityAction(
     throw new Error(`${input.entity}.${input.field} is not a suggested field`);
   const recordId = await resolveLiveShortcode(db, input.id, input.entity);
   if (!recordId) throw new Error(`Record not found: ${input.id}`);
-  const [held, stored] = await Promise.all([
+  const [held, storedRows] = await Promise.all([
     assignmentsInForce(db, plan.entity.entity, recordId, [input.field]),
-    readStoredColumns(db, plan.entity, recordId, [input.field]),
+    readStoredRows(db, plan.entity, [recordId], [input.field]),
   ]);
+  const stored = storedRows.get(recordId);
   const value = stored?.[input.field] ?? null;
   if (input.suggestionId) {
     const cursor = decodeAuditCursor(input.suggestionId);

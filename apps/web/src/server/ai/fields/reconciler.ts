@@ -257,7 +257,7 @@ async function loadPrecedents(
     ? sql`AND c.${columnOf(plan, "deletedAt")} IS NULL`
     : sql``;
   const newest = plan.hasUpdatedAt
-    ? sql`c."updatedAt" DESC NULLS LAST, c.id`
+    ? sql`date_trunc('milliseconds', c."updatedAt") DESC NULLS LAST, c.id`
     : sql`c.id`;
   const candidates = (corrected: boolean) =>
     reads.select(
@@ -281,12 +281,16 @@ async function loadPrecedents(
     candidates(false),
   ]);
   const correctedIds = new Set(corrected.map((row) => String(row.id)));
+  const updatedAt = (row: Row) => {
+    const time = new Date(String(row.updatedAt)).getTime();
+    return Number.isFinite(time) ? time : -Infinity;
+  };
+  // Match SQL's timestamp precision and identity tie-break across batch sizes.
   const newestFirst = (rows: readonly Row[]) =>
-    [...rows].sort((a, b) =>
-      plan.hasUpdatedAt
-        ? new Date(String(b.updatedAt)).getTime() -
-          new Date(String(a.updatedAt)).getTime()
-        : String(a.id).localeCompare(String(b.id)),
+    [...rows].sort(
+      (a, b) =>
+        (plan.hasUpdatedAt ? updatedAt(b) - updatedAt(a) : 0) ||
+        String(a.id).localeCompare(String(b.id)),
     );
   const ordered = [
     ...newestFirst(corrected),
@@ -400,40 +404,54 @@ async function load(
             ]),
           ),
         });
-        const loaded = inputs.get(item.key)!;
-        if (prepare && loaded.row && entity !== "run") {
-          loaded.questions = new Map(
-            await Promise.all(
-              plan.fields
-                .filter(
-                  (field) =>
-                    (field.mode === "prune" ||
-                      !assignments.has(`${entity}:${item.id}:${field.key}`) ||
-                      assignments.get(`${entity}:${item.id}:${field.key}`) ===
-                        "release") &&
-                    (blank(loaded.row![field.key]) || !field.fillOnly) &&
-                    field.basis.some((key) => !blank(loaded.row![key])),
-                )
-                .map(async (field) => {
-                  const prepared = await reads
-                    .for(item.key)
-                    .prepare(fieldSources(plan, field), async (db) => {
-                      const result = await (
-                        await import("./produce")
-                      ).produceFieldAnswer(
-                        db,
-                        fieldInput(loaded, field),
-                        null,
-                        true,
-                      );
-                      return result.output.questions ?? [];
-                    });
-                  return [field.key, prepared] as const;
-                }),
-            ),
-          );
-        }
       }
+      if (!prepare || entity === "run") return;
+      const requests: {
+        field: string;
+        input: FieldAskInput;
+        questions: Map<string, FieldAskInput["questions"]>;
+      }[] = [];
+      for (const item of items) {
+        const loaded = inputs.get(item.key)!;
+        if (!loaded.row) continue;
+        const questions = new Map<string, FieldAskInput["questions"]>();
+        loaded.questions = questions;
+        const fields = plan.fields.filter(
+          (field) =>
+            (field.mode !== "prune" || !blank(loaded.row![field.key])) &&
+            (field.mode === "prune" ||
+              !assignments.has(`${entity}:${item.id}:${field.key}`) ||
+              assignments.get(`${entity}:${item.id}:${field.key}`) ===
+                "release") &&
+            (blank(loaded.row![field.key]) || !field.fillOnly) &&
+            field.basis.some((key) => !blank(loaded.row![key])),
+        );
+        // Capture before shared I/O; later scopes reuse already seen revisions.
+        await reads
+          .for(item.key)
+          .prepare(
+            [...new Set(fields.flatMap((field) => fieldSources(plan, field)))],
+            async () => {},
+          );
+        for (const field of fields)
+          requests.push({
+            field: field.key,
+            input: fieldInput(loaded, field),
+            questions,
+          });
+      }
+      // Capture each scope's roster revisions before the shared data read.
+      // A source write during preparation then fails the publication fence.
+      if (!requests.length) return;
+      const prepared = await reads.prepare([], async (db) =>
+        (await import("~/server/ai/fields/produce")).prepareFieldQuestions(
+          db,
+          requests.map((request) => request.input),
+        ),
+      );
+      // Preparation preserves request order and returns one list per input.
+      for (const [index, request] of requests.entries())
+        request.questions.set(request.field, prepared[index]!);
     }),
   );
   return inputs;

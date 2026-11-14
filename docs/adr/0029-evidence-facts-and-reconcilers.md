@@ -229,6 +229,18 @@ Ask; `c.decision(channel, subject, field)` returns the decision in force;
 downstream scope; `c.gap.evidence`, `c.gap.answer`, `c.gap.decision` and
 `c.gap.time` declare what is missing and who supplies it.
 
+Saved-field questions share canonical selected-detail reads by entity within
+the load batch. Each scope records its own row and roster revisions before
+the shared preparation reads data; returned records are matched by public id,
+and each field keeps only its policy's basis and resolution context. Preparation
+checks stored basis rows as a batch; a missing or changed record contributes no
+questions. A changed source is refused by the
+publication fence. Each question has its own provider-free input capture;
+the actual producer checks the stored row and frozen questions again before
+any model transport.
+Precedents rank corrected values first, then newest update at millisecond
+precision and record identity, so batch membership cannot reorder tied peers.
+
 A Catalog target with no owned columns may declare `coalesceCreation(values)`
 to combine equal natural keys in the same batch. In canonical scope-key order,
 the first new declaration reserves the shared id; every participating scope

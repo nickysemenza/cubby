@@ -324,14 +324,11 @@ export function holdFieldsValues<V extends object>(
         recordId,
         before ??
           (mode === "update" && plan && Object.keys(owned).length
-            ? ((await (
-                await import("./stored-field")
-              ).readStoredColumns(
-                database,
-                plan,
-                recordId,
-                Object.keys(owned),
-              )) ?? {})
+            ? ((
+                await (
+                  await import("./stored-field")
+                ).readStoredRows(database, plan, [recordId], Object.keys(owned))
+              ).get(recordId) ?? {})
             : {}),
         owned,
         changes ??

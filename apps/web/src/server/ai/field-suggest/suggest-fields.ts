@@ -91,14 +91,17 @@ import {
 /** A client-supplied basis value beyond this length is truncated, not rejected. */
 const MAX_BASIS_VALUE_LENGTH = 500;
 
-/** Resolves reference-basis shortcodes to display names. The seam
- * `suggest-fields.unit.test.ts` fakes instead of standing up a database. */
+/** Resolves reference-basis shortcodes to display names. */
 type LabelResolverPort = (
   db: Database,
   codes: readonly string[],
 ) => Promise<Map<string, string>>;
 
-const defaultResolveLabels: LabelResolverPort = async (db, codes) => {
+/** Finite preparation batches can resolve their reference codes together. */
+export const resolveFieldReferenceLabels: LabelResolverPort = async (
+  db,
+  codes,
+) => {
   if (codes.length === 0) return new Map();
   const refs = await resolveShortcodes(db, codes);
   if (refs.size === 0) return new Map();
@@ -1187,7 +1190,7 @@ export async function suggestFields(
     clientBasis.set(key, scalarBasisValue(resolution.value));
   }
 
-  const resolveLabels = ports?.resolveLabels ?? defaultResolveLabels;
+  const resolveLabels = ports?.resolveLabels ?? resolveFieldReferenceLabels;
   const resolvedRawByTarget = new Map<string, string | null>();
   const suggestions: Record<string, FieldSuggestion | null> = {};
 

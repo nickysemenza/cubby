@@ -1,5 +1,5 @@
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { eq } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 
 import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
@@ -9,19 +9,24 @@ import type { EntityFieldsPlan, FieldsRow } from "./plan";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
-/** The stored values of `columns` on one record, as the reconciler reads them, or null when it is gone. */
-export async function readStoredColumns(
+/** Stored basis columns by record id; absent records stay absent. */
+export async function readStoredRows(
   db: RepositoryQueryInput,
   plan: EntityFieldsPlan,
-  recordId: string,
+  recordIds: readonly string[],
   columns: readonly string[],
-): Promise<FieldsRow | null> {
-  const [row]: FieldsRow[] = await repositoryQueries(db)
+): Promise<ReadonlyMap<string, FieldsRow>> {
+  if (!recordIds.length) return new Map();
+  const rows: FieldsRow[] = await repositoryQueries(db)
     .select()
     .from(plan.table)
-    .where(eq(plan.table.id, recordId));
-  if (!row) return null;
-  return Object.fromEntries(columns.map((key) => [key, row[key] ?? null]));
+    .where(inArray(plan.table.id, [...recordIds]));
+  return new Map(
+    rows.map((row) => [
+      String(row.id),
+      Object.fromEntries(columns.map((key) => [key, row[key] ?? null])),
+    ]),
+  );
 }
 
 /** A reference answer as its column stores it: the id behind a shortcode. */

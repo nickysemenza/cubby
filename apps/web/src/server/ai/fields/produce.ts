@@ -4,11 +4,19 @@
  * A stale input is refused before any model call, so its Ask re-queues.
  */
 import { entityRefKey } from "@cubby/schemas/entity";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { parseEntityRef, runEntityId } from "@cubby/schemas/identifiers";
 
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
-import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
-import { prepareSavedField } from "~/server/ai/fields/prepare";
+import {
+  suggestFields,
+  resolveFieldReferenceLabels,
+  type SuggestFieldsPorts,
+} from "~/server/ai/field-suggest/suggest-fields";
+import {
+  prepareSavedFields,
+  type PreparedField,
+} from "~/server/ai/fields/prepare";
 import { fieldPlan } from "~/server/ai/fields/repo/plan";
 import { precedentLines } from "~/server/ai/fields/repo/precedents";
 import { aiRunOwner } from "~/server/ai/policy/call-owner";
@@ -22,58 +30,134 @@ import { WorkEvidenceObsoleteError } from "~/server/kernel/work-errors";
 
 import type { FieldAskInput } from "./ask";
 import type { FieldAnswer } from "./repo/field-answer";
-import { readStoredColumns, storedReferenceId } from "./repo/stored-field";
+import { readStoredRows, storedReferenceId } from "./repo/stored-field";
+
+async function unchangedFieldInputs(
+  db: Database,
+  inputs: readonly FieldAskInput[],
+) {
+  const groups = new Map<
+    string,
+    {
+      plan: NonNullable<ReturnType<typeof fieldPlan>>["entity"];
+      inputs: FieldAskInput[];
+    }
+  >();
+  for (const input of inputs) {
+    const plan = fieldPlan(input.entity, input.field);
+    if (!plan)
+      throw new Error(`${input.entity}.${input.field} is not a fields column`);
+    const group = groups.get(input.entity) ?? { plan: plan.entity, inputs: [] };
+    group.inputs.push(input);
+    groups.set(input.entity, group);
+  }
+  const unchanged = new Set<FieldAskInput>();
+  for (const group of groups.values()) {
+    const rows = await readStoredRows(
+      db,
+      group.plan,
+      [...new Set(group.inputs.map((input) => input.recordId))],
+      [...new Set(group.inputs.flatMap((input) => Object.keys(input.row)))],
+    );
+    for (const input of group.inputs) {
+      const stored = rows.get(input.recordId);
+      if (
+        stored &&
+        Object.entries(input.row).every(
+          ([key, value]) =>
+            valueKey(fieldJson(stored[key])) === valueKey(value),
+        )
+      )
+        unchanged.add(input);
+    }
+  }
+  return unchanged;
+}
 
 export async function produceFieldAnswer(
   db: Database,
   input: FieldAskInput,
   runId: string | null,
-  prepareOnly = false,
-): Promise<
-  Produced<
-    FieldAnswer & {
-      questions?: import("zod").z.infer<
-        typeof import("~/server/ai/evaluation-inputs").preparedQuestion
-      >[];
-    }
-  >
-> {
-  if (!prepareOnly && !input.questions)
+): Promise<Produced<FieldAnswer>> {
+  if (!input.questions)
     throw refusedBeforeSending(
       new Error("The field question has no prepared model inputs"),
     );
-  const plan = fieldPlan(input.entity, input.field);
-  if (!plan)
-    throw new Error(`${input.entity}.${input.field} is not a fields column`);
-  const stored = await readStoredColumns(
-    db,
-    plan.entity,
-    input.recordId,
-    Object.keys(input.row),
-  );
-  if (
-    !stored ||
-    Object.entries(input.row).some(
-      ([key, value]) => valueKey(fieldJson(stored[key])) !== valueKey(value),
-    )
-  )
+  if (!(await unchangedFieldInputs(db, [input])).has(input))
     throw refusedBeforeSending(
       new WorkEvidenceObsoleteError(
         "The record changed after Cubby read it; the new values file their own question",
       ),
     );
-  const prepared = await prepareSavedField(
-    db,
-    input.entity,
-    input.recordId,
-    input.field,
-  );
+  const [prepared] = await prepareSavedFields(db, [input]);
   if (!prepared)
     throw refusedBeforeSending(
       new WorkEvidenceObsoleteError(
         "The record or its field result is unavailable",
       ),
     );
+  return evaluateField(db, input, runId, prepared, false);
+}
+
+/** Prepare tracked rows together; admission is checked again before a producer call. */
+export async function prepareFieldQuestions(
+  db: Database,
+  inputs: readonly FieldAskInput[],
+): Promise<NonNullable<FieldAskInput["questions"]>[]> {
+  const unchanged = await unchangedFieldInputs(db, inputs);
+  const current = inputs.filter((input) => unchanged.has(input));
+  const prepared = await prepareSavedFields(db, current);
+  const byInput = new Map(
+    current.map((input, index) => [input, prepared[index]]),
+  );
+  const codes = new Set<string>();
+  for (const field of prepared) {
+    if (!field) continue;
+    for (const model of entityFieldModels[field.entity].fields) {
+      const code = field.basis[model.key];
+      if (model.reference && code) codes.add(code);
+    }
+  }
+  const labels = await resolveFieldReferenceLabels(db, [...codes]);
+  const resolveLabels: NonNullable<SuggestFieldsPorts["resolveLabels"]> = (
+    readDb,
+    wanted,
+  ) =>
+    wanted.every((code) => codes.has(code))
+      ? Promise.resolve(labels)
+      : resolveFieldReferenceLabels(readDb, wanted);
+  return Promise.all(
+    inputs.map(async (input) => {
+      const basis = byInput.get(input);
+      if (!basis) return [];
+      const result = await evaluateField(
+        db,
+        input,
+        null,
+        basis,
+        true,
+        resolveLabels,
+      );
+      return result.output.questions ?? [];
+    }),
+  );
+}
+
+async function evaluateField(
+  db: Database,
+  input: FieldAskInput,
+  runId: string | null,
+  prepared: PreparedField,
+  prepareOnly: boolean,
+  resolveLabels?: SuggestFieldsPorts["resolveLabels"],
+): Promise<
+  Produced<
+    FieldAnswer & { questions?: NonNullable<FieldAskInput["questions"]> }
+  >
+> {
+  const plan = fieldPlan(input.entity, input.field);
+  if (!plan)
+    throw new Error(`${input.entity}.${input.field} is not a fields column`);
   const references = plan.field.reference;
   const labelById = new Map<string, string>();
   if (references) {
@@ -110,6 +194,7 @@ export async function produceFieldAnswer(
           decisionModel: FIELD_SUGGESTION_FEATURE.model,
           recordId: input.recordId,
           precedentText: precedentLines(input.precedents, labelById),
+          resolveLabels,
         },
       ),
     { providerFree: true, expected: prepareOnly ? undefined : input.questions },
