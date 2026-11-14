@@ -31,10 +31,6 @@ export async function readSelectedEntityRecords({
   const projection = [
     ...Object.keys(schema.shape).filter((key) => key !== "fields"),
     ...Object.keys(schema.shape.fields.shape),
-    // Resolver evidence supplies effective values and provenance before serialization.
-    ...(includeFieldReads && scaffold.fields.detail.includes("fieldResolutions")
-      ? ["fieldResolutions"]
-      : []),
   ];
   const found = await scaffold.get(
     context.db,

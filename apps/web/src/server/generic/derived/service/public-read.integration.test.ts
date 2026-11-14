@@ -1,5 +1,6 @@
+import { systemActor } from "@cubby/schemas/context";
 import { fieldEnvelopeReadSchema } from "@cubby/schemas/entity-field-envelopes";
-import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
@@ -15,6 +16,7 @@ import {
   readRecipeById,
   updateRecipe,
 } from "~/server/domains/recipe/repo/crud";
+import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
 import {
   publicFieldEnvelopeBatch,
   selectedFieldEnvelopeSchema,
@@ -87,6 +89,24 @@ describe("nested field envelope reads", () => {
     expect(row.location).not.toHaveProperty("valuation");
     expect(row.location).not.toHaveProperty("aiDescription");
     expect(row).not.toHaveProperty("fieldResolutions");
+    const selectedContext = { db: ctx.db, actorContext: systemActor() };
+    const [identity] = await readSelectedEntityRecords({
+      context: selectedContext,
+      entity: "product",
+      ids: [product.id],
+      fields: ["name", "brandId"],
+    });
+    expect(identity?.name).toBe("Synthetic nested stock");
+    expect(identity).not.toHaveProperty("fields.price");
+    const [valuation] = await readSelectedEntityRecords({
+      context: selectedContext,
+      entity: "product",
+      ids: [product.id],
+      fields: ["price"],
+    });
+    const selectedPrice = fieldEnvelopeFor(valuation ?? {}, "price");
+    expect(selectedPrice && fieldValueOf(selectedPrice)).toBe(13);
+    expect(valuation).not.toHaveProperty("fieldResolutions");
     const narrow = await productScaffold.fieldReads(
       ctx.db,
       [product.id],
