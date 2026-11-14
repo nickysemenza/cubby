@@ -49,11 +49,15 @@ import { manualTransactionEvidence } from "~/server/domains/financial-transactio
 import { expenseRecords } from "~/server/domains/financial-transaction/repo/purchase-event-records";
 import { purchaseAsks } from "~/server/domains/financial-transaction/service/purchase-asks";
 import { readExistingOrderCandidates } from "~/server/domains/purchase-import/repo/existing-order-candidates";
+import { deletePurchases } from "~/server/domains/purchase/repo/purchase";
 import { purchaseWorkFacts } from "~/server/domains/purchase/repo/work-facts";
 import { decideStatement } from "~/server/domains/transaction-import/repo/statement-decisions";
-import { insertManyWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import {
+  insertManyWithShortcode,
+  insertWithShortcode,
+} from "~/server/generic/shortcode/repo/shortcode-utils";
 import { householdWrite, emitWrites, machinery } from "~/server/kernel/api";
-import { decide, reconcileNow } from "~/server/kernel/api";
+import { decide, reconcileNow, resolveForRead } from "~/server/kernel/api";
 import { append, evidenceRow } from "~/server/kernel/api";
 import { runQueuedAsks } from "~/server/kernel/ask";
 import { askEnvelope, inputHashOf } from "~/server/kernel/envelope";
@@ -1149,6 +1153,182 @@ describe("statement spending review and re-import", () => {
     await expectFixedPoint();
     expect(await liveMoney()).toEqual(money);
     expect(await getDb(ctx.db).select().from(drift)).toEqual([]);
+    // The chosen Purchase is deleted: the choice is re-asked, nothing new is
+    // minted for it, and a member's edit to the kept lump still applies.
+    await deletePurchases(ctx.db, [target.output.id], ctx.actor);
+    const [transaction] = await getDb(ctx.db)
+      .select()
+      .from(financialTransaction);
+    const scope = { kind: "purchaseEvent", key: transaction!.id };
+    expect((await reconcileNow(ctx.db, [scope]))[0]?.gaps).toEqual([
+      expect.objectContaining({
+        input: expect.stringContaining("was removed"),
+      }),
+    ]);
+    expect(await liveMoney()).toEqual({
+      transactions: 1,
+      purchases: 0,
+      cost: 1234n,
+      allocated: 0n,
+    });
+    const [lump] = (await ledgerRows()).expenses;
+    await updateExpense(
+      ctx.db,
+      parseShortcodeFor("expense", lump!.shortcode),
+      { spendingCategoryId: setup.advice.spendingCategoryId },
+      ctx.actor,
+    );
+    await reconcileNow(ctx.db, [scope]);
+    expect((await ledgerRows()).expenses).toEqual([
+      expect.objectContaining({
+        id: lump!.id,
+        deletedAt: null,
+        spendingCategoryId: expect.any(String),
+      }),
+    ]);
+    expect(await liveMoney()).toMatchObject({ purchases: 0 });
+  });
+  it("applies a member's create, book and category on backlog rows held at cutover", async () => {
+    const setup = await fixture("cutover-backlog", "member", 42.5, false);
+    await withKernelApply(null, () =>
+      insertWithShortcode(ctx.db, "vendor", {
+        name: "Synthetic Orchard",
+        itemizationExpectation: "required",
+      }),
+    );
+    const [observation] = await getDb(ctx.db)
+      .select()
+      .from(sourceTransactionRecord);
+    const emptyBaseline = (kind: string, key: string) =>
+      getDb(ctx.db)
+        .insert(evidenceBinding)
+        .values({
+          factKind: "manualEntry",
+          factId: crypto.randomUUID(),
+          basis: "baseline",
+          eventKey: `baseline:empty:${kind}:${key}`,
+          scopeKind: kind,
+          scopeKey: key,
+        });
+    await emptyBaseline("bankEvent", observation!.occurrenceId);
+    await reconcileNow(ctx.db, [
+      { kind: "bankEvent", key: observation!.occurrenceId },
+    ]);
+    expect(await liveMoney()).toMatchObject({ transactions: 0 });
+    // The member's own create books nothing automatically.
+    expect(
+      await decideObservation(setup, observation!.shortcode, "create"),
+    ).toMatchObject({ status: "waiting" });
+    expect(await liveMoney()).toEqual({
+      transactions: 1,
+      purchases: 0,
+      cost: 0n,
+      allocated: 0n,
+    });
+    const [transaction] = await getDb(ctx.db)
+      .select()
+      .from(financialTransaction);
+    await emptyBaseline("purchaseEvent", transaction!.id);
+    expect(
+      await decideObservation(setup, observation!.shortcode, "book"),
+    ).toMatchObject({ status: "applied", gaps: [] });
+    const categorized = await decideStatement(
+      ctx.db,
+      ctx.actor,
+      statementDecisionInput.parse({
+        observationId: observation!.shortcode,
+        accountId: setup.account.output.id,
+        application: {
+          action: "book",
+          kindOverride: "purchase",
+          booking: { spendingCategoryId: setup.advice.spendingCategoryId },
+        },
+      }),
+    );
+    expect(categorized).toMatchObject({ status: "applied", gaps: [] });
+    expect(await liveMoney()).toEqual({
+      transactions: 1,
+      purchases: 1,
+      cost: 4250n,
+      allocated: 4250n,
+    });
+    expect((await ledgerRows()).expenses).toEqual([
+      expect.objectContaining({ spendingCategoryId: expect.any(String) }),
+    ]);
+    expect(await getDb(ctx.db).select().from(drift)).toEqual([]);
+    await expectFixedPoint();
+  });
+  it("rejects a statement row by deleting only a transaction no other row holds", async () => {
+    const setup = await fixture("reject-solo", "member", 42.5, false);
+    await withKernelApply(null, () =>
+      insertWithShortcode(ctx.db, "vendor", {
+        name: "Synthetic Orchard",
+        itemizationExpectation: "required",
+      }),
+    );
+    const reject = (observationId: string) =>
+      decideStatement(
+        ctx.db,
+        ctx.actor,
+        statementDecisionInput.parse({
+          observationId,
+          application: { action: "reject" },
+        }),
+      );
+    const [solo] = await getDb(ctx.db).select().from(sourceTransactionRecord);
+    const created = await decideObservation(setup, solo!.shortcode, "create");
+    expect(await reject(solo!.shortcode)).toMatchObject({ gaps: [] });
+    expect(await resolveForRead(ctx.db, created.transactionId!)).toBeNull();
+    const first = await recordRow("reject-shared", "2026-05-06", 30);
+    const shared = await decideObservation(setup, first.shortcode, "create");
+    await recordSourceTransactionRecords(
+      ctx.db,
+      recordSourceTransactionRecordsInput.parse({
+        import: {
+          source: "mint",
+          label: "synthetic-mint.csv",
+          fingerprint: "synthetic-reject-shared-mint",
+          dateKind: "posted",
+          rowCountDeclared: null,
+          notes: null,
+        },
+        rows: [
+          {
+            accountDescriptor: "Synthetic card 4242",
+            statementDate: "2026-05-06",
+            providerAmount: -30,
+            merchant: "Synthetic Orchard",
+            rawDescription: "SYNTHETIC ORCHARD",
+            sourceCategory: "Groceries",
+            providerStatus: "posted",
+            providerNotes: null,
+            rowPosition: 1,
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    const [second] = await getDb(ctx.db)
+      .select()
+      .from(sourceTransactionRecord)
+      .where(eq(sourceTransactionRecord.source, "mint"));
+    await decideStatement(
+      ctx.db,
+      ctx.actor,
+      statementDecisionInput.parse({
+        observationId: second!.shortcode,
+        accountId: setup.account.output.id,
+        application: {
+          action: "attach",
+          kindOverride: "purchase",
+          transactionId: shared.transactionId!,
+        },
+      }),
+    );
+    await reject(first.shortcode);
+    expect(await resolveForRead(ctx.db, shared.transactionId!)).toMatchObject({
+      shortcode: shared.transactionId,
+    });
   });
   it("books a weekly same-vendor charge past last week's provably settled Purchase", async () => {
     const setup = await fixture("weekly-one");
@@ -1280,6 +1460,7 @@ describe("statement spending review and re-import", () => {
       .from(sourceTransactionRecord);
     await decideObservation(setup, observation!.shortcode, "book");
     expect(await liveMoney()).toMatchObject({ cost: 4250n });
+    const [booked] = (await ledgerRows()).purchases;
     await decideObservation(
       setup,
       observation!.shortcode,
@@ -1296,6 +1477,7 @@ describe("statement spending review and re-import", () => {
       cost: 0n,
       allocated: 0n,
     });
+    expect(await resolveForRead(ctx.db, booked!.shortcode)).toBeNull();
   });
   it("holds a revised amount against a statement Purchase a member added lines to", async () => {
     const setup = await fixture("added-line", "member", 40);

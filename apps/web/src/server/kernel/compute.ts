@@ -955,6 +955,16 @@ function createPure(
         )?.entityId ?? null
       );
     },
+    stored(target, naturalKey) {
+      const declared = requireTarget(target);
+      return (
+        state.owned.find(
+          (record) =>
+            record.target.name === declared.name &&
+            record.naturalKey === naturalKey,
+        )?.stored ?? null
+      );
+    },
     attach(target, naturalKey, id) {
       const declared = requireTarget(target);
       state.tracked.references.add(id);

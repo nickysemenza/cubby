@@ -414,6 +414,8 @@ export interface Pure {
   existing(target: ColumnRef): readonly string[];
   /** The id of a record this scope owns, for decisions about it; null before it exists. */
   recordId(target: ColumnRef, naturalKey: string): string | null;
+  /** The stored row of a record this scope owns; null before it exists. */
+  stored(target: ColumnRef, naturalKey: string): ColumnValues | null;
   attach(target: ColumnRef, naturalKey: string, id: string): void;
   record(
     target: ColumnRef,

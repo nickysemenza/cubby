@@ -212,30 +212,22 @@ const tableReads = [
  * Keep a record this scope does not re-derive. A member's decisions on its
  * own fields still apply, so a gap never swallows an edit.
  */
-function keep(c: Pure, input: Input, target: ColumnRef, key: string) {
+function keep(c: Pure, target: ColumnRef, key: string) {
   const id = c.recordId(target, key);
-  const rows: readonly { id: string; deletedAt: Date | null }[] =
-    target === purchaseRecords
-      ? input.purchases
-      : target === expenseRecords
-        ? input.expenses
-        : target === allocationRecords
-          ? input.allocations
-          : target === attributionRecords
-            ? input.attributions
-            : [];
+  const stored = c.stored(target, key);
   const decided =
     !!id &&
-    rows.some((row) => row.id === id && !row.deletedAt) &&
+    !!stored &&
+    !stored.deletedAt &&
     [
       ...c.assignments(recordSubject(target.entity ?? target.name, id)).keys(),
     ].some((field) => target.columns.includes(field));
   if (decided) record(c, target, key, {});
   else c.retire(target, key, "keep");
 }
-function retained(c: Pure, input: Input) {
+function retained(c: Pure) {
   for (const target of targets)
-    for (const key of c.existing(target)) keep(c, input, target, key);
+    for (const key of c.existing(target)) keep(c, target, key);
 }
 function record(
   c: Pure,
@@ -937,7 +929,7 @@ export function createPurchaseEvent({
     reconcile(input, c) {
       const subject = `purchaseEvent:${input.key}`;
       if (c.decision("rejection", subject)?.kind === "reject") {
-        retained(c, input);
+        retained(c);
         return c.done();
       }
       // Manual entries and the later order-evidence writer's reviewed record decisions
@@ -1093,8 +1085,7 @@ export function createPurchaseEvent({
         }
         for (const target of targets)
           for (const key of c.existing(target))
-            if (!seeded.has(`${target.name}:${key}`))
-              keep(c, input, target, key);
+            if (!seeded.has(`${target.name}:${key}`)) keep(c, target, key);
         return c.done();
       }
       const transaction = input.transactions.find(
@@ -1118,14 +1109,14 @@ export function createPurchaseEvent({
           (survivor !== null && survivor !== input.key) ||
           !targets.some((target) => c.existing(target).length)
         ) {
-          retained(c, input);
+          retained(c);
           return c.done();
         }
         if (decidedBooking(c, subject)) {
           c.gap.unsupported(
             "the charge no longer supports this spending, and the booking carries member decisions",
           );
-          retained(c, input);
+          retained(c);
           return c.done();
         }
         // The Purchase it created stays while it holds other spending: its
@@ -1186,7 +1177,7 @@ export function createPurchaseEvent({
         !recorded.every((row) => ownAllocations.has(row.id))
       ) {
         if (prior?.kind === "review") c.gap.decision(prior.reason);
-        retained(c, input);
+        retained(c);
         return c.done();
       }
       const account = input.accounts.find(
@@ -1194,7 +1185,7 @@ export function createPurchaseEvent({
       );
       if (!account) {
         c.gap.decision("a live financial account");
-        retained(c, input);
+        retained(c);
         return c.done();
       }
       const accountParty =
@@ -1360,7 +1351,7 @@ export function createPurchaseEvent({
               label: `Use ${row.name}`,
             })),
         });
-        retained(c, input);
+        retained(c);
         return c.done();
       }
       const bookings = [
@@ -1374,7 +1365,7 @@ export function createPurchaseEvent({
       const creations = bookingVendorCreations(bookings, checked);
       if (creations.kind !== "ready") {
         c.gap.decision(creations.reason);
-        retained(c, input);
+        retained(c);
         return c.done();
       }
       const vendorNaturalKey = ownKey(
@@ -1395,7 +1386,7 @@ export function createPurchaseEvent({
       );
       if (selection.kind !== "ready") {
         c.gap.decision(selection.reason);
-        retained(c, input);
+        retained(c);
         return c.done();
       }
       const vendorRow = selection.rows[0]!;
@@ -1571,7 +1562,7 @@ export function createPurchaseEvent({
             ],
           },
         );
-        retained(c, input);
+        retained(c);
         return c.done();
       }
       const targetPurchase =
@@ -1601,7 +1592,7 @@ export function createPurchaseEvent({
             ]),
           },
         );
-        retained(c, input);
+        retained(c);
         return c.done();
       }
       const existingTarget = input.purchases.find(
@@ -1628,7 +1619,7 @@ export function createPurchaseEvent({
             },
           ],
         });
-        retained(c, input);
+        retained(c);
         return c.done();
       }
       const selectedCategory =
@@ -1644,7 +1635,7 @@ export function createPurchaseEvent({
         : undefined;
       if (selectedCategory && !category) {
         c.gap.decision("a live spending category");
-        retained(c, input);
+        retained(c);
         return c.done();
       }
       // A charge joins an existing Purchase only where its lines leave room
@@ -1688,7 +1679,7 @@ export function createPurchaseEvent({
             ? "the chosen Purchase has an unpriced or unclassified line or an uncertain payment, so its remaining capacity for this charge is unknown"
             : "the chosen Purchase's remaining capacity cannot cover this charge",
         );
-        retained(c, input);
+        retained(c);
         return c.done();
       }
       // Moving the charge retires the Purchase this scope created for it, which
@@ -1701,7 +1692,7 @@ export function createPurchaseEvent({
         c.gap.decision(
           "the Purchase this charge booked holds other spending; reconcile it before moving the charge",
         );
-        retained(c, input);
+        retained(c);
         return c.done();
       }
       const rows = statementBookingRows({
@@ -1752,7 +1743,7 @@ export function createPurchaseEvent({
       });
       if (violation) {
         c.gap.decision(violation);
-        retained(c, input);
+        retained(c);
         return c.done();
       }
       // The member's attach decision carries the whole move: what it points at
