@@ -5,7 +5,7 @@ SET LOCAL lock_timeout='2s';
 -- Tables later altered or dropped, and the tables their dropped foreign keys reference.
 LOCK TABLE "AiEvaluation", "AiEvaluationRequest", "AuditLog", "EmailClassificationObservation", "Run", "Suggestion" IN ACCESS EXCLUSIVE MODE;
 --> statement-breakpoint
-LOCK TABLE "AiAnalysis", "Answer", "Ask", "AskScope", "ConnectionCandidateEvidence", "Cookbook", "Decision", "Device", "Entity", "EvidenceBinding", "Expense", "ExpenseAttribution", "FactKey", "FinancialAccount", "FinancialTransaction", "FinancialTransactionAllocation", "GardenEntry", "Location", "ManualEntry", "Meal", "Planting", "Product", "ProductCategory", "Project", "Purchase", "RecordKey", "ScopeState", "SourceOccurrence", "SourceTransactionRecord", "SpendingCategory", "Task", "Vendor" IN SHARE ROW EXCLUSIVE MODE;
+LOCK TABLE "AiAnalysis", "Answer", "Ask", "AskScope", "ConnectionCandidateEvidence", "Cookbook", "Decision", "Device", "Entity", "EvidenceBinding", "Expense", "ExpenseAttribution", "FactKey", "FinancialAccount", "FinancialTransaction", "FinancialTransactionAllocation", "GardenEntry", "Location", "ManualEntry", "Meal", "Planting", "Product", "ProductCategory", "Project", "Purchase", "RecordKey", "ScopeDirty", "ScopeState", "SourceOccurrence", "SourceTransactionRecord", "SpendingCategory", "Task", "Vendor" IN SHARE ROW EXCLUSIVE MODE;
 --> statement-breakpoint
 CREATE TEMP TABLE cutover_money ON COMMIT DROP AS
 SELECT 'Expense'::text source, id, "purchaseId" owner, date_trunc('month',date)::date month_key,"costMinor" amount FROM "Expense"
@@ -138,7 +138,8 @@ SELECT 'ExpenseAttribution', 'ExpenseAttribution', 'purchaseEvent', coalesce((SE
  CASE WHEN s.source_table='Suggestion' AND (s.legacy->'producer'->>'kind'='rule' OR s.legacy->>'model'='rule') THEN 'source' ELSE 'model' END producer,
  s.id ask_id,
  s.source_table='AiEvaluation' AND (s.result IS NULL AND (NOT s.cancelled OR s.attempts>0 OR s.legacy->>'leaseToken' IS NOT NULL) OR s.result IS NOT NULL AND EXISTS(SELECT 1 FROM "AiEvaluationRequest" r WHERE r."evaluationId"=s.id)) needs_ask,
- s.cancelled OR s.source_table='AiEvaluation' AND s.state='queued' cancel_import
+ s.cancelled OR s.source_table='AiEvaluation' AND s.state='queued' cancel_import,
+ CASE WHEN s.target->>'entity' IN ('product','cookbook','location','meal','project','task','vendor','financialAccount','planting','gardenEntry','productCategory','run','device','spendingCategory') AND s.target->>'recordId' IS NOT NULL THEN (s.target->>'entity')||':'||(s.target->>'recordId') END fields_scope
  FROM source_answers s
 ), ask_rows AS (
  SELECT * FROM imports WHERE needs_ask
@@ -219,7 +220,7 @@ SELECT 'ExpenseAttribution', 'ExpenseAttribution', 'purchaseEvent', coalesce((SE
  UNION ALL
  SELECT 'ask',i.source_table||':'||i.id,jsonb_build_object('id',c.ask_id,'inputHash',c.hash,'feature','legacy:'||c.feature,'producer',c.producer,'promptVersion',c.prompt_version,
  'input',jsonb_build_object('legacy',c.legacy,'sourceTable',c.source_table),'state',c.state,'cancelledAt',CASE WHEN c.cancel_import THEN coalesce(c.legacy->'updatedAt',to_jsonb(now() AT TIME ZONE 'UTC')) END,
- 'availableAt',c.available_at,'attempts',c.attempts,'maxAttempts',greatest(3,c.attempts+1),'lastError',CASE WHEN c.cancel_import AND NOT c.cancelled THEN 'Cutover cancelled legacy queued work: its scope asks again from current inputs' ELSE c.error END,'waitCause',CASE WHEN c.legacy->>'waitCause' IN ('funding','provider_capacity','in_flight','rate_limit','device') THEN c.legacy->>'waitCause' END,'createdAt',c.created_at,'executor',NULL) FROM imports i JOIN ask_rows c USING(ask_id) WHERE i.source_table='AiEvaluation'
+ 'availableAt',c.available_at,'attempts',c.attempts,'maxAttempts',greatest(3,c.attempts+1),'lastError',CASE WHEN c.cancel_import AND NOT c.cancelled THEN CASE WHEN c.fields_scope IS NOT NULL THEN 'Cutover cancelled legacy queued work: its fields scope runs again and asks from current inputs' ELSE 'Cutover cancelled legacy queued work: no current scope owns its record' END ELSE c.error END,'waitCause',CASE WHEN c.legacy->>'waitCause' IN ('funding','provider_capacity','in_flight','rate_limit','device') THEN c.legacy->>'waitCause' END,'createdAt',c.created_at,'executor',NULL) FROM imports i JOIN ask_rows c USING(ask_id) WHERE i.source_table='AiEvaluation'
  UNION ALL
  SELECT 'answer',source_table||':'||id,jsonb_build_object('inputHash',hash,'feature','legacy:'||feature,'producer',producer,'promptVersion',prompt_version,
  'output',jsonb_build_object('result',result,'legacy',legacy,'sourceTable',source_table),'model',model,'askId',CASE WHEN needs_ask THEN ask_id END,'runId',run_id,'createdAt',created_at) FROM imports WHERE result IS NOT NULL
@@ -228,6 +229,10 @@ SELECT 'ExpenseAttribution', 'ExpenseAttribution', 'purchaseEvent', coalesce((SE
  UNION ALL
  SELECT 'askScope',source_table||':'||id||':record',jsonb_build_object('askId',ask_id,'scopeKind',CASE WHEN target->>'entity' IN ('product','cookbook','location','meal','project','task','vendor','financialAccount','planting','gardenEntry','productCategory','run','device','spendingCategory') THEN 'fields' ELSE 'record' END,
  'scopeKey',(target->>'entity')||':'||(target->>'recordId'),'createdAt',created_at) FROM imports WHERE needs_ask AND target->>'recordId' IS NOT NULL
+ UNION ALL
+ -- A cancelled queued evaluation's fields scope runs again under current rules.
+ SELECT DISTINCT ON (fields_scope) 'dirty','fields:'||fields_scope,jsonb_build_object('scopeKind','fields','scopeKey',fields_scope,'lane','catalog','reason','cutover:cancelled-ask')
+ FROM imports WHERE source_table='AiEvaluation' AND needs_ask AND cancel_import AND NOT cancelled AND fields_scope IS NOT NULL
  UNION ALL
  (SELECT DISTINCT ON (i.ask_id,r."runId") 'askScope','AiEvaluationRequest:'||r.id,jsonb_build_object('askId',i.ask_id,'scopeKind','run','scopeKey',r."runId",'runId',r."runId",'receipt',r.receipt,'sequence',r.sequence,'cancelledAt',r."cancelledAt",'createdAt',r."createdAt")
  FROM "AiEvaluationRequest" r JOIN imports i ON i.source_table='AiEvaluation' AND i.id=r."evaluationId" WHERE i.needs_ask
@@ -359,6 +364,12 @@ FROM cutover_expected e CROSS JOIN LATERAL jsonb_populate_record(NULL::"AskScope
 ORDER BY r."askId",r."scopeKind",r."scopeKey",(e.source_id LIKE 'AiEvaluationRequest:%') DESC
 ON CONFLICT ("askId","scopeKind","scopeKey") DO UPDATE SET receipt=excluded.receipt,sequence=excluded.sequence,"cancelledAt"=excluded."cancelledAt";
 --> statement-breakpoint
+INSERT INTO "ScopeDirty" ("scopeKind","scopeKey",lane,reason)
+SELECT r."scopeKind",r."scopeKey",r.lane,r.reason FROM cutover_expected e
+CROSS JOIN LATERAL jsonb_populate_record(NULL::"ScopeDirty",e.row) r
+WHERE e.mapping='dirty'
+ON CONFLICT DO NOTHING;
+--> statement-breakpoint
 INSERT INTO "FactKey" (key,"factKind","factId")
 SELECT row->'payload'->'acceptedScope'->>'kind'||':'||(row->'payload'->'acceptedScope'->>'key'),'manualEntry',row->>'id'
 FROM cutover_expected WHERE mapping='manualEntry'
@@ -395,6 +406,7 @@ DO $verify$ BEGIN
  IF EXISTS (SELECT 1 FROM cutover_expected e CROSS JOIN LATERAL jsonb_populate_record(NULL::"ManualEntry",e.row) r WHERE mapping IN ('manualEntry','manualInput') AND NOT EXISTS (SELECT 1 FROM "ManualEntry" t WHERE t."id"=r."id" AND ROW(t."id",t."entity",t."userId",t."payload") IS NOT DISTINCT FROM ROW(r."id",r."entity",r."userId",r."payload"))) THEN RAISE EXCEPTION 'Accepted-input cutover: manualEntry preservation mismatch'; END IF;
  IF EXISTS (SELECT 1 FROM cutover_expected e CROSS JOIN LATERAL jsonb_populate_record(NULL::"EvidenceBinding",e.row) r WHERE mapping='binding' AND NOT EXISTS (SELECT 1 FROM "EvidenceBinding" t WHERE t."factKind"=r."factKind" AND t."factId"=r."factId" AND t."basis"=r."basis" AND ROW(t."factKind",t."factId",t."basis",t."eventKey",t."scopeKind",t."scopeKey") IS NOT DISTINCT FROM ROW(r."factKind",r."factId",r."basis",r."eventKey",r."scopeKind",r."scopeKey"))) THEN RAISE EXCEPTION 'Accepted-input cutover: binding preservation mismatch'; END IF;
  IF EXISTS (SELECT 1 FROM cutover_expected e WHERE mapping='scope' AND NOT EXISTS (SELECT 1 FROM "ScopeState" t WHERE t."scopeKind"::text=e.row->>'scopeKind' AND t."scopeKey"::text=e.row->>'scopeKey' AND t.version=0 AND (t."scopeKind" NOT IN ('bankEvent','purchaseEvent') OR EXISTS(SELECT 1 FROM "EvidenceBinding" b WHERE b."scopeKind"=t."scopeKind" AND b."scopeKey"=t."scopeKey" AND b.basis='baseline')))) THEN RAISE EXCEPTION 'Accepted-input cutover: scope preservation mismatch'; END IF;
+ IF EXISTS (SELECT 1 FROM cutover_expected e WHERE mapping='dirty' AND NOT EXISTS (SELECT 1 FROM "ScopeDirty" t WHERE t."scopeKind"=e.row->>'scopeKind' AND t."scopeKey"=e.row->>'scopeKey')) THEN RAISE EXCEPTION 'Accepted-input cutover: cancelled ask scope preservation mismatch'; END IF;
  IF EXISTS (SELECT 1 FROM cutover_expected e CROSS JOIN LATERAL jsonb_populate_record(NULL::"Decision",e.row) r WHERE mapping='decision' AND NOT EXISTS (SELECT 1 FROM "Decision" t WHERE t."id"=r."id" AND ROW(t."id",t."channel",t."subject",t."slot",t."field",t."kind",t."value",t."other",t."actorKind",t."actorId",t."at") IS NOT DISTINCT FROM ROW(r."id",r."channel",r."subject",r."slot",r."field",r."kind",r."value",r."other",r."actorKind",r."actorId",r."at"))) THEN RAISE EXCEPTION 'Accepted-input cutover: decision preservation mismatch'; END IF;
  IF EXISTS (SELECT 1 FROM cutover_expected e CROSS JOIN LATERAL jsonb_populate_record(NULL::"Ask",e.row) r WHERE mapping='ask' AND NOT EXISTS (SELECT 1 FROM "Ask" t WHERE t."id"=r."id" AND ROW(t."id",t."inputHash",t."feature",t."producer",t."promptVersion",t."input",t."state",t."cancelledAt",t."availableAt",t."attempts",t."maxAttempts",t."lastError",t."createdAt",t."executor") IS NOT DISTINCT FROM ROW(r."id",r."inputHash",r."feature",r."producer",r."promptVersion",r."input",r."state",r."cancelledAt",r."availableAt",r."attempts",r."maxAttempts",r."lastError",r."createdAt",r."executor"))) THEN RAISE EXCEPTION 'Accepted-input cutover: ask preservation mismatch'; END IF;
  IF EXISTS (SELECT 1 FROM cutover_expected e CROSS JOIN LATERAL jsonb_populate_record(NULL::"Answer",e.row) r WHERE mapping='answer' AND NOT EXISTS (SELECT 1 FROM "Answer" t WHERE t."inputHash"=r."inputHash" AND ROW(t."inputHash",t."feature",t."producer",t."promptVersion",t."output",t."model",t."askId",t."runId",t."createdAt") IS NOT DISTINCT FROM ROW(r."inputHash",r."feature",r."producer",r."promptVersion",e.row->'output',r."model",r."askId",r."runId",r."createdAt"))) THEN RAISE EXCEPTION 'Accepted-input cutover: answer preservation mismatch'; END IF;

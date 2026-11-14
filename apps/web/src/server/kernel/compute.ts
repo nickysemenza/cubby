@@ -88,6 +88,8 @@ type MissingAnswer = {
   kind: AskKind;
   envelope: AskEnvelope;
   inputHash: string;
+  /** Every read of this envelope fills a value no accepted record holds. */
+  fill: boolean;
 };
 
 type UsedAnswer = {
@@ -136,7 +138,7 @@ type DecisionRow = {
 type Tracked = {
   answers: Map<
     string,
-    { kind: AskKind; envelope: AskEnvelope; request: boolean }
+    { kind: AskKind; envelope: AskEnvelope; request: boolean; fill: boolean }
   >;
   subjects: Set<string>;
   references: Set<string>;
@@ -834,10 +836,12 @@ function createPure(
       const envelope = askEnvelope(untyped, input);
       const text = envelopeText(envelope);
       const request = options?.request !== false;
+      const previous = state.tracked.answers.get(text);
       state.tracked.answers.set(text, {
         kind: untyped,
         envelope,
-        request: request || state.tracked.answers.get(text)?.request === true,
+        request: request || previous?.request === true,
+        fill: options?.fill === true && (previous?.fill ?? true),
       });
       const known = state.answers.get(text);
       if (known && known.output !== null)

@@ -191,7 +191,7 @@ it("carries held values, paid results, redirects and every accepted money row", 
       ).rows[0],
     ).toMatchObject({
       cancelled: true,
-      lastError: expect.stringContaining("its scope asks again"),
+      lastError: expect.stringContaining("its fields scope runs again"),
     });
     expect(
       (
@@ -405,6 +405,7 @@ it("aborts atomically for every preservation verification", async () => {
       ask: 'DELETE FROM "Ask"',
       answer: 'DELETE FROM "Answer"',
       askScope: 'DELETE FROM "AskScope"',
+      "cancelled ask scope": 'DELETE FROM "ScopeDirty"',
       "absorbed scope": 'UPDATE "RecordKey" SET "mergedAt"=NULL',
       "accepted occurrence":
         'DELETE FROM "RecordKey" WHERE "scopeKey"=\'' + cutoverId(63) + "'",
@@ -456,7 +457,7 @@ it("aborts atomically for every preservation verification", async () => {
         checked++;
       }
     }
-    expect(checked).toBe(18);
+    expect(checked).toBe(19);
   });
 });
 
@@ -508,6 +509,14 @@ it("runs the registered scopes without changing accepted money and proposes the 
       const claimed = await claimAsks(database, [runnable], 10);
       // Cancelled legacy work is never claimed; scopes ask again from current inputs.
       expect(claimed.map((a) => a.id)).not.toContain(cutoverId(42));
+      expect(
+        (
+          await client.query(
+            `SELECT reason FROM "ScopeDirty" WHERE "scopeKind"='fields' AND "scopeKey"=$1`,
+            [`product:${cutoverId(13)}`],
+          )
+        ).rows,
+      ).toEqual([{ reason: "cutover:cancelled-ask" }]);
 
       const money = `SELECT jsonb_agg(payload ORDER BY name,id) value FROM (
       SELECT 'transaction' name,id,to_jsonb(t) payload FROM "FinancialTransaction" t
@@ -768,6 +777,22 @@ it("lets current stored authority defeat a synthesized review in both directions
         ],
       );
     }
+    // A second record where Cubby holds the same category (a correction's recheck target).
+    {
+      const code = generateShortcode("product");
+      await client.query(
+        `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,'product',$2)`,
+        [cutoverId(88), code],
+      );
+      await client.query(
+        `INSERT INTO "Product" (id,shortcode,name,"categoryId") VALUES ($1,$2,'Synthetic sibling product',$3)`,
+        [cutoverId(88), code, cutoverId(83)],
+      );
+      await client.query(
+        `INSERT INTO "AuditLog" ("entityKind","entityId",action,changes,"userId",authority,"createdAt") VALUES ('product',$1,'update',jsonb_build_object('categoryId',jsonb_build_object('to',$2::text)),'synthetic-cutover','automatic','2026-02-01')`,
+        [cutoverId(88), cutoverId(83)],
+      );
+    }
     for (const n of [84, 86, 87]) {
       const code = generateShortcode("product");
       await client.query(
@@ -851,22 +876,54 @@ it("lets current stored authority defeat a synthesized review in both directions
     try {
       const { createKernel } = await import("../src/server/kernel/api");
       const { KERNEL_MODULES } = await import("../src/server/kernel/modules");
+      const { startPass, runOnePass } =
+        await import("../src/server/kernel/pass");
+      const { versionSweepPass } = await import("../src/server/kernel/drift");
       const kernel = createKernel(KERNEL_MODULES);
-      const result = await kernel.reconcileNow(database, [
-        { kind: "fields", key: `product:${cutoverId(80)}` },
-        { kind: "fields", key: `product:${cutoverId(81)}` },
-        { kind: "fields", key: `product:${cutoverId(84)}` },
-        { kind: "fields", key: `product:${cutoverId(86)}` },
-      ]);
-      expect(result.filter((r) => r.status === "failed")).toEqual([]);
+      // The deploy's path: the version sweep, then the runner's dirty scopes.
+      // Asks stay queued; no producer runs.
+      const sweep = versionSweepPass(() => kernel.registry);
+      await startPass(database, sweep);
+      const sweepOnly = {
+        ...kernel.registry,
+        passes: new Map([[sweep.name, sweep]]),
+      };
+      while (await runOnePass(database, sweepOnly));
+      const runDirty = async () => {
+        const dirty = (
+          await client.query<{ kind: string; key: string }>(
+            `SELECT "scopeKind" kind,"scopeKey" key FROM "ScopeDirty" WHERE "scopeKind"='fields' ORDER BY 2`,
+          )
+        ).rows;
+        const result = await kernel.reconcileNow(database, dirty);
+        expect(result.filter((r) => r.status === "failed")).toEqual([]);
+        return dirty.map((scope) => scope.key);
+      };
+      // Every blank asked field is filed; nothing becomes Drift.
+      expect(await runDirty()).toContain(`product:${cutoverId(84)}`);
       expect(
         (
           await client.query(
-            `SELECT input->'input'->>'recordId' id FROM "Ask" WHERE feature='field-suggestion' AND input->'input'->>'field'='categoryId' AND input->'input'->>'recordId' IN ($1,$2)`,
-            [cutoverId(84), cutoverId(86)],
+            `SELECT count(*)::int n FROM "Drift" WHERE "scopeKind"='fields'`,
+          )
+        ).rows[0].n,
+      ).toBe(0);
+      const categoryAsks = async () =>
+        (
+          await client.query(
+            `SELECT input->'input'->>'recordId' id FROM "Ask" WHERE feature='field-suggestion' AND state='queued' AND input->'input'->>'field'='categoryId' AND input->'input'->>'recordId' = ANY($1) ORDER BY 1`,
+            [[80, 81, 84, 86, 88].map(cutoverId)],
+          )
+        ).rows;
+      expect(await categoryAsks()).toEqual([{ id: cutoverId(84) }]);
+      expect(
+        (
+          await client.query(
+            `SELECT stage FROM "ScopeState" WHERE "scopeKind"='fields' AND "scopeKey"=$1`,
+            [`product:${cutoverId(84)}`],
           )
         ).rows,
-      ).toEqual([{ id: cutoverId(84) }]);
+      ).toEqual([{ stage: "waiting" }]);
 
       expect(
         (
@@ -876,6 +933,33 @@ it("lets current stored authority defeat a synthesized review in both directions
           )
         ).rows,
       ).toEqual([{ categoryId: cutoverId(83) }, { categoryId: cutoverId(83) }]);
+
+      // A member corrects Cubby's category on one record: the sibling where
+      // Cubby holds the same value since cutover is asked again.
+      const { settleFieldEdits } =
+        await import("../src/server/ai/fields/repo/field-decisions");
+      const { fieldsPlanOf } =
+        await import("../src/server/ai/fields/repo/plan");
+      const { buildActorContext } = await import("@cubby/schemas/context");
+      const { userId } = await import("@cubby/schemas/identifiers");
+      await client.query(`UPDATE "Product" SET "categoryId"=$1 WHERE id=$2`, [
+        cutoverId(82),
+        cutoverId(80),
+      ]);
+      await settleFieldEdits(
+        database,
+        buildActorContext(userId.parse("synthetic-member")),
+        fieldsPlanOf("product"),
+        cutoverId(80),
+        { categoryId: cutoverId(83) },
+        { categoryId: cutoverId(82) },
+      );
+      expect(await runDirty()).toContain(`product:${cutoverId(88)}`);
+      expect(await categoryAsks()).toEqual(
+        [{ id: cutoverId(84) }, { id: cutoverId(88) }].sort((a, b) =>
+          a.id.localeCompare(b.id),
+        ),
+      );
     } finally {
       await pool.end();
     }

@@ -391,11 +391,15 @@ export interface Pure {
   assignments(subject: string): ReadonlyMap<string, DecisionInForce>;
   /** Resolve a retained id or shortcode through identity redirects on reads. */
   reference(entity: ShortcodeType, ref: string): string | null;
-  /** `request: false` reads an existing answer without owing a producer call. */
+  /**
+   * `request: false` reads an existing answer without owing a producer call.
+   * `fill: true` marks an ask whose answer can only fill a value no accepted
+   * record holds; a version sweep files it instead of proposing Drift.
+   */
   answer<I, O>(
     kind: AskKind<I, O>,
     input: I,
-    options?: { request?: boolean },
+    options?: { request?: boolean; fill?: boolean },
   ): AnsweredValue<O> | Missing;
   /**
    * The decision in force: by field (assignment, veto), by the other subject

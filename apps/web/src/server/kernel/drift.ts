@@ -37,11 +37,12 @@ import {
   isEmptyDifference,
   type Difference,
 } from "./diff";
-import { lockKeyRevs } from "./dirty";
+import { lockKeyRevs, markDirty } from "./dirty";
+import { heldBaselineGap } from "./held-gap";
 import { driftSubject, hashCanonical } from "./keys";
 import type { KernelRegistry } from "./registry";
 import { fromIso, isoText } from "./sql-time";
-import { wakeClaimRecovery } from "./wake";
+import { wakeAfterCommit, wakeClaimRecovery } from "./wake";
 
 type Q = Pick<RepositoryQueryClient, "execute" | "insert" | "select">;
 
@@ -98,26 +99,29 @@ const stale = (reconciler: Reconciler) => sql`
       AND p.rules = ${reconciler.rules})`;
 
 /**
- * Fence one page's input revisions, then publish it in at most two statements:
- * clean scopes advance with their dependencies and stale proposals cleared,
- * and the rest become proposals. Sweep tables hold no money-lane column, so
- * the page takes no household write gate.
+ * Fence one page's input revisions, then publish it: clean scopes advance with
+ * their dependencies and stale proposals cleared; a scope whose only change is
+ * asks that fill values no accepted record holds goes dirty, so its normal run
+ * files them; the rest become proposals that wait on the member. Sweep tables
+ * hold no money-lane column; the revision locks take the write gate.
  */
 async function proposeOrAdvance(
-  q: Q,
+  tx: Database,
+  registry: KernelRegistry,
   computed: readonly Computed[],
 ): Promise<void> {
+  const q = repositoryQueries(tx);
   const plans = computed.flatMap((entry) => {
     if (entry.error !== null || !entry.desired) return [];
     const diff = difference(entry, { releaseBaseline: true });
+    const unchanged =
+      semanticallyEmpty(diff) && !entry.desired.disagreements.length;
     return [
       {
         computed: entry,
         diff,
-        clean:
-          semanticallyEmpty(diff) &&
-          !entry.missing.length &&
-          !entry.desired.disagreements.length,
+        clean: unchanged && !entry.missing.length,
+        fill: unchanged && entry.missing.every((missing) => missing.fill),
       },
     ];
   });
@@ -186,10 +190,18 @@ async function proposeOrAdvance(
       )
       DELETE FROM "Drift" p USING advanced
       WHERE p."scopeKind" = advanced.kind AND p."scopeKey" = advanced.key`);
-  await recordDrifts(
-    q,
-    fenced.filter((plan) => !plan.clean),
-  );
+  const fills = fenced.filter((plan) => !plan.clean && plan.fill);
+  if (
+    fills.length &&
+    (await markDirty(q, registry, {
+      keys: [],
+      discovers: fills.map((plan) => plan.computed.scope),
+      reason: "sweep:fill",
+    }))
+  )
+    await wakeAfterCommit(tx);
+  const drifts = fenced.filter((plan) => !plan.clean && !plan.fill);
+  await recordDrifts(q, drifts, { hold: true });
 }
 
 /** Recent answers per feature and tier that set a proposal's cost estimate. */
@@ -211,7 +223,11 @@ async function proposalOf(computed: Computed, diff: Difference) {
 }
 
 /**
- * Store exact proposals in one statement; no producer calls are owed. Each
+ * Store exact proposals in one statement; no producer calls are owed. With
+ * `hold`, the same statement gives each scope's state the held-baseline
+ * member gap, as a held apply writes it: the scope keeps its version and
+ * dependencies until an approval or a later run replaces its gaps. A scope
+ * that went dirty keeps its state. Each
  * ask a proposal would file costs the median of the last {@link COST_HISTORY}
  * priced Answers for its feature and requested tier, else the ask kind's
  * declared estimate; a source ask is free. A proposal with any ask of unknown
@@ -221,8 +237,10 @@ async function proposalOf(computed: Computed, diff: Difference) {
 export async function recordDrifts(
   q: Q,
   proposals: readonly { computed: Computed; diff: Difference }[],
+  options: { hold?: boolean } = {},
 ): Promise<void> {
   if (!proposals.length) return;
+  const gaps = [heldBaselineGap()];
   const rows = await Promise.all(
     proposals.map(async ({ computed, diff }) => {
       const proposal = await proposalOf(computed, diff);
@@ -267,6 +285,14 @@ export async function recordDrifts(
       FROM filed JOIN history
         ON history.feature = filed.feature AND history.tier IS NOT DISTINCT FROM filed.tier
       GROUP BY filed."scopeKind", filed."scopeKey"
+    ), held AS (
+      UPDATE "ScopeState" s SET gaps = ${JSON.stringify(gaps)}::jsonb,
+        stage = ${resolveStage({ ended: false, stuck: false, working: false, gaps })},
+        "nextActor" = ${nextActor(gaps)}, "firstGap" = ${gaps[0]!.input}
+      FROM incoming
+      WHERE ${options.hold === true} AND s."scopeKind" = incoming."scopeKind" AND s."scopeKey" = incoming."scopeKey"
+        AND NOT EXISTS (SELECT 1 FROM "ScopeDirty" d
+          WHERE d."scopeKind" = s."scopeKind" AND d."scopeKey" = s."scopeKey")
     )
     INSERT INTO "Drift" ("scopeKind", "scopeKey", version, rules, "proposalHash", "inputsHash",
       difference, "askCount", "estimatedCostMicros")
@@ -319,7 +345,7 @@ export function versionSweepPass(registry: () => KernelRegistry): Pass {
           // The page publishes with its cursor, in the pass's fenced transaction.
           publish: (tx) =>
             withDatabaseOperationPhase("apply", () =>
-              proposeOrAdvance(repositoryQueries(tx), computed),
+              proposeOrAdvance(tx, current, computed),
             ),
         };
       }
@@ -454,7 +480,7 @@ export async function approveDrift(
       claimed.token,
     );
     await repositoryTransactionDatabase(db, (tx) =>
-      proposeOrAdvance(repositoryQueries(tx), [computed!]),
+      proposeOrAdvance(tx, registry, [computed!]),
     );
     return "stale";
   }

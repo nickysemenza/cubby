@@ -2620,6 +2620,20 @@ describe("evidence-facts kernel", () => {
     expect(proposals.map((row) => row.scopeKey)).toEqual([...orders].sort());
     const proposal = proposals[0];
     expect(proposal?.scopeKey).toBe("ORD-F");
+    // A swept proposal waits on the member, as a held apply does.
+    const held = async () =>
+      (
+        await repositoryQueries(ctx.db).execute<{
+          stage: string;
+          firstGap: string | null;
+        }>(
+          sql`SELECT stage, "firstGap" FROM "ScopeState" WHERE "scopeKind" = ${PURCHASE_SCOPE} AND "scopeKey" = 'ORD-F'`,
+        )
+      ).rows[0];
+    expect(await held()).toEqual({
+      stage: "needs_you",
+      firstGap: "approval of the change to accepted records",
+    });
 
     await expect(
       next.approveDrift(
@@ -2631,6 +2645,7 @@ describe("evidence-facts kernel", () => {
     ).resolves.toBe("applied");
     const [approved] = await purchases(ctx.db);
     expect(approved?.merchant).toBe("SYNTHETIC GROCER");
+    expect(await held()).toEqual({ stage: "done", firstGap: null });
 
     // A proposal stored under older rules is replaced, never applied.
     const { kernel: later } = kernelWith({ purchaseVersion: 3 });

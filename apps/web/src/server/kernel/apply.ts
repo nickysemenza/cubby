@@ -75,6 +75,7 @@ import {
   HouseholdWriteBusyError,
   type WriteMode,
 } from "./gate";
+import { heldBaselineGap } from "./held-gap";
 import { mergeRecords, removeRecords } from "./identity";
 import {
   indexFacts,
@@ -738,17 +739,7 @@ async function applyBatch(
       diff,
       heldBaseline,
       gaps: heldBaseline
-        ? [
-            {
-              kind: "decision",
-              input: "approval of the change to accepted records",
-              actor: "you",
-              since: null,
-              until: null,
-              actions: [],
-              inputHash: null,
-            },
-          ]
+        ? [heldBaselineGap()]
         : [...item.computed.desired.gaps],
     });
     // A disagreement is shown as computed and cannot be approved. Otherwise

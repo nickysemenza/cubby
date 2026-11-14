@@ -76,6 +76,8 @@ type FieldsInput = {
   /** Values each field held before a later write replaced them. */
   replaced: ReadonlyMap<string, readonly string[]>;
   precedents: ReadonlyMap<string, readonly Precedent[]>;
+  /** Values a person ruled out on another record of the entity since this record's last assignment. */
+  ruledOutSince: ReadonlyMap<string, readonly string[]>;
   questions?: ReadonlyMap<string, FieldAskInput["questions"]>;
 };
 
@@ -174,6 +176,59 @@ async function loadReplaced(
       record.set(field, [...(record.get(field) ?? []), valueKey(from)]);
     }
     byRecord.set(row.entityId, record);
+  }
+  return byRecord;
+}
+
+/**
+ * Two statements per entity: per record and field, the values a person vetoed
+ * on another record of the entity after this record's newest assignment. A
+ * correction rechecks the records where Cubby holds the corrected value; this
+ * is the newer member evidence that releases the cutover's hold on them.
+ */
+async function loadRuledOutSince(
+  reads: Reads,
+  plan: EntityFieldsPlan,
+  ids: readonly string[],
+): Promise<Map<string, Map<string, string[]>>> {
+  const fields = plan.fields.map((field) => field.key);
+  const byRecord = new Map<string, Map<string, string[]>>();
+  if (!fields.length || !ids.length) return byRecord;
+  const subjects = ids.map((id) => recordSubject(plan.entity, id));
+  const [vetoes, assignments] = await Promise.all([
+    reads.select(
+      decision,
+      [],
+      sql`${decision.channel} = ${"veto"} AND ${decision.kind} = ${"veto"}
+        AND ${decision.field} = ANY(${textArrayParam(fields)})
+        AND starts_with(${decision.subject}, ${`${plan.entity}:`})`,
+    ),
+    reads.select(
+      decision,
+      [],
+      sql`${decision.channel} = ${"assignment"} AND ${decision.subject} = ANY(${textArrayParam(subjects)})`,
+    ),
+  ]);
+  if (!vetoes.length) return byRecord;
+  const assigned = new Map<string, number>();
+  for (const row of assignments) {
+    const slot = `${row.subject}\u0000${row.slot}`;
+    assigned.set(slot, Math.max(assigned.get(slot) ?? 0, row.at.getTime()));
+  }
+  for (const [index, id] of ids.entries()) {
+    const subject = subjects[index]!;
+    const record = new Map<string, string[]>();
+    for (const veto of vetoes)
+      if (
+        veto.subject !== subject &&
+        veto.field &&
+        veto.at.getTime() > (assigned.get(`${subject}\u0000${veto.field}`) ?? 0)
+      )
+        record.set(veto.field, [
+          ...(record.get(veto.field) ?? []),
+          valueKey(veto.value),
+        ]);
+    if (record.size) byRecord.set(id, record);
   }
   return byRecord;
 }
@@ -292,7 +347,7 @@ async function load(
       for (const row of held)
         if (!assignments.has(`${row.subject}:${row.field}`))
           assignments.set(`${row.subject}:${row.field}`, row.kind);
-      const [rows, replaced] = await Promise.all([
+      const [rows, replaced, ruledOutSince] = await Promise.all([
         Promise.all(
           items.map(
             async (item): Promise<Row | null> =>
@@ -302,6 +357,7 @@ async function load(
           ),
         ),
         loadReplaced(reads, plan, ids),
+        loadRuledOutSince(reads, plan, ids),
       ]);
       const live: Row[] = rows.flatMap((row) =>
         row && !(plan.hasDeletedAt && row.deletedAt) ? [row] : [],
@@ -326,6 +382,7 @@ async function load(
           id: item.id,
           row: row && live.includes(row) ? row : null,
           replaced: replaced.get(item.id) ?? new Map(),
+          ruledOutSince: ruledOutSince.get(item.id) ?? new Map(),
           analysis: row
             ? await loadAnalysis(
                 reads.for(item.key),
@@ -475,7 +532,8 @@ export function fieldsReconciler(
             precedents: [...(input.precedents.get(field.key) ?? [])],
             questions: input.questions?.get(field.key),
           };
-          // The cutover's value stands while its basis and value are unchanged.
+          // The cutover's value stands while its basis and value are unchanged
+          // and no person has since ruled that value out on another record.
           const baseline = c.answer(
             fieldBaselineAsk,
             { entity: input.entity, recordId: input.id, field: field.key },
@@ -483,14 +541,21 @@ export function fieldsReconciler(
           );
           const held =
             baseline.status === "answered" &&
+            !(input.ruledOutSince.get(field.key) ?? []).includes(
+              valueKey(current),
+            ) &&
             Object.entries(askInput.row).every(
               ([key, value]) =>
                 valueKey(fieldJson(baseline.output.record[key])) ===
                 valueKey(value),
             );
+          // Asking for a blank field changes no accepted record.
           const answer = held
             ? null
-            : c.answer(ask, askInput, { request: field.apply !== "offer" });
+            : c.answer(ask, askInput, {
+                request: field.apply !== "offer",
+                fill: currentUndecided && !prune,
+              });
           if (answer?.status === "answered") proposal = answer.output.proposal;
         }
         // A person's decision on a column this scope owns is applied here;
