@@ -616,7 +616,8 @@ export async function machinery(
         passes.some((row) => row.stage === "working");
       const resolved = resolveStage({ ended, stuck, working, gaps });
       const stage =
-        resolved === "done" && passes.some((row) => row.stage === "waiting")
+        resolved === "done" &&
+        (dirty.rows.length > 0 || passes.some((row) => row.stage === "waiting"))
           ? "waiting"
           : resolved;
       const times = (values: readonly (string | null | undefined)[]) =>

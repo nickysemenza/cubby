@@ -522,14 +522,14 @@ that order. Consumer scopes use the input record UUID as their key, so a
 source or bank event exposes its gaps before a consumer creates an output.
 Machinery deduplicates shared evidence, answers and decisions across scopes. Its stage is the first that applies:
 
-| Stage     | Applies when                                                                   |
-| --------- | ------------------------------------------------------------------------------ |
-| Ended     | The record is rejected, absorbed, or out of scope by decision.                 |
-| Stuck     | A scope or ask has exhausted its attempts, or an ask is `unknown`.             |
-| Working   | A claim on one of its scopes or asks is live. Read from the claim, not cached. |
-| Needs you | The first gap is a decision or an input only a member supplies.                |
-| Waiting   | The first gap waits on a source, an agent, a queue or time.                    |
-| Done      | No gaps.                                                                       |
+| Stage     | Applies when                                                                                              |
+| --------- | --------------------------------------------------------------------------------------------------------- |
+| Ended     | The record is rejected, absorbed, or out of scope by decision.                                            |
+| Stuck     | A scope or ask has exhausted its attempts, or an ask is `unknown`.                                        |
+| Working   | A claim on one of its scopes or asks is live. Read from the claim, not cached.                            |
+| Needs you | The first gap is a decision or an input only a member supplies.                                           |
+| Waiting   | The first gap waits on a source, an agent, a queue or time; or a scope is dirty before a gap is computed. |
+| Done      | No gaps.                                                                                                  |
 
 Actors are `you`, `Cubby`, `an agent`, a named source, and `time`. Member copy
 follows one shape: `{Stage} · {waiting|working} for {input} from {actor}`,
