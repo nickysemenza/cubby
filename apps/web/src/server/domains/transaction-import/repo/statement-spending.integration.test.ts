@@ -1,6 +1,10 @@
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
+import {
+  statementMerchantKey,
+  statementMerchantSupportInput,
+} from "@cubby/schemas/statement-answers";
 import { statementDecisionInput } from "@cubby/schemas/statement-decision";
 import { eq, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
@@ -12,6 +16,7 @@ import { describe, expect, it } from "vitest";
 
 import { shiftPlainDate } from "~/lib/household-date";
 import { modelInput } from "~/server/ai/model-asks";
+import { MERCHANT_IDENTITY_SUPPORT_FEATURE } from "~/server/ai/policy/features";
 import {
   withDatabaseOperationMetrics,
   withDatabaseOperationPhase,
@@ -23,6 +28,7 @@ import {
   evidenceBinding,
   drift,
   ask,
+  answer,
   recordKey,
 } from "~/server/db/kernel-schema";
 import {
@@ -41,6 +47,7 @@ import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { updateFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { manualTransactionEvidence } from "~/server/domains/financial-transaction/repo/manual-evidence";
 import { expenseRecords } from "~/server/domains/financial-transaction/repo/purchase-event-records";
+import { purchaseAsks } from "~/server/domains/financial-transaction/service/purchase-asks";
 import { readExistingOrderCandidates } from "~/server/domains/purchase-import/repo/existing-order-candidates";
 import { purchaseWorkFacts } from "~/server/domains/purchase/repo/work-facts";
 import { decideStatement } from "~/server/domains/transaction-import/repo/statement-decisions";
@@ -49,6 +56,7 @@ import { householdWrite, emitWrites, machinery } from "~/server/kernel/api";
 import { decide, reconcileNow } from "~/server/kernel/api";
 import { append, evidenceRow } from "~/server/kernel/api";
 import { runQueuedAsks } from "~/server/kernel/ask";
+import { askEnvelope, inputHashOf } from "~/server/kernel/envelope";
 import { productionKernel } from "~/server/kernel/kernel";
 
 import { recordSourceTransactionRecords } from "./source-transaction-record";
@@ -1363,10 +1371,18 @@ describe("statement spending review and re-import", () => {
         .where(eq(financialAccount.shortcode, account.output.id));
       const rowAccountId = budgetAccount!.id;
       let seededScopes: { kind: string; key: string }[] = [];
+      const merchants = Array.from(
+        { length: count },
+        (_, index) => `Synthetic budget merchant ${index}`,
+      );
+      // The last merchant is new: its booking creates the Vendor from stored answers.
+      const created = merchants.at(-1)!;
       if (count === 32) {
         const [seller] = await insertManyWithShortcode(ctx.db, "vendor", [
-          { name: "Synthetic budget merchant 0" },
+          { name: merchants[0]! },
         ]);
+        // Settled history up to the day before the page, so the new charges'
+        // candidate window covers it.
         const historical = await withKernelApply(null, () =>
           insertManyWithShortcode(
             ctx.db,
@@ -1374,7 +1390,7 @@ describe("statement spending review and re-import", () => {
             Array.from({ length: 2048 }, (_, index) => ({
               vendorId: seller!.id,
               displayLabel: `Synthetic history ${index}`,
-              date: shiftPlainDate("2024-01-01", -index),
+              date: shiftPlainDate("2026-05-03", -index),
             })),
           ),
         );
@@ -1386,10 +1402,10 @@ describe("statement spending review and re-import", () => {
               accountId: rowAccountId,
               kind: "purchase",
               status: "posted",
-              amount: 1000n,
+              amount: 1250n,
               transactionDate: row.date,
               postedDate: row.date,
-              merchant: "Synthetic budget merchant 0",
+              merchant: merchants[0]!,
             })),
           ),
         );
@@ -1400,8 +1416,8 @@ describe("statement spending review and re-import", () => {
             historical.map((row) => ({
               purchaseId: row.id,
               name: "Synthetic settled history",
-              cost: 1000n,
-              date: "2024-01-01",
+              cost: 1250n,
+              date: row.date,
               economicRole: "vendor",
               lineKind: "principal",
               costType: "materials",
@@ -1415,7 +1431,7 @@ describe("statement spending review and re-import", () => {
               historical.map((row, index) => ({
                 purchaseId: row.id,
                 transactionId: transactions[index]!.id,
-                amountMinor: 1000n,
+                amountMinor: 1250n,
                 confirmsMerchant: false,
               })),
             );
@@ -1424,72 +1440,57 @@ describe("statement spending review and re-import", () => {
           kind: "purchaseEvent",
           key: row.id,
         }));
-        await reconcileNow(ctx.db, [seededScopes[0]!]);
-        await getDb(ctx.db)
-          .execute(sql`INSERT INTO "ScopeDep" ("scopeKind", "scopeKey", key)
-          SELECT 'purchaseEvent', historical.id, replace(dep.key, ${seededScopes[0]!.key}, historical.id)
-          FROM unnest(${textArrayParam(seededScopes.slice(1).map((scope) => scope.key))}) historical(id)
-          CROSS JOIN "ScopeDep" dep WHERE dep."scopeKind"='purchaseEvent' AND dep."scopeKey"=${seededScopes[0]!.key}
-          ON CONFLICT DO NOTHING`);
+        // Every historical scope records its own dependencies.
+        await reconcileNow(ctx.db, seededScopes);
       }
-      const merchants = Array.from(
-        { length: count },
-        (_, index) => `Synthetic budget merchant ${index}`,
-      );
       await insertManyWithShortcode(
         ctx.db,
         "vendor",
         merchants
-          .filter((_, index) => count !== 32 || index !== 0)
+          .filter(
+            (name, index) => name !== created && (count !== 32 || index !== 0),
+          )
           .map((name) => ({ name })),
       );
-      await recordSourceTransactionRecords(
-        ctx.db,
-        recordSourceTransactionRecordsInput.parse({
-          import: {
-            source: "monarch",
-            label: "Synthetic kernel budget",
-            fingerprint: `kernel-budget-${count}`,
-            observedAt: "2026-05-05T00:00:00Z",
-          },
-          rows: merchants.map((merchant, index) => ({
-            providerTransactionId: `synthetic-kernel-budget-${index}`,
-            providerAccountId: "synthetic-budget-account",
-            accountDescriptor: "Synthetic budget card",
-            statementDate: "2026-05-04",
-            providerAmount: -10,
-            providerStatus: "posted",
-            merchant,
-            rawDescription: merchant,
-            sourceCategory: "Groceries",
-            rowPosition: index + 1,
-          })),
-        }),
-        ctx.actor,
-      );
-      const occurrences = await getDb(ctx.db).select().from(sourceOccurrence);
-      await decide(
-        ctx.db,
-        ctx.actor,
-        occurrences.flatMap((row) => [
-          {
-            channel: "assignment",
-            kind: "set",
-            subject: `bank:${row.id}`,
-            field: "accountId",
-            value: account.output.id,
-            scopes: [{ kind: "bankEvent", key: row.id }],
-          },
-          {
-            channel: "assignment",
-            kind: "set",
-            subject: `bank:${row.id}`,
-            field: "kind",
-            value: "purchase",
-            scopes: [{ kind: "bankEvent", key: row.id }],
-          },
-        ]),
-      );
+      const identityInput = { merchant: statementMerchantKey(created) };
+      const identity = {
+        name: created,
+        confidence: "high",
+        counterparty: "business",
+      };
+      const stored = async (
+        kind: Parameters<typeof askEnvelope>[0],
+        request: Parameters<typeof askEnvelope>[1],
+        value: Record<string, string | number>,
+      ) => ({
+        inputHash: await inputHashOf(askEnvelope(kind, request)),
+        feature: kind.feature,
+        producer: kind.producer,
+        promptVersion: kind.promptVersion,
+        output: { value, model: "synthetic" },
+      });
+      await getDb(ctx.db)
+        .insert(answer)
+        .values([
+          await stored(
+            purchaseAsks.merchantIdentityAsk,
+            purchaseAsks.merchantIdentityRequest(identityInput),
+            identity,
+          ),
+          await stored(
+            purchaseAsks.merchantSupportAsk,
+            purchaseAsks.supportRequest(
+              statementMerchantSupportInput(identityInput, identity)!,
+            ),
+            {
+              selectedIndex:
+                MERCHANT_IDENTITY_SUPPORT_FEATURE.choices.indexOf(
+                  "supported_business",
+                ),
+              confidence: "high",
+            },
+          ),
+        ]);
       const kernel = await productionKernel();
       // Capture wakes even when the runner consumes them before this journey ends.
       await getDb(ctx.db).execute(sql`CREATE TABLE "SyntheticKernelWake" (
@@ -1507,35 +1508,58 @@ describe("statement spending review and re-import", () => {
         .execute(sql`CREATE TRIGGER synthetic_kernel_wake AFTER INSERT OR UPDATE OF seq ON "ScopeDirty"
       FOR EACH ROW EXECUTE FUNCTION synthetic_kernel_wake()`);
       const measured = await withDatabaseOperationMetrics(async (metrics) => {
-        if (count === 32) {
-          await reconcileNow(
+        // The page's upload and the member's review count toward its budget.
+        await withDatabaseOperationPhase("upload", () =>
+          recordSourceTransactionRecords(
             ctx.db,
-            occurrences.map((row) => ({ kind: "bankEvent", key: row.id })),
-          );
-          const dirty = await getDb(ctx.db).execute<{
-            n: number;
-            historical: number;
-          }>(
-            sql`SELECT count(*)::int n, count(*) FILTER (WHERE "scopeKey" = ANY(${textArrayParam(seededScopes.map((scope) => scope.key))}))::int historical FROM "ScopeDirty" WHERE "scopeKind"='purchaseEvent'`,
-          );
-          if (
-            dirty.rows.length !== 1 ||
-            dirty.rows[0]!.n !== 32 ||
-            dirty.rows[0]!.historical !== 0
-          )
-            throw new Error(
-              `Unexpected statement fanout: ${JSON.stringify(dirty.rows)}`,
-            );
-          console.log(
-            "statement-kernel-fanout",
-            JSON.stringify({
-              householdPurchases: 2048,
-              page: 32,
-              dirtied: dirty.rows[0]!.n,
-              historicalDirtied: dirty.rows[0]!.historical,
+            recordSourceTransactionRecordsInput.parse({
+              import: {
+                source: "monarch",
+                label: "Synthetic kernel budget",
+                fingerprint: `kernel-budget-${count}`,
+                observedAt: "2026-05-05T00:00:00Z",
+              },
+              rows: merchants.map((merchant, index) => ({
+                providerTransactionId: `synthetic-kernel-budget-${index}`,
+                providerAccountId: "synthetic-budget-account",
+                accountDescriptor: "Synthetic budget card",
+                statementDate: "2026-05-04",
+                providerAmount: -10,
+                providerStatus: "posted",
+                merchant,
+                rawDescription: merchant,
+                sourceCategory: "Groceries",
+                rowPosition: index + 1,
+              })),
             }),
-          );
-        }
+            ctx.actor,
+          ),
+        );
+        const occurrences = await getDb(ctx.db).select().from(sourceOccurrence);
+        await withDatabaseOperationPhase("review", () =>
+          decide(
+            ctx.db,
+            ctx.actor,
+            occurrences.flatMap((row) => [
+              {
+                channel: "assignment",
+                kind: "set",
+                subject: `bank:${row.id}`,
+                field: "accountId",
+                value: account.output.id,
+                scopes: [{ kind: "bankEvent", key: row.id }],
+              },
+              {
+                channel: "assignment",
+                kind: "set",
+                subject: `bank:${row.id}`,
+                field: "kind",
+                value: "purchase",
+                scopes: [{ kind: "bankEvent", key: row.id }],
+              },
+            ]),
+          ),
+        );
         await expectStatementBudget(
           () =>
             withDatabaseOperationPhase("fence", () =>
@@ -1584,11 +1608,21 @@ describe("statement spending review and re-import", () => {
       ).toBe(0);
       console.log(
         "statement-kernel-settled-fanout",
-        JSON.stringify({ charges: count, woken: settledFanout.rows }),
+        JSON.stringify({
+          charges: count,
+          householdPurchases: seededScopes.length,
+          woken: settledFanout.rows,
+        }),
       );
       expect(
-        settledFanout.rows.find((row) => row.kind === "purchaseEvent")?.n,
-      ).toBe(count);
+        settledFanout.rows.find((row) => row.kind === "purchaseEvent"),
+      ).toMatchObject({ n: count, raises: count, historical: 0 });
+      expect(
+        await getDb(ctx.db)
+          .select({ name: vendorTable.name })
+          .from(vendorTable)
+          .where(eq(vendorTable.name, created)),
+      ).toEqual([{ name: created }]);
       await getDb(ctx.db).execute(
         sql`DROP TRIGGER synthetic_kernel_wake ON "ScopeDirty"`,
       );
@@ -1613,8 +1647,8 @@ describe("statement spending review and re-import", () => {
         expenses: count + seededScopes.length,
         allocations: count + seededScopes.length,
         bindings: count,
-        cost: String((count + seededScopes.length) * 1000),
-        allocated: String((count + seededScopes.length) * 1000),
+        cost: String(count * 1000 + seededScopes.length * 1250),
+        allocated: String(count * 1000 + seededScopes.length * 1250),
       });
     },
   );

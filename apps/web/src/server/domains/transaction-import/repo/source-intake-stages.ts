@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { sourceOccurrenceIdentityKind } from "@cubby/schemas/source-occurrence-fields";
 import type { RecordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { moneyToMinor } from "@cubby/shared";
@@ -36,13 +37,17 @@ import {
   assertNotFuture,
   constraintViolation,
 } from "~/server/errors/app-error";
+import {
+  logAuditEntries,
+  type AuditEntryInput,
+} from "~/server/generic/audit-log/repo/audit-log";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { append, evidenceRow } from "~/server/kernel/api";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
-import { auditEvidenceRows } from "./intake-audit";
+import { evidenceAuditEntries } from "./intake-audit";
 import { dirtySourceOccurrences } from "./source-event-dirty";
 import { occurrenceEvidence, statementEvidence } from "./statement-evidence";
 
@@ -159,37 +164,48 @@ export async function prepareRows(
   return rows;
 }
 
-async function insertOccurrences(
+/**
+ * New occurrences and their observations in one kernel append. Occurrences
+ * carry their minted ids and insert first, so observations can name them.
+ */
+async function appendIntake(
   tx: DrizzleTransaction,
-  rows: Omit<typeof sourceOccurrence.$inferInsert, "shortcode">[],
+  occurrences: (Omit<typeof sourceOccurrence.$inferInsert, "shortcode"> & {
+    id: (typeof sourceOccurrence.$inferSelect)["id"];
+  })[],
+  observations: Omit<
+    typeof sourceTransactionRecord.$inferInsert,
+    "shortcode"
+  >[],
 ) {
-  if (!rows.length) return [];
-  const facts = await append(
-    databaseForTransaction(tx),
-    rows.map((row) => evidenceRow(occurrenceEvidence, row)),
-  );
-  return unwrapDb(tx)
-    .select()
-    .from(sourceOccurrence)
-    .where(
-      sql`${sourceOccurrence.id} = ANY(${uuidArrayParam(facts.map((fact) => fact.id))})`,
-    );
-}
-async function insertObservations(
-  tx: DrizzleTransaction,
-  rows: Omit<typeof sourceTransactionRecord.$inferInsert, "shortcode">[],
-) {
-  if (!rows.length) return [];
-  const facts = await append(
-    databaseForTransaction(tx),
-    rows.map((row) => evidenceRow(statementEvidence, row)),
-  );
-  return unwrapDb(tx)
-    .select()
-    .from(sourceTransactionRecord)
-    .where(
-      sql`${sourceTransactionRecord.id} = ANY(${uuidArrayParam(facts.map((fact) => fact.id))})`,
-    );
+  const query = unwrapDb(tx);
+  const facts =
+    occurrences.length || observations.length
+      ? await append(databaseForTransaction(tx), [
+          ...occurrences.map((row) => evidenceRow(occurrenceEvidence, row)),
+          ...observations.map((row) => evidenceRow(statementEvidence, row)),
+        ])
+      : [];
+  const idsOf = (kind: string) =>
+    facts.filter((fact) => fact.kind === kind).map((fact) => fact.id);
+  return {
+    occurrences: occurrences.length
+      ? await query
+          .select()
+          .from(sourceOccurrence)
+          .where(
+            sql`${sourceOccurrence.id} = ANY(${uuidArrayParam(idsOf(occurrenceEvidence.kind))})`,
+          )
+      : [],
+    observations: observations.length
+      ? await query
+          .select()
+          .from(sourceTransactionRecord)
+          .where(
+            sql`${sourceTransactionRecord.id} = ANY(${uuidArrayParam(idsOf(statementEvidence.kind))})`,
+          )
+      : [],
+  };
 }
 
 /** Intake changes evidence/head state only. Unknown revision order never changes accepted money. */
@@ -464,8 +480,27 @@ export async function applySourceIntake(
   let createdObservations: (typeof sourceTransactionRecord.$inferSelect)[] = [];
   let afterOwners: (typeof sourceOccurrence.$inferSelect)[] = [];
   let memberships: (typeof transactionImportRecord.$inferInsert)[] = [];
+  // One audit insert for the whole intake.
+  const audits: AuditEntryInput[] = [];
+  // New occurrences wait for their observations to share one append.
+  let staged: Parameters<typeof appendIntake>[1] = [];
+  const mintedIds = new Map<
+    string,
+    (typeof sourceOccurrence.$inferSelect)["id"]
+  >();
+  const flush = async (
+    observations: Parameters<typeof appendIntake>[2] = [],
+  ) => {
+    const appended = await appendIntake(tx, staged, observations);
+    staged = [];
+    for (const minted of appended.occurrences)
+      mintedOwners.set(identityKey(storedIdentity(minted)), minted);
+    return appended.observations;
+  };
   const requireBatch = () =>
     batchId ?? constraintViolation("The collection batch is missing.");
+  const ownerId = (ref: OwnerRef) =>
+    "minted" in ref ? mintedIds.get(ref.minted)! : ref.id;
   const owner = (ref: OwnerRef) =>
     "minted" in ref ? mintedOwners.get(ref.minted)! : ref;
   const observationId = (ref: ObservationRef) =>
@@ -473,10 +508,16 @@ export async function applySourceIntake(
       ? ref.id
       : createdObservations.find(
           (saved) =>
-            saved.occurrenceId === owner(ref.minted.owner).id &&
+            saved.occurrenceId === ownerId(ref.minted.owner) &&
             saved.factFingerprint === ref.minted.factFingerprint,
         )!.id;
   for (const write of plan.writes) {
+    if (
+      staged.length &&
+      write.kind !== "insert_observations" &&
+      write.kind !== "insert_occurrences"
+    )
+      await flush();
     switch (write.kind) {
       case "ensure_source":
         await ensureExternalSources(tx, [write.source]);
@@ -486,26 +527,23 @@ export async function applySourceIntake(
           await insertWithShortcode(tx, "transactionImport", write.values)
         ).id;
         break;
-      case "insert_occurrences": {
-        const created = await insertOccurrences(
-          tx,
-          write.rows.map(({ values, positionedInBatch }) => ({
+      case "insert_occurrences":
+        for (const { key, values, positionedInBatch } of write.rows) {
+          const id = parseEntityId("sourceOccurrence", crypto.randomUUID());
+          mintedIds.set(key, id);
+          staged.push({
             ...values,
+            id,
             physicalImportId: positionedInBatch ? requireBatch() : null,
-          })),
-        );
-        created.forEach((minted) =>
-          mintedOwners.set(identityKey(storedIdentity(minted)), minted),
-        );
+          });
+        }
         break;
-      }
       case "insert_observations": {
-        createdObservations = await insertObservations(
-          tx,
+        createdObservations = await flush(
           write.rows.map(({ owner: ref, values }) => ({
             ...values,
             batchId: requireBatch(),
-            occurrenceId: owner(ref).id,
+            occurrenceId: ownerId(ref),
           })),
         );
         if (createdObservations.length)
@@ -513,7 +551,7 @@ export async function applySourceIntake(
             createdObservations.flatMap((observation) => {
               const planned = write.rows.find(
                 (row) =>
-                  owner(row.owner).id === observation.occurrenceId &&
+                  ownerId(row.owner) === observation.occurrenceId &&
                   row.factFingerprint === observation.factFingerprint,
               )!;
               return [
@@ -538,7 +576,7 @@ export async function applySourceIntake(
       case "update_heads": {
         const requestedChanges = requestedRows(
           write.changes.map((change) => ({
-            id: owner(change.owner).id,
+            id: ownerId(change.owner),
             head: change.head ? observationId(change.head) : null,
             state: change.reviewState,
             observed: change.lastObservedAt.toISOString(),
@@ -589,27 +627,27 @@ export async function applySourceIntake(
         break;
       }
       case "audit_occurrences":
-        await auditEvidenceRows(
-          tx,
-          actor,
-          "sourceOccurrence",
-          write.before,
-          afterOwners,
+        audits.push(
+          ...evidenceAuditEntries(
+            "sourceOccurrence",
+            write.before,
+            afterOwners,
+          ),
         );
         break;
       case "audit_new_observations": {
         const newIds = createdObservations.map((row) => row.id);
         if (newIds.length)
-          await auditEvidenceRows(
-            tx,
-            actor,
-            "sourceTransactionRecord",
-            [],
-            await query
-              .select(sourceObservationColumns)
-              .from(
-                sql`${sourceObservationsForPage(newIds)} "SourceTransactionRecord"`,
-              ),
+          audits.push(
+            ...evidenceAuditEntries(
+              "sourceTransactionRecord",
+              [],
+              await query
+                .select(sourceObservationColumns)
+                .from(
+                  sql`${sourceObservationsForPage(newIds)} "SourceTransactionRecord"`,
+                ),
+            ),
           );
         break;
       }
@@ -630,12 +668,8 @@ export async function applySourceIntake(
           })
           .where(eq(sourceOccurrence.id, write.owner.id))
           .returning();
-        await auditEvidenceRows(
-          tx,
-          actor,
-          "sourceOccurrence",
-          [write.owner],
-          updated,
+        audits.push(
+          ...evidenceAuditEntries("sourceOccurrence", [write.owner], updated),
         );
         await dirtySourceOccurrences(
           tx,
@@ -657,22 +691,22 @@ export async function applySourceIntake(
           )
           .map((member) => member.statementRowId);
         if (afterBatch)
-          await auditEvidenceRows(
-            tx,
-            actor,
-            "transactionImport",
-            write.before
-              ? [
-                  received.length
-                    ? { ...write.before, records: [] }
-                    : write.before,
-                ]
-              : [],
-            [
-              received.length
-                ? { ...afterBatch, records: received }
-                : afterBatch,
-            ],
+          audits.push(
+            ...evidenceAuditEntries(
+              "transactionImport",
+              write.before
+                ? [
+                    received.length
+                      ? { ...write.before, records: [] }
+                      : write.before,
+                  ]
+                : [],
+              [
+                received.length
+                  ? { ...afterBatch, records: received }
+                  : afterBatch,
+              ],
+            ),
           );
         break;
       }
@@ -686,6 +720,8 @@ export async function applySourceIntake(
       }
     }
   }
+  if (staged.length) await flush();
+  await logAuditEntries(tx, actor, audits);
   const { outcome } = plan;
   return {
     ...plan.receipt,

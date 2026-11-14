@@ -121,33 +121,76 @@ const isConflict = (error: UnparsedError) =>
   isEntityShortcodeCollision(error, "Entity") ||
   ["40001", "40P01", "55P03"].includes(findPgError(error)?.code ?? "");
 
-/** Dependency waves preserve foreign keys, including links within one table. */
+/** The tables of the new rows `entry` references by id, among `pending`. */
+function newReferences(
+  entry: Difference["inserts"][number],
+  pending: ReadonlyMap<string, unknown>,
+): string[] {
+  const columns = getTableColumns(entry.target.table);
+  return getTableConfig(entry.target.table).foreignKeys.flatMap((fk) => {
+    const reference = fk.reference();
+    const foreign = getTableName(reference.foreignTable);
+    return reference.columns.flatMap((column, index) => {
+      if (reference.foreignColumns[index]?.name !== "id") return [];
+      const property = Object.keys(columns).find(
+        (key) => columns[key]!.name === column.name,
+      );
+      return property &&
+        pending.has(`${foreign}:${String(entry.values[property])}`)
+        ? [foreign]
+        : [];
+    });
+  });
+}
+
+/**
+ * Foreign keys order the inserts: one statement per table in table order, and
+ * dependency waves within a table that links to its own new rows. Row waves
+ * order everything when the new rows' tables reference each other in a cycle.
+ */
 function orderedInserts(
   inserts: Difference["inserts"],
 ): Difference["inserts"][] {
+  const all = new Map(
+    inserts.map((entry) => [`${entry.target.name}:${entry.id}`, entry]),
+  );
+  const tables = new Map<string, Difference["inserts"]>();
+  const after = new Map<string, Set<string>>();
+  for (const entry of inserts) {
+    const rows = tables.get(entry.target.name) ?? [];
+    rows.push(entry);
+    tables.set(entry.target.name, rows);
+    const needs = after.get(entry.target.name) ?? new Set<string>();
+    for (const table of newReferences(entry, all))
+      if (table !== entry.target.name) needs.add(table);
+    after.set(entry.target.name, needs);
+  }
+  const groups: Difference["inserts"][] = [];
+  const done = new Set<string>();
+  while (done.size < tables.size) {
+    const ready = [...tables.keys()].filter(
+      (table) =>
+        !done.has(table) && [...after.get(table)!].every((d) => done.has(d)),
+    );
+    if (!ready.length) return insertWaves(inserts);
+    for (const table of ready) {
+      done.add(table);
+      groups.push(...insertWaves(tables.get(table)!));
+    }
+  }
+  return groups;
+}
+
+/** Dependency waves preserve foreign keys, including links within one table. */
+function insertWaves(inserts: Difference["inserts"]): Difference["inserts"][] {
   const pending = new Map(
     inserts.map((entry) => [`${entry.target.name}:${entry.id}`, entry]),
   );
   const groups: Difference["inserts"][] = [];
   while (pending.size) {
-    const ready = [...pending.values()].filter((entry) => {
-      const columns = getTableColumns(entry.target.table);
-      return getTableConfig(entry.target.table).foreignKeys.every((fk) => {
-        const reference = fk.reference();
-        return reference.columns.every((column, index) => {
-          if (reference.foreignColumns[index]?.name !== "id") return true;
-          const property = Object.keys(columns).find(
-            (key) => columns[key]!.name === column.name,
-          );
-          return (
-            !property ||
-            !pending.has(
-              `${getTableName(reference.foreignTable)}:${String(entry.values[property])}`,
-            )
-          );
-        });
-      });
-    });
+    const ready = [...pending.values()].filter(
+      (entry) => !newReferences(entry, pending).length,
+    );
     if (!ready.length)
       throw new KernelContractError(
         "New reconciled records contain a foreign-key cycle",

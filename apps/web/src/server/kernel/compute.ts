@@ -34,7 +34,6 @@ import type {
   Reconciler,
   ScopeRef,
 } from "./define";
-import { readKeyRevs } from "./dirty";
 import {
   askEnvelope,
   envelopeText,
@@ -55,6 +54,9 @@ import {
   KernelContractError,
   LockedReadChangedError,
   KeyLedger,
+  parseRevisions,
+  revisionsSource,
+  type AnswerLoader,
   type ReadMode,
 } from "./reads";
 import {
@@ -155,20 +157,57 @@ async function computeBatchInPhase(
   const ledger = new KeyLedger();
   const scopeKeys = scopes.map((scope) => scope.key);
   const loadedRevisions = new Map<Key, number>();
-  const revisions = async (keys: readonly Key[]) => {
-    if (
-      mode.lockedRevisions &&
-      keys.some((key) => !mode.lockedRevisions!.has(key))
-    )
-      throw new LockedReadChangedError();
-    const revs = mode.lockedRevisions
-      ? new Map(keys.map((key) => [key, mode.lockedRevisions!.get(key)!]))
-      : await readKeyRevs(q, keys);
-    for (const [key, rev] of revs)
-      if (!loadedRevisions.has(key)) loadedRevisions.set(key, rev);
-    return revs;
+  const revisions: Revisions = {
+    held(keys) {
+      if (!mode.lockedRevisions) return null;
+      if (keys.some((key) => !mode.lockedRevisions!.has(key)))
+        throw new LockedReadChangedError();
+      return new Map(keys.map((key) => [key, mode.lockedRevisions!.get(key)!]));
+    },
+    observe(revs) {
+      for (const [key, rev] of revs)
+        if (!loadedRevisions.has(key)) loadedRevisions.set(key, rev);
+      return revs;
+    },
   };
-  const reads = createReads(q, reconciler, scopeKeys, ledger, mode);
+  /** Answers by envelope text: the row's output, or null once known missing. */
+  const answers = new Map<string, { inputHash: string; output: Json | null }>();
+  // Load-time answer reads of one tick share a statement.
+  let queuedAnswers = new Map<
+    string,
+    { kind: AskKind; envelope: AskEnvelope; scopes: Set<string> }
+  >();
+  let answerFlush: Promise<void> | null = null;
+  const readAnswers: AnswerLoader = async (asking, requested) => {
+    const texts = requested.map(({ kind, input }) => {
+      const envelope = askEnvelope(kind, input);
+      const text = envelopeText(envelope);
+      const entry = queuedAnswers.get(text) ?? {
+        kind,
+        envelope,
+        scopes: new Set<string>(),
+      };
+      for (const scope of asking) entry.scopes.add(scope);
+      queuedAnswers.set(text, entry);
+      return text;
+    });
+    answerFlush ??= Promise.resolve().then(() => {
+      const wanted = queuedAnswers;
+      queuedAnswers = new Map();
+      answerFlush = null;
+      return loadAnswers(q, wanted, answers, ledger, revisions);
+    });
+    await answerFlush;
+    return texts.map((text) => answers.get(text)?.output ?? null);
+  };
+  const reads = createReads(
+    q,
+    reconciler,
+    scopeKeys,
+    ledger,
+    mode,
+    readAnswers,
+  );
   const released = new Set(
     (mode.released ?? []).map(
       (entry) => `${entry.subject}\u0000${entry.field}`,
@@ -201,8 +240,6 @@ async function computeBatchInPhase(
     );
   }
 
-  /** Answers by envelope text: the row's output, or null once known missing. */
-  const answers = new Map<string, { inputHash: string; output: Json | null }>();
   const decisions = new Map<string, DecisionRow[]>();
   const loadedSubjects = new Set<string>();
   const usedBy = new Map<string, Tracked>(
@@ -453,6 +490,12 @@ async function loadPatched(
   return patched;
 }
 
+/** Locked runs reuse the held revisions; unlocked reads return their own. */
+type Revisions = {
+  held(keys: readonly Key[]): Map<Key, number> | null;
+  observe(revs: Map<Key, number>): Map<Key, number>;
+};
+
 async function loadAnswers(
   q: Q,
   wanted: ReadonlyMap<
@@ -461,7 +504,7 @@ async function loadAnswers(
   >,
   answers: Map<string, { inputHash: string; output: Json | null }>,
   ledger: KeyLedger,
-  revisions: (keys: readonly Key[]) => Promise<Map<Key, number>>,
+  revisions: Revisions,
 ) {
   if (!wanted.size) return;
   const hashed = await Promise.all(
@@ -472,14 +515,30 @@ async function loadAnswers(
     })),
   );
   const keys = hashed.map((entry) => answerKey(entry.inputHash));
-  const revs = await revisions(keys);
-  const rows = await q
-    .select({ inputHash: answer.inputHash, output: answer.output })
-    .from(answer)
-    .where(
-      sql`${answer.inputHash} = ANY(${textArrayParam(hashed.map((entry) => entry.inputHash))})`,
-    );
-  const found = new Map(rows.map((row) => [row.inputHash, row.output]));
+  const where = sql`${answer.inputHash} = ANY(${textArrayParam(hashed.map((entry) => entry.inputHash))})`;
+  const held = revisions.held(keys);
+  const fields = { inputHash: answer.inputHash, output: answer.output };
+  let rows: { inputHash: string | null; output: Json | null }[];
+  let revs: Map<Key, number>;
+  if (held) {
+    revs = held;
+    rows = await q.select(fields).from(answer).where(where);
+  } else {
+    // One statement for the revisions and the answers; see `selectWithRevisions`.
+    const result = await q
+      .select({
+        revs: sql<Record<string, number | string>>`revisions.revs`,
+        ...fields,
+      })
+      .from(revisionsSource(keys))
+      .leftJoin(answer, where);
+    revs = parseRevisions(keys, result[0]?.revs);
+    rows = result;
+  }
+  revisions.observe(revs);
+  const found = new Map(
+    rows.flatMap((row) => (row.inputHash ? [[row.inputHash, row.output]] : [])),
+  );
   for (const entry of hashed) {
     answers.set(entry.text, {
       inputHash: entry.inputHash,
@@ -496,29 +555,41 @@ async function loadDecisions(
   decisions: Map<string, DecisionRow[]>,
   loaded: Set<string>,
   ledger: KeyLedger,
-  revisions: (keys: readonly Key[]) => Promise<Map<Key, number>>,
+  revisions: Revisions,
 ) {
   if (!wanted.size) return;
   const subjects = [...wanted.keys()];
-  const revs = await revisions(subjects.map(decisionKey));
+  const keys = subjects.map(decisionKey);
+  const held = revisions.held(keys);
   // The newest row per (subject, channel, slot) is in force; an identity
   // decision is stored once under its first subject and read from both.
   // The text column is not named `at`: ORDER BY would sort by it instead of
   // the microsecond column.
-  const result = await q.execute<
-    Omit<DecisionRow, "at"> & { other: string | null; atText: string }
-  >(sql`
+  const inForce = sql`
     SELECT DISTINCT ON (d.subject, d.channel, d.slot)
       d.id, d.channel, d.subject, d.slot, d.other, d.kind, d.value,
       ${isoText(sql`d.at`)} AS "atText"
     FROM "Decision" d
     WHERE d.subject = ANY(${textArrayParam(subjects)}) OR d.other = ANY(${textArrayParam(subjects)})
-    ORDER BY d.subject, d.channel, d.slot, d.at DESC, d.id DESC`);
+    ORDER BY d.subject, d.channel, d.slot, d.at DESC, d.id DESC`;
+  type Row = Omit<DecisionRow, "at"> & { other: string | null; atText: string };
+  // Unlocked, one statement reads the revisions and the decisions; see `selectWithRevisions`.
+  const result = await q.execute<
+    Row & { revs?: Record<string, number | string> }
+  >(
+    held
+      ? inForce
+      : sql`SELECT revisions.revs, decided.* FROM ${revisionsSource(keys)} LEFT JOIN LATERAL (${inForce}) decided ON true`,
+  );
+  const revs = revisions.observe(
+    held ?? parseRevisions(keys, result.rows[0]?.revs),
+  );
   for (const subject of subjects) {
     loaded.add(subject);
     decisions.set(subject, []);
   }
-  for (const { atText, ...rest } of result.rows) {
+  for (const { atText, revs: _revs, ...rest } of result.rows) {
+    if (rest.id === null) continue;
     const row = { ...rest, at: atText };
     if (decisions.has(row.subject)) decisions.get(row.subject)!.push(row);
     if (row.other && decisions.has(row.other))

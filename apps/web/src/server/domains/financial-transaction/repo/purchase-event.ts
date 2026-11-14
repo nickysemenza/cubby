@@ -14,12 +14,7 @@ import { sql } from "drizzle-orm";
 import { householdLocalDate, shiftPlainDate } from "~/lib/household-date";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { textArrayParam } from "~/server/db/helpers/array-param";
-import {
-  manualEntry,
-  decision,
-  answer,
-  recordKey,
-} from "~/server/db/kernel-schema";
+import { manualEntry, decision, recordKey } from "~/server/db/kernel-schema";
 import {
   expense,
   expenseAttribution,
@@ -72,8 +67,7 @@ import {
   type Pure,
   type ScopeReads,
 } from "~/server/kernel/api";
-import { askEnvelope, inputHashOf } from "~/server/kernel/envelope";
-import { decisionKey, answerKey } from "~/server/kernel/keys";
+import { decisionKey } from "~/server/kernel/keys";
 
 import type { purchaseAsks } from "../service/purchase-asks";
 import {
@@ -213,7 +207,6 @@ const tableReads = [
     "mergedIntoId",
   ]),
   source.table(decision, ["subject", "channel", "kind", "value", "at"]),
-  source.table(answer, ["inputHash", "output"]),
 ];
 /**
  * Keep a record this scope does not re-derive. A member's decisions on its
@@ -415,44 +408,32 @@ export function createPurchaseEvent({
         recordSubject("financialTransaction", key),
       ];
       const allSubjects = keys.flatMap(subjectsOf);
-      const [
-        transactionRows,
-        manuals,
-        decisions,
-        bankOwners,
-        ownAllocationsByScope,
-      ] = await Promise.all([
-        each(async (key, scoped) =>
-          (await scoped.rows(financialTransaction, [key])).get(key),
-        ),
-        each(
-          async (key, scoped) =>
-            (
-              await scoped.facts(manualTransactionEvidence, [
-                `purchaseEvent:${key}`,
-              ])
-            ).get(`purchaseEvent:${key}`) ?? [],
-        ),
-        reads.selectEach(
-          decision,
-          new Map(keys.map((key) => [key, subjectsOf(key).map(decisionKey)])),
-          sql`${decision.subject} = ANY(${textArrayParam(allSubjects)}) OR ${decision.other} = ANY(${textArrayParam(allSubjects)})`,
-        ),
-        reads.selectEach(
-          recordKey,
-          new Map(
-            keys.map((key) => [key, [`record:financialTransaction:${key}`]]),
+      const [transactionRows, manuals, decisions, ownAllocationsByScope] =
+        await Promise.all([
+          each(async (key, scoped) =>
+            (await scoped.rows(financialTransaction, [key])).get(key),
           ),
-          sql`${recordKey.scopeKind}='bankEvent' AND ${recordKey.entity}=${"financialTransaction"} AND ${recordKey.entityId}=ANY(${textArrayParam(keys)}::uuid[])`,
-        ),
-        each((key, scoped) =>
-          scoped.lookup(
-            financialTransactionAllocation,
-            transactionAllocations,
-            [key],
+          each(
+            async (key, scoped) =>
+              (
+                await scoped.facts(manualTransactionEvidence, [
+                  `purchaseEvent:${key}`,
+                ])
+              ).get(`purchaseEvent:${key}`) ?? [],
           ),
-        ),
-      ]);
+          reads.selectEach(
+            decision,
+            new Map(keys.map((key) => [key, subjectsOf(key).map(decisionKey)])),
+            sql`${decision.subject} = ANY(${textArrayParam(allSubjects)}) OR ${decision.other} = ANY(${textArrayParam(allSubjects)})`,
+          ),
+          each((key, scoped) =>
+            scoped.lookup(
+              financialTransactionAllocation,
+              transactionAllocations,
+              [key],
+            ),
+          ),
+        ]);
       const choicesOf = (key: string) =>
         decisions.filter((row) => row.subject === `purchaseEvent:${key}`);
       // Purchases a member's identity decision names, booked or not.
@@ -483,33 +464,21 @@ export function createPurchaseEvent({
         ]),
       );
       const allReferences = [...new Set([...referencesOf.values()].flat())];
-      const hashes = new Map(
-        await Promise.all(
-          keys.map(async (key) => {
-            const row = transactionRows.get(key);
-            return [
-              key,
-              row
-                ? await inputHashOf(
-                    askEnvelope(
-                      merchantIdentityAsk,
-                      merchantIdentityRequest(
-                        statementMerchantIdentityInput({
-                          ...row,
-                          amount: minorToMoney(row.amount),
-                        }) ?? { merchant: "" },
-                      ),
-                    ),
-                  )
-                : null,
-            ] as const;
-          }),
-        ),
+      const identityInputs = new Map(
+        keys.map((key) => {
+          const row = transactionRows.get(key);
+          return [
+            key,
+            row
+              ? statementMerchantIdentityInput({
+                  ...row,
+                  amount: minorToMoney(row.amount),
+                })
+              : null,
+          ] as const;
+        }),
       );
-      const allHashes = [...hashes.values()].filter(
-        (hash): hash is string => !!hash,
-      );
-      const [referenced, saved] = await Promise.all([
+      const [referenced, identities] = await Promise.all([
         allReferences.length
           ? reads.selectEach(
               entityIdentity,
@@ -524,16 +493,18 @@ export function createPurchaseEvent({
               sql`${entityIdentity.id}::text = ANY(${textArrayParam(allReferences)}) OR ${entityIdentity.shortcode} = ANY(${textArrayParam(allReferences)})`,
             )
           : [],
-        reads.selectEach(
-          answer,
-          new Map(
-            keys.map((key) => {
-              const hash = hashes.get(key);
-              return [key, hash ? [answerKey(hash)] : []];
-            }),
-          ),
-          sql`${answer.inputHash} = ANY(${textArrayParam(allHashes)})`,
-        ),
+        // The reconcile asks the same questions; it reuses these answers.
+        each(async (key, scoped) => {
+          const identityInput = identityInputs.get(key);
+          if (!identityInput) return null;
+          const [output] = await scoped.answers([
+            {
+              kind: merchantIdentityAsk,
+              input: merchantIdentityRequest(identityInput),
+            },
+          ]);
+          return merchantAnswer(output);
+        }),
       ]);
       // Each scope follows the merge redirects of the records it references.
       const identitiesByScope = await each(async (key, scoped) => {
@@ -569,10 +540,7 @@ export function createPurchaseEvent({
             (row) => row.kind === kind && !row.deletedAt && !row.mergedIntoId,
           )
           .map((row) => row.id);
-      const answerNameOf = (key: string) =>
-        merchantAnswer(
-          saved.find((row) => row.inputHash === hashes.get(key))?.output,
-        )?.name ?? null;
+      const answerNameOf = (key: string) => identities.get(key)?.name ?? null;
       const namesOf = (key: string) => {
         const transaction = transactionRows.get(key);
         return new Set(
@@ -591,8 +559,23 @@ export function createPurchaseEvent({
             .map((name) => name.trim().toLowerCase()),
         );
       };
-      const [namedVendors, retainedPurchases, referencedVendors] =
+      const [, namedVendors, retainedPurchases, referencedVendors] =
         await Promise.all([
+          each(async (key, scoped) => {
+            const identity = identities.get(key);
+            const identityInput = identityInputs.get(key);
+            const supportInput =
+              identity && identityInput
+                ? statementMerchantSupportInput(identityInput, identity)
+                : null;
+            if (supportInput)
+              await scoped.answers([
+                {
+                  kind: merchantSupportAsk,
+                  input: supportRequest(supportInput),
+                },
+              ]);
+          }),
           each((key, scoped) =>
             scoped.lookup(vendor, vendorNames, [...namesOf(key)]),
           ),
@@ -690,7 +673,6 @@ export function createPurchaseEvent({
             exactPayments,
             ownedPurchases,
             bindings,
-            occurrences,
             accounts,
           ] = await Promise.all([
             scoped.lookup(
@@ -732,16 +714,6 @@ export function createPurchaseEvent({
               })),
             }),
             scoped.rows(
-              sourceOccurrence,
-              bankOwners
-                .filter(
-                  (owner) =>
-                    owner.entityId === key &&
-                    !owner.scopeKey.startsWith("manual:"),
-                )
-                .map((owner) => owner.scopeKey),
-            ),
-            scoped.rows(
               financialAccount,
               transaction ? [transaction.accountId] : [],
             ),
@@ -776,10 +748,22 @@ export function createPurchaseEvent({
                 financialTransaction,
                 allocations.map((row) => row.transactionId),
               ),
+              // Only records this scope keeps read attributions; a
+              // candidate's capacity never depends on who benefits.
               scoped.lookup(
                 expenseAttribution,
                 expenseAttributions,
-                expenses.map((row) => row.id),
+                expenses
+                  .filter(
+                    (row) =>
+                      !!row.purchaseId &&
+                      (ownedPurchases.has(row.purchaseId) ||
+                        currentAllocations.some(
+                          (allocation) =>
+                            allocation.purchaseId === row.purchaseId,
+                        )),
+                  )
+                  .map((row) => row.id),
               ),
               scoped.lookup(
                 financialTransactionAllocation,
@@ -852,7 +836,7 @@ export function createPurchaseEvent({
               vendors: allVendors,
               categories: [...categories.values()],
               payments,
-              occurrences: [...occurrences.values()],
+              occurrences: [],
               bindings: bindings.filter(
                 (binding) =>
                   binding.scope.kind === "purchaseEvent" &&
@@ -864,8 +848,8 @@ export function createPurchaseEvent({
           ] as const;
         }),
       );
-      // Settlement proof reads the occurrences behind every other charge that
-      // settles a loaded Purchase, in one statement per source for the batch.
+      // The occurrences behind this charge and behind every other charge
+      // that settles a loaded Purchase: one statement per source for the batch.
       const settlingOf = new Map(
         inputs.map(([key, input]) => [
           key,
@@ -878,67 +862,75 @@ export function createPurchaseEvent({
           ],
         ]),
       );
-      const settling = [...new Set([...settlingOf.values()].flat())];
-      const [settlingOwners, settlingAccepted] = settling.length
-        ? await Promise.all([
-            reads.selectEach(
-              recordKey,
-              new Map(
-                [...settlingOf].map(([key, ids]) => [
-                  key,
-                  ids.map((id) => `record:financialTransaction:${id}`),
-                ]),
-              ),
-              sql`${recordKey.scopeKind}='bankEvent' AND ${recordKey.entity}=${"financialTransaction"} AND ${recordKey.entityId}=ANY(${textArrayParam(settling)}::uuid[])`,
+      const ownersRead = [
+        ...new Set([...keys, ...[...settlingOf.values()].flat()]),
+      ];
+      const owners = await reads.selectEach(
+        recordKey,
+        new Map(
+          keys.map((key) => [
+            key,
+            [key, ...settlingOf.get(key)!].map(
+              (id) => `record:financialTransaction:${id}`,
             ),
-            each((key, scoped) =>
-              scoped.lookup(
-                sourceOccurrence,
-                acceptedOccurrences,
-                settlingOf.get(key)!,
-              ),
-            ),
-          ])
-        : [[], new Map<string, (typeof sourceOccurrence.$inferSelect)[]>()];
-      const ownersOf = (key: string) =>
-        settlingOwners.filter(
+          ]),
+        ),
+        sql`${recordKey.scopeKind}='bankEvent' AND ${recordKey.entity}=${"financialTransaction"} AND ${recordKey.entityId}=ANY(${textArrayParam(ownersRead)}::uuid[])`,
+      );
+      const ownersOf = (transactionIds: readonly string[]) =>
+        owners.filter(
           (row) =>
-            settlingOf.get(key)!.includes(row.entityId) &&
+            transactionIds.includes(row.entityId) &&
             !row.scopeKey.startsWith("manual:"),
         );
-      const ownedOccurrences = settling.length
-        ? await each((key, scoped) =>
-            scoped.rows(
-              sourceOccurrence,
-              ownersOf(key).map((row) => row.scopeKey),
-            ),
-          )
-        : new Map<string, Map<string, typeof sourceOccurrence.$inferSelect>>();
+      const [ownedOccurrences, settlingAccepted] = await Promise.all([
+        each((key, scoped) =>
+          scoped.rows(
+            sourceOccurrence,
+            ownersOf([key, ...settlingOf.get(key)!]).map((row) => row.scopeKey),
+          ),
+        ),
+        each((key, scoped) =>
+          scoped.lookup(
+            sourceOccurrence,
+            acceptedOccurrences,
+            settlingOf.get(key)!,
+          ),
+        ),
+      ]);
       return new Map(
-        inputs.map(([key, input]) => [
-          key,
-          {
-            ...input,
-            settlementOccurrences: [
-              ...ownersOf(key).flatMap((row) => {
-                const occurrence = ownedOccurrences.get(key)?.get(row.scopeKey);
-                return occurrence
-                  ? [{ transactionId: row.entityId, occurrence }]
-                  : [];
+        inputs.map(([key, input]) => {
+          const occurrenceOf = (owner: (typeof owners)[number]) =>
+            ownedOccurrences.get(key)!.get(owner.scopeKey);
+          return [
+            key,
+            {
+              ...input,
+              occurrences: ownersOf([key]).flatMap((owner) => {
+                const occurrence = occurrenceOf(owner);
+                return occurrence ? [occurrence] : [];
               }),
-              ...(settlingAccepted.get(key) ?? []).flatMap((occurrence) =>
-                occurrence.acceptedTransactionId
-                  ? [
-                      {
-                        transactionId: occurrence.acceptedTransactionId,
-                        occurrence,
-                      },
-                    ]
-                  : [],
-              ),
-            ],
-          },
-        ]),
+              settlementOccurrences: [
+                ...ownersOf(settlingOf.get(key)!).flatMap((owner) => {
+                  const occurrence = occurrenceOf(owner);
+                  return occurrence
+                    ? [{ transactionId: owner.entityId, occurrence }]
+                    : [];
+                }),
+                ...settlingAccepted.get(key)!.flatMap((occurrence) =>
+                  occurrence.acceptedTransactionId
+                    ? [
+                        {
+                          transactionId: occurrence.acceptedTransactionId,
+                          occurrence,
+                        },
+                      ]
+                    : [],
+                ),
+              ],
+            },
+          ];
+        }),
       );
     },
     // oxlint-disable-next-line complexity -- prerequisite, identity and conservation refusals form one atomic money plan.
