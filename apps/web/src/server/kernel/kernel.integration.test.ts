@@ -14,6 +14,7 @@ import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/f
 import type { Database } from "~/server/db/database";
 import { withDatabaseOperationMetrics } from "~/server/db/db-observability";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
+import { withHouseholdWrite } from "~/server/db/helpers";
 import {
   answer,
   manualEntry,
@@ -67,10 +68,12 @@ import {
 import { applyComputed, runClaimedScopes } from "./apply";
 import {
   AskUnknownError,
+  claimExternalAsk,
   expireAsks,
   queueAsk,
   runQueuedAsks,
   settleAskOutcome,
+  settleExternalAsk,
 } from "./ask";
 import {
   releaseFundingWaits,
@@ -87,8 +90,11 @@ import {
   fenceClaim,
 } from "./claim";
 import { computeBatch } from "./compute";
+import { markDirty } from "./dirty";
 import { enterWriteTransaction, householdWrite } from "./gate";
 import { runOnePass } from "./pass";
+import { claimPassFixture, seedPass } from "./pass.fixtures";
+import { publishTransaction } from "./publication";
 import { ownedColumns } from "./registry";
 import {
   CATEGORY_SCOPE,
@@ -1313,6 +1319,173 @@ describe("evidence-facts kernel", () => {
       { orderRef: other.key },
       { orderRef: scope.key, amountMinor: 140, merchant: "Member seller" },
     ]);
+  });
+
+  // Each gated entry point locks its row only after the gate. A member write
+  // that takes the gate and then that row waits for it; were the entry to
+  // hold the row while it waited for the gate, the two would deadlock.
+  const lockOrderAsk = defineAsk({
+    feature: "fixture.lock-order",
+    producer: "image",
+    promptVersion: "1",
+    input: z.object({ revision: z.string() }),
+    output: z.object({ value: z.string() }),
+  });
+  const lockOrderPass = { name: "fixture.lock-order", key: "default" };
+  const touchPass = sql`UPDATE "Pass" SET "updatedAt" = now()
+    WHERE name = ${lockOrderPass.name} AND key = ${lockOrderPass.key}`;
+  it.each([
+    {
+      entry: "a Pass publication",
+      async enter(_kernel: Kernel, work: (tx: Database) => Promise<void>) {
+        await seedPass(ctx.db, lockOrderPass);
+        const claim = await claimPassFixture(ctx.db, lockOrderPass);
+        return { row: touchPass, run: () => claim.fenced(work) };
+      },
+    },
+    {
+      entry: "a member publication",
+      async enter(_kernel: Kernel, work: (tx: Database) => Promise<void>) {
+        await seedPass(ctx.db, lockOrderPass);
+        return {
+          row: touchPass,
+          run: () =>
+            publishTransaction(ctx.db)(async (tx) => {
+              await repositoryQueries(tx).execute(sql`SELECT 1 FROM "Pass"
+                WHERE name = ${lockOrderPass.name} AND key = ${lockOrderPass.key} FOR SHARE`);
+              await work(tx);
+            }),
+        };
+      },
+    },
+    {
+      entry: "an external Ask settlement",
+      async enter(kernel: Kernel, work: (tx: Database) => Promise<void>) {
+        const id = await queueAsk(
+          ctx.db,
+          lockOrderAsk,
+          { revision: "synthetic" },
+          { record: { entity: "image", id: crypto.randomUUID() } },
+        );
+        const claim = await claimExternalAsk(ctx.db, lockOrderAsk, {
+          id,
+          executor: "synthetic-device",
+          leaseMs: 60_000,
+        });
+        return {
+          row: sql`UPDATE "Ask" SET "lastError" = "lastError" WHERE id = ${id}::uuid`,
+          run: () =>
+            settleExternalAsk(
+              ctx.db,
+              kernel.registry,
+              lockOrderAsk,
+              claim!,
+              { output: { value: "synthetic" } },
+              {
+                validate: async (tx) => {
+                  await work(tx);
+                  return true;
+                },
+                evidence: async () => [charge("ORD-LOCK-ASK", 90)],
+              },
+            ),
+        };
+      },
+    },
+  ])("takes the gate before $entry locks its row", async ({ enter }) => {
+    const fixture = fixtureModule();
+    const kernel = createKernel([
+      fixture.module,
+      defineModule({ name: "lock-order", asks: [lockOrderAsk] }),
+    ]);
+    let held!: () => void;
+    const onHeld = new Promise<void>((resolve) => (held = resolve));
+    let resume!: () => void;
+    const onResume = new Promise<void>((resolve) => (resume = resolve));
+    const entry = await enter(kernel, async (tx) => {
+      held();
+      await onResume;
+      await kernel.append(tx, [charge("ORD-LOCK", 80)]);
+    });
+    const running = entry.run();
+    await onHeld;
+    const member = householdWrite(ctx.db, async (tx) => {
+      await repositoryQueries(tx).execute(entry.row);
+    });
+    await vi.waitUntil(
+      async () =>
+        (
+          await repositoryQueries(ctx.db).execute<{ n: number }>(
+            sql`SELECT count(*)::int AS n FROM pg_stat_activity
+                WHERE datname = current_database() AND wait_event_type = 'Lock'`,
+          )
+        ).rows[0]!.n > 0,
+      { timeout: 5_000, interval: 20 },
+    );
+    resume();
+    await expect(Promise.all([running, member])).resolves.toBeDefined();
+  });
+
+  it("bounds every gate entry with the write limits, keeping an outer writer's", async () => {
+    const { kernel } = kernelWith();
+    const limits = async (tx: Database) =>
+      (
+        await repositoryQueries(tx).execute<{ lock: string; tx: string }>(
+          sql`SELECT current_setting('lock_timeout') AS lock, current_setting('transaction_timeout') AS tx`,
+        )
+      ).rows[0];
+    const dirty = (tx: Database) =>
+      markDirty(repositoryQueries(tx), kernel.registry, {
+        keys: ["synthetic:limits"],
+        reason: "synthetic",
+      });
+    expect(
+      await repositoryTransactionDatabase(ctx.db, async (tx) => {
+        await dirty(tx);
+        return limits(tx);
+      }),
+    ).toEqual({ lock: "2s", tx: "20s" });
+    expect(
+      await repositoryTransactionDatabase(ctx.db, async (tx) => {
+        await enterWriteTransaction(repositoryQueries(tx), {
+          lane: "catalog",
+          mode: "background",
+        });
+        await dirty(tx);
+        return limits(tx);
+      }),
+    ).toEqual({ lock: "500ms", tx: "1500ms" });
+  });
+
+  it("reads every write the gate serialized before a money write", async () => {
+    const { kernel } = kernelWith();
+    let held!: () => void;
+    const onHeld = new Promise<void>((resolve) => (held = resolve));
+    let release!: () => void;
+    const onRelease = new Promise<void>((resolve) => (release = resolve));
+    const writer = householdWrite(ctx.db, async (tx) => {
+      await kernel.append(tx, [charge("ORD-SNAPSHOT", 60)]);
+      held();
+      await onRelease;
+    });
+    await onHeld;
+    const reader = withHouseholdWrite(
+      ctx.db,
+      async (tx) => (await tx.select().from(fixtureCharge)).length,
+    );
+    await vi.waitUntil(
+      async () =>
+        (
+          await repositoryQueries(ctx.db).execute<{ n: number }>(
+            sql`SELECT count(*)::int AS n FROM pg_stat_activity
+              WHERE datname = current_database() AND wait_event_type = 'Lock'`,
+          )
+        ).rows[0]!.n > 0,
+      { timeout: 5_000, interval: 20 },
+    );
+    release();
+    await writer;
+    expect(await reader).toBe(1);
   });
 
   it("retains Run requester links for queued and already answered scope inputs", async () => {

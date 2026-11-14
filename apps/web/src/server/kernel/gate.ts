@@ -75,7 +75,7 @@ const GATE_LOCK = sql`pg_advisory_xact_lock(hashtextextended('cubby:household-wr
 export const takeHouseholdGate = sql`${writeLimits("member")} AS limits, ${GATE_LOCK} AS gate`;
 
 /** Whether this transaction holds the household write gate. */
-export const holdsHouseholdGate = sql`EXISTS (
+const holdsHouseholdGate = sql`EXISTS (
   SELECT 1 FROM pg_locks WHERE pid = pg_backend_pid() AND locktype = 'advisory'
     AND classid = ((hashtextextended('cubby:household-write', 0) >> 32) & 4294967295)::oid
     AND objid = (hashtextextended('cubby:household-write', 0) & 4294967295)::oid

@@ -19,7 +19,6 @@ import { withDatabaseOperationPhase } from "~/server/db/db-observability";
 import { drift } from "~/server/db/kernel-schema";
 import {
   repositoryQueries,
-  repositoryTransactionDatabase,
   type RepositoryQueryClient,
 } from "~/server/db/repository-access.boundary";
 
@@ -40,6 +39,7 @@ import {
   type Difference,
 } from "./diff";
 import { lockKeyRevs, markDirty } from "./dirty";
+import { householdWrite } from "./gate";
 import { heldBaselineGap } from "./held-gap";
 import { driftSubject, hashCanonical } from "./keys";
 import type { KernelRegistry } from "./registry";
@@ -105,7 +105,8 @@ const stale = (reconciler: Reconciler) => sql`
  * their dependencies and stale proposals cleared; a scope whose only change is
  * asks that fill values no accepted record holds goes dirty, so its normal run
  * files them; the rest become proposals that wait on the member. Sweep tables
- * hold no money-lane column; the revision locks take the write gate.
+ * hold no money-lane column; the caller's transaction opens with the write
+ * gate, before any row this page locks.
  */
 async function proposeOrAdvance(
   tx: Database,
@@ -481,7 +482,7 @@ export async function approveDrift(
       { table: "ScopeDirty", kind: scope.kind, key: scope.key },
       claimed.token,
     );
-    await repositoryTransactionDatabase(db, (tx) =>
+    await householdWrite(db, (tx) =>
       proposeOrAdvance(tx, registry, [computed!]),
     );
     return "stale";

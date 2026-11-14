@@ -319,9 +319,11 @@ transaction that decides, reconciles and writes again. Claim partitions use sepa
 admission locks shared by Ask and Pass claims; producer calls happen after
 those transactions close. Money applies use no serializable transactions. A synchronous reconcile inside a
 member transaction returns waiting immediately for a claim held by another
-worker; it never sleeps while holding the gate. The transaction sets `lock_timeout`, `statement_timeout` and
-`idle_in_transaction_session_timeout` and `transaction_timeout` with `SET LOCAL`, so Postgres releases
-the gate when a Worker dies. Loading, matching, planning and producer calls
+worker; it never sleeps while holding the gate. Every gate entry, including
+the gate a kernel statement carries, sets `lock_timeout`, `statement_timeout`,
+`idle_in_transaction_session_timeout` and `transaction_timeout` with `SET LOCAL`
+when the transaction has none yet, so Postgres releases the gate when a Worker
+dies. Loading, matching, planning and producer calls
 happen before the transaction opens. The lock timeout stays below the transaction
 timeout, including for locked fallback runs, so contention is a retryable lock
 wait rather than a terminated session. A nested writer that already holds the
@@ -340,7 +342,13 @@ A member decision that invokes an authored field writer opens `householdWrite`
 before inserting its Decisions, so the writer enters with the gate held.
 
 Lock order inside an apply is the gate, then the `KeyRev` rows in key order,
-then the `ScopeDirty` row, then the record rows. The gate binds that order: a
+then the `ScopeDirty` row, then the record rows. A writer that takes the gate
+ahead of its row locks takes it as its first lock, and the gate entry refuses a
+transaction that already holds a row or advisory lock. A Pass publication, a
+member publication and an external Ask settlement take the gate before their
+Pass, record or Ask row; a Run transaction locks the Run row before its Pass
+row. Money writes read after the gate at read committed, so they see every
+writer the gate serialized before them. The gate binds that order: a
 transaction holding it may take further revision locks after dirty or record
 locks without a cycle, because no other kernel writer runs beside it. A
 conflict on `seq` or `rev`, a deadlock or a serialization failure does not
@@ -420,7 +428,10 @@ comes first; a refusal or a failure proven to have sent nothing leaves the ask
 `queued` with a wait cause. The row is marked `sent` in Neon, in one statement
 for a batch, before the request leaves. The `Answer` row is committed in Neon
 before the result is applied anywhere; a streamed agent turn may be displayed
-as it arrives and is an Answer only when the whole turn is stored.
+as it arrives and is an Answer only when the whole turn is stored. A failed
+response is never an Answer. Every transport, including the agent host's,
+records in the produce ledger what it sent and what refused before sending,
+so a hosted turn proves unsent the same way.
 
 The response-cache Durable Object is the single in-flight claim for every
 producer call on every transport, including ChatGPT-plan traffic and agent

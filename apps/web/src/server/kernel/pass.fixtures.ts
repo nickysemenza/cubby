@@ -2,10 +2,7 @@ import { eq, and, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { kernelPass } from "~/server/db/kernel-schema";
-import {
-  repositoryQueries,
-  type RepositoryQueryInput,
-} from "~/server/db/repository-access.boundary";
+import { repositoryQueries } from "~/server/db/repository-access.boundary";
 
 import { fenceClaim, renewClaim, releaseClaim } from "./claim";
 import { withWorkContext } from "./context";
@@ -41,19 +38,6 @@ export async function readPasses(
         filter.runId ? eq(kernelPass.runId, filter.runId) : undefined,
       ),
     );
-}
-export async function replacePassWake(db: Database, key: string) {
-  return repositoryQueries(db)
-    .update(kernelPass)
-    .set({ wakeVersion: sql`${kernelPass.wakeVersion} + 1` })
-    .where(eq(kernelPass.key, key));
-}
-export async function lockPass(db: RepositoryQueryInput, key: string) {
-  return repositoryQueries(db)
-    .select()
-    .from(kernelPass)
-    .where(eq(kernelPass.key, key))
-    .for("update");
 }
 export async function claimPassFixture(
   db: Database,

@@ -31,11 +31,7 @@ import type {
   RunServices,
 } from "~/server/domains/purchase-agent/service/environment";
 import { assertNotInMaintenance } from "~/server/http/maintenance";
-import { refusedBeforeSending } from "~/server/kernel/produce-ledger";
-import {
-  WorkDeferredError,
-  WorkSupersededError,
-} from "~/server/kernel/work-errors";
+import { WorkSupersededError } from "~/server/kernel/work-errors";
 import { getAuthSecret } from "~/server/lib/auth-configuration";
 
 /** The MCP endpoint the delegation bearer's audience names. */
@@ -164,28 +160,6 @@ export function fenceDispatch(
   });
 }
 
-/** The error types Cubby's agent transport answers with before sending. */
-const CUBBY_LOCAL_REFUSAL =
-  /"(?:type|code)"\s*:\s*"(?:cubby_admission_refused|cubby_plan_budget_reached|cubby_credit_refused|cubby_transport_failed|subscription_unavailable)"/u;
-
-/**
- * A failed model response reaches Pi as it arrived and is never an Answer:
- * the transport's produce ledger settles the Ask queued when it proves nothing
- * was sent, and `unknown` otherwise.
- */
-class ModelTurnResponseError extends Error {
-  override name = "ModelTurnResponseError";
-  constructor(
-    readonly response: {
-      status: number;
-      headers: Record<string, string>;
-      body: string;
-    },
-  ) {
-    super(`The model answered HTTP ${response.status}: ${response.body}`);
-  }
-}
-
 /** The committed Answer precedes replaying a complete model response to Pi. */
 export function agentModelTurn(
   env: Env,
@@ -196,83 +170,11 @@ export function agentModelTurn(
   fence: () => Promise<void>,
 ): Promise<Response> {
   return withHostDatabase(env, ctx, async (db, service) => {
-    const [{ withAsk }, { agentTurnAsk }] = await Promise.all([
-      import("~/server/kernel/api"),
-      import("./agent-turn-ask"),
-    ]);
     const scope = await service.loadRunScope(db, runEntityId.parse(rawRunId));
-    const { generation, request } = input;
-    if (scope.public.dispatchEventId !== generation)
+    if (scope.public.dispatchEventId !== input.generation)
       throw new WorkSupersededError();
-    const kind = {
-      ...agentTurnAsk,
-      produce: async () => {
-        await fence();
-        const response = await send();
-        const output = {
-          status: response.status,
-          headers: Object.fromEntries(
-            [...response.headers].filter(([key]) => key !== "set-cookie"),
-          ),
-          body: await response.text(),
-        };
-        if (response.ok) return { output };
-        const failure = new ModelTurnResponseError(output);
-        // Cubby's own refusals answer before any transport; the transports
-        // record what they sent, so the ledger proves which ones were unsent.
-        if (CUBBY_LOCAL_REFUSAL.test(output.body))
-          refusedBeforeSending(failure);
-        if (response.status === 403 || response.status === 429) {
-          const { pendingFundingResumeAt } =
-            await import("~/server/domains/run/repo/execution-context");
-          const { readRun } =
-            await import("~/server/domains/run/repo/ai-work-state");
-          const owner = await readRun(db, runEntityId.parse(rawRunId));
-          const until =
-            owner?.status === "paused_auth" &&
-            owner.failureCode === "execution_limit"
-              ? await pendingFundingResumeAt(db, rawRunId)
-              : null;
-          if (until)
-            throw new WorkDeferredError(
-              "Model turn waits for funding",
-              until,
-              "ai_funding_window",
-            );
-        }
-        throw failure;
-      },
-    };
-    try {
-      const answer = await withAsk(
-        db,
-        kind,
-        { runId: rawRunId, generation, request },
-        {
-          runId: rawRunId,
-          pass: { name: "purchase.dispatch", key: rawRunId },
-          initialOutcome: input.recovery,
-        },
-      );
-      return new Response(answer.body, {
-        status: answer.status,
-        headers: answer.headers,
-      });
-    } catch (error) {
-      if (error instanceof ModelTurnResponseError)
-        return new Response(error.response.body, {
-          status: error.response.status,
-          headers: error.response.headers,
-        });
-      if (error instanceof WorkDeferredError)
-        return Response.json(
-          {
-            error: { type: "cubby_admission_refused", message: error.message },
-          },
-          { status: error.reason === "ai_funding_window" ? 403 : 429 },
-        );
-      throw error;
-    }
+    const { runAgentTurn } = await import("./agent-turn-ask");
+    return runAgentTurn(db, { runId: rawRunId, ...input }, send, fence);
   });
 }
 

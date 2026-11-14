@@ -112,10 +112,6 @@ export const withDatabaseOperationMetrics = async <T>(
   return operationMetricsStore.run(collectors, () => fn(metrics));
 };
 
-/** Request correlation survives nested page/phase collectors without SQL values. */
-export const databaseRequestId = (): string | undefined =>
-  operationMetricsStore.getStore()?.at(-1)?.requestId;
-
 type ActivityKind = "query" | "acquire" | "clientQueue";
 type FinishActivity = (endedAt?: number) => void;
 
