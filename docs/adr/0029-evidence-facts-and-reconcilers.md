@@ -238,6 +238,11 @@ questions. A changed source is refused by the
 publication fence. Each question has its own provider-free input capture;
 the actual producer checks the stored row and frozen questions again before
 any model transport.
+Frozen questions compare canonical JSON: JSONB may reorder object keys, while
+array order, values and output policy remain part of the fence. A mismatch
+declares a pre-send refusal to the produce ledger. The ledger re-queues only
+when no transport left during the entire call; an earlier transmission still
+leaves the outcome unknown.
 Precedents rank corrected values first, then newest update at millisecond
 precision and record identity, so batch membership cannot reorder tied peers.
 

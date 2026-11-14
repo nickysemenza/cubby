@@ -966,7 +966,7 @@ describe("queued model request", () => {
   });
 
   it("captures output policy changes in a prepared field question", async () => {
-    const { captureAiInput, withAiInputs } =
+    const { captureAiInput, withAiInputs, preparedQuestion } =
       await import("./evaluation-inputs");
     const capture = (maxTokens: number) =>
       withAiInputs(true, () =>
@@ -984,9 +984,29 @@ describe("queued model request", () => {
       outputRevision: z.toJSONSchema(LOCATION_DESCRIPTION_FEATURE.schema),
     });
     expect(first).not.toEqual(changed);
+    // Claim parsing restores schema keys, but JSONB also reorders record keys.
+    const stored = preparedQuestion.parse({
+      ...first,
+      policy: Object.fromEntries(Object.entries(first.policy ?? {}).reverse()),
+    });
+    expect(stored).toEqual(first);
+    expect(JSON.stringify(stored)).not.toBe(JSON.stringify(first));
+    const unchanged = await withAiInputs(
+      false,
+      () =>
+        captureAiInput(
+          { ...LOCATION_DESCRIPTION_FEATURE, maxTokens: 333 },
+          "synthetic-policy",
+          request,
+        ),
+      { expected: [stored] },
+    );
+    expect(unchanged.questions).toEqual([first]);
     const { WorkEvidenceObsoleteError } =
       await import("~/server/kernel/work-errors");
-    await expect(
+    const { runProduce, markTransmitted } =
+      await import("~/server/kernel/produce-ledger");
+    const refuseChanged = () =>
       withAiInputs(
         false,
         () =>
@@ -995,9 +1015,23 @@ describe("queued model request", () => {
             "synthetic-policy",
             request,
           ),
-        { expected: [first] },
-      ),
-    ).rejects.toBeInstanceOf(WorkEvidenceObsoleteError);
+        { expected: [stored] },
+      );
+    expect(await runProduce(refuseChanged)).toMatchObject({
+      status: "failed",
+      error: expect.any(WorkEvidenceObsoleteError),
+      unsent: expect.any(WorkEvidenceObsoleteError),
+    });
+    expect(
+      await runProduce(async () => {
+        markTransmitted();
+        return refuseChanged();
+      }),
+    ).toMatchObject({
+      status: "failed",
+      error: expect.any(WorkEvidenceObsoleteError),
+      unsent: null,
+    });
   });
 
   it("replays the captured schema, token cap and tier", async () => {
