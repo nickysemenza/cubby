@@ -816,7 +816,7 @@ export const discoveryEmailAuditPage = z.object({
       ]),
       current: z
         .object({
-          classification: mailboxClassification,
+          classification: mailboxClassification.nullable(),
           stage: mailboxClassificationStage.nullable(),
           status: emailStatus,
           checksum: z.string().nullable(),

@@ -233,7 +233,9 @@ retry; recovery resumes it once a later budget window has room.
 Run reads expose per-Email receipts and linked continuation Run references.
 Discovery Run reads also page through handling receipts, including reused
 classifications, with ownership and outcomes at handling time alongside current
-Email state. These receipts share the Run request ledger. Historical coverage
+Email state. An available Email can have no current classification; that null
+verdict does not erase its handling receipt or make the Email unavailable.
+These receipts share the Run request ledger. Historical coverage
 uses only stored receipts and immutable observations and is explicitly incomplete
 when handling membership was not recorded; an Email's current processing Run
 does not establish historical membership. Audit reads never replay classification

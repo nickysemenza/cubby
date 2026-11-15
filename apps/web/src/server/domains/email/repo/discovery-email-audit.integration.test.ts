@@ -141,6 +141,10 @@ it("retains reused discovery decisions without consuming queued reclassification
       classificationReason: "Synthetic later member decision",
     })
     .where(eq(email.id, selected.id));
+  await getDb(ctx.db)
+    .update(email)
+    .set({ classification: null, classificationStage: null })
+    .where(eq(email.id, frozen.id));
   for (const owner of owners) {
     const ownerRef = { userId: ctx.actor.userId, ledgerPartyId: party.id };
     const read = await loadMailDiscoveryRead(
@@ -178,6 +182,10 @@ it("retains reused discovery decisions without consuming queued reclassification
           id: frozen.shortcode,
           outcome: "frozen",
           classification: "uncertain",
+          current: expect.objectContaining({
+            classification: null,
+            stage: null,
+          }),
         }),
       ]),
     );
