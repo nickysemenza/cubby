@@ -175,6 +175,9 @@ describe("fields scope", () => {
       .from(productCategory)
       .where(eq(productCategory.feature, "food"));
     expect(category).toBeTruthy();
+    const brand = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic pantry brand",
+    });
     const ingredient = await createIngredientFixture(
       ctx.db,
       { name: "Synthetic carrot ingredient" },
@@ -224,9 +227,11 @@ describe("fields scope", () => {
         const value =
           input.field === "categoryId"
             ? category!.id
-            : ready && input.field === "ingredientId"
-              ? ingredient.entityId
-              : null;
+            : input.field === "brandId"
+              ? brand.entityId
+              : ready && input.field === "ingredientId"
+                ? ingredient.entityId
+                : null;
         await withAsk(
           ctx.db,
           {
@@ -301,11 +306,16 @@ describe("fields scope", () => {
         .select({
           categoryId: product.categoryId,
           ingredientId: product.ingredientId,
+          brandId: product.brandId,
         })
         .from(product)
         .where(eq(product.id, item.entityId)),
     ).toEqual([
-      { categoryId: category!.id, ingredientId: ingredient.entityId },
+      {
+        categoryId: category!.id,
+        ingredientId: ingredient.entityId,
+        brandId: brand.entityId,
+      },
     ]);
     expect(transport).not.toHaveBeenCalled();
   });
