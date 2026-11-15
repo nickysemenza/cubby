@@ -1,4 +1,5 @@
 import { ledgerPartyId } from "@cubby/schemas/identifiers";
+import { MACHINERY_RAW_ERROR_BYTES } from "@cubby/schemas/kernel/machinery";
 import { askProducer, kernelWaitCause } from "@cubby/schemas/kernel/machinery";
 import { eq, inArray, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -1228,7 +1229,15 @@ describe("evidence-facts kernel", () => {
         async load(_reads, keys) {
           loads++;
           if (phase === "connection")
-            throw new Error("Connection terminated unexpectedly");
+            throw new Error(
+              `Failed query: ${"synthetic input ".repeat(2000)}`,
+              {
+                cause: Object.assign(
+                  new Error("Connection terminated unexpectedly"),
+                  { code: "08006" },
+                ),
+              },
+            );
           if (phase === "load" && keys.includes("poison"))
             throw new Error("Synthetic malformed evidence");
           return new Map(keys.map((key) => [key, key]));
@@ -1280,6 +1289,18 @@ describe("evidence-facts kernel", () => {
                 errorClass: phase === "load" ? "failed" : "isolated",
               },
             ],
+      );
+      const saved = await repositoryQueries(ctx.db).execute<{
+        retained: number;
+        bytes: number;
+      }>(sql`
+        SELECT count(*) FILTER (WHERE error LIKE '%08006%'
+          AND position('Connection terminated unexpectedly' IN error) < position('Failed query' IN error))::int AS retained,
+          max(octet_length(error))::int AS bytes
+        FROM "ScopeState" WHERE "scopeKind"=${reconciler.scope}`);
+      expect(saved.rows[0]!.retained).toBe(phase === "connection" ? 3 : 0);
+      expect(saved.rows[0]!.bytes).toBeLessThanOrEqual(
+        MACHINERY_RAW_ERROR_BYTES,
       );
     },
   );
