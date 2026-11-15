@@ -7,7 +7,10 @@ import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { parseEntityRef, runEntityId } from "@cubby/schemas/identifiers";
 
-import { withAiInputs } from "~/server/ai/evaluation-inputs";
+import {
+  withAiInputs,
+  type QueryEmbeddingReader,
+} from "~/server/ai/evaluation-inputs";
 import {
   suggestFields,
   resolveFieldReferenceLabels,
@@ -31,6 +34,12 @@ import { WorkEvidenceObsoleteError } from "~/server/kernel/work-errors";
 import type { FieldAskInput } from "./ask";
 import type { FieldAnswer } from "./repo/field-answer";
 import { readStoredRows, storedReferenceId } from "./repo/stored-field";
+
+export type PreparedFieldQuestions = {
+  questions: NonNullable<FieldAskInput["questions"]>;
+  queryEmbeddings: readonly string[];
+  incomplete: boolean;
+};
 
 async function unchangedFieldInputs(
   db: Database,
@@ -103,7 +112,13 @@ export async function produceFieldAnswer(
 export async function prepareFieldQuestions(
   db: Database,
   inputs: readonly FieldAskInput[],
-): Promise<NonNullable<FieldAskInput["questions"]>[]> {
+  options: {
+    readQueryEmbedding?: (
+      input: FieldAskInput,
+      query: string,
+    ) => Promise<number[] | null>;
+  } = {},
+): Promise<PreparedFieldQuestions[]> {
   const unchanged = await unchangedFieldInputs(db, inputs);
   const current = inputs.filter((input) => unchanged.has(input));
   const prepared = await prepareSavedFields(db, current);
@@ -129,7 +144,8 @@ export async function prepareFieldQuestions(
   return Promise.all(
     inputs.map(async (input) => {
       const basis = byInput.get(input);
-      if (!basis) return [];
+      if (!basis)
+        return { questions: [], queryEmbeddings: [], incomplete: false };
       const result = await evaluateField(
         db,
         input,
@@ -137,8 +153,15 @@ export async function prepareFieldQuestions(
         basis,
         true,
         resolveLabels,
+        options.readQueryEmbedding
+          ? (query) => options.readQueryEmbedding!(input, query)
+          : undefined,
       );
-      return result.output.questions ?? [];
+      return {
+        questions: result.output.questions ?? [],
+        queryEmbeddings: result.output.queryEmbeddings ?? [],
+        incomplete: result.output.incomplete ?? false,
+      };
     }),
   );
 }
@@ -150,11 +173,8 @@ async function evaluateField(
   prepared: PreparedField,
   prepareOnly: boolean,
   resolveLabels?: SuggestFieldsPorts["resolveLabels"],
-): Promise<
-  Produced<
-    FieldAnswer & { questions?: NonNullable<FieldAskInput["questions"]> }
-  >
-> {
+  readQueryEmbedding?: QueryEmbeddingReader,
+): Promise<Produced<FieldAnswer & Partial<PreparedFieldQuestions>>> {
   const plan = fieldPlan(input.entity, input.field);
   if (!plan)
     throw new Error(`${input.entity}.${input.field} is not a fields column`);
@@ -197,7 +217,11 @@ async function evaluateField(
           resolveLabels,
         },
       ),
-    { providerFree: true, expected: prepareOnly ? undefined : input.questions },
+    {
+      providerFree: true,
+      expected: prepareOnly ? undefined : input.questions,
+      readQueryEmbedding,
+    },
   );
   const { result: evaluated, inputs } = captured;
   if (prepareOnly)
@@ -206,9 +230,17 @@ async function evaluateField(
         proposal: null,
         outcome: "prepared",
         questions: captured.questions,
+        queryEmbeddings: captured.queryEmbeddings,
+        incomplete: captured.incomplete,
       },
       model: null,
     };
+  if (captured.incomplete)
+    throw refusedBeforeSending(
+      new WorkEvidenceObsoleteError(
+        "The field's semantic search inputs are incomplete",
+      ),
+    );
   const model =
     [...inputs].reverse().find((call) => call.operation === operation)?.model ??
     null;

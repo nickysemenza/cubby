@@ -6,6 +6,7 @@ import type {
 import { getErrorMessage } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
 
+import { markPreparationIncomplete } from "~/server/ai/evaluation-inputs";
 import { type AiCallOwner } from "~/server/ai/policy/call-owner";
 import type { Database } from "~/server/db";
 import {
@@ -53,18 +54,17 @@ async function scanSemanticRefs(
 ): Promise<SemanticRefScan> {
   if (query.trim().length < SEMANTIC_MIN_QUERY_LENGTH)
     return { candidates: [], complete: true };
+  const config = getSemanticEmbeddingConfig();
+  const embedding = await withTrace(
+    TraceNames.service("semanticSearch", "embedQuery"),
+    () => embedQuery(query, { db, ...owner }),
+  );
   if (!semanticEmbeddingsConfigured())
     return {
       candidates: [],
       complete: false,
       error: "Semantic embeddings are unavailable",
     };
-
-  const config = getSemanticEmbeddingConfig();
-  const embedding = await withTrace(
-    TraceNames.service("semanticSearch", "embedQuery"),
-    () => embedQuery(query, { db, ...owner }),
-  );
   if (!embedding)
     return {
       candidates: [],
@@ -113,21 +113,23 @@ export async function semanticEntityCandidates(
   SemanticProductCandidate[] | ReturnType<typeof optionalAiUnavailable>
 > {
   try {
-    const { candidates: refs } = await scanSemanticRefs(
-      db,
-      query,
-      limit,
-      entityKind,
-      owner,
-    );
+    const scan = await scanSemanticRefs(db, query, limit, entityKind, owner);
+    const refs = scan.candidates;
     const hits = await hydrateSearchHitRefs(db, refs);
     const { provider, model } = getSemanticEmbeddingConfig();
-    return rankRowsByRef(refs, hits).map(({ row: hit, similarity }) => ({
-      item: { ...hit, name: hit.title },
-      similarity,
-      reason: `Semantic ${provider}/${model}`,
-    }));
+    const candidates = rankRowsByRef(refs, hits).map(
+      ({ row: hit, similarity }) => ({
+        item: { ...hit, name: hit.title },
+        similarity,
+        reason: `Semantic ${provider}/${model}`,
+      }),
+    );
+    // Pending corpus work does not invalidate matches already proven current.
+    // An incomplete empty scan cannot establish that no candidate exists.
+    if (!scan.complete && !candidates.length) markPreparationIncomplete();
+    return candidates;
   } catch (error) {
+    markPreparationIncomplete();
     log.warn(`${entityKind}-candidates failed`, {
       query,
       message: getErrorMessage(error),

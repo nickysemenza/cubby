@@ -77,6 +77,7 @@ export type { Reads, ScopeReads } from "./reads";
 export { effectiveBindings } from "./reads";
 export { bindingWrites } from "./registry";
 export {
+  readAskAnswer,
   AskAbandonedError,
   AskExhaustedError,
   AskUnknownError,

@@ -107,6 +107,20 @@ async function readAnswerOutput(
   return row ? row.output : undefined;
 }
 
+/** Read an immutable Answer without claiming work or invoking its producer. */
+export async function readAskAnswer<I, O>(
+  db: Database,
+  kind: AskKind<I, O>,
+  input: I,
+): Promise<O | undefined> {
+  const envelope = askEnvelope(kind, input);
+  const output = await readAnswerOutput(
+    repositoryQueries(db),
+    await inputHashOf(envelope),
+  );
+  return output === undefined ? undefined : kind.output.parse(output);
+}
+
 /** Every requester retains a durable reference to the Answer, including a replay. */
 async function recordAnswerReceipts(q: Q, askId: string, inputHash: string) {
   await q.execute(sql`UPDATE "AskScope" s SET receipt=jsonb_build_object(${"answer"}::text, jsonb_build_object(${"inputHash"}::text, a."inputHash"))
