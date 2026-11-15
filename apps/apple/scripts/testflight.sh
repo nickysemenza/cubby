@@ -231,7 +231,7 @@ case "$platform" in
     require IOS_LIVE_ACTIVITY_PROFILES_JSON
     profile_uuid="$(resolve_profile "$PROFILES_JSON" "AppStore $bundle_id iOS" IOS_APP_STORE mobileprovision)"
     live_activity_profile_uuid="$(resolve_live_activity_profile)"
-    notification_profile_uuid="$(resolve_profile "$NOTIFICATION_PROFILES_JSON" "AppStore $notification_bundle_id iOS" IOS_APP_STORE mobileprovision "$notification_bundle_id")"
+    notification_profile_uuid="$(resolve_profile "$NOTIFICATION_PROFILES_JSON" "AppStore Cubby Notification Service iOS" IOS_APP_STORE mobileprovision "$notification_bundle_id")"
     archive_platform Cubby-iOS 'generic/platform=iOS' "$ios_archive" "$profile_uuid" \
       CUBBY_NOTIFICATION_PROVISIONING_PROFILE_SPECIFIER="$notification_profile_uuid" \
       CUBBY_LIVE_ACTIVITY_PROVISIONING_PROFILE_SPECIFIER="$live_activity_profile_uuid"
@@ -247,7 +247,7 @@ case "$platform" in
   macos)
     require MAC_INSTALLER_SIGNING_CERTIFICATE
     profile_uuid="$(resolve_profile "$PROFILES_JSON" "AppStore $bundle_id macOS" MAC_APP_STORE provisionprofile)"
-    notification_profile_uuid="$(resolve_profile "$NOTIFICATION_PROFILES_JSON" "AppStore $notification_bundle_id macOS" MAC_APP_STORE provisionprofile "$notification_bundle_id")"
+    notification_profile_uuid="$(resolve_profile "$NOTIFICATION_PROFILES_JSON" "AppStore Cubby Notification Service macOS" MAC_APP_STORE provisionprofile "$notification_bundle_id")"
     archive_platform Cubby-macOS 'generic/platform=macOS' "$macos_archive" "$profile_uuid" CUBBY_NOTIFICATION_PROVISIONING_PROFILE_SPECIFIER="$notification_profile_uuid" ARCHS=arm64
     verify_archive \
       "$macos_archive" \
