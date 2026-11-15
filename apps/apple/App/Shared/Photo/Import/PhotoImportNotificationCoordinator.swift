@@ -166,22 +166,32 @@ final class PhotoImportNotificationCoordinator: NSObject, UNUserNotificationCent
         registeredRuns.removeAll()
     }
 
+    // UIKit's notification completions can trigger snapshot/state restoration and must run
+    // on the main queue. Keep explicit callbacks rather than async delegate bridging.
     nonisolated func userNotificationCenter(
-        _ center: UNUserNotificationCenter, willPresent notification: UNNotification
-    ) async -> UNNotificationPresentationOptions {
-        [.banner, .sound]
+        _ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+        withCompletionHandler completionHandler:
+            @escaping @Sendable (UNNotificationPresentationOptions) -> Void
+    ) {
+        DispatchQueue.main.async { completionHandler([.banner, .sound]) }
     }
 
     nonisolated func userNotificationCenter(
-        _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse
-    ) async {
+        _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping @Sendable () -> Void
+    ) {
         let info = response.notification.request.content.userInfo
-        if let runID = info["runId"] as? String {
-            await MainActor.run { AppModel.active?.navigator.open(.activity(run: runID)) }
-        } else if info["backgroundResults"] as? Bool == true {
-            let entity = info["entity"] as? String
-            let id = info["entityId"] as? String
-            await Self.shared.openResult(entity: entity, id: id)
+        let runID = info["runId"] as? String
+        let backgroundResults = info["backgroundResults"] as? Bool == true
+        let entity = info["entity"] as? String
+        let id = info["entityId"] as? String
+        Task { @MainActor in
+            defer { completionHandler() }
+            if let runID {
+                AppModel.active?.navigator.open(.activity(run: runID))
+            } else if backgroundResults {
+                await Self.shared.openResult(entity: entity, id: id)
+            }
         }
     }
 
