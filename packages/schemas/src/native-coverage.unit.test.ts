@@ -98,6 +98,7 @@ describe("native presentation coverage", () => {
       ),
     );
     expect(handoffs.sort()).toEqual([
+      "detailSlot device.notifications",
       "detailSlot expense.settlement",
       "detailSlot productCategory.spending-classification",
       "detailSlot project.analytics",

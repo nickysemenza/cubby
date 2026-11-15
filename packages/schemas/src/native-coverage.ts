@@ -366,6 +366,10 @@ export const nativeCoverage = {
    * (`apps/apple/App/Shared/Entity/Detail/DetailSlots.swift`) switches over exhaustively.
    */
   detailSlot: {
+    "device.notifications": handoff(
+      { section: "notifications", label: "Test notifications on web" },
+      "Notification preferences live in Settings; web can send a test to a named device.",
+    ),
     ...implemented([
       "meal.nutrition",
       "run.import-controls",

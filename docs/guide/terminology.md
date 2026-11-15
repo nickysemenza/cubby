@@ -607,6 +607,10 @@ _Avoid_: derived, computed, default; "Use no value"
 The Inventory entries whose Owner is the viewing member. Wardrobe narrows My stuff to the apparel category family. Books (`books` family) and Records (`music` family) include both the viewing member (`@me`) and explicitly shared stock (`@household`); another member's stuff is My stuff with that member as Owner.
 _Avoid_: my products, belongings
 
+**Background result alert**:
+An optional message telling a household member what Cubby added through unattended processing. Related additions share one result, and several results can arrive as a digest.
+_Avoid_: change notification, review request
+
 **Device**:
 One registered native app instance on a phone or Mac, identified independently of a session or push token; a reinstall can retain the same identity. Optionally owned by a Ledger Party member and linked to the physical phone or Mac as a Product. An automatic-work switch, set on the device itself, and a remote-pause override, set from the web, together decide whether the job dispatcher sends it companion work; either one is enough to make it a plain viewer.
 _Avoid_: session, connection, install id

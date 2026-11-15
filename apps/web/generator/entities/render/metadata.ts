@@ -549,6 +549,27 @@ export const renderEntityMetadataArtifacts = (
         },
         { name: "allEntities", value: entities.map(({ key }) => key) },
         {
+          name: "backgroundResultAlertEntities",
+          value: entities
+            .filter(
+              ({ descriptor }) => descriptor.backgroundResultAlert != null,
+            )
+            .map(({ key }) => key),
+        },
+        {
+          name: "backgroundResultAlertPolicies",
+          value: Object.fromEntries(
+            entities
+              .filter(
+                ({ descriptor }) => descriptor.backgroundResultAlert != null,
+              )
+              .map(({ key, descriptor }) => [
+                key,
+                descriptor.backgroundResultAlert,
+              ]),
+          ),
+        },
+        {
           name: "suggestionEntities",
           value: entities
             .filter(({ fieldModel }) =>

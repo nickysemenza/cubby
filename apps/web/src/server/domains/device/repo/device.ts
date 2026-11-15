@@ -47,8 +47,13 @@ export const deviceScaffold = listScaffold("device", device, {
       const clock = bind.batch(async () => ({ now: new Date() }));
       return [
         clock.fields(
-          rawDeviceOut.pick({ updateRequired: true, inactive: true }),
+          rawDeviceOut.pick({
+            updateRequired: true,
+            inactive: true,
+            pushRegistered: true,
+          }),
           (row, { now }) => ({
+            pushRegistered: row.pushRegistration !== null,
             updateRequired: appleAppVersionTooOld(row.appVersion),
             inactive: deviceInactive(row.lastSeenAt, now),
           }),

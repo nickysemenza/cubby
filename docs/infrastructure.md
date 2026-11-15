@@ -303,7 +303,7 @@ cf workers secrets list --worker cubby
 | `R2_SECRET_ACCESS_KEY` | `cubby` Worker secret          | Main R2 S3 credential                                                                                                 |
 | `GOOGLE_CLIENT_SECRET` | `cubby` Worker secret          | Google OAuth confidential credential                                                                                  |
 | `GOOGLE_CLIENT_ID`     | Checked-in Worker `vars` value | Public Google OAuth client identifier                                                                                 |
-| `APNS_KEY_ID`          | `cubby` Worker secret          | APNs token-auth key id (photo-run Live Activities and alerts)                                                         |
+| `APNS_KEY_ID`          | `cubby` Worker secret          | APNs token-auth key id (Live Activities, import alerts and background result alerts)                                  |
 | `APNS_TEAM_ID`         | `cubby` Worker secret          | Apple Developer team id that owns the APNs key                                                                        |
 | `APNS_PRIVATE_KEY`     | `cubby` Worker secret          | APNs `.p8` PKCS8 PEM; absent = pushes recorded unsent                                                                 |
 | `AI_GATEWAY_API_KEY`   | Worker/local secret            | Cloudflare API token: authenticated REST inference, including named subscriber BYOK and paid third-party passthrough; |
@@ -324,6 +324,14 @@ delivery state and prevents a late response from ending the corrected
 registration. Alert delivery keys also include the cumulative planned photo
 count, so a late response from an earlier batch cannot end a later batch in the
 same phase.
+
+Rich alert images use a Notification Service extension on iOS and macOS. Each
+app identity needs its `.NotificationService` App ID and matching platform
+provisioning profile. Release uses the `AppStore <bundle>.NotificationService iOS`
+and `AppStore <bundle>.NotificationService macOS` profiles. The extension fetches
+only the optional public thumbnail, with a bounded size and timeout; it has no
+household session or push credentials. Signed hardware delivery and attachments
+remain distinct from unsigned compilation and APNs acceptance.
 
 ## Google Cloud and Gmail OAuth
 

@@ -2180,6 +2180,10 @@ Rules:
     ],
   },
   capabilities: {
+    backgroundResultAlert: {
+      amountField: "cost",
+      group: { entity: "purchase", field: "purchaseId" },
+    },
     suggestions: [],
     images: {
       storage: false,

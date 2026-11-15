@@ -5,17 +5,21 @@ import {
   type AuditStoredChanges,
 } from "@cubby/schemas/audit";
 import { type ActorContext, type AuditChannel } from "@cubby/schemas/context";
+import { backgroundResultAlertEntities } from "@cubby/schemas/entity-roster";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
+import { runAfterCommit } from "~/server/db/helpers/core";
 import { kernelApplyProvenance } from "~/server/db/kernel-apply-context";
 import { auditLog } from "~/server/db/schema";
 import { captureAuditId } from "~/server/generic/audit-log/repo/audit-receipts";
 import { recordChange } from "~/server/generic/changes/repo/change";
+import { admitBackgroundAlerts } from "~/server/generic/push/repo/admission";
 import type { RemovalAuditEntry } from "~/server/generic/removal/repo/core";
 import { jsonCursor } from "~/server/lib/json-cursor";
+import { wakeAt } from "~/server/workflows/background-tasks/publish";
 
 type AuditAction = "create" | "update" | "delete";
 export const auditActionSchema = z.enum(["create", "update", "delete"]);
@@ -233,6 +237,17 @@ export async function logAuditEntry(
     .returning({ id: auditLog.id });
   if (inserted) {
     captureAuditId(inserted.id);
+    if (
+      actor.runId &&
+      entry.action === "create" &&
+      backgroundResultAlertEntities.some(
+        (entity) => entity === entry.entityKind,
+      ) &&
+      (await admitBackgroundAlerts(db, [inserted.id]))
+    )
+      await runAfterCommit(db, () =>
+        wakeAt(new Date(Date.now() + 120_000), { source: "push.results" }),
+      );
     await recordChange(db, {
       kind: "source",
       categories: [entry.entityKind, "auditLog"],
@@ -298,6 +313,23 @@ export async function logAuditEntries(
     "objects",
   );
   for (const row of inserted) captureAuditId(row.id);
+  if (
+    actor.runId &&
+    entries.some(
+      (entry) =>
+        entry.action === "create" &&
+        backgroundResultAlertEntities.some(
+          (entity) => entity === entry.entityKind,
+        ),
+    ) &&
+    (await admitBackgroundAlerts(
+      db,
+      inserted.map((row) => row.id),
+    ))
+  )
+    await runAfterCommit(db, () =>
+      wakeAt(new Date(Date.now() + 120_000), { source: "push.results" }),
+    );
   await recordChange(db, {
     kind: "source",
     categories: [...inserted.map((row) => row.entityKind), "auditLog"],

@@ -62,6 +62,29 @@ settings:
     CURRENT_PROJECT_VERSION: "2"
 
 targetTemplates:
+  CubbyNotificationService:
+    type: app-extension
+    sources:
+      - path: App/NotificationService
+        excludes: ["Info-iOS.plist", "Info-macOS.plist", "macOS.entitlements"]
+    info:
+      path: App/NotificationService/Info-${plat}.plist
+      properties:
+        CFBundleDisplayName: Cubby Notifications
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(CUBBY_APP_BUNDLE_IDENTIFIER).NotificationService
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
+      configs:
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: Apple Distribution
+          PROVISIONING_PROFILE_SPECIFIER: "$(CUBBY_NOTIFICATION_PROVISIONING_PROFILE_SPECIFIER)"
   CubbyApp:
     type: application
     sources:
@@ -181,6 +204,21 @@ targetTemplates:
           fi
 
 targets:
+  CubbyNotificationService-iOS:
+    templates: [CubbyNotificationService]
+    templateAttributes: { plat: iOS }
+    platform: iOS
+  CubbyNotificationService-macOS:
+    templates: [CubbyNotificationService]
+    templateAttributes: { plat: macOS }
+    platform: macOS
+    entitlements:
+      path: App/NotificationService/macOS.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+    configFiles:
+      Debug: Generated/MacDebugAppIdentity.xcconfig
   Cubby-iOS:
     templates: [CubbyApp]
     templateAttributes:
@@ -223,6 +261,8 @@ targets:
           ENABLE_TESTABILITY: YES
           APS_ENVIRONMENT: development
     dependencies:
+      - target: CubbyNotificationService-iOS
+        embed: true
       - target: CubbyLiveActivity
         embed: true
   CubbyLiveActivity:
@@ -254,6 +294,9 @@ targets:
           PROVISIONING_PROFILE_SPECIFIER: "$(CUBBY_LIVE_ACTIVITY_PROVISIONING_PROFILE_SPECIFIER)"
   Cubby-macOS:
     templates: [CubbyApp]
+    dependencies:
+      - target: CubbyNotificationService-macOS
+        embed: true
     sources:
       - path: App/LiveActivity/Shared/DeviceWorkAttributes.swift
     templateAttributes:

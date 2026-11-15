@@ -2749,6 +2749,15 @@ const buildMetadataSchemas = () => {
     .strictObject({
       /** Writes land in the audit log; opt out with `false`. */
       auditable: flag(true),
+      /** Member-facing creations eligible for unattended-result alerts. */
+      backgroundResultAlert: z
+        .object({
+          amountField: z.string().optional(),
+          group: z.object({ entity: z.string(), field: z.string() }).optional(),
+        })
+        .nullable()
+        .optional()
+        .default(null),
       /**
        * Direct image storage only. Display imagery is universal and resolved
        * independently from this storage declaration.

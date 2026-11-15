@@ -71,3 +71,36 @@ The derived snapshot Pass walks views and typed snapshots in one scheduled bulk 
 Retention repairs incomplete image execution and prunes completed Passes after eight days and cancelled Passes after fourteen. Unfinished work, Answers, source evidence, decisions, Run and RunStep stay. Calendar invalidation keeps its post-commit Durable Object fast path; only a failed mark starts the origin-keyed fallback Pass.
 
 See [background derived data](entities.md#background-derived-data) for snapshot families and [database capacity](infrastructure.md#postgresql-and-hyperdrive) for connection limits.
+
+## Background result alerts
+
+Opted-in household members receive Apple push alerts for committed unattended
+Task, Purchase, Expense and Shipment creations. Entity declarations own eligibility,
+amount fields and related-result grouping; an Expense belonging to a Purchase
+appears as that Purchase. Supporting records, updates, duplicate matches, manual
+and foreground imports, interactive agent sessions and unapplied proposals do not
+notify. Run-attributed creation receipts prove unattended origin through their
+scheduled or discovery ancestry. Kernel apply receipts alone do not prove origin.
+
+A creation receipt admits each enabled device's delivery in the same transaction.
+Delivery identity is the device and created record, independent of retries or Run
+successors. A fixed two-minute window starts with the oldest pending result;
+later arrivals cannot extend it. Claimed batch membership and its collapse key
+survive retries. Network requests run outside database transactions. The existing
+background queue carries deadline wakes and the hourly backstop recovers missed
+wakes. APNs acceptance records provider acceptance, not device display; ambiguous
+retries can repeat a displayed alert.
+
+Alerts contain titles, details and amounts where available. An existing cover may
+supply a bounded thumbnail; image failure leaves complete text. Single-result taps
+open the live entity; missing targets and digests open Changes by Cubby. Neither
+image research nor enrichment delays an alert.
+
+Device notification registrations are private credentials bound to the current
+member, authenticated app session, app identity and APNs environment. Notification
+Settings opts this device into background results independently of photo-import
+preferences and Live Activities. Token rotation preserves pending results for the
+same member and fences late delivery responses; opt-out, logout and owner changes
+make old registrations ineligible. Retiring a Device removes its delivery state.
+The web Device Notifications section sends a test through the same transport and
+reports APNs acceptance or the provider failure.

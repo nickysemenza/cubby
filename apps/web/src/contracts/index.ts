@@ -80,3 +80,4 @@ export { machineryContract } from "./machinery.contract";
 export { relatednessContract } from "./relatedness.contract";
 
 export { imageBacklogContract } from "./image-backlog.contract";
+export { devicePushContract } from "./device-push.contract";

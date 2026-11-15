@@ -17,6 +17,9 @@ final class PhotoImportNotificationCoordinator: NSObject, UNUserNotificationCent
     static let shared = PhotoImportNotificationCoordinator()
     private weak var model: AppModel?
     private var deviceToken: String?
+    private(set) var registrationError: String?
+    private var stopping = false
+    private var backgroundRegistrationKey: String?
     private var registeredRuns: [String: String] = [:]
     private var registeringRuns: Set<String> = []
 
@@ -50,14 +53,20 @@ final class PhotoImportNotificationCoordinator: NSObject, UNUserNotificationCent
     }
 
     func receivedDeviceToken(_ data: Data) {
-        deviceToken = data.map { String(format: "%02x", $0) }.joined()
-        registeredRuns.removeAll()
+        guard !stopping else { return }
+        let token = data.map { String(format: "%02x", $0) }.joined()
+        if deviceToken != token {
+            registeredRuns.removeAll()
+            backgroundRegistrationKey = nil
+        }
+        deviceToken = token
         Task { await reconcile() }
     }
 
     private func observeWork() {
         withObservationTracking {
             _ = model?.phase
+            _ = NotificationPreferences.shared.backgroundResultsEnabled
             for flow in model?.photoImportFlows ?? [] {
                 _ = flow.session.runID
                 _ = flow.notifyWhenReady
@@ -71,7 +80,26 @@ final class PhotoImportNotificationCoordinator: NSObject, UNUserNotificationCent
     }
 
     private func reconcile() async {
-        guard let model, model.phase == .signedIn, let deviceToken else { return }
+        guard !stopping, let model, model.phase == .signedIn, let deviceToken else { return }
+        do {
+            let enabled = NotificationPreferences.shared.backgroundResultsEnabled
+            let key = "\(deviceToken):\(enabled)"
+            if backgroundRegistrationKey != key {
+                var input = DevicePushRegisterInput(
+                    token: deviceToken, environment: .production,
+                    appIdentity: AppleAppIdentity.current == .development ? .development : .production,
+                    enabled: enabled)
+                #if DEBUG
+                    input.environment = .development
+                #endif
+                _ = try await model.client.registerDevicePush(input)
+                backgroundRegistrationKey = key
+                registrationError = nil
+            }
+        } catch {
+            registrationError = error.userMessage
+            Diagnostics.report(error, context: "notifications.register")
+        }
         for flow in model.latestPhotoImportFlows {
             guard flow.notifyWhenReady, let runID = flow.session.runID,
                 registeredRuns[runID] != flow.liveActivityBatchID, !registeringRuns.contains(runID)
@@ -91,7 +119,39 @@ final class PhotoImportNotificationCoordinator: NSObject, UNUserNotificationCent
         }
     }
 
+    func resumeRegistration() async {
+        stopping = false
+        await refreshRegistration()
+    }
+
+    func refreshRegistration() async {
+        guard !stopping, let model, model.phase == .signedIn else { return }
+        backgroundRegistrationKey = nil
+        let permission = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        if permission == .authorized || permission == .provisional {
+            await reconcile()
+            registerDevice()
+        } else {
+            do { _ = try await model.client.endDevicePush() } catch {
+                Diagnostics.report(error, context: "notifications.permission")
+            }
+        }
+    }
+
     func stop(client: CubbyClient) async {
+        stopping = true
+        registrationError = nil
+        #if os(iOS)
+            UIApplication.shared.unregisterForRemoteNotifications()
+        #elseif os(macOS)
+            NSApplication.shared.unregisterForRemoteNotifications()
+        #endif
+        do { _ = try await client.endDevicePush() } catch {
+            Diagnostics.report(error, context: "notifications.end")
+        }
+        backgroundRegistrationKey = nil
+        deviceToken = nil
+        NotificationPreferences.shared.backgroundResultsEnabled = false
         for runID in registeredRuns.keys {
             do { _ = try await client.endPhotoRunNotification(.init(runId: runID)) } catch {
                 Diagnostics.report(error, context: "photos.import.notification.end")
@@ -109,7 +169,31 @@ final class PhotoImportNotificationCoordinator: NSObject, UNUserNotificationCent
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse
     ) async {
-        guard let runID = response.notification.request.content.userInfo["runId"] as? String else { return }
-        await MainActor.run { AppModel.active?.navigator.open(.activity(run: runID)) }
+        let info = response.notification.request.content.userInfo
+        if let runID = info["runId"] as? String {
+            await MainActor.run { AppModel.active?.navigator.open(.activity(run: runID)) }
+        } else if info["backgroundResults"] as? Bool == true {
+            let entity = info["entity"] as? String
+            let id = info["entityId"] as? String
+            await Self.openResult(entity: entity, id: id)
+        }
+    }
+
+    @MainActor private static func openResult(entity: String?, id: String?) async {
+        guard let model = AppModel.active, model.phase == .signedIn else { return }
+        if let entity, let key = EntityKey(rawValue: entity), let id {
+            do {
+                if let row = try await model.client.row(EntityCatalog[key], id: id) {
+                    model.navigator.open(.entity(key, id: row.id))
+                    return
+                }
+            } catch { Diagnostics.report(error, context: "notifications.open") }
+        }
+        let url = model.webHandoff.url(.route(path: "/suggestions", query: ["status": "automatic"]))
+        #if os(iOS)
+            _ = await UIApplication.shared.open(url)
+        #elseif os(macOS)
+            NSWorkspace.shared.open(url)
+        #endif
     }
 }

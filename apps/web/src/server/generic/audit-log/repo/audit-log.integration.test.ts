@@ -263,3 +263,211 @@ describe("getAuditLog — entityName", () => {
     });
   });
 });
+
+// A creation receipt and its pending alert must commit or roll back together.
+describe("background result alerts", () => {
+  const ctx = withTestDb();
+
+  it("admits unattended creations once, excludes interactive writes, and preserves rollback", async () => {
+    const { createRepoEntity } = await import("tooling/factories/repo");
+    const { getDb, withTransactionDatabase } =
+      await import("~/server/db/helpers");
+    const { deviceAlertDelivery, device, run } =
+      await import("~/server/db/schema");
+    const { logAuditEntry } =
+      await import("~/server/generic/audit-log/repo/audit-log");
+    const { resolveOrThrow } =
+      await import("~/server/generic/shortcode/repo/shortcode-resolver");
+    const { session } = await import("~/server/db/auth.schema");
+    const sessionId = randomUUID();
+    await getDb(ctx.db)
+      .insert(session)
+      .values({
+        id: sessionId,
+        token: randomUUID(),
+        userId: ctx.actor.userId,
+        expiresAt: new Date(Date.now() + 86400_000),
+        updatedAt: new Date(),
+      });
+    const owner = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Alert member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const install = await insertWithShortcode(ctx.db, "device", {
+      name: "Alert phone",
+      installationId: randomUUID(),
+      platform: "ios",
+      ledgerPartyId: owner.id,
+    });
+    await getDb(ctx.db)
+      .update(device)
+      .set({
+        backgroundAlerts: true,
+        pushRegistration: {
+          token: "a".repeat(64),
+          userId: ctx.actor.userId,
+          sessionId,
+          generation: randomUUID(),
+          environment: "development",
+          appIdentity: "production",
+        },
+      })
+      .where(eq(device.id, install.id));
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    await getDb(ctx.db)
+      .update(run)
+      .set({ trigger: "discovery" })
+      .where(eq(run.id, runId));
+    const unattended = {
+      ...ctx,
+      actor: { ...ctx.actor, runId, channel: "mcp" as const },
+    };
+    const task = await createRepoEntity(unattended, "task", {
+      name: "Background household task",
+      trade: "other",
+    });
+    const taskId = await resolveOrThrow(ctx.db, "task", task.output.id);
+    await createRepoEntity(ctx, "task", {
+      name: "Interactive household task",
+      trade: "other",
+    });
+    await logAuditEntry(ctx.db, unattended.actor, {
+      entityKind: "task",
+      entityId: taskId,
+      action: "create",
+    });
+    const pending = () =>
+      getDb(ctx.db)
+        .select()
+        .from(deviceAlertDelivery)
+        .where(eq(deviceAlertDelivery.deviceId, install.id));
+    expect(await pending()).toHaveLength(1);
+    const first = (await pending())[0]!;
+    expect(first.availableAt.getTime() - first.createdAt.getTime()).toBe(
+      120_000,
+    );
+    await expect(
+      withTransactionDatabase(ctx.db, async (tx) => {
+        await createRepoEntity({ ...unattended, db: tx }, "task", {
+          name: "Rolled back task",
+          trade: "other",
+        });
+        throw new Error("synthetic rollback");
+      }),
+    ).rejects.toThrow("synthetic rollback");
+    expect(await pending()).toHaveLength(1);
+    await getDb(ctx.db)
+      .update(run)
+      .set({ trigger: "foreground" })
+      .where(eq(run.id, runId));
+    await createRepoEntity(unattended, "task", {
+      name: "Foreground import task",
+      trade: "other",
+    });
+    expect(await pending()).toHaveLength(1);
+
+    const { dispatchBackgroundAlerts } =
+      await import("~/server/generic/push/repo/delivery");
+    const key = await crypto.subtle.generateKey(
+      { name: "ECDSA", namedCurve: "P-256" },
+      true,
+      ["sign"],
+    );
+    const der = new Uint8Array(
+      await crypto.subtle.exportKey("pkcs8", key.privateKey),
+    );
+    const credentials = {
+      keyId: "SYNTHPUSH1",
+      teamId: "SYNTHPUSH1",
+      privateKey: `-----BEGIN PRIVATE KEY-----\n${btoa(String.fromCharCode(...der))}\n-----END PRIVATE KEY-----`,
+    };
+    const sent: string[] = [];
+    const transport: import("~/server/generic/push/repo/apns").ApnsTransport =
+      async (request) => {
+        sent.push(request.headers["apns-collapse-id"]!);
+        expect(JSON.parse(request.body).aps.alert.body).toContain(
+          "Background household task",
+        );
+        return sent.length === 1
+          ? { status: 503, reason: "ServiceUnavailable" }
+          : { status: 200, reason: null };
+      };
+    await dispatchBackgroundAlerts(ctx.db, { transport, credentials });
+    expect(sent).toHaveLength(0);
+    await getDb(ctx.db)
+      .update(deviceAlertDelivery)
+      .set({ availableAt: new Date(0) })
+      .where(eq(deviceAlertDelivery.deviceId, install.id));
+    await Promise.all([
+      dispatchBackgroundAlerts(ctx.db, { transport, credentials }),
+      dispatchBackgroundAlerts(ctx.db, { transport, credentials }),
+    ]);
+    expect(sent).toHaveLength(1);
+    expect((await pending())[0]!.acceptedAt).toBeNull();
+    await getDb(ctx.db)
+      .update(deviceAlertDelivery)
+      .set({ availableAt: new Date(0) })
+      .where(eq(deviceAlertDelivery.deviceId, install.id));
+    await dispatchBackgroundAlerts(ctx.db, { transport, credentials });
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toBe(sent[0]);
+    expect((await pending())[0]!.acceptedAt).not.toBeNull();
+
+    const { registerDevicePush, endDevicePush } =
+      await import("~/server/domains/device/repo/device-push");
+    const { sendDeviceAlert } =
+      await import("~/server/generic/push/repo/delivery");
+    const installActor = { ...ctx.actor, deviceId: install.id };
+    await getDb(ctx.db)
+      .update(run)
+      .set({ trigger: "discovery" })
+      .where(eq(run.id, runId));
+    await createRepoEntity(unattended, "task", {
+      name: "Next background task",
+      trade: "other",
+    });
+    await registerDevicePush(ctx.db, installActor, sessionId, {
+      token: "b".repeat(64),
+      environment: "development",
+      appIdentity: "production",
+      enabled: true,
+    });
+    expect((await pending()).filter((row) => !row.acceptedAt)).toHaveLength(1);
+    await sendDeviceAlert(
+      ctx.db,
+      install.id,
+      { aps: { alert: "Synthetic race" } },
+      randomUUID(),
+      {
+        credentials,
+        transport: async () => {
+          await registerDevicePush(ctx.db, installActor, sessionId, {
+            token: "c".repeat(64),
+            environment: "development",
+            appIdentity: "production",
+            enabled: true,
+          });
+          return { status: 410, reason: "Unregistered" };
+        },
+      },
+    );
+    const [rotated] = await getDb(ctx.db)
+      .select()
+      .from(device)
+      .where(eq(device.id, install.id));
+    expect(
+      (
+        await import("@cubby/schemas/device-fields")
+      ).devicePushRegistration.parse(rotated!.pushRegistration).token,
+    ).toBe("c".repeat(64));
+    expect(rotated!.backgroundAlerts).toBe(true);
+    const { readDeviceById } =
+      await import("~/server/domains/device/repo/device");
+    expect(
+      JSON.stringify(await readDeviceById(ctx.db, install.id)),
+    ).not.toContain("c".repeat(64));
+    await endDevicePush(ctx.db, installActor);
+    expect((await pending()).filter((row) => !row.acceptedAt)).toHaveLength(0);
+  });
+});

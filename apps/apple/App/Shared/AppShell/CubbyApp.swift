@@ -123,7 +123,10 @@ struct CubbyApp: App {
             }
             .onChange(of: scenePhase) { _, phase in
                 model.setCompanionSceneActive(phase == .active)
-                if phase == .active { model.continuePhotoImports() }
+                if phase == .active {
+                    model.continuePhotoImports()
+                    Task { await PhotoImportNotificationCoordinator.shared.refreshRegistration() }
+                }
                 #if os(iOS)
                     DeviceWorkLiveActivityCoordinator.shared.setForeground(phase == .active)
                     if phase == .background {

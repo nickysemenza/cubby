@@ -205,6 +205,16 @@ jobs:
           api-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           api-private-key: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
 
+      - name: Download notification service provisioning profile
+        id: notification-profile
+        uses: apple-actions/download-provisioning-profiles@233aa54e59082c0e8a8cf8b0b02c72dea2422ef9 # v7.1.0
+        with:
+          bundle-id: com.nickysemenza.cubby.NotificationService
+          profile-type: ${{ matrix.platform == 'ios' && 'IOS_APP_STORE' || 'MAC_APP_STORE' }}
+          issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          api-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          api-private-key: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+
       - name: Download Live Activity provisioning profile
         id: live-activity-profile
         if: matrix.platform == 'ios'
@@ -234,6 +244,7 @@ jobs:
         env:
           RELEASE_VERSION: ${{ needs.plan.outputs.version }}
           RELEASE_BUILD_NUMBER: ${{ needs.plan.outputs.build }}
+          NOTIFICATION_PROFILES_JSON: ${{ steps.notification-profile.outputs.profiles }}
           PROFILES_JSON: ${{ steps.profile.outputs.profiles }}
           IOS_LIVE_ACTIVITY_PROFILES_JSON: ${{ steps.live-activity-profile.outputs.profiles }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}

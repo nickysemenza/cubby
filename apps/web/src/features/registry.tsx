@@ -282,6 +282,11 @@ const detailSlots = {
       ),
     ),
   },
+  device: {
+    notifications: slot(() =>
+      named(import("~/features/device/notifications"), "DeviceNotifications"),
+    ),
+  },
   run: {
     results: runReportSlot("results"),
     // Progress, usage and changes are server-composed report slots; `runReportSlot` is their one
