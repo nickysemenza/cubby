@@ -280,12 +280,31 @@ async function finishResponse(
 
 async function runPlacedEvent(request: Request, env: Env) {
   const event = placedEventSchema.parse(await request.json());
-  return withPlacement(
-    request,
-    event.event === "queue"
-      ? await runPlacedQueue(event.queue, event.bodies, env)
-      : await runPlacedScheduled(event, env),
-  );
+  const startedAt = performance.now();
+  try {
+    return withPlacement(
+      request,
+      event.event === "queue"
+        ? await runPlacedQueue(event.queue, event.bodies, env)
+        : await runPlacedScheduled(event, env),
+    );
+  } catch (error) {
+    // Preserve the callee's original stack before the caller sees only a
+    // transport failure; partial execution remains possible.
+    Sentry.captureException(error, {
+      mechanism: { handled: false, type: "auto.http.cloudflare" },
+      captureContext: {
+        contexts: {
+          background_execution: {
+            event: event.event,
+            duration_ms: Math.round(performance.now() - startedAt),
+            execution_outcome: "unknown",
+          },
+        },
+      },
+    });
+    throw error;
+  }
 }
 
 /** Owns HTTP routing and body lifetime; the platform entry only adapts events. */
