@@ -234,7 +234,13 @@ export async function decide(
           throw new KernelContractError(
             `An ask decision sets ${ASK_OUTCOME_FIELD} to one of ${askOutcomes.join(", ")}`,
           );
-        await settleAskOutcome(tx, registry, askHash, outcome);
+        await settleAskOutcome(
+          tx,
+          registry,
+          askHash,
+          outcome,
+          actorKind(actor),
+        );
         continue;
       }
       // A column a reconciler owns takes its decision through that

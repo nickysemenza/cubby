@@ -2,13 +2,13 @@
  * How an owed answer reads once Cubby cannot produce it on its own (ADR 0029
  * section 8): an `unknown` ask, one out of attempts, or one a member gave up
  * on is a gap whose actor is the member. Its actions are decisions on the
- * ask's subject: `not_sent` returns an unknown ask to the queue, `retry`
- * re-queues one that failed or was given up, `abandoned` gives up.
+ * ask's subject: `retry` accepts a possible repeat charge or re-queues one
+ * that failed or was given up, `abandoned` gives up.
  */
 import type { KernelGap, KernelGapAction } from "@cubby/schemas/kernel/stage";
 
 export const ASK_OUTCOME_FIELD = "outcome";
-export const askOutcomes = ["not_sent", "retry", "abandoned"] as const;
+export const askOutcomes = ["retry", "abandoned"] as const;
 export type AskOutcome = (typeof askOutcomes)[number];
 
 /** The decision subject of an owed answer. */
@@ -78,11 +78,15 @@ export function askMemberGap(
   });
   if (ask.cancelled)
     return gap(`${label}, which was given up`, [
-      action(ask.inputHash, "retry", "Ask again"),
+      action(
+        ask.inputHash,
+        "retry",
+        ask.state === "unknown" ? "Ask again (may charge again)" : "Ask again",
+      ),
     ]);
   if (ask.state === "unknown")
     return gap(`${label}: the request was sent and its outcome is unknown`, [
-      action(ask.inputHash, "not_sent", "It was not sent: ask again"),
+      action(ask.inputHash, "retry", "Ask again (may charge again)"),
       action(ask.inputHash, "abandoned", "Give up on this answer"),
     ]);
   if (ask.state === "queued" && ask.attempts >= ask.maxAttempts)

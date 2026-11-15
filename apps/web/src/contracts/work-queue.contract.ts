@@ -47,7 +47,7 @@ export const workQueueContract = defineContract(
     }),
     retry: mutation({
       description:
-        "Retry one Stuck scope, ask or pass, clearing its attempts and making it available.",
+        "Retry one Stuck scope, ask or pass, clearing its attempts and making it available. Retrying an unknown call requires a member and may charge again.",
       input: workRetryTarget,
       output: z.object({ retried: z.boolean() }),
       invalidates: ["runOnly"],

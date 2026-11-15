@@ -1824,7 +1824,13 @@ describe("evidence-facts kernel", () => {
         sql`SELECT "inputHash" FROM "Ask" WHERE feature = ${ask.feature}`,
       )
     ).rows;
-    await settleAskOutcome(ctx.db, kernel.registry, row!.inputHash, "not_sent");
+    await settleAskOutcome(
+      ctx.db,
+      kernel.registry,
+      row!.inputHash,
+      "retry",
+      "member",
+    );
     expect(await kernel.withAsk(ctx.db, ask, "synthetic", options)).toBe(
       "Synthetic answer",
     );
@@ -2612,11 +2618,12 @@ describe("evidence-facts kernel", () => {
     },
   );
 
-  it("never sends an unknown ask again", async () => {
+  it("never sends an unknown ask again without a member accepting a possible repeat charge", async () => {
     let calls = 0;
     const { kernel, fixture } = kernelWith({
       categorize: async () => {
         calls += 1;
+        if (calls > 1) return "Groceries";
         // The Worker stalls past its claim: expiry finds the sent ask first.
         await repositoryQueries(ctx.db).execute(
           sql`UPDATE "Ask" SET "claimDeadline" = now() - interval '1 second' WHERE state = ${ASK.sent}`,
@@ -2648,12 +2655,45 @@ describe("evidence-facts kernel", () => {
     ).rejects.toBeInstanceOf(AskUnknownError);
     expect(await runQueuedAsks(ctx.db, kernel.registry, 10)).toBe(0);
     const [ask] = (
-      await repositoryQueries(ctx.db).execute<{ state: string }>(
-        sql`SELECT state FROM "Ask"`,
-      )
+      await repositoryQueries(ctx.db).execute<{
+        state: string;
+        inputHash: string;
+      }>(sql`SELECT state, "inputHash" FROM "Ask"`)
     ).rows;
     expect(ask?.state).toBe("unknown");
     expect(calls).toBe(1);
+    const decision = {
+      channel: "assignment" as const,
+      kind: "set" as const,
+      subject: `ask:${ask!.inputHash}`,
+      field: "outcome",
+      value: "retry",
+    };
+    await expect(
+      kernel.decide(
+        ctx.db,
+        { ...ctx.actor, oauthClientId: "synthetic-agent" },
+        [decision],
+      ),
+    ).rejects.toThrow("A member must choose");
+    await expect(
+      kernel.decide(ctx.db, { ...ctx.actor, channel: "system" }, [decision]),
+    ).rejects.toThrow("A member must choose");
+    await kernel.decide(ctx.db, ctx.actor, [
+      { ...decision, value: "abandoned" },
+    ]);
+    expect(await runQueuedAsks(ctx.db, kernel.registry, 10)).toBe(0);
+    await kernel.decide(ctx.db, ctx.actor, [decision]);
+    expect(await runQueuedAsks(ctx.db, kernel.registry, 10)).toBe(1);
+    expect(
+      await kernel.withAsk(
+        ctx.db,
+        fixture.categorize,
+        { merchant: "Synthetic Unknown Market" },
+        waiting,
+      ),
+    ).toEqual({ category: "Groceries" });
+    expect(calls).toBe(2);
   });
 
   it("fences a shared decision first requested by another scope in an earlier round", async () => {

@@ -519,6 +519,12 @@ the provider offers an idempotency key or a result lookup that settles it. A
 receipt that arrives late may settle the original attempt but never authorizes
 an apply against inputs that have since changed.
 
+A member may explicitly ask again, accepting that the original call may have
+been charged. The same Ask and response-cache identity remain: a retained
+answer replays without another call, and a live in-flight claim defers the retry.
+Giving up does not erase an unknown outcome or its repeat-charge warning.
+Only a member actor may authorize that retry; agents and automatic work cannot.
+
 ### 9. Identity, merge and delete
 
 A reconciled record's id and shortcode come from `RecordKey` and never from

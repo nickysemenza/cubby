@@ -390,7 +390,7 @@ function KernelDiagnostics() {
             disabled={retry.isPending}
             onClick={() => retry.mutate(failure.target)}
           >
-            {failure.unknown ? "It was not sent: ask again" : "Retry"}
+            {failure.unknown ? "Ask again (may charge again)" : "Retry"}
           </Button>
         </div>
       ))}

@@ -90,7 +90,7 @@ export const machineryContract = defineContract(
     }),
     decide: mutation({
       description:
-        "Record decisions a record's machinery offers: same, distinct, reject, an assignment, a veto, or a release. Each decision must be one of the record's gap actions or a field decision on the record itself.",
+        "Record decisions a record's machinery offers: same, distinct, reject, an assignment, a veto, or a release. Each decision must be one of the record's gap actions or a field decision on the record itself. Retrying an unknown call requires a member and may charge again.",
       input: machineryRecord.extend({
         decisions: z.array(machineryDecision).min(1).max(20),
       }),

@@ -9,7 +9,7 @@ struct EntityRowPresentationTests {
     @Test func headerNeverChoosesAmongPaidRecoveryDecisions() {
         #expect(RecordMachineryHeader.inlineAction([String]()) == nil)
         #expect(RecordMachineryHeader.inlineAction(["Only action"]) == "Only action")
-        #expect(RecordMachineryHeader.inlineAction(["It was not sent: ask again", "Keep unknown"]) == nil)
+        #expect(RecordMachineryHeader.inlineAction(["Ask again (may charge again)", "Keep unknown"]) == nil)
     }
 
     private func field(_ value: JSONValue) -> JSONValue {
