@@ -4,7 +4,6 @@ import {
   type VendorUpdateData,
 } from "@cubby/schemas/entities/vendor";
 /** Vendor spend is derived only from `SUM(Expense.cost)` through live purchases. */
-import { entityRefKey } from "@cubby/schemas/entity";
 import {
   vendorRawOut as rawVendorOut,
   type VendorRawOut as RawVendorOut,
@@ -99,10 +98,7 @@ import { vendorPurchaseFolds } from "~/server/domains/vendor/policy/purchase-fol
 import { vendorStatementLabels } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import { vendorSearch } from "~/server/domains/vendor/repo/search-read-vendor";
 import { agentHintsLabel } from "~/server/entity-kernel/repo/detail-display-labels";
-import {
-  resolveEntityAttachments,
-  resolveEntityDisplayImages,
-} from "~/server/entity-kernel/repo/entity-display-image";
+import { resolveEntityAttachments } from "~/server/entity-kernel/repo/entity-display-image";
 import { patchEntityRows } from "~/server/entity-kernel/repo/entity-patch";
 import {
   type MutationReceipt,
@@ -426,12 +422,12 @@ export const readVendorById = vendorReader.getByID;
 /** One live Vendor by public code, or null. */
 export const readVendor = vendorReader.getByShortcode;
 
+/** Text-only field choices; display media is not part of their input. */
 export const vendorOptions = async (
   db: Database,
 ): Promise<VendorOptionsOut> => {
   const rows = await getDb(db)
     .select({
-      entityId: vendor.id,
       shortcode: vendor.shortcode,
       name: vendor.name,
       count: vendorPurchaseCount,
@@ -440,15 +436,10 @@ export const vendorOptions = async (
     .where(notDeleted(vendor))
     .orderBy(desc(vendorPurchaseCount), asc(vendor.name));
 
-  const images = await resolveEntityDisplayImages(
-    db,
-    rows.map((row) => ({ entityKind: "vendor", entityId: row.entityId })),
-  );
   return rows.map((row) => ({
     id: parseShortcodeFor("vendor", row.shortcode),
     name: row.name,
     count: Number(row.count),
-    logo: images.get(entityRefKey("vendor", row.entityId)) ?? null,
   }));
 };
 

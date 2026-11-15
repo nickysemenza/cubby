@@ -235,7 +235,8 @@ the shared preparation reads data; returned records are matched by public id,
 and each field keeps only its policy's basis and resolution context. Preparation
 checks stored basis rows as a batch; a missing or changed record contributes no
 questions. A changed source is refused by the
-publication fence. Each question has its own provider-free input capture;
+publication fence. Text-only choice rosters load identities, labels and ranking facts without
+display media. Each question has its own provider-free input capture;
 the actual producer checks the stored row and frozen questions again before
 any model transport.
 Semantic query embeddings are durable Answers owned by the embedding module.

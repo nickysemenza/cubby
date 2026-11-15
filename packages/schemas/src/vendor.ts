@@ -3,7 +3,6 @@ import {
   vendorFilterFields as vendorBaseFilterFields,
 } from "@cubby/schemas/entities/vendor";
 import { z } from "zod";
-import { imageUrlSummary } from "./image-summary";
 
 import { vendorShortcode } from "./identifiers";
 import { presenceFilter } from "./pagination";
@@ -52,7 +51,6 @@ const vendorOptionsOut = z.array(
     id: vendorShortcode,
     name: z.string(),
     count: z.number().int(),
-    logo: imageUrlSummary.nullable(),
   }),
 );
 export type VendorOptionsOut = z.infer<typeof vendorOptionsOut>;
