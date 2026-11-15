@@ -15,7 +15,13 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { and, desc, eq } from "drizzle-orm";
 import { liveReplayBudget } from "tooling/ai/live-replay-budget";
 import { localSecret } from "tooling/local-secret";
-import { call, from, mcp } from "tooling/purchase-agent-script";
+import {
+  call,
+  from,
+  mcp,
+  mcpRead,
+  type ScriptStep,
+} from "tooling/purchase-agent-script";
 import { withTestDb } from "tooling/test-setup";
 import { withWorkerdRuntime } from "tooling/workerd-runtime";
 import { afterAll, describe, expect, it } from "vitest";
@@ -87,6 +93,29 @@ const replayCases = z
   .min(1)
   .max(100);
 const scripted = process.env.MAIL_REPLAY_SCRIPTED === "1";
+const readCode = process.env.MAIL_REPLAY_READ_CODE === "1";
+// Identical read workload in both scripted variants; only model orchestration changes.
+const scriptedReads: ScriptStep[] = readCode
+  ? [
+      call("read-code", "codemode", {
+        code: `if (typeof fetch !== "undefined" || typeof process !== "undefined" || typeof require !== "undefined" || "mcp__cubby__purchase_import" in tools || "claim_next_import_work" in tools || typeof models !== "undefined") throw new Error("Unexpected sandbox authority"); const matches = await Promise.all(["Synthetic ceramic mug", "Synthetic tea towel"].map(async name => JSON.parse(await tools.mcp__cubby__entity_read({action:"resolve",entity:"product",names:[name]})))); text({kind:"read-code-success",successfulReads:matches.length,matches});`,
+      }),
+      { check: "read-code", includes: "readCalls" },
+      { check: "read-code", includes: "read-code-success" },
+      { check: "read-code", includes: '"successfulReads":2' },
+    ]
+  : [
+      mcpRead("read-mug", "entity_read", {
+        action: "resolve",
+        entity: "product",
+        names: ["Synthetic ceramic mug"],
+      }),
+      mcpRead("read-towel", "entity_read", {
+        action: "resolve",
+        entity: "product",
+        names: ["Synthetic tea towel"],
+      }),
+    ];
 const evaluationBudget = scripted ? null : await liveReplayBudget();
 const inputUrl = process.env.MAIL_REPLAY_INPUT_URL;
 if (process.env.CI && inputUrl)
@@ -215,6 +244,7 @@ describe("isolated Mail coordinator replay", () => {
         costScope: "all_run_features",
         synthetic: !inputUrl,
         scripted,
+        readMode: readCode ? "code" : "ordinary",
         primary,
         escalation,
         cases: reports.length,
@@ -315,7 +345,13 @@ describe("isolated Mail coordinator replay", () => {
             .from(kernelPass)
             .where(eq(kernelPass.runId, started!.runId));
           const event = dispatch
-            ? purchaseAgentEvent.parse(dispatch.cursor)
+            ? z
+                .object({
+                  events: z
+                    .tuple([purchaseAgentEvent])
+                    .rest(purchaseAgentEvent),
+                })
+                .parse(dispatch.cursor).events[0]
             : null;
           if (!started || !event)
             throw new Error(
@@ -451,6 +487,7 @@ describe("isolated Mail coordinator replay", () => {
                   sample.subject === syntheticAttemptLimit.subject
                     ? [
                         call("claim", "claim_next_import_work"),
+                        ...scriptedReads,
                         call("invalid-extract-1", EXTRACT_ORDER_TOOL),
                         call("invalid-extract-2", EXTRACT_ORDER_TOOL),
                         call("invalid-extract-3", EXTRACT_ORDER_TOOL),
@@ -459,6 +496,7 @@ describe("isolated Mail coordinator replay", () => {
                     : sample.baseline.kind === "imported"
                       ? [
                           call("claim", "claim_next_import_work"),
+                          ...scriptedReads,
                           call("extract", EXTRACT_ORDER_TOOL, {
                             mail: {
                               mailboxId,
@@ -519,6 +557,7 @@ describe("isolated Mail coordinator replay", () => {
                         ]
                       : [
                           call("claim", "claim_next_import_work"),
+                          ...scriptedReads,
                           mcp("resolve", "purchase_import", started.runId, {
                             action: "mail_resolve",
                             mailboxId,
@@ -533,7 +572,7 @@ describe("isolated Mail coordinator replay", () => {
                         ],
               },
               "purchase-agent",
-              { coordinatorModels: { primary } },
+              { coordinatorModels: { primary }, readCode },
             );
             diagnose = async () => {
               const attempts = await getDb(ctx.db)
@@ -568,6 +607,11 @@ describe("isolated Mail coordinator replay", () => {
               observedOutcome = await observe(async () => {
                 await scenario.wake();
                 await waitForSettlement();
+                const violations = await scenario.violations();
+                if (violations.length)
+                  throw new Error(
+                    `Scripted replay violations: ${JSON.stringify(violations)}`,
+                  );
               });
             } finally {
               await scenario.close();
@@ -618,6 +662,7 @@ describe("isolated Mail coordinator replay", () => {
                   },
                 },
                 coordinatorModels: { primary, escalation },
+                readCode,
               },
               async ({ harness }) => {
                 // The coordinator runs in the web Worker's Durable Object; its

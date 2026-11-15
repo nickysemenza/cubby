@@ -26,7 +26,11 @@ import { z } from "zod";
 
 import type { McpToolDefinition, RunServices } from "./environment";
 import type { MailAttemptEvidence } from "./mail-attempts";
-import { CLAIM_IMPORT_WORK_TOOL, CUBBY_MCP_TOOL_PREFIX } from "./tool-protocol";
+import {
+  CLAIM_IMPORT_WORK_TOOL,
+  CUBBY_MCP_TOOL_PREFIX,
+  codeReadableTool,
+} from "./tool-protocol";
 
 // The transport needs a URL. No request leaves the Worker: `mcpFetch` hands
 // it to Cubby's MCP handler in process with the run's bearer.
@@ -318,6 +322,7 @@ export function cubbyMcpExtension(
     context: Context,
   ) => Promise<string | undefined>,
   runId?: string,
+  readCode = false,
 ): Extension {
   let client: Promise<Client> | undefined;
   const connected = () => {
@@ -332,6 +337,13 @@ export function cubbyMcpExtension(
     tools: tools.map((tool) =>
       defineTool({
         name: `${CUBBY_MCP_TOOL_PREFIX}${tool.name}`,
+        // Attachment originals must still reach the model as media. Pi's
+        // schema-less Code Mode result mapping keeps only their text.
+        ...(readCode &&
+        tool.name !== "purchase_import_read" &&
+        codeReadableTool(`${CUBBY_MCP_TOOL_PREFIX}${tool.name}`)
+          ? { callers: ["tools"] as const }
+          : {}),
         description: tool.description,
         // MCP tool input schemas are always JSON-Schema objects.
         parameters: tool.inputSchema,

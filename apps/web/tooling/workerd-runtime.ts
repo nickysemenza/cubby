@@ -38,6 +38,7 @@ export interface WorkerdRuntimeOptions {
       };
   models?: WorkerdHarnessOptions["models"];
   coordinatorModels?: WorkerdHarnessOptions["coordinatorModels"];
+  readCode?: WorkerdHarnessOptions["readCode"];
   poolIdleTimeoutMs?: WorkerdHarnessOptions["poolIdleTimeoutMs"];
   /** Called after each acquisition, to attribute a slow or failed start. */
   onPhase?: (phase: string) => void;
@@ -120,6 +121,7 @@ export async function openWorkerdRuntime<T>(
     googleProviderUrl: googleProvider?.url,
     models: options.models,
     coordinatorModels: options.coordinatorModels,
+    readCode: options.readCode,
     poolIdleTimeoutMs: options.poolIdleTimeoutMs,
     onPhase: phase,
   });

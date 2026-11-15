@@ -147,6 +147,10 @@ export interface AgentGateway extends UniversalGateway {
  * address another Run.
  */
 export interface PurchaseAgentEnvironment {
+  /** Evaluation harness only: bounded read-only Code Mode, absent in production. */
+  readCodeSandbox?: () => Promise<
+    import("@earendil-works/pi-codemode/portable").CodemodeSandboxBase
+  >;
   /** Cubby's AI Gateway through the Worker's AI binding. */
   gateway(): AgentGateway;
   /** Returns null only when the household has no ChatGPT plan connection. */

@@ -646,8 +646,8 @@ in-process boundary enforced by construction:
   `process`, `globalThis`, `self` and `require` globals, under any spelling. A
   new agent capability is a new Run service, never an import.
 
-The model never runs code: its only authority is the tool set, and every tool
-is a Run service or an MCP call checked as above. The boundary keeps Cubby's
+Production models act through the tool set, and every tool is a Run service
+or an MCP call checked as above. The boundary keeps Cubby's
 own agent code on that path. It is not a sandbox: the agent shares the Worker's
 isolate, so its dependencies (the Agents SDK, pi) run with the same runtime
 authority as any Worker code, including `process.env` populated by
@@ -684,6 +684,43 @@ until a session itemizes it.
 | Findings and their fixes                   | `findings.ts`                                                          |
 
 ## Mail replay evaluation
+
+`MAIL_REPLAY_READ_CODE=1` selects the read-only Code Mode experiment in the
+isolated replay harness. The default uses ordinary tools. The host enables it
+only beside a model peer; production configuration has no enabling variable.
+Photo inventory and external MCP retain their ordinary tools.
+
+The experiment uses Pi's `createCodemodeTool` and its durable nested-tool
+replay. Its callable catalog and dispatch both admit only `entity_read` and
+`purchase_import_read`, still narrowed by the Mail manifest and checked by
+the delegated MCP handler. Their schemas are discovered inside the sandbox
+with `describeTool`; direct `entity_read` is hidden from the model. Ordinary
+`purchase_import_read` stays available for attachment originals, whose media
+Pi's schema-less Code Mode mapping cannot forward. Claims,
+writes, escalation, settlement, model generation and generic host services
+are unavailable to scripts. Ordinary writers retain their host-owned nested
+calls. Pi's conversation store is cleared before each script invocation,
+including recovery, so `store`/`load` cannot carry evidence between Emails.
+The transcript includes each script's nested read names, outcomes and
+durations without copying its intermediate results into model context.
+
+The harness runs QuickJS on the coordinator's thread with 16 MiB of VM memory
+and 10,000 interrupt polls per execution. Scripts have a maximum 30-second
+deadline, 32 nested reads per execution attempt, 32,000 source characters and
+2,000 selected-output tokens plus the nested-call summary.
+QuickJS exposes no network, modules, process or Worker bindings. Computation
+blocks the coordinator until a tool await or the interrupt limit; this inline
+configuration is an evaluation capability, not a production rollout.
+
+Compare identical synthetic corpus, models, effort and repeats with
+`MAIL_REPLAY_READ_CODE` unset and set to `1`. `MAIL_REPLAY_SCRIPTED=1` exercises
+both orchestration paths without inference; its identical two-read workload
+proves plumbing, not token savings or extraction quality. Live comparison uses
+the existing pricing snapshot and shared spending ledger below. Keep all
+Run-scoped token/cache counts, charged and standard cost, unpriced calls,
+settlement latency, actual models, failures, escalations and outcome differences.
+Adopt only with lower cost per correctly settled source and no increase in
+incorrect outcomes or member interventions; fewer turns alone is insufficient.
 
 `eval:mail-replay:stdin` replays the synthetic originals in
 `apps/web/tooling/ai/mail-import-comparison.json` through the current writers;

@@ -868,14 +868,26 @@ export class PurchaseImportRunAgent
       }),
     );
     const mcpTools = await this.agentEnv.mcpTools(purpose);
+    const readCode =
+      purpose === "mail_import" && this.agentEnv.readCodeSandbox !== undefined;
     this.registry.install(
       cubbyMcpExtension(
         mcpTools,
         () => this.services(),
         (api, context) => this.toolGeneration(api, context),
         purpose === "mail_import" ? runId : undefined,
+        readCode,
       ),
     );
+    if (readCode && this.agentEnv.readCodeSandbox) {
+      const { readCodeTool } = await import("./read-code");
+      this.registry.install(
+        defineExtension({
+          name: "cubby.read-code",
+          tools: [readCodeTool(await this.agentEnv.readCodeSandbox())],
+        }),
+      );
+    }
     if (workflow.skills)
       this.registry.install(await piSkills([workflow.skills]));
     this.installed = runId;

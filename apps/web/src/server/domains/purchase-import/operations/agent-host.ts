@@ -72,10 +72,12 @@ function purchaseAgentEnvironment(
     CUBBY_PURCHASE_AGENT_TEST_MODEL: testModel,
     CUBBY_PURCHASE_AGENT_FIXED_MODEL: fixedModel,
     CUBBY_PURCHASE_AGENT_COORDINATOR_MODELS: coordinatorModels,
+    CUBBY_PURCHASE_AGENT_READ_CODE: readCode,
   } = env as Env & {
     CUBBY_PURCHASE_AGENT_TEST_MODEL?: PurchaseAgentEnvironment["testModel"];
     CUBBY_PURCHASE_AGENT_FIXED_MODEL?: string;
     CUBBY_PURCHASE_AGENT_COORDINATOR_MODELS?: string;
+    CUBBY_PURCHASE_AGENT_READ_CODE?: string;
   };
   return {
     modelTurn: (request, send) =>
@@ -108,6 +110,18 @@ function purchaseAgentEnvironment(
     // pi's database work runs only under a live coordinator turn.
     services: runServicesFor(env, ctx, runId, { fence }),
     mcpTools: purchaseAgentMcpTools,
+    ...(testModel &&
+      readCode === "1" && {
+        readCodeSandbox: async () => {
+          const { createInlineCodemodeSandbox } =
+            await import("@earendil-works/pi-codemode/cloudflare");
+          return createInlineCodemodeSandbox({
+            memoryLimitBytes: 16 * 1024 * 1024,
+            interruptBudget: 10_000,
+            timeoutMs: 30_000,
+          });
+        },
+      }),
     ...(testModel && {
       testModel: {
         fetch: (request: Request) =>
