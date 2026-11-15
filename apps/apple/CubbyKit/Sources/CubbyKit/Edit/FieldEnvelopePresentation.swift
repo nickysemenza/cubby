@@ -290,7 +290,7 @@ extension FieldEnvelopePresentation {
     public static let vetoLabel = "Wrong, clear it"
     public static let releasedLabel = "Cubby decides this"
     public static let unknownCallNote =
-        "Cubby won't send this paid call again on its own. If you say it was not sent, Cubby may send it again and you may be charged again."
+        "Cubby won't send this paid call again on its own. Asking again may charge again if the original call went through."
     public static let decidedNote = "Recorded. Cubby reworks this next; the stage shows its progress."
     public static let noGapLabel = "Nothing is waiting on this."
     public static let emptyMachineryLabel = "Cubby has recorded no work on this yet."

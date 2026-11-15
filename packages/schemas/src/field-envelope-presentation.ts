@@ -336,11 +336,11 @@ export function machineryCoverageLabel(collection: {
 }
 
 /**
- * @public A paid call Cubby will not resend on its own. Saying it was not
- * sent lets Cubby send it again, which is charged again if it did go through.
+ * @public A paid call Cubby will not resend on its own. Explicit retry accepts
+ * a possible repeat charge without claiming the original was not sent.
  */
 export const MACHINERY_UNKNOWN_CALL_NOTE =
-  "Cubby won't send this paid call again on its own. If you say it was not sent, Cubby may send it again and you may be charged again.";
+  "Cubby won't send this paid call again on its own. Asking again may charge again if the original call went through.";
 /** @public After a decision: the scope reruns before the value changes. */
 export const MACHINERY_DECIDED_NOTE =
   "Recorded. Cubby reworks this next; the stage shows its progress.";

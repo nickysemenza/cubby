@@ -143,7 +143,7 @@ export async function retryKernelWork(
         kind: "set",
         subject: `ask:${ask.inputHash}`,
         field: "outcome",
-        value: ask.state === "unknown" ? "not_sent" : "retry",
+        value: "retry",
       },
     ]);
     return { retried: true };

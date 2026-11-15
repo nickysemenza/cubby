@@ -15,6 +15,7 @@ import {
   kernelWaitCause,
   MACHINERY_RESPONSE_BYTES,
 } from "@cubby/schemas/kernel/machinery";
+import type { DecisionActorKind } from "@cubby/schemas/kernel/stage";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -212,30 +213,28 @@ async function wakeWaitingPasses(q: Q, askId: string): Promise<void> {
 
 /**
  * A member's statement about an ask Cubby cannot settle alone, applied in
- * the decision's transaction: `not_sent` returns an unknown ask to the
- * queue, `retry` re-queues one that failed or was given up, `abandoned`
- * gives up. Waiting scopes rerun and waiting passes run.
+ * the decision's transaction: `retry` accepts a possible repeat charge for an
+ * unknown call or re-queues one that failed or was given up; `abandoned` gives
+ * up. Waiting scopes rerun and waiting passes run.
  */
 export async function settleAskOutcome(
   tx: Database,
   registry: KernelRegistry,
   inputHash: string,
   outcome: AskOutcome,
+  actor: DecisionActorKind,
 ): Promise<void> {
   const q = repositoryQueries(tx);
   const updated = await q.execute<{ id: string }>(
-    outcome === "not_sent"
-      ? sql`UPDATE "Ask" SET state = ${ASK.queued}, "sentAt" = NULL, "claimToken" = NULL,
-          "claimDeadline" = NULL, "waitCause" = NULL, "availableAt" = now()
-        WHERE "inputHash" = ${inputHash} AND state = ${ASK.unknown} AND "cancelledAt" IS NULL
-        RETURNING id`
-      : outcome === "retry"
-        ? sql`UPDATE "Ask" SET state = ${ASK.queued}, attempts = 0, "cancelledAt" = NULL,
+    outcome === "retry"
+      ? sql`UPDATE "Ask" SET state = ${ASK.queued}, attempts = 0, "cancelledAt" = NULL, "sentAt" = NULL,
             "claimToken" = NULL, "claimDeadline" = NULL, "waitCause" = NULL, "availableAt" = now()
-          WHERE "inputHash" = ${inputHash} AND state = ${ASK.queued}
-            AND ("cancelledAt" IS NOT NULL OR attempts >= "maxAttempts")
+          WHERE "inputHash" = ${inputHash}
+            AND ((state = ${ASK.unknown} AND ${actor === "member"}) OR (state = ${ASK.queued}
+              AND ("cancelledAt" IS NOT NULL OR attempts >= "maxAttempts")))
+            AND NOT coalesce("claimDeadline" > now(), false)
           RETURNING id`
-        : sql`UPDATE "Ask" SET "cancelledAt" = coalesce("cancelledAt", now()),
+      : sql`UPDATE "Ask" SET "cancelledAt" = coalesce("cancelledAt", now()),
             "claimToken" = NULL, "claimDeadline" = NULL
           WHERE "inputHash" = ${inputHash} AND state IN (${ASK.queued}, ${ASK.unknown})
           RETURNING id`,
@@ -243,7 +242,7 @@ export async function settleAskOutcome(
   const ask = updated.rows[0];
   if (!ask)
     throw new KernelContractError(
-      `The ask ${inputHash} is not in a state that "${outcome}" applies to`,
+      `The ask ${inputHash} is not in a state that "${outcome}" applies to.${outcome === "retry" && actor !== "member" ? " A member must choose whether to retry an unknown call; it may charge again." : ""}`,
     );
   await wakeWaitingPasses(q, ask.id);
   await markDirty(q, registry, {

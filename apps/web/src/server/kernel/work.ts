@@ -18,7 +18,6 @@ import {
   type RepositoryQueryClient,
 } from "~/server/db/repository-access.boundary";
 
-import { askOutcomes } from "./ask-gap";
 import { passOrder } from "./claim";
 import { machineryErrorText } from "./error-presentation";
 import type { KernelRegistry } from "./registry";
@@ -203,7 +202,7 @@ export async function readRunWork(
            JOIN "RecordKey" k ON k."scopeKind"=waiter."scopeKind" AND k."scopeKey"=waiter."scopeKey"
            JOIN "Entity" e ON e.id=k."entityId" AND e.kind=k.entity
            WHERE waiter."askId"=a.id AND k."mergedAt" IS NULL AND k."rejectedAt" IS NULL
-             AND ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL ORDER BY e.shortcode LIMIT 1) AS record, ${isoText(sql`a."sentAt"`)} AS "sentAt", ${isoText(sql`a."answeredAt"`)} AS "answeredAt", a."lastError", CASE WHEN a."cancelledAt" IS NOT NULL THEN ${askOutcomes[2]} ELSE a.state END AS state,
+             AND ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL ORDER BY e.shortcode LIMIT 1) AS record, ${isoText(sql`a."sentAt"`)} AS "sentAt", ${isoText(sql`a."answeredAt"`)} AS "answeredAt", a."lastError", CASE WHEN a."cancelledAt" IS NOT NULL THEN ${"abandoned"} ELSE a.state END AS state,
           CASE WHEN a."cancelledAt" IS NOT NULL THEN ${STAGE.ended}
             WHEN a.state = ${ASK.answered} THEN ${STAGE.done}
             WHEN a.state = ${ASK.unknown} OR a.attempts >= a."maxAttempts" THEN ${STAGE.stuck}
