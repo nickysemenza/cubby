@@ -3728,7 +3728,8 @@ admit the field before it is asked.
 An edit over Cubby's value records the chosen assignment and vetoes the replaced value. Keep
 records the displayed value as an assignment. "Wrong, clear it" records a veto and releases the assignment; the reconciler
 clears the value. "Let Cubby decide" releases the assignment. System imports record assignments
-without grading the model. Corrections recheck at most 25 similar Cubby-held records.
+without grading the model. Corrections recheck at most 25 similar Cubby-held records,
+prioritizing records with a shared reference-valued basis; missing references do not count as shared.
 
 #### Field automation triggers
 
