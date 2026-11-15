@@ -36,7 +36,7 @@ const TIMEOUTS = {
   { lock: number; statement: number; idle: number; transaction: number }
 >;
 
-/** A member's write found the gate held past its lock timeout; retry shortly. */
+/** Gate admission was busy; retry without treating the work as a target fault. */
 export class HouseholdWriteBusyError extends WorkRetryableError {
   override name = "HouseholdWriteBusyError";
   constructor(cause?: unknown) {
@@ -88,18 +88,28 @@ const holdsHouseholdGate = sql`EXISTS (
  * row while waiting for the gate could deadlock a gated apply, so every path
  * that takes the gate ahead of its row locks enters here.
  */
-async function enterGate(q: Q, mode: WriteMode): Promise<void> {
-  const state = await q.execute<{ ordered: boolean }>(sql`
+async function enterGate(
+  q: Q,
+  mode: WriteMode,
+  nonblocking = false,
+): Promise<boolean> {
+  const lock = nonblocking
+    ? sql`pg_try_advisory_xact_lock(hashtextextended('cubby:household-write', 0))`
+    : sql`${GATE_LOCK}::text IS NOT NULL`;
+  const state = await q.execute<{ ordered: boolean; acquired: boolean }>(sql`
     WITH state AS MATERIALIZED (SELECT ${holdsHouseholdGate} OR (
       pg_current_xact_id_if_assigned() IS NULL AND NOT EXISTS (
         SELECT 1 FROM pg_locks WHERE pid = pg_backend_pid() AND locktype = 'advisory'
-      )) AS ordered)
-    SELECT ordered, CASE WHEN ordered THEN ${writeLimits(mode)} || ${GATE_LOCK}::text END
-    FROM state`);
+      )) AS ordered), limits AS MATERIALIZED (
+      SELECT ordered, CASE WHEN ordered THEN ${writeLimits(mode)} END AS limits FROM state
+    )
+    SELECT ordered, CASE WHEN ordered AND limits IS NOT NULL THEN ${lock} END AS acquired
+    FROM limits`);
   if (!state.rows[0]?.ordered)
     throw new Error(
       "The household write gate must be the transaction's first lock; open householdWrite at the mutation boundary",
     );
+  return state.rows[0].acquired;
 }
 
 /**
@@ -113,12 +123,24 @@ export async function enterHouseholdGate(
   await enterGate(repositoryQueries(db), mode);
 }
 
-/** Session limits for this transaction only, then the gate when the lane is money. */
+/**
+ * Session limits for this transaction only, then the gate for money writes.
+ * A locked background computation tries the gate before spending its budget
+ * on reads; busy admission throws the existing retryable gate error.
+ */
 export async function enterWriteTransaction(
   q: Q,
-  options: { lane: KernelLane | null; mode: WriteMode },
+  options: {
+    lane: KernelLane | null;
+    mode: WriteMode;
+    nonblockingGate?: boolean;
+  },
 ): Promise<void> {
-  if (options.lane === "money") return enterGate(q, options.mode);
+  if (options.lane === "money" || options.nonblockingGate) {
+    const acquired = await enterGate(q, options.mode, options.nonblockingGate);
+    if (!acquired) throw new HouseholdWriteBusyError();
+    return;
+  }
   await q.execute(sql`SELECT ${writeLimits(options.mode)}`);
 }
 
