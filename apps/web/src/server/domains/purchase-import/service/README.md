@@ -759,7 +759,8 @@ or deliberate conservative carry before another launch.
   reconciliation. Default startup refuses outstanding reservations.
 - The replay checks a stopped allowance while observing the Run, and
   finalization closes physical admission before reading the last receipts,
-  allowing the same bounded wait for final queued usage. Outstanding cost is
+  allowing at least sixty seconds for in-flight background calls to record final
+  usage. Outstanding cost is
   derived from retained reservations, so subtraction residue cannot block the
   next case.
 

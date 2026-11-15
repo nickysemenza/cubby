@@ -261,6 +261,7 @@ describe("isolated Mail coordinator replay", () => {
         measurements: reports.map((report) => ({
           case: report.case,
           seconds: report.seconds ?? null,
+          diagnostics: report.diagnostics,
           usage: report.usage ?? null,
           // A known subtotal is not a complete cost when usage is unpriced.
           unpricedCalls:

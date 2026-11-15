@@ -106,7 +106,10 @@ async function guardedPeer(options: { paid?: boolean; held?: number } = {}) {
   vi.stubEnv("MAIL_REPLAY_PRICING_FILE", catalog);
   if (options.paid) vi.stubEnv("MAIL_REPLAY_ALLOW_PAID", "1");
   if (options.held) vi.stubEnv("MAIL_REPLAY_CARRY_RESERVATIONS", "1");
-  const book = await liveReplayBudget({ receiptWaitMs: 20 });
+  const book = await liveReplayBudget({
+    receiptWaitMs: 20,
+    finalReceiptWaitMs: 20,
+  });
   books.push({ book, directory });
   let rows: Receipt[] = [];
   let afterRead: (() => void) | undefined;

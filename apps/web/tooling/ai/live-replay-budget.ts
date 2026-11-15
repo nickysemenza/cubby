@@ -60,7 +60,8 @@ class PendingReceipts extends Error {}
 /** One host-owned allowance for all physical calls, peers, cases and launches. */
 export async function liveReplayBudget({
   receiptWaitMs = 5_000,
-}: { receiptWaitMs?: number } = {}) {
+  finalReceiptWaitMs = 60_000,
+}: { receiptWaitMs?: number; finalReceiptWaitMs?: number } = {}) {
   const ledgerPath = process.env.MAIL_REPLAY_BUDGET_FILE;
   const catalogPath = process.env.MAIL_REPLAY_PRICING_FILE;
   if (!ledgerPath || !catalogPath)
@@ -398,7 +399,7 @@ export async function liveReplayBudget({
         accepting = false;
         await serial(async () => {
           await reconcile();
-          const deadline = Date.now() + receiptWaitMs;
+          const deadline = Date.now() + finalReceiptWaitMs;
           while (
             activePending().length &&
             !ledger.stopped &&
