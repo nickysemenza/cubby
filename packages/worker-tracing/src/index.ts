@@ -60,7 +60,8 @@ export type WorkerSpan = TraceSpan;
 
 // Cached after the first attempt; `null` = checked and absent (non-worker).
 let cfTracing: CfTracing | null | undefined;
-async function getCfTracing(): Promise<CfTracing | null> {
+/** Resolve before constructing adapters whose callbacks must start synchronously. */
+export async function loadWorkerTracing(): Promise<CfTracing | null> {
   if (cfTracing !== undefined) return cfTracing;
   try {
     // A variable specifier plus @vite-ignore: Vite's import analysis (web UI
@@ -89,7 +90,7 @@ export async function withSpan<T>(
   fn: (span: WorkerSpan) => Promise<T>,
   attributes?: Record<string, SpanAttr>,
 ): Promise<T> {
-  const tracing = await getCfTracing();
+  const tracing = await loadWorkerTracing();
   if (!tracing) return fn(NOOP_TRACE_SPAN);
   return enterSpan(tracing, name, fn, {
     attributes,

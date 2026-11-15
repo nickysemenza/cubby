@@ -9,6 +9,7 @@ import {
   type GatewayFetchFor,
   type RefusedAttempt,
 } from "@cubby/shared/ai/pi-providers";
+import { piTelemetry } from "@cubby/worker-tracing/pi";
 import {
   createModels,
   type Api,
@@ -124,7 +125,15 @@ export function piCallTarget(
   return {
     model: resolved,
     complete: async (context, options) => {
-      const message = await models.complete(resolved, context, options);
+      const telemetry = await piTelemetry(() => ({
+        "cubby.ai.feature": call.metadata.feature,
+        "cubby.ai.operation": call.metadata.operation,
+      }));
+      const message = await telemetry.startSpan(
+        { name: "pi.ai.call" },
+        (telemetry) =>
+          models.complete(resolved, context, { ...options, telemetry }),
+      );
       // The provider SDK replaces fetch refusals with "Connection error".
       // Preserve the final admission/provider cause after its retries finish.
       if (

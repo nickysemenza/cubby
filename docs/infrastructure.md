@@ -131,6 +131,14 @@ the Runs whose coordinator is active (`running` and `paused_*`) before such a
 deploy. Pass dispatch intent remains in Postgres; coordinator SQLite receipts and
 conversations must be preserved across that change.
 
+Pi model calls and durable phases use `@cubby/worker-tracing/pi` to nest their
+SDK spans under the current Workers invocation. Agent spans carry the Run id
+and purpose; single-shot calls carry their feature and operation. Only approved
+scalar metadata (model, tokens, tool, phase and outcome) is exported. Prompts,
+completions, tool arguments and provider error messages stay out of these
+spans. SDK events become bounded per-name counts and last-event metadata;
+native trace links are not synthesized across Durable Object wakes.
+
 Each member authorizes once from Settings. Verify the client/grant without
 printing token values:
 
