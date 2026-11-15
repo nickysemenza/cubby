@@ -170,7 +170,8 @@ final class PhotoImportNotificationCoordinator: NSObject, UNUserNotificationCent
     // on the main queue. Keep explicit callbacks rather than async delegate bridging.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter, willPresent notification: UNNotification,
-        withCompletionHandler completionHandler: @escaping @Sendable (UNNotificationPresentationOptions) -> Void
+        withCompletionHandler completionHandler:
+            @escaping @Sendable (UNNotificationPresentationOptions) -> Void
     ) {
         DispatchQueue.main.async { completionHandler([.banner, .sound]) }
     }
