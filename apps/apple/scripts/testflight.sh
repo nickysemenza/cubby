@@ -38,7 +38,7 @@ require() {
   done
 }
 
-require RELEASE_VERSION RELEASE_BUILD_NUMBER TESTFLIGHT_OUTPUT_DIR PROFILES_JSON \
+require RELEASE_VERSION RELEASE_BUILD_NUMBER TESTFLIGHT_OUTPUT_DIR PROFILES_JSON NOTIFICATION_PROFILES_JSON \
   ASC_API_KEY_PATH APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID
 
 # `pnpm generate` writes both from packages/shared/src/apple-app-identity.ts.
@@ -52,6 +52,7 @@ if [[ -z "$team_id" || -z "$bundle_id" ]]; then
   echo "error: apps/apple/Generated/AppleVersion.xcconfig lacks the team or bundle id; run pnpm generate" >&2
   exit 1
 fi
+readonly notification_bundle_id="$bundle_id.NotificationService"
 readonly live_activity_bundle_id="$bundle_id.LiveActivity"
 readonly project="apps/apple/Cubby.xcodeproj"
 readonly derived_data="$TESTFLIGHT_OUTPUT_DIR/DerivedData"
@@ -129,6 +130,7 @@ write_export_options() {
     /usr/libexec/PlistBuddy \
       -c "Add :provisioningProfiles:$live_activity_bundle_id string $live_activity_profile_uuid" "$path"
   fi
+  /usr/libexec/PlistBuddy -c "Add :provisioningProfiles:$notification_bundle_id string $notification_profile_uuid" "$path"
   /usr/libexec/PlistBuddy -c 'Add :signingCertificate string Apple Distribution' "$path"
   /usr/libexec/PlistBuddy -c 'Add :signingStyle string manual' "$path"
   /usr/libexec/PlistBuddy -c "Add :teamID string $team_id" "$path"
@@ -183,10 +185,12 @@ verify_archive() {
   [[ -f "$privacy_manifest" && -f "$embedded_profile" ]]
   # v1.0.7 archived fine but App Store Connect rejected the upload (90360)
   # because the Live Activity extension had no CFBundleDisplayName.
-  local extension
+  local extension extension_info
   while IFS= read -r -d '' extension; do
-    [[ -n "$(plutil -extract CFBundleDisplayName raw -o - "$extension/Info.plist" 2>/dev/null || true)" ]] || {
-      echo "error: $extension/Info.plist is missing CFBundleDisplayName" >&2
+    extension_info="$extension/Info.plist"
+    [[ -f "$extension_info" ]] || extension_info="$extension/Contents/Info.plist"
+    [[ -n "$(plutil -extract CFBundleDisplayName raw -o - "$extension_info" 2>/dev/null || true)" ]] || {
+      echo "error: $extension_info is missing CFBundleDisplayName" >&2
       exit 1
     }
   done < <(find "$app" -name '*.appex' -type d -print0)
@@ -227,7 +231,9 @@ case "$platform" in
     require IOS_LIVE_ACTIVITY_PROFILES_JSON
     profile_uuid="$(resolve_profile "$PROFILES_JSON" "AppStore $bundle_id iOS" IOS_APP_STORE mobileprovision)"
     live_activity_profile_uuid="$(resolve_live_activity_profile)"
+    notification_profile_uuid="$(resolve_profile "$NOTIFICATION_PROFILES_JSON" "AppStore $notification_bundle_id iOS" IOS_APP_STORE mobileprovision "$notification_bundle_id")"
     archive_platform Cubby-iOS 'generic/platform=iOS' "$ios_archive" "$profile_uuid" \
+      CUBBY_NOTIFICATION_PROVISIONING_PROFILE_SPECIFIER="$notification_profile_uuid" \
       CUBBY_LIVE_ACTIVITY_PROVISIONING_PROFILE_SPECIFIER="$live_activity_profile_uuid"
     verify_archive \
       "$ios_archive" \
@@ -241,7 +247,8 @@ case "$platform" in
   macos)
     require MAC_INSTALLER_SIGNING_CERTIFICATE
     profile_uuid="$(resolve_profile "$PROFILES_JSON" "AppStore $bundle_id macOS" MAC_APP_STORE provisionprofile)"
-    archive_platform Cubby-macOS 'generic/platform=macOS' "$macos_archive" "$profile_uuid" ARCHS=arm64
+    notification_profile_uuid="$(resolve_profile "$NOTIFICATION_PROFILES_JSON" "AppStore $notification_bundle_id macOS" MAC_APP_STORE provisionprofile "$notification_bundle_id")"
+    archive_platform Cubby-macOS 'generic/platform=macOS' "$macos_archive" "$profile_uuid" CUBBY_NOTIFICATION_PROVISIONING_PROFILE_SPECIFIER="$notification_profile_uuid" ARCHS=arm64
     verify_archive \
       "$macos_archive" \
       "$macos_archive/Products/Applications/Cubby.app" \

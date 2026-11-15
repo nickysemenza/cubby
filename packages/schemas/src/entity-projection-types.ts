@@ -419,6 +419,10 @@ export type EntityInspectorMetadata = CompiledEntityPresentation & {
   browserRouted: boolean;
 
   auditable: boolean;
+  backgroundResultAlert?: {
+    amountField?: string;
+    group?: { entity: string; field: string };
+  } | null;
 
   hasImages: boolean;
 

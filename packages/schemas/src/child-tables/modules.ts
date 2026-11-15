@@ -8,6 +8,57 @@ import { defineChildTable } from "../entity-definitions/child-definition.js";
 import { financialEvidenceChildren } from "./financial-evidence";
 
 export const modulesChildren = [
+  defineChildTable({
+    name: "DeviceAlertDelivery",
+    exportName: "deviceAlertDelivery",
+    columns: [
+      {
+        key: "id",
+        kind: "uuid",
+        primaryKey: true,
+        default: { sql: "gen_random_uuid()" },
+      },
+      {
+        key: "deviceId",
+        kind: "uuid",
+        notNull: true,
+        type: "DeviceId",
+        reference: { table: "device", column: "id", onDelete: "cascade" },
+      },
+      { key: "auditId", kind: "uuid", notNull: true },
+      { key: "creationKey", kind: "text", notNull: true },
+      { key: "registration", kind: "uuid", notNull: true },
+      { key: "batchId", kind: "uuid" },
+      { key: "claimToken", kind: "uuid" },
+      {
+        key: "availableAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+      },
+      {
+        key: "createdAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+      },
+      { key: "acceptedAt", kind: "timestamp" },
+      { key: "lastError", kind: "text" },
+    ],
+    types: [{ module: "@cubby/schemas/identifiers", exports: ["DeviceId"] }],
+    indexes: [
+      {
+        name: "DeviceAlertDelivery_device_creation_key",
+        unique: true,
+        on: ["deviceId", "creationKey"],
+      },
+      {
+        name: "DeviceAlertDelivery_pending_idx",
+        on: ["availableAt"],
+        where: '"acceptedAt" IS NULL',
+      },
+    ],
+  }),
   ...financialEvidenceChildren,
   ...suggestionChildren,
   ...importObservationChildren,

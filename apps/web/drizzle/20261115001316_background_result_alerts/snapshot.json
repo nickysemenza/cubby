@@ -1,0 +1,471 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "4a08fda0-c9c1-4437-b4bb-d45d874d01b6",
+  "prevIds": [
+    "dd390187-4e45-4af1-80b1-fe7d12f51a77"
+  ],
+  "footprints": [
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "DeviceAlertDelivery"
+      ],
+      "writes": [
+        "s|tbl|public.DeviceAlertDelivery",
+        "n|tbl|public.DeviceAlertDelivery",
+        "e|tbl|public.DeviceAlertDelivery",
+        "n|rel|public.DeviceAlertDelivery",
+        "n|type|public.DeviceAlertDelivery",
+        "n|rel|public.DeviceAlertDelivery_pkey"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "Device",
+        "backgroundAlerts"
+      ],
+      "writes": [
+        "s|col|public.Device.backgroundAlerts",
+        "n|col|public.Device.backgroundAlerts",
+        "e|col|public.Device.backgroundAlerts"
+      ],
+      "reads": [
+        "n|tbl|public.Device",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "Device",
+        "pushRegistration"
+      ],
+      "writes": [
+        "s|col|public.Device.pushRegistration",
+        "n|col|public.Device.pushRegistration",
+        "e|col|public.Device.pushRegistration"
+      ],
+      "reads": [
+        "n|tbl|public.Device",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "Device",
+        "pushLastError"
+      ],
+      "writes": [
+        "s|col|public.Device.pushLastError",
+        "n|col|public.Device.pushLastError",
+        "e|col|public.Device.pushLastError"
+      ],
+      "reads": [
+        "n|tbl|public.Device",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "DeviceAlertDelivery",
+        "DeviceAlertDelivery_device_creation_key"
+      ],
+      "writes": [
+        "s|idx|public.DeviceAlertDelivery_device_creation_key",
+        "n|idx|public.DeviceAlertDelivery_device_creation_key",
+        "e|idx|public.DeviceAlertDelivery_device_creation_key",
+        "n|rel|public.DeviceAlertDelivery_device_creation_key"
+      ],
+      "reads": [
+        "n|tbl|public.DeviceAlertDelivery",
+        "n|sch|public",
+        "n|col|public.DeviceAlertDelivery.deviceId",
+        "n|col|public.DeviceAlertDelivery.creationKey"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "DeviceAlertDelivery",
+        "DeviceAlertDelivery_pending_idx"
+      ],
+      "writes": [
+        "s|idx|public.DeviceAlertDelivery_pending_idx",
+        "n|idx|public.DeviceAlertDelivery_pending_idx",
+        "e|idx|public.DeviceAlertDelivery_pending_idx",
+        "n|rel|public.DeviceAlertDelivery_pending_idx"
+      ],
+      "reads": [
+        "n|tbl|public.DeviceAlertDelivery",
+        "n|sch|public",
+        "n|col|public.DeviceAlertDelivery.availableAt"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "public",
+        "DeviceAlertDelivery"
+      ],
+      "writes": [
+        "s|fk|public.DeviceAlertDelivery.DeviceAlertDelivery_deviceId_Device_id_fk",
+        "n|fk|public.DeviceAlertDelivery.DeviceAlertDelivery_deviceId_Device_id_fk",
+        "e|fk|public.DeviceAlertDelivery.DeviceAlertDelivery_deviceId_Device_id_fk",
+        "n|con|public.DeviceAlertDelivery.DeviceAlertDelivery_deviceId_Device_id_fk"
+      ],
+      "reads": [
+        "n|tbl|public.DeviceAlertDelivery",
+        "n|sch|public",
+        "n|tbl|public.Device",
+        "n|sch|public",
+        "n|col|public.DeviceAlertDelivery.deviceId",
+        "n|col|public.Device.id",
+        "e|uniqueness|public.Device.id"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "name": "DeviceAlertDelivery",
+        "isRlsEnabled": false,
+        "entityType": "tables"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Device",
+        "name": "backgroundAlerts",
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Device",
+        "name": "pushRegistration",
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Device",
+        "name": "pushLastError",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "DeviceAlertDelivery",
+        "name": "id",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "DeviceAlertDelivery",
+        "name": "deviceId",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "DeviceAlertDelivery",
+        "name": "auditId",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "DeviceAlertDelivery",
+        "name": "creationKey",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "DeviceAlertDelivery",
+        "name": "registration",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "DeviceAlertDelivery",
+        "name": "batchId",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "DeviceAlertDelivery",
+        "name": "claimToken",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "DeviceAlertDelivery",
+        "name": "availableAt",
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "DeviceAlertDelivery",
+        "name": "createdAt",
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "DeviceAlertDelivery",
+        "name": "acceptedAt",
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "DeviceAlertDelivery",
+        "name": "lastError",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "DeviceAlertDelivery",
+        "name": "DeviceAlertDelivery_device_creation_key",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "deviceId",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "creationKey",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "DeviceAlertDelivery",
+        "name": "DeviceAlertDelivery_pending_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "availableAt",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": "\"acceptedAt\" IS NULL",
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "DeviceAlertDelivery",
+        "name": "DeviceAlertDelivery_deviceId_Device_id_fk",
+        "nameExplicit": true,
+        "columns": [
+          "deviceId"
+        ],
+        "schemaTo": "public",
+        "tableTo": "Device",
+        "columnsTo": [
+          "id"
+        ],
+        "onUpdate": "NO ACTION",
+        "onDelete": "CASCADE",
+        "entityType": "fks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "DeviceAlertDelivery",
+        "name": "DeviceAlertDelivery_pkey",
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "entityType": "pks"
+      }
+    }
+  ]
+}

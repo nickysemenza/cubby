@@ -3,7 +3,7 @@ import { attachedImageInputs } from "./image-description-inputs";
 import { idField, readOnly, timestampField } from "./field-policy";
 import { z } from "zod";
 import { dateTime } from "../codec";
-import { devicePlatform } from "../device-fields.js";
+import { devicePushRegistration, devicePlatform } from "../device-fields.js";
 import {
   deviceShortcode,
   ledgerPartyShortcode,
@@ -159,6 +159,77 @@ export const { definition, readSchemas } = defineEntityModel({
       },
     }),
     defineEdge({
+      key: "DeviceAlertDelivery.deviceId",
+      from: "row:DeviceAlertDelivery",
+      to: "device",
+      cardinality: "one",
+      inverse: {
+        key: "device.DeviceAlertDelivery",
+        from: "device",
+        to: "row:DeviceAlertDelivery",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "DeviceAlertDelivery.deviceId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "Alert delivery state owned by the install.",
+      },
+      fromEnd: {
+        role: "metadata",
+        label: "device references",
+        description: "A row naming the install associated with its event.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        description: "A pending background-result alert for this install.",
+        label: "push registrations",
+        liveness: {
+          kind: "must-target-live",
+        },
+        role: "owned-child",
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason:
+              "Child rows have no independently exposed lifecycle operation.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason:
+              "Child rows have no independently exposed lifecycle operation.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "cascade-alert-deliveries",
+              effect: "hard-delete",
+              description:
+                "A removed install retains no pending alerts or push credentials.",
+            },
+            handler: {
+              module: "~/server/domains/device/repo/edge-policies",
+              export: "deleteDeviceAlertDeliveries",
+            },
+            order: 2,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "Devices cannot be merged.",
+          },
+        },
+      },
+    }),
+    defineEdge({
       key: "RunPushRegistration.deviceId",
       from: "row:RunPushRegistration",
       to: "device",
@@ -293,6 +364,7 @@ export const { definition, readSchemas } = defineEntityModel({
         },
       ],
       sections: [
+        { kind: "slot", id: "notifications", title: "Notifications" },
         {
           kind: "fields",
           id: "overview",
@@ -316,6 +388,7 @@ export const { definition, readSchemas } = defineEntityModel({
           title: "Coverage and summaries",
           fields: [
             "appleIntelligenceAvailable",
+            "backgroundAlerts",
             "updateRequired",
             "inactive",
             "createdAt",
@@ -543,6 +616,38 @@ export const { definition, readSchemas } = defineEntityModel({
         },
         validation: readOnly(z.string().nullable()),
       },
+      {
+        key: "pushRegistered",
+        kind: "boolean",
+        validation: readOnly(z.boolean().default(false)),
+        display: { list: false, detail: false },
+      },
+      {
+        key: "backgroundAlerts",
+        kind: "boolean",
+        validation: readOnly(z.boolean().default(false)),
+        display: { list: false },
+      },
+      {
+        key: "pushLastError",
+        audit: false,
+        kind: "text",
+        nullable: true,
+        validation: readOnly(z.string().nullable()),
+        display: { list: false, detail: false },
+      },
+      {
+        key: "pushRegistration",
+        audit: false,
+        kind: "json",
+        nullable: true,
+        output: false,
+        validation: {
+          read: devicePushRegistration.nullable(),
+          create: null,
+          update: null,
+        },
+      },
       idField(deviceShortcode),
       timestampField("createdAt"),
       timestampField("updatedAt"),
@@ -555,6 +660,9 @@ export const { definition, readSchemas } = defineEntityModel({
         specialized: "primary-key:DeviceId",
       },
       { key: "shortcode", specialized: "shortcode" },
+      { key: "backgroundAlerts", defaultValue: false },
+      "pushRegistration",
+      "pushLastError",
       "installationId",
       "name",
       { key: "platform", specialized: "enum:platform" },

@@ -1824,6 +1824,8 @@ const declarationDescriptor = (
   descriptor.softDelete = declaration.capabilities.softDelete;
   if (declaration.route === null) descriptor.browserRoutes = false;
   descriptor.auditable = declaration.capabilities.auditable;
+  descriptor.backgroundResultAlert =
+    declaration.capabilities.backgroundResultAlert;
   descriptor.hasImages =
     declaration.capabilities.images.storage === "gallery" ||
     declaration.capabilities.images.storage === "cover";

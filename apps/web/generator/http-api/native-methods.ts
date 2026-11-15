@@ -117,6 +117,8 @@ export const CLIENT_PASSTHROUGH_METHODS = {
     method: "endPhotoRunLiveActivity",
     doc: null,
   },
+  "devicePush.register": { method: "registerDevicePush", doc: null },
+  "devicePush.end": { method: "endDevicePush", doc: null },
   "photoImport.registerNotification": {
     method: "registerPhotoRunNotification",
     doc: null,

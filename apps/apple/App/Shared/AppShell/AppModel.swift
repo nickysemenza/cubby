@@ -217,12 +217,14 @@ final class AppModel {
     var baseURL: URL {
         didSet {
             guard baseURL != oldValue else { return }
+            let previousClient = client
             nativeWorkspaces.reset()
             Self.persistBaseURL(baseURL)
             Diagnostics.setBaseURL(baseURL)
             rebindClients()
             ImageCaches.reset()
             Task {
+                await PhotoImportNotificationCoordinator.shared.stop(client: previousClient)
                 await spotlight.wipe()
                 await restoreSession()
             }
@@ -336,6 +338,7 @@ final class AppModel {
             recoverPhotoImports()
             await companionImageWorker?.start()
             await syncDeviceParticipation()
+            await PhotoImportNotificationCoordinator.shared.resumeRegistration()
             storedLibraryMetadataSync?.setSignedIn(true)
             if participation.automaticWork && UserDefaults.standard.bool(forKey: Self.photoMatchingPendingKey)
             {
@@ -458,6 +461,7 @@ final class AppModel {
         recoverPhotoImports()
         await companionImageWorker?.start()
         await syncDeviceParticipation()
+        await PhotoImportNotificationCoordinator.shared.resumeRegistration()
         storedLibraryMetadataSync?.setSignedIn(true)
         if participation.automaticWork && UserDefaults.standard.bool(forKey: Self.photoMatchingPendingKey) {
             Task { await startAutomaticPhotoMatching() }

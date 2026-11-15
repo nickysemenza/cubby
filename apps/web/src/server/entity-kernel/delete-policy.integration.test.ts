@@ -98,6 +98,7 @@ import {
   importSourceProduct,
   imageDerivative,
   runPushRegistration,
+  deviceAlertDelivery,
   ledgerSourceClaim,
   mealFoodEntry,
   mealRecipe,
@@ -1144,6 +1145,13 @@ async function seedRunOwnedRows(db: Database, ids: StagingIds, runId: RunId) {
         pushToken: "synthetic-delete-policy-token",
         apnsEnvironment: "development",
         appIdentity: "production",
+      });
+    if (deviceId)
+      await insertAndReturn(db, deviceAlertDelivery, {
+        deviceId,
+        auditId: crypto.randomUUID(),
+        creationKey: "synthetic:created-result",
+        registration: crypto.randomUUID(),
       });
     await insertAndReturn(db, photoRunImage, {
       runId: photoRun.id,

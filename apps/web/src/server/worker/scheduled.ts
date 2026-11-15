@@ -57,6 +57,11 @@ async function runHourlyBackstop(
             await runProductionKernel(db, { budgetMs: 20_000 }).catch(
               (error: unknown) => errors.push(error),
             );
+            await (
+              await import("~/server/generic/push/repo/delivery")
+            )
+              .dispatchBackgroundAlerts(db)
+              .catch((error: unknown) => errors.push(error));
             await wakeKernel({ source: "cron.backstop" }).catch(
               (error: unknown) => errors.push(error),
             );

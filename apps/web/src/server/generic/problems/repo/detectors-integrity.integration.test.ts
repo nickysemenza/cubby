@@ -44,6 +44,7 @@ import {
   suggestionTable as suggestion,
   photoGroupProposal,
   runPushRegistration,
+  deviceAlertDelivery,
   productConversionCoverage,
   productUnitMappings,
   purchasePaymentEvidence,
@@ -1679,6 +1680,14 @@ const SOURCE_FACTORIES = {
       groupKey: uniq("group"),
       productKind: "create",
       productCreate: { name: uniq("Proposal") },
+    }),
+
+  "DeviceAlertDelivery.deviceId": (db, targetId) =>
+    insertAndReturn(db, deviceAlertDelivery, {
+      deviceId: parseEntityId("device", targetId),
+      auditId: crypto.randomUUID(),
+      creationKey: uniq("created-result"),
+      registration: crypto.randomUUID(),
     }),
 
   "RunPushRegistration.runId": async (db, targetId) =>

@@ -30,7 +30,18 @@ struct NotificationSettingsSection: View {
             )
             .disabled(requestingPermission)
             .accessibilityIdentifier("settings.importNotifications")
+            Toggle(
+                "Background results",
+                isOn: Binding(
+                    get: { preferences.backgroundResultsEnabled },
+                    set: setBackgroundResults)
+            )
+            .disabled(requestingPermission)
+            .accessibilityIdentifier("settings.backgroundResults")
             if requestingPermission { LoadingIndicator(label: "Enabling notifications") }
+            if let registrationError = PhotoImportNotificationCoordinator.shared.registrationError {
+                Text(registrationError).foregroundStyle(FieldGuideTokens.destructive)
+            }
             if let permissionError {
                 Text(permissionError).foregroundStyle(FieldGuideTokens.destructive)
             }
@@ -47,6 +58,9 @@ struct NotificationSettingsSection: View {
         } footer: {
             Text(
                 "Import notifications alert you when an import is ready or needs attention. This is the default for new imports; each import can override it."
+            )
+            Text(
+                "Background results include purchase and task details and available images. Related additions arrive together on this device."
             )
             #if os(iOS)
                 Text("Live Activities show ongoing progress and are controlled in system settings.")
@@ -96,8 +110,28 @@ struct NotificationSettingsSection: View {
         }
     }
 
+    private func setBackgroundResults(_ enabled: Bool) {
+        requestingPermission = true
+        permissionError = nil
+        Task {
+            defer { requestingPermission = false }
+            do {
+                let allowed: Bool
+                if enabled {
+                    allowed = try await PhotoImportNotificationCoordinator.shared.requestPermission()
+                } else {
+                    allowed = false
+                }
+                NotificationPreferences.shared.backgroundResultsEnabled = allowed
+                if enabled && !allowed { permissionError = "Notifications are disabled in system settings." }
+                await PhotoImportNotificationCoordinator.shared.refreshRegistration()
+            } catch { permissionError = error.userMessage }
+        }
+    }
+
     private func refreshPermissions() async {
         permission = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        await PhotoImportNotificationCoordinator.shared.refreshRegistration()
         #if os(iOS)
             systemActivitiesEnabled = ActivityAuthorizationInfo().areActivitiesEnabled
         #endif

@@ -710,6 +710,7 @@ export const { definition, readSchemas } = defineEntityModel({
 
   search: "lexical",
   capabilities: {
+    backgroundResultAlert: {},
     images: {
       storage: false,
       displaySourceOverrides: [

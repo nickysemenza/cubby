@@ -135,6 +135,13 @@ export const entityDescriptor = z.object({
   softDelete: z.boolean(),
   browserRoutes: z.boolean().optional(),
   auditable: z.boolean(),
+  backgroundResultAlert: z
+    .object({
+      amountField: z.string().optional(),
+      group: z.object({ entity: z.string(), field: z.string() }).optional(),
+    })
+    .nullable()
+    .optional(),
   hasImages: z.boolean(),
   /** Manifest-owned storage, display fallback and importer route policy. */
   images: imagePolicy,

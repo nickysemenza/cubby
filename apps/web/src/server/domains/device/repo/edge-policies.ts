@@ -4,7 +4,12 @@ import { inArray } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { DrizzleTransaction } from "~/server/db";
-import { imageSighting, runPushRegistration } from "~/server/db/schema";
+import {
+  device,
+  deviceAlertDelivery,
+  imageSighting,
+  runPushRegistration,
+} from "~/server/db/schema";
 import { deriveAndStoreImageCapture } from "~/server/domains/image/repo/image-capture-derivation";
 
 /**
@@ -32,4 +37,18 @@ export const deleteDevicePushRegistrations = async (
   await tx
     .delete(runPushRegistration)
     .where(inArray(runPushRegistration.deviceId, ids));
+};
+
+/** Retiring an install revokes its credential and pending result deliveries. */
+export const deleteDeviceAlertDeliveries = async (
+  tx: DrizzleTransaction,
+  ids: DeviceId[],
+): Promise<void> => {
+  await tx
+    .delete(deviceAlertDelivery)
+    .where(inArray(deviceAlertDelivery.deviceId, ids));
+  await tx
+    .update(device)
+    .set({ pushRegistration: null, backgroundAlerts: false })
+    .where(inArray(device.id, ids));
 };

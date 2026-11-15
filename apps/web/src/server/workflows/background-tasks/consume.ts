@@ -43,6 +43,16 @@ async function consumeBackgroundQueueBatch(
         await import("~/server/domains/image-processing/repo/image-processing-ring")
       ).ringDueDeviceWork(db);
     const ran = await runProductionKernel(db, { budgetMs: 20_000 });
+    try {
+      const { dispatchBackgroundAlerts } =
+        await import("~/server/generic/push/repo/delivery");
+      await dispatchBackgroundAlerts(db);
+    } catch (error) {
+      ports.captureException(error);
+      await wakeAt(new Date(Date.now() + 60_000), {
+        source: "push.results.failure",
+      });
+    }
     const result = await repositoryQueries(db).execute<{ at: string | null }>(
       sql`SELECT to_char((${kernelNextSql((await productionKernel()).registry)}), 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS at`,
     );

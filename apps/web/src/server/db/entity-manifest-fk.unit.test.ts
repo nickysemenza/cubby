@@ -268,6 +268,11 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "ownership",
     reason: "a push registration owned by its Run",
   },
+  "DeviceAlertDelivery.deviceId": {
+    classification: "ownership",
+    reason:
+      "pending and accepted result-alert receipts owned by the native install",
+  },
   "RunPushRegistration.deviceId": {
     classification: "metadata",
     reason: "the native install that registered for pushes",

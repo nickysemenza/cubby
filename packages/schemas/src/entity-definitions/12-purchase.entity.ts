@@ -2319,6 +2319,7 @@ export const { definition, readSchemas } = defineEntityModel({
     ],
   },
   capabilities: {
+    backgroundResultAlert: { amountField: "statedTotal" },
     suggestions: [],
     dataQuality: {
       // Rows the stored evaluator reads beyond its own row (ADR 0021).

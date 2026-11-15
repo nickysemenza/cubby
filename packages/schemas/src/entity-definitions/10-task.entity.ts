@@ -1444,6 +1444,7 @@ export const { definition, readSchemas } = defineEntityModel({
     ],
   },
   capabilities: {
+    backgroundResultAlert: {},
     timeline: "default",
     images: {
       storage: "gallery",
