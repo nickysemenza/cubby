@@ -93,7 +93,7 @@ retries can repeat a displayed alert.
 
 Alerts contain titles, details and amounts where available. An existing cover may
 supply a bounded thumbnail; image failure leaves complete text. Single-result taps
-open the live entity; missing targets and digests open Changes by Cubby. Neither
+wait for restored sign-in and open the live entity; missing targets and digests open Changes by Cubby. Neither
 image research nor enrichment delays an alert.
 
 Device notification registrations are private credentials bound to the current

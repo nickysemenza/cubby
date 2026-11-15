@@ -469,5 +469,81 @@ describe("background result alerts", () => {
     ).not.toContain("c".repeat(64));
     await endDevicePush(ctx.db, installActor);
     expect((await pending()).filter((row) => !row.acceptedAt)).toHaveLength(0);
+
+    await registerDevicePush(ctx.db, installActor, sessionId, {
+      token: "c".repeat(64),
+      environment: "development",
+      appIdentity: "production",
+      enabled: true,
+    });
+    const { moneyToMinor } = await import("@cubby/shared");
+    const { logAuditEntries } =
+      await import("~/server/generic/audit-log/repo/audit-log");
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Grouped shop",
+    });
+    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      date: "2024-01-15",
+      statedTotal: moneyToMinor(42),
+    });
+    const expense = await insertWithShortcode(ctx.db, "expense", {
+      name: "Grouped item",
+      lineKind: "principal",
+      costType: "materials",
+      trade: "other",
+      date: "2024-01-15",
+      purchaseId: purchase.id,
+      cost: moneyToMinor(42),
+    });
+    await logAuditEntries(ctx.db, unattended.actor, [
+      { entityKind: "purchase", entityId: purchase.id, action: "create" },
+      { entityKind: "expense", entityId: expense.id, action: "create" },
+    ]);
+    await getDb(ctx.db)
+      .update(deviceAlertDelivery)
+      .set({ availableAt: new Date(0) })
+      .where(eq(deviceAlertDelivery.deviceId, install.id));
+    let groupedSends = 0;
+    await dispatchBackgroundAlerts(ctx.db, {
+      credentials,
+      transport: async (request) => {
+        const payload = JSON.parse(request.body);
+        expect(payload.entity).toBe("purchase");
+        expect(payload.entityId).toBe(purchase.shortcode);
+        expect(payload.aps.alert.title).toBe("Added Purchase");
+        expect(payload.aps.alert.body).toContain("42");
+        groupedSends++;
+        return { status: 200, reason: null };
+      },
+    });
+    expect(groupedSends).toBe(1);
+    const extra = await insertWithShortcode(ctx.db, "expense", {
+      name: "Later item",
+      lineKind: "principal",
+      costType: "materials",
+      trade: "other",
+      date: "2024-01-15",
+      purchaseId: purchase.id,
+      cost: moneyToMinor(5),
+    });
+    await logAuditEntries(ctx.db, unattended.actor, [
+      { entityKind: "expense", entityId: extra.id, action: "create" },
+    ]);
+    await getDb(ctx.db)
+      .update(deviceAlertDelivery)
+      .set({ availableAt: new Date(0) })
+      .where(eq(deviceAlertDelivery.deviceId, install.id));
+    await dispatchBackgroundAlerts(ctx.db, {
+      credentials,
+      transport: async (request) => {
+        const payload = JSON.parse(request.body);
+        expect(payload.entityId).toBe(purchase.shortcode);
+        expect(payload.aps.alert.title).toBe("Added to Purchase");
+        groupedSends++;
+        return { status: 200, reason: null };
+      },
+    });
+    expect(groupedSends).toBe(2);
   });
 });

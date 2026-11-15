@@ -186,6 +186,7 @@ async function resultContent(
       detail: string;
       internalId: string;
       imageEntity: Entity;
+      created: boolean;
     }
   >();
   for (const receipt of receipts) {
@@ -215,13 +216,16 @@ async function resultContent(
         record.title ??
         entityRoster[entity].singular,
     ).slice(0, 100);
-    groups.set(`${entity}:${record.id}`, {
+    const groupKey = `${entity}:${record.id}`;
+    groups.set(groupKey, {
       entity,
       id: record.id,
       title,
       detail: typeof amount === "number" ? formatCurrency(amount) : "",
       internalId: receipt.entityId,
       imageEntity: receipt.entityKind,
+      created:
+        receipt.entityKind === entity || groups.get(groupKey)?.created === true,
     });
   }
   const results = [...groups.values()];
@@ -245,7 +249,7 @@ async function resultContent(
       alert: {
         title:
           results.length === 1
-            ? `Added ${entityRoster[first.entity].singular}`
+            ? `${first.created ? "Added" : "Added to"} ${entityRoster[first.entity].singular}`
             : `Cubby added ${results.length} results`,
         body: results
           .slice(0, 3)

@@ -10,7 +10,7 @@ import UserNotifications
 #endif
 
 /// Alerts use the standard device token, independently of ActivityKit authorization. The
-/// server stores an explicit per-run opt-in and delivers only readiness or attention changes.
+/// server retains photo imports' per-run opt-in independently of the background-results preference.
 @MainActor
 @Observable
 final class PhotoImportNotificationCoordinator: NSObject, UNUserNotificationCenterDelegate {
@@ -19,7 +19,9 @@ final class PhotoImportNotificationCoordinator: NSObject, UNUserNotificationCent
     private var deviceToken: String?
     private(set) var registrationError: String?
     private var stopping = false
+    private var sessionGeneration = 0
     private var backgroundRegistrationKey: String?
+    private var pendingResult: (entity: String?, id: String?)?
     private var registeredRuns: [String: String] = [:]
     private var registeringRuns: Set<String> = []
 
@@ -74,6 +76,7 @@ final class PhotoImportNotificationCoordinator: NSObject, UNUserNotificationCent
         } onChange: { [weak self] in
             Task { @MainActor in
                 self?.observeWork()
+                await self?.openPendingResult()
                 await self?.reconcile()
             }
         }
@@ -121,6 +124,7 @@ final class PhotoImportNotificationCoordinator: NSObject, UNUserNotificationCent
 
     func resumeRegistration() async {
         stopping = false
+        await openPendingResult()
         await refreshRegistration()
     }
 
@@ -140,7 +144,9 @@ final class PhotoImportNotificationCoordinator: NSObject, UNUserNotificationCent
 
     func stop(client: CubbyClient) async {
         stopping = true
+        sessionGeneration += 1
         registrationError = nil
+        pendingResult = nil
         #if os(iOS)
             UIApplication.shared.unregisterForRemoteNotifications()
         #elseif os(macOS)
@@ -175,19 +181,33 @@ final class PhotoImportNotificationCoordinator: NSObject, UNUserNotificationCent
         } else if info["backgroundResults"] as? Bool == true {
             let entity = info["entity"] as? String
             let id = info["entityId"] as? String
-            await Self.openResult(entity: entity, id: id)
+            await Self.shared.openResult(entity: entity, id: id)
         }
     }
 
-    @MainActor private static func openResult(entity: String?, id: String?) async {
-        guard let model = AppModel.active, model.phase == .signedIn else { return }
-        if let entity, let key = EntityKey(rawValue: entity), let id {
+    private func openResult(entity: String?, id: String?) async {
+        pendingResult = (entity, id)
+        await openPendingResult()
+    }
+
+    /// A cold launch restores authentication after the notification delegate receives its tap.
+    private func openPendingResult() async {
+        guard !stopping, let model, model.phase == .signedIn, let result = pendingResult else { return }
+        pendingResult = nil
+        let origin = model.baseURL
+        let generation = sessionGeneration
+        if let entity = result.entity, let key = EntityKey(rawValue: entity), let id = result.id {
             do {
                 if let row = try await model.client.row(EntityCatalog[key], id: id) {
+                    guard model.phase == .signedIn, model.baseURL == origin, sessionGeneration == generation
+                    else { return }
                     model.navigator.open(.entity(key, id: row.id))
                     return
                 }
             } catch { Diagnostics.report(error, context: "notifications.open") }
+        }
+        guard model.phase == .signedIn, model.baseURL == origin, sessionGeneration == generation else {
+            return
         }
         let url = model.webHandoff.url(.route(path: "/suggestions", query: ["status": "automatic"]))
         #if os(iOS)
