@@ -21,6 +21,9 @@ const ledgerSchema = z.object({
   accountedUsd: z.number().finite().nonnegative(),
   outstandingUsd: z.number().finite().nonnegative(),
   stopped: z.boolean(),
+  stopReason: z
+    .enum(["unknown_outcome", "missing_receipts", "failed_no_usage", "other"])
+    .optional(),
   reservations: z
     .array(
       z.object({
@@ -60,13 +63,9 @@ export async function liveReplayBudget({
 }: { receiptWaitMs?: number } = {}) {
   const ledgerPath = process.env.MAIL_REPLAY_BUDGET_FILE;
   const catalogPath = process.env.MAIL_REPLAY_PRICING_FILE;
-  if (
-    !ledgerPath ||
-    !catalogPath ||
-    process.env.MAIL_REPLAY_PLAN_AS_PAID === "1"
-  )
+  if (!ledgerPath || !catalogPath)
     throw new Error(
-      "Live replay requires a budget ledger and official pricing snapshot; paid replay is disabled",
+      "Live replay requires a budget ledger and official pricing snapshot",
     );
   const lockPath = `${ledgerPath}.lock`;
   const lock = openSync(lockPath, "wx");
@@ -78,10 +77,44 @@ export async function liveReplayBudget({
     const ledger = ledgerSchema.parse(
       JSON.parse(readFileSync(ledgerPath, "utf8")),
     );
+    // A deliberate recovery may keep unknown older calls at their full
+    // reservation. It never turns uncertainty into free allowance.
+    const carried = new Set(
+      process.env.MAIL_REPLAY_CARRY_RESERVATIONS === "1"
+        ? ledger.reservations.map((receipt) => receipt.id)
+        : [],
+    );
     if (
-      ledger.stopped ||
-      ledger.outstandingUsd > 0 ||
-      ledger.reservations.length > 0
+      carried.size &&
+      ledger.stopped &&
+      (ledger.stopReason === undefined || ledger.stopReason === "other")
+    )
+      throw new Error(
+        "Replay accounting failure requires reconciliation before carrying reservations",
+      );
+    const held = ledger.reservations.reduce(
+      (sum, receipt) => sum + receipt.maxCostUsd,
+      0,
+    );
+    if (
+      new Set(ledger.reservations.map((receipt) => receipt.id)).size !==
+      ledger.reservations.length
+    )
+      throw new Error(
+        "Replay ledger contains duplicate reservation identities",
+      );
+    if (
+      Math.abs(held - ledger.outstandingUsd) >
+      Number.EPSILON * Math.max(1, held)
+    )
+      throw new Error("Replay reservations do not match outstanding allowance");
+    if (ledger.accountedUsd + held > ledger.limitUsd + Number.EPSILON)
+      throw new Error("Replay allowance is already exceeded");
+    if (
+      carried.size === 0 &&
+      (ledger.stopped ||
+        ledger.outstandingUsd > 0 ||
+        ledger.reservations.length > 0)
     )
       throw new Error(
         "Reconcile the stopped or outstanding replay allowance before another transmission",
@@ -96,9 +129,12 @@ export async function liveReplayBudget({
     const pending = new Map<
       string,
       { model: string; maxCostUsd: number; refused: boolean }
-    >();
+    >(ledger.reservations.map(({ id, ...receipt }) => [id, receipt]));
+    const activePending = () =>
+      [...pending.keys()].filter((id) => !carried.has(id));
+    const caseReceipts = new Set<string>();
     const settled = new Set<string>();
-    let readUsage: (() => Promise<Usage[]>) | undefined;
+    let readUsage: ((receiptIds: string[]) => Promise<Usage[]>) | undefined;
     let accepting = false;
     const save = () => {
       // Preserve the physical identity even when runtime shutdown loses its SQL receipt.
@@ -116,15 +152,20 @@ export async function liveReplayBudget({
       );
       renameSync(`${ledgerPath}.tmp`, ledgerPath);
     };
-    function stop(message: string): never {
+    function stop(
+      message: string,
+      reason: NonNullable<z.infer<typeof ledgerSchema>["stopReason"]> = "other",
+    ): never {
       ledger.stopped = true;
+      ledger.stopReason = reason;
       save();
       throw new Error(message);
     }
     async function reconcile() {
       if (!readUsage) throw new Error("No active replay case");
-      const rows = await readUsage();
+      const rows = await readUsage([...caseReceipts]);
       for (const [id, reservation] of pending) {
+        if (carried.has(id)) continue;
         const matches = rows.filter((row) => row.gatewayLogId === id);
         if (!matches.length) continue;
         const row = matches[0];
@@ -160,6 +201,16 @@ export async function liveReplayBudget({
         )
           stop(
             "Unpriced or ambiguous physical-call usage; replay allowance stopped",
+            matches.length === 1 &&
+              row?.model === reservation.model &&
+              row.status === "failed" &&
+              (row.standardCost === null || row.standardCost === 0) &&
+              row.inputTokens === null &&
+              row.outputTokens === null &&
+              row.cacheReadTokens === null &&
+              row.cacheWriteTokens === null
+              ? "failed_no_usage"
+              : "other",
           );
         ledger.accountedUsd += row.standardCost;
         ledger.outstandingUsd = Math.max(
@@ -220,6 +271,7 @@ export async function liveReplayBudget({
           if (input.action === "failed")
             stop(
               `Unknown physical-call outcome ${input.id}; reservation retained`,
+              "unknown_outcome",
             );
           if (input.action === "refused") {
             const receipt = pending.get(input.id);
@@ -254,7 +306,9 @@ export async function liveReplayBudget({
             ledger.accountedUsd + ledger.outstandingUsd + quote.maxCostUsd <=
             ledger.limitUsd;
           const refusedPending = () =>
-            [...pending.values()].some((receipt) => receipt.refused);
+            [...pending].some(
+              ([id, receipt]) => !carried.has(id) && receipt.refused,
+            );
           if (!fits() && refusedPending()) {
             // Refusal telemetry is queued. Let that exact no-usage SQL receipt
             // arrive before deciding whether the next funding step can fit.
@@ -269,7 +323,7 @@ export async function liveReplayBudget({
               );
           }
           if (!fits())
-            throw pending.size
+            throw activePending().length
               ? new PendingReceipts(
                   "Waiting for physical-call receipts before another full-window reservation",
                 )
@@ -284,6 +338,7 @@ export async function liveReplayBudget({
             maxCostUsd: quote.maxCostUsd,
             refused: false,
           });
+          caseReceipts.add(id);
           ledger.outstandingUsd += quote.maxCostUsd;
           save();
           return { id };
@@ -309,17 +364,25 @@ export async function liveReplayBudget({
     const vars = {
       PRICING_CATALOG: catalog,
       EVAL_BUDGET_URL: `http://127.0.0.1:${address.port}/${token}`,
+      ...(process.env.MAIL_REPLAY_ALLOW_PAID === "1" && { ALLOW_PAID: "1" }),
     };
+    if (carried.size) {
+      ledger.stopped = false;
+      delete ledger.stopReason;
+      save();
+    }
     return {
-      begin(read: () => Promise<Usage[]>) {
+      receiptIds: () => [...caseReceipts],
+      begin(read: (receiptIds: string[]) => Promise<Usage[]>) {
         if (
           readUsage ||
           ledger.stopped ||
-          ledger.outstandingUsd > 0 ||
+          activePending().length > 0 ||
           ledger.accountedUsd >= ledger.limitUsd
         )
           throw new Error("Replay allowance cannot admit another case");
         readUsage = read;
+        caseReceipts.clear();
         accepting = true;
         return { agent: vars, gateway: vars };
       },
@@ -336,13 +399,18 @@ export async function liveReplayBudget({
         await serial(async () => {
           await reconcile();
           const deadline = Date.now() + receiptWaitMs;
-          while (pending.size && !ledger.stopped && Date.now() < deadline) {
+          while (
+            activePending().length &&
+            !ledger.stopped &&
+            Date.now() < deadline
+          ) {
             await delay(Math.min(100, receiptWaitMs));
             await reconcile();
           }
-          if (pending.size)
+          if (activePending().length)
             stop(
               "Missing physical-call receipts; replay allowance stopped with reservations retained",
+              "missing_receipts",
             );
           if (ledger.stopped) throw new Error("Replay allowance stopped");
           readUsage = undefined;

@@ -729,15 +729,19 @@ requires `MAIL_REPLAY_PRICING_FILE` (an official models.dev `?type=all`
 snapshot) and `MAIL_REPLAY_BUDGET_FILE`. The exclusive JSON ledger records
 `limitUsd`, `accountedUsd`, `outstandingUsd`, `stopped`, and outstanding
 physical `reservations` (ID, model, maximum cost and refusal proof). The ledger
-spans fresh databases, peer isolates and launcher invocations; a stale lock or
-outstanding reservation requires reconciliation before another launch.
+spans fresh databases, peer isolates and launcher invocations. A stale lock
+requires investigation; outstanding reservations require exact reconciliation
+or deliberate conservative carry before another launch.
 
 - One loopback admission server serializes full catalog-window reservations
   for both peers before every physical call. It reconciles exact stored
   receipts between requests, so sequential calls can reuse unused capacity
   without partitioning the allowance between coordinator and other features.
-- Frontier requests require the subscriber-credit alias and no-wholesale flag;
-  paid forwarding is disabled.
+- Frontier requests use the subscriber-credit alias and no-wholesale flag by
+  default. An explicitly authorized `MAIL_REPLAY_ALLOW_PAID=1` comparison admits
+  OpenAI's actual paid stage under the same physical-call ledger. Credit and
+  subscription attempts refuse locally first, preserving truthful paid usage
+  attribution; Anthropic stays credit-only.
 - Uncertain calls keep their reservations and stop further evaluation. Only
   exact reconciliation of successful physical requests with priced stored usage
   releases unused capacity. A fully read credit refusal also requires its exact
@@ -745,13 +749,22 @@ outstanding reservation requires reconciliation before another launch.
   funding fallback can wait up to five seconds for that queued receipt; expiry
   stops the evaluation and keeps the reservation. Unknown failures stay
   reserved with their physical IDs.
+- After inspecting an interrupted attempt, `MAIL_REPLAY_CARRY_RESERVATIONS=1`
+  can resume with older unknown calls held at their complete maximum cost.
+  Their identities remain in the same ledger and their allowance is never
+  reclaimed. New calls must fit beside those holds; new uncertain calls stop
+  admission as usual. Stopped ledgers record their reason: only unknown,
+  missing-receipt or failed-without-usage outcomes permit carry. Unpriced
+  successful calls, unreserved usage and exceeded bounds require exact
+  reconciliation. Default startup refuses outstanding reservations.
 - The replay checks a stopped allowance while observing the Run, and
   finalization closes physical admission before reading the last receipts,
   allowing the same bounded wait for final queued usage. Outstanding cost is
   derived from retained reservations, so subtraction residue cannot block the
   next case.
 
-The report covers all Run-scoped AI usage, including extraction and audit, with
+The report covers all Run-scoped AI usage, including extraction and audit, plus
+the case's exact physical receipts whose feature omitted Run attribution, with
 raw token/cache counts, duration and unknown prices. Known cost subtotals are
 not complete costs when calls are unpriced. Version 2 synthetic replays fail on
 disposition, total, line-cost or supported-link disagreements; free-form line

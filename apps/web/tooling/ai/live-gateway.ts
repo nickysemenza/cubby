@@ -30,13 +30,8 @@ type Env = {
   PRICING_CATALOG?: string;
   RESPONSES_MODEL?: string;
   RESPONSES_EFFORT?: string;
-  /**
-   * "1" forwards a ChatGPT plan attempt to the paid OpenAI route, so a replay
-   * measures the requested OpenAI model instead of falling down the funding
-   * ladder. Anthropic has no Unified Billing route on this gateway (only the
-   * `subscriber-credit` key), so Claude attempts stay on credit.
-   */
-  PLAN_AS_PAID?: string;
+  /** Explicitly authorized, budget-guarded OpenAI paid evaluation. */
+  ALLOW_PAID?: string;
   /** Shared host-owned physical-call allowance. */
   EVAL_BUDGET_URL?: string;
 };
@@ -61,12 +56,16 @@ async function reserveEvaluation(
 ) {
   if (!env.EVAL_BUDGET_URL) return undefined;
   const frontier = route === "openai" || route === "anthropic";
+  const paid =
+    env.ALLOW_PAID === "1" &&
+    route === "openai" &&
+    request.headers.get("x-cubby-inference-funding") === "paid";
   if (
-    env.PLAN_AS_PAID === "1" ||
-    request.headers.get("x-cubby-inference-funding") === "paid" ||
-    (frontier &&
-      (request.headers.get("cf-aig-byok-alias") !== "subscriber-credit" ||
-        request.headers.get("cf-aig-no-wholesale") !== "true"))
+    !paid &&
+    (request.headers.get("x-cubby-inference-funding") === "paid" ||
+      (frontier &&
+        (request.headers.get("cf-aig-byok-alias") !== "subscriber-credit" ||
+          request.headers.get("cf-aig-no-wholesale") !== "true")))
   )
     return Response.json(
       {
@@ -185,6 +184,14 @@ function forward(
     return fetch(run.url, run.init);
   }
   const headers = strippedHeaders({ headers: request.headers });
+  if (
+    env.ALLOW_PAID === "1" &&
+    route === "openai" &&
+    request.headers.get("x-cubby-inference-funding") === "paid"
+  ) {
+    headers.delete("cf-aig-byok-alias");
+    headers.delete("cf-aig-no-wholesale");
+  }
   headers.delete("x-cubby-inference-funding");
   // The placeholder host must not follow the request to the gateway.
   headers.delete("host");
@@ -224,10 +231,7 @@ export default {
     }
     // This Worker has only a Unified Billing token, never a ChatGPT session.
     // Preserve the funding ladder by letting its owner choose the paid stage.
-    if (
-      request.headers.get("x-cubby-inference-funding") === "subscription" &&
-      env.PLAN_AS_PAID !== "1"
-    )
+    if (request.headers.get("x-cubby-inference-funding") === "subscription")
       return Response.json(
         {
           error: {
@@ -240,6 +244,24 @@ export default {
       );
     // `/openai/responses`, `/anthropic/v1/messages`, `/workers-ai/...`
     const route = url.pathname.split("/")[1] ?? "unknown";
+    // Let the funding ladder select its real paid stage, with accurate paid
+    // usage attribution, rather than buying a credit/subscription attempt.
+    if (
+      env.EVAL_BUDGET_URL &&
+      env.ALLOW_PAID === "1" &&
+      route === "openai" &&
+      request.headers.get("x-cubby-inference-funding") !== "paid"
+    )
+      return Response.json(
+        {
+          error: {
+            code: "insufficient_quota",
+            message:
+              "Credit routing is disabled for this authorized paid evaluation",
+          },
+        },
+        { status: 429 },
+      );
     let body =
       request.method === "GET" || request.method === "HEAD"
         ? undefined

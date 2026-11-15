@@ -1,7 +1,9 @@
+import { agentConversationSchema } from "@cubby/schemas/agent-conversation";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   importRunAgentManifest,
   EXTRACT_ORDER_TOOL,
+  importRunAgentIdentity,
 } from "@cubby/schemas/import-run-agent";
 import { mailAttributionHeaders } from "@cubby/schemas/mailbox-research";
 import { purchaseAgentEvent } from "@cubby/schemas/purchase-import";
@@ -12,7 +14,7 @@ import {
 } from "@cubby/shared/ai/gateway-metadata";
 import { supportedChatModelSchema } from "@cubby/shared/ai/models";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { liveReplayBudget } from "tooling/ai/live-replay-budget";
 import { localSecret } from "tooling/local-secret";
 import {
@@ -241,7 +243,7 @@ describe("isolated Mail coordinator replay", () => {
       JSON.stringify({
         kind: "mail-import-replay",
         reportVersion: 2,
-        costScope: "all_run_features",
+        costScope: "run_features_and_case_receipts",
         synthetic: !inputUrl,
         scripted,
         readMode: readCode ? "code" : "ordinary",
@@ -409,7 +411,15 @@ describe("isolated Mail coordinator replay", () => {
                     durationMs: aiUsage.durationMs,
                   })
                   .from(aiUsage)
-                  .where(eq(aiUsage.runId, runId))
+                  .where(
+                    or(
+                      eq(aiUsage.runId, runId),
+                      inArray(
+                        aiUsage.gatewayLogId,
+                        evaluationBudget?.receiptIds() ?? [],
+                      ),
+                    ),
+                  )
                   .orderBy(aiUsage.createdAt);
                 const [failed] = await getDb(ctx.db)
                   .select({
@@ -443,7 +453,9 @@ describe("isolated Mail coordinator replay", () => {
                         DIAGNOSTIC_CHARS,
                       ),
                     ),
-                  diagnostics: await diagnose(),
+                  diagnostics: await diagnose().catch((error: unknown) => [
+                    `Replay diagnostics unavailable: ${String(error).slice(0, DIAGNOSTIC_CHARS)}`,
+                  ]),
                   usage: usage.map((row) => ({
                     feature: row.feature,
                     model: row.model,
@@ -632,7 +644,7 @@ describe("isolated Mail coordinator replay", () => {
             };
             if (!evaluationBudget)
               throw new Error("Live replay requires guarded admission");
-            const allowances = evaluationBudget.begin(async () =>
+            const allowances = evaluationBudget.begin(async (receiptIds) =>
               getDb(ctx.db)
                 .select({
                   gatewayLogId: aiUsage.gatewayLogId,
@@ -645,7 +657,12 @@ describe("isolated Mail coordinator replay", () => {
                   cacheWriteTokens: aiUsage.cacheWriteTokens,
                 })
                 .from(aiUsage)
-                .where(eq(aiUsage.runId, runId)),
+                .where(
+                  or(
+                    eq(aiUsage.runId, runId),
+                    inArray(aiUsage.gatewayLogId, receiptIds),
+                  ),
+                ),
             );
             await withWorkerdRuntime(
               {
@@ -683,10 +700,36 @@ describe("isolated Mail coordinator replay", () => {
                   const peer = await harness
                     .getWorker("cubby-test-model")
                     .fetch("https://model.test/usage");
-                  return [...logs, `peer usage: ${await peer.text()}`];
+                  const transcript = await harness
+                    .getWorker("cubby-job-wake-producer")
+                    .fetch("https://queue.test/coordinator-transcript", {
+                      method: "POST",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({
+                        agentId: importRunAgentIdentity(runId, "mail_import"),
+                      }),
+                    });
+                  if (!transcript.ok)
+                    throw new Error(
+                      `Replay transcript refused (${transcript.status})`,
+                    );
+                  const conversation = agentConversationSchema.parse(
+                    await transcript.json(),
+                  );
+                  const calls = conversation.messages
+                    .flatMap((message) => message.parts)
+                    .filter(
+                      (part) =>
+                        part.type === "tool" && part.toolName === "codemode",
+                    );
+                  return [
+                    ...logs,
+                    `peer usage: ${await peer.text()}`,
+                    `code usage: ${JSON.stringify({ calls: calls.length, errors: calls.filter((part) => part.type === "tool" && part.state === "output-error").length })}`,
+                  ];
                 };
-                try {
-                  observedOutcome = await observe(async () => {
+                observedOutcome = await observe(async () => {
+                  try {
                     const response = await harness
                       .getWorker("cubby-job-wake-producer")
                       .fetch("https://queue.test/wake", {
@@ -699,10 +742,12 @@ describe("isolated Mail coordinator replay", () => {
                         `Replay dispatch refused (${response.status})`,
                       );
                     await waitForSettlement();
-                  });
-                } finally {
-                  await evaluationBudget.finish();
-                }
+                  } finally {
+                    // Flush exact physical receipts before the report reads
+                    // usage, while this case's database still exists.
+                    await evaluationBudget.finish();
+                  }
+                });
               },
             );
           }
