@@ -32,7 +32,10 @@ import { resolveFilterTokens } from "~/server/entity-kernel/filter-tokens";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { publishAllQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
+  createInventoryFixture,
+  createLocationFixture,
   createProductIdentityFixture,
+  makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -660,6 +663,7 @@ describe("composed Work queue engine", () => {
       makeProductInput({
         name: "Synthetic source gap widget",
         categoryId: null,
+        expectedQuantity: 1,
       }),
       ctx.actor,
     );
@@ -730,5 +734,47 @@ describe("composed Work queue engine", () => {
       memberOnly: false,
     });
     expect(excluded.meta.totalCount).toBe(0);
+    for (const name of ["Synthetic first shelf", "Synthetic second shelf"]) {
+      const location = await createLocationFixture(
+        ctx.db,
+        makeLocationInput({ name }),
+        ctx.actor,
+      );
+      await createInventoryFixture(
+        ctx.db,
+        {
+          productId: product.entityId,
+          locationId: location.entityId,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+    }
+    await publishAllQualityFixtures(ctx.db);
+    const problems = (executor?: WorkExecutor) =>
+      readComposedQueue(ctx.db, {
+        input: {
+          family: "problem",
+          reason: ["productsMissingPrice", "duplicateInventory"],
+          query: "Synthetic source gap widget",
+          executor,
+        },
+        memberPartyId: null,
+        memberOnly: false,
+      });
+    expect(
+      (await problems()).items
+        .map((row) => ({ reason: row.reasonKeys[0], executor: row.executor }))
+        .sort((a, b) => a.reason!.localeCompare(b.reason!)),
+    ).toEqual([
+      { reason: "duplicateInventory", executor: "human" },
+      { reason: "productsMissingPrice", executor: "agent" },
+    ]);
+    expect(
+      (await problems("agent")).items.map((row) => row.reasonKeys),
+    ).toEqual([["productsMissingPrice"]]);
+    expect(
+      (await problems("human")).items.map((row) => row.reasonKeys),
+    ).toEqual([["duplicateInventory"]]);
   });
 });

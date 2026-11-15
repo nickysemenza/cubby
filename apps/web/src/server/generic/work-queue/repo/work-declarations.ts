@@ -433,7 +433,7 @@ export const entityProblemSources = (
               { key: definition.key, label: definition.title },
             ])
               ? [
-                  sql`(${definition.key}::text, ${definition.title}::text, base.${sql.identifier(`match_${index}`)}, (base.${sql.identifier(`missing_${index}`)} AND NOT base.${sql.identifier(`match_${index}`)}))`,
+                  sql`(${definition.key}::text, ${definition.title}::text, ${decisionExecutor(PROBLEM_DECISION[definition.key])}::text, base.${sql.identifier(`match_${index}`)}, (base.${sql.identifier(`missing_${index}`)} AND NOT base.${sql.identifier(`match_${index}`)}))`,
                 ]
               : [],
           );
@@ -444,6 +444,7 @@ export const entityProblemSources = (
               name: sql`base.name`,
               owners: sql`base.owners`,
               ...columns,
+              executor: sql`reason.executor`,
               source: sql`reason.source`,
               key: sql`reason.source || ':' || base.code`,
               reason: sql`reason.label`,
@@ -451,7 +452,7 @@ export const entityProblemSources = (
             })
               .from(sql`${sql.identifier(baseName)} base`)
               .innerJoin(
-                sql`LATERAL (VALUES ${sql.join(admitted, sql`, `)}) reason(source, label, matched, missing)`,
+                sql`LATERAL (VALUES ${sql.join(admitted, sql`, `)}) reason(source, label, executor, matched, missing)`,
                 sql`true`,
               )
               .where(missing ? sql`reason.missing` : sql`reason.matched`);

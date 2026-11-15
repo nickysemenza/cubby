@@ -1812,8 +1812,8 @@ or routing expressions. They project admitted filter values, readiness and relat
 relation of not-deleted records that can match a certain or possible Problem, per entity and
 request, then compute membership and label/authority columns once in its
 base, admitting only records matching a certain or possible Problem. Bound values are part of
-expression reuse. Compact reason arms only filter that base; reason declarations own actions and
-ordering; possible matches with missing publications add completeness warnings, never actionable
+expression reuse. Compact reason arms only filter that base; each carries its declaration's executor,
+actions and ordering independently of the other reasons sharing the base. Possible matches with missing publications add completeness warnings, never actionable
 rows. Routed label and owner expressions are deduplicated base columns outside the facts relation.
 
 ### Counts and totals
