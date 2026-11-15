@@ -35,6 +35,7 @@ import {
 import { textArrayParam } from "~/server/db/helpers/array-param";
 import { uuidArrayParam } from "~/server/db/helpers/query";
 import { decision } from "~/server/db/kernel-schema";
+import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { auditLog } from "~/server/db/retained-tables";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import {
@@ -235,36 +236,34 @@ async function loadRuledOutSince(
   return byRecord;
 }
 
-/**
- * Two statements per field with parents: each subject's newest person-held
- * values on records sharing a parent, and the corrected ones among them.
- */
+/** One entity query retains each field's corrected and ordinary candidate sets. */
 async function loadPrecedents(
   reads: Reads,
   plan: EntityFieldsPlan,
-  field: FieldPlan,
   subjects: readonly Row[],
-): Promise<Map<string, Precedent[]>> {
+): Promise<Map<string, Map<string, Precedent[]>>> {
+  const fields = plan.fields.filter((field) => field.parents.length);
+  if (!fields.length || !subjects.length) return new Map();
   const ids = subjects.map((row) => String(row.id));
-  const sameParent = sql.join(
-    field.parents.map(
-      (key) => sql`c.${columnOf(plan, key)} = s.${columnOf(plan, key)}`,
-    ),
-    sql` OR `,
-  );
-  const target = columnOf(plan, field.key);
   const live = plan.hasDeletedAt
     ? sql`AND c.${columnOf(plan, "deletedAt")} IS NULL`
     : sql``;
   const newest = plan.hasUpdatedAt
     ? sql`date_trunc('milliseconds', c."updatedAt") DESC NULLS LAST, c.id`
     : sql`c.id`;
-  const candidates = (corrected: boolean) =>
-    reads.select(
-      plan.table,
-      [],
-      sql`${plan.table.id} IN (
-        SELECT p.id FROM ${plan.table} s
+  const candidates = sql.join(
+    fields.flatMap((field) => {
+      const sameParent = sql.join(
+        field.parents.map(
+          (key) => sql`c.${columnOf(plan, key)} = s.${columnOf(plan, key)}`,
+        ),
+        sql` OR `,
+      );
+      const target = columnOf(plan, field.key);
+      return [true, false].map(
+        (corrected) => sql`
+        SELECT DISTINCT ${field.key}::text AS field, ${corrected}::boolean AS corrected, p.id
+        FROM ${plan.table} s
         CROSS JOIN LATERAL (
           SELECT c.id FROM ${plan.table} c
           WHERE c.id <> s.id AND (${sameParent}) ${live}
@@ -274,12 +273,50 @@ async function loadPrecedents(
           ORDER BY ${newest}
           LIMIT ${PRECEDENT_LIMIT}
         ) p
-        WHERE s.id = ANY(${uuidArrayParam(ids)}))`,
-    );
-  const [corrected, all] = await Promise.all([
-    candidates(true),
-    candidates(false),
-  ]);
+        WHERE s.id = ANY(${uuidArrayParam(ids)})`,
+      );
+    }),
+    sql` UNION ALL `,
+  );
+  // The same declared column revisions precede this shared read. Selecting
+  // table columns through Drizzle retains its date and value decoders.
+  const selected = await reads.prepare([plan.table], (db) =>
+    repositoryQueries(db)
+      .select({
+        field: sql<string>`candidates.field`,
+        corrected: sql<boolean>`candidates.corrected`,
+        row: getTableColumns(plan.table),
+      })
+      .from(plan.table)
+      .innerJoin(
+        sql`(${candidates}) AS candidates`,
+        sql`${plan.table.id} = candidates.id`,
+      ),
+  );
+  return new Map(
+    fields.map((field) => {
+      const rows = selected.filter((entry) => entry.field === field.key);
+      return [
+        field.key,
+        precedentsBySubject(
+          plan,
+          field,
+          subjects,
+          rows.filter((entry) => entry.corrected).map((entry) => entry.row),
+          rows.filter((entry) => !entry.corrected).map((entry) => entry.row),
+        ),
+      ] as const;
+    }),
+  );
+}
+
+function precedentsBySubject(
+  plan: EntityFieldsPlan,
+  field: FieldPlan,
+  subjects: readonly Row[],
+  corrected: readonly Row[],
+  all: readonly Row[],
+): Map<string, Precedent[]> {
   const correctedIds = new Set(corrected.map((row) => String(row.id)));
   const updatedAt = (row: Row) => {
     const time = new Date(String(row.updatedAt)).getTime();
@@ -368,19 +405,7 @@ async function load(
       const live: Row[] = rows.flatMap((row) =>
         row && !(plan.hasDeletedAt && row.deletedAt) ? [row] : [],
       );
-      const precedentsByField = new Map(
-        await Promise.all(
-          plan.fields
-            .filter((field) => field.parents.length && live.length)
-            .map(
-              async (field) =>
-                [
-                  field.key,
-                  await loadPrecedents(reads, plan, field, live),
-                ] as const,
-            ),
-        ),
-      );
+      const precedentsByField = await loadPrecedents(reads, plan, live);
       for (const [index, item] of items.entries()) {
         const row = rows[index] ?? null;
         inputs.set(item.key, {
