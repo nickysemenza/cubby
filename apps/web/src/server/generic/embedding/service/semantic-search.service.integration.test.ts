@@ -4,8 +4,9 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq, isNull } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import { setCfEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
@@ -15,9 +16,11 @@ import { productPairFingerprint } from "~/server/domains/product/repo/match/prod
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
+import { queryEmbeddingAsk } from "~/server/generic/embedding/module";
 import { getStoredEmbeddingHashes } from "~/server/generic/embedding/repo/entity-embedding-refresh";
 import { findSimilarEntitiesWorkflow } from "~/server/generic/embedding/service/semantic-similarity";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
+import { embedQuery } from "~/server/generic/embedding/service/semantic/embeddings";
 import {
   createInMemoryVectorizeIndex,
   type VectorStorePort,
@@ -31,6 +34,7 @@ import {
 } from "~/server/generic/search/repo/search-document";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
+import { readAskAnswer } from "~/server/kernel/api";
 import { gatewayEgressEnv } from "~/server/testing/ai-gateway-egress";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
@@ -131,7 +135,10 @@ const refreshOne = async (
 describe("semantic search background tasks", () => {
   const ctx = withTestDb();
 
-  afterEach(() => setCfEnv(undefined));
+  afterEach(() => {
+    setCfEnv(undefined);
+    vi.unstubAllGlobals();
+  });
 
   it("keeps unavailable similarity results public and skips candidate work", async () => {
     const source = await createProduct(
@@ -296,7 +303,7 @@ describe("semantic search background tasks", () => {
     ).rejects.toThrow("Suggestion not found");
   });
 
-  it("embeds a fresh projection once, then skips it as fresh", async () => {
+  it("reuses settled entity and query embeddings without another provider call", async () => {
     const product = await createProduct(
       ctx.db,
       makeProductInput({ name: "Backfill blue tarp" }),
@@ -318,6 +325,55 @@ describe("semantic search background tasks", () => {
         getSemanticEmbeddingConfig(),
       ),
     ).toBe(0);
+    const dimensions = getSemanticEmbeddingConfig().dimensions;
+    const vector = Array.from({ length: dimensions }, (_, index) =>
+      index === 0 ? 1 : 0,
+    );
+    setCfEnv(
+      fromPartial<Env>({
+        ...gatewayEgressEnv("synthetic-gateway-token"),
+        VECTORIZE: createInMemoryVectorizeIndex(),
+      }),
+    );
+    const provider = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            object: "list",
+            model: getSemanticEmbeddingConfig().model,
+            data: [{ object: "embedding", index: 0, embedding: vector }],
+            usage: { prompt_tokens: 4, total_tokens: 4 },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+    );
+    vi.stubGlobal("fetch", async (input: string | URL | Request) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      if (/\/embeddings(?:\?|$)/.test(url)) return provider();
+      if (/models\.dev|openrouter|pricing/.test(url)) return Response.json({});
+      throw new Error("Unexpected synthetic query transport");
+    });
+    const text = "synthetic query ledger proof";
+    expect(await embedQuery(text, { db: ctx.db })).toEqual(vector);
+    expect(
+      await readAskAnswer(ctx.db, queryEmbeddingAsk, {
+        text,
+        interactive: false,
+      }),
+    ).toEqual(vector);
+    const prepared = await withAiInputs(
+      true,
+      () => embedQuery("  SYNTHETIC   QUERY LEDGER PROOF  ", { db: ctx.db }),
+      { providerFree: true },
+    );
+    expect(prepared.result).toEqual(vector);
+    expect(prepared.incomplete).toBe(false);
+    expect(provider).toHaveBeenCalledTimes(1);
   });
 
   it("does not upload a provider result after the source ticket changes", async () => {

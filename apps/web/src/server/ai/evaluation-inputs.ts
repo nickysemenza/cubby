@@ -20,11 +20,14 @@ export const preparedQuestion = z.object({
 });
 const capturedInput = capturedFieldInput;
 export type CapturedInput = z.infer<typeof capturedInput>;
+export type QueryEmbeddingReader = (query: string) => Promise<number[] | null>;
 const scope = new AsyncLocalStorage<{
   prepareOnly: boolean;
   providerFree: boolean;
   /** Set when a provider-free preparation skipped an input it needed. */
   incomplete: boolean;
+  queryEmbeddings: Set<string>;
+  readQueryEmbedding?: QueryEmbeddingReader;
   inputs: CapturedInput[];
   questions: z.infer<typeof preparedQuestion>[];
   expected?: readonly z.infer<typeof preparedQuestion>[];
@@ -45,6 +48,18 @@ export const markPreparationIncomplete = () => {
   const current = scope.getStore();
   if (current?.providerFree) current.incomplete = true;
 };
+
+/** A field's scoped reader records the Answer revision before its vector is used. */
+export async function readPreparationQueryEmbedding(
+  query: string,
+  fallback: () => Promise<number[] | null>,
+): Promise<number[] | null> {
+  const current = scope.getStore();
+  current?.queryEmbeddings.add(query);
+  return current?.readQueryEmbedding
+    ? current.readQueryEmbedding(query)
+    : fallback();
+}
 export async function captureAiInput(
   feature: Pick<AiFeature, "feature" | "promptVersion" | "model"> &
     Partial<Pick<AiFeature, "tier">> & {
@@ -57,6 +72,12 @@ export async function captureAiInput(
 ) {
   const current = scope.getStore();
   if (!current) return;
+  if (current.providerFree && current.incomplete && !current.prepareOnly)
+    throw refusedBeforeSending(
+      new WorkEvidenceObsoleteError(
+        "The field's semantic search inputs are incomplete",
+      ),
+    );
   const question = preparedQuestion.parse({
     ...feature,
     operation,
@@ -97,6 +118,7 @@ export async function withAiInputs<T>(
     providerFree?: boolean;
     captureToParent?: boolean;
     expected?: readonly z.infer<typeof preparedQuestion>[];
+    readQueryEmbedding?: QueryEmbeddingReader;
   } = {},
 ) {
   const parent = scope.getStore();
@@ -104,16 +126,25 @@ export async function withAiInputs<T>(
     prepareOnly,
     providerFree: options.providerFree === true,
     incomplete: false,
+    queryEmbeddings: new Set<string>(),
+    readQueryEmbedding:
+      options.readQueryEmbedding ?? parent?.readQueryEmbedding,
     inputs: new Array<CapturedInput>(),
     questions: new Array<z.infer<typeof preparedQuestion>>(),
     expected: options.expected,
   };
   const result = await scope.run(store, work);
-  if (options.captureToParent !== false) parent?.inputs.push(...store.inputs);
+  if (parent && options.captureToParent !== false) {
+    parent.inputs.push(...store.inputs);
+    parent.incomplete ||= store.incomplete;
+    for (const query of store.queryEmbeddings)
+      parent.queryEmbeddings.add(query);
+  }
   return {
     result,
     inputs: store.inputs,
     questions: store.questions,
     incomplete: store.incomplete,
+    queryEmbeddings: [...store.queryEmbeddings],
   };
 }

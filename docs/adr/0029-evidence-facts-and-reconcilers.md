@@ -238,6 +238,14 @@ questions. A changed source is refused by the
 publication fence. Each question has its own provider-free input capture;
 the actual producer checks the stored row and frozen questions again before
 any model transport.
+Semantic query embeddings are durable Answers owned by the embedding module.
+Provider-free field preparation records each scope's Answer revision before
+using its vector; missing vectors become Ask dependencies rather than empty
+candidate answers. The query producer runs outside publication transactions.
+Read-only Answer lookup never claims work or invokes a provider. An incomplete
+empty semantic scan cannot establish that no candidate exists; current matches
+remain usable when unrelated corpus work is pending. Stored field envelopes
+and the producer's frozen-question check remain unchanged.
 Frozen questions compare canonical JSON: JSONB may reorder object keys, while
 array order, values and output policy remain part of the fence. A mismatch
 declares a pre-send refusal to the produce ledger. The ledger re-queues only

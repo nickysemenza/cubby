@@ -6,27 +6,42 @@
  */
 import type { ProjectId } from "@cubby/schemas/identifiers";
 import { FIELDS_SCOPE } from "@cubby/schemas/kernel/capability";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { FIELD_SUGGESTION_FEATURE } from "~/server/ai/policy/features";
+import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
-import { product, project } from "~/server/db/schema";
+import { repositoryQueries } from "~/server/db/repository-access.boundary";
+import { product, productCategory, project } from "~/server/db/schema";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { executeEntity } from "~/server/entity-kernel";
+import {
+  embeddingKernelModule,
+  queryEmbeddingAsk,
+} from "~/server/generic/embedding/module";
+import { embedFixtures } from "~/server/generic/embedding/repo/embedding-drain.fixtures";
+import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
+import {
+  createInMemoryVectorizeIndex,
+  productionVectorStore,
+} from "~/server/generic/embedding/service/semantic/vector-store";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import {
   createKernel,
   defineAsk,
   defineModule,
   startPass,
+  withAsk,
 } from "~/server/kernel/api";
-import { runQueuedAsks } from "~/server/kernel/ask";
+import { computeBatch } from "~/server/kernel/compute";
 import { readPasses } from "~/server/kernel/pass.fixtures";
+import { gatewayEgressEnv } from "~/server/testing/ai-gateway-egress";
 import {
   createIngredientFixture,
   createProductIdentityFixture,
@@ -34,7 +49,7 @@ import {
 } from "~/server/testing/repo.fixtures";
 import { fieldsReconcilePass } from "~/server/workflows/fields-reconcile-pass";
 
-import { fieldAskInput, type FieldAskInput } from "./ask";
+import { fieldAsk, fieldAskInput, type FieldAskInput } from "./ask";
 import { insertFieldsFixture } from "./fields.fixtures";
 import { fieldsKernelModule } from "./module";
 import { fieldsCapabilities, fieldsReconciler } from "./reconciler";
@@ -45,6 +60,10 @@ const RUN = { budgetMs: 20_000 };
 
 describe("fields scope", () => {
   const ctx = withTestDb();
+  afterEach(() => {
+    setCfEnv(undefined);
+    vi.unstubAllGlobals();
+  });
 
   /** A test kernel whose field Ask answers from `answers` by field. */
   const kernelAnswering = (
@@ -150,9 +169,12 @@ describe("fields scope", () => {
     await kernel.run(ctx.db, RUN);
     expect((await stored(id)).kind).toBe("garden");
 
-    const category = await createRepoEntity(ctx, "productCategory", {
-      name: "Synthetic produce",
-    });
+    const q = repositoryQueries(ctx.db);
+    const [category] = await q
+      .select({ id: productCategory.id })
+      .from(productCategory)
+      .where(eq(productCategory.feature, "food"));
+    expect(category).toBeTruthy();
     const ingredient = await createIngredientFixture(
       ctx.db,
       { name: "Synthetic carrot ingredient" },
@@ -167,21 +189,113 @@ describe("fields scope", () => {
       proposal: { value, label: null, confidence: 0.99, runnerUp: null },
       outcome: "pick",
     });
-    const { kernel: dependentKernel } = kernelAnswering({
-      categoryId: pick(category.entityId),
-      ingredientId: (input) =>
-        input.row.categoryId === category.entityId
-          ? pick(ingredient.entityId)
-          : { proposal: null, outcome: "no_candidates" },
+    const vectorIndex = createInMemoryVectorizeIndex();
+    setCfEnv(
+      fromPartial<Env>({
+        ...gatewayEgressEnv("synthetic-gateway-token"),
+        VECTORIZE: vectorIndex,
+      }),
+    );
+    const transport = vi.fn(() => {
+      throw new Error("Synthetic providers must answer this journey");
     });
-    await dependentKernel.reconcileNow(ctx.db, [
-      { kind: FIELDS_SCOPE, key: `product:${item.entityId}` },
+    vi.stubGlobal("fetch", transport);
+    const dependentKernel = createKernel([
+      fieldsKernelModule,
+      embeddingKernelModule,
     ]);
-    // Every first-round answer is ready before any inferred value is applied.
-    for (;;) {
-      if (!(await runQueuedAsks(ctx.db, dependentKernel.registry, 4))) break;
-    }
-    await dependentKernel.run(ctx.db, RUN);
+    const scope = { kind: FIELDS_SCOPE, key: `product:${item.entityId}` };
+    const prepare = async () => {
+      const [computed] = await computeBatch(
+        q,
+        dependentKernel.registry,
+        dependentKernel.registry.reconcilers.get(FIELDS_SCOPE)!,
+        [scope],
+        { db: ctx.db, locked: false, hideBaseline: true },
+      );
+      expect(computed!.error).toBeNull();
+      return computed!;
+    };
+    const answerFields = async (ready: boolean) => {
+      const computed = await prepare();
+      for (const missing of computed.missing) {
+        if (missing.kind.feature !== fieldAsk.feature) continue;
+        const input = fieldAskInput.parse(missing.envelope.input);
+        const value =
+          input.field === "categoryId"
+            ? category!.id
+            : ready && input.field === "ingredientId"
+              ? ingredient.entityId
+              : null;
+        await withAsk(
+          ctx.db,
+          {
+            ...fieldAsk,
+            admit: async () => {},
+            produce: async () => ({
+              output: value
+                ? pick(value)
+                : { proposal: null, outcome: "no_candidates" },
+            }),
+          },
+          input,
+          { record: { entity: "product", id: item.entityId } },
+        );
+      }
+    };
+    await answerFields(false);
+    await dependentKernel.reconcileNow(ctx.db, [scope]);
+    const cold = await prepare();
+    expect(
+      cold.missing.filter(
+        (entry) => entry.kind.feature === queryEmbeddingAsk.feature,
+      ),
+    ).toHaveLength(1);
+    expect(
+      cold.missing.filter(
+        (entry) =>
+          entry.kind.feature === fieldAsk.feature &&
+          fieldAskInput.parse(entry.envelope.input).field === "ingredientId",
+      ),
+    ).toHaveLength(0);
+    const query = queryEmbeddingAsk.input.parse(
+      cold.missing.find(
+        (entry) => entry.kind.feature === queryEmbeddingAsk.feature,
+      )!.envelope.input,
+    );
+    const config = getSemanticEmbeddingConfig();
+    const vector = Array.from({ length: config.dimensions }, (_, index) =>
+      index === 0 ? 1 : 0,
+    );
+    await withAsk(
+      ctx.db,
+      {
+        ...queryEmbeddingAsk,
+        produce: async () => ({ output: vector, model: config.model }),
+      },
+      query,
+    );
+    await embedFixtures(
+      ctx.db,
+      [{ entityKind: "ingredient", entityId: ingredient.entityId }],
+      {
+        configured: () => true,
+        config: getSemanticEmbeddingConfig,
+        vectorStore: productionVectorStore,
+        embed: async (texts) => texts.map(() => vector),
+      },
+    );
+    const warm = await prepare();
+    const ingredientRequest = warm.missing.find(
+      (entry) =>
+        entry.kind.feature === fieldAsk.feature &&
+        fieldAskInput.parse(entry.envelope.input).field === "ingredientId",
+    );
+    expect(
+      fieldAskInput.parse(ingredientRequest!.envelope.input).questions?.length,
+    ).toBeGreaterThan(0);
+    await answerFields(true);
+    await dependentKernel.reconcileNow(ctx.db, [scope]);
     expect(
       await getDb(ctx.db)
         .select({
@@ -191,8 +305,9 @@ describe("fields scope", () => {
         .from(product)
         .where(eq(product.id, item.entityId)),
     ).toEqual([
-      { categoryId: category.entityId, ingredientId: ingredient.entityId },
+      { categoryId: category!.id, ingredientId: ingredient.entityId },
     ]);
+    expect(transport).not.toHaveBeenCalled();
   });
   it("prepares a member-held Product tag prune without making a producer call", async () => {
     const record = await insertFieldsFixture(ctx.db, "product", {
@@ -203,7 +318,7 @@ describe("fields scope", () => {
       name: "Synthetic work light",
       tags: ["M12"],
     });
-    const kernel = createKernel([fieldsKernelModule]);
+    const kernel = createKernel([fieldsKernelModule, embeddingKernelModule]);
     await kernel.reconcileNow(ctx.db, [
       { kind: FIELDS_SCOPE, key: `product:${other.id}` },
       { kind: FIELDS_SCOPE, key: `product:${record.id}` },

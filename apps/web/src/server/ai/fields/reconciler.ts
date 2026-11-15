@@ -38,6 +38,7 @@ import { decision } from "~/server/db/kernel-schema";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { auditLog } from "~/server/db/retained-tables";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
+import { queryEmbeddingAsk } from "~/server/generic/embedding/module";
 import {
   defineReconciler,
   recordSubject,
@@ -46,11 +47,14 @@ import {
   type AskKind,
   type ColumnRef,
   type Reads,
+  type Pure,
   type Reconciler,
 } from "~/server/kernel/api";
+import { WorkPausedError } from "~/server/kernel/work-errors";
 
 import { analysisSources, analysisAsk, loadAnalysis } from "./analysis";
 import { fieldAsk, fieldBaselineAsk, type FieldAskInput } from "./ask";
+import type { PreparedFieldQuestions } from "./produce";
 import type { FieldAnswer } from "./repo/field-answer";
 import {
   fieldsPlanOf,
@@ -81,7 +85,7 @@ type FieldsInput = {
   precedents: ReadonlyMap<string, readonly Precedent[]>;
   /** Values a person ruled out on another record of the entity since this record's last assignment. */
   ruledOutSince: ReadonlyMap<string, readonly string[]>;
-  questions?: ReadonlyMap<string, FieldAskInput["questions"]>;
+  preparations?: ReadonlyMap<string, PreparedFieldQuestions>;
 };
 
 // Catalog membership, reference labels and inherited contexts used by field preparation.
@@ -433,14 +437,15 @@ async function load(
       if (!prepare || entity === "run") return;
       const requests: {
         field: string;
+        scopeKey: string;
         input: FieldAskInput;
-        questions: Map<string, FieldAskInput["questions"]>;
+        preparations: Map<string, PreparedFieldQuestions>;
       }[] = [];
       for (const item of items) {
         const loaded = inputs.get(item.key)!;
         if (!loaded.row) continue;
-        const questions = new Map<string, FieldAskInput["questions"]>();
-        loaded.questions = questions;
+        const preparations = new Map<string, PreparedFieldQuestions>();
+        loaded.preparations = preparations;
         const fields = plan.fields.filter(
           (field) =>
             (field.mode !== "prune" || !blank(loaded.row![field.key])) &&
@@ -461,22 +466,42 @@ async function load(
         for (const field of fields)
           requests.push({
             field: field.key,
+            scopeKey: item.key,
             input: fieldInput(loaded, field),
-            questions,
+            preparations,
           });
       }
       // Capture each scope's roster revisions before the shared data read.
       // A source write during preparation then fails the publication fence.
       if (!requests.length) return;
+      const scopedReads = new Map(
+        requests.map((request) => [request.input, reads.for(request.scopeKey)]),
+      );
       const prepared = await reads.prepare([], async (db) =>
         (await import("~/server/ai/fields/produce")).prepareFieldQuestions(
           db,
           requests.map((request) => request.input),
+          {
+            readQueryEmbedding: async (input, text) => {
+              const reader = scopedReads.get(input);
+              if (!reader)
+                throw new Error("A field query must have a scoped reader");
+              const [vector] = await reader.answers([
+                {
+                  kind: queryEmbeddingAsk,
+                  input: { text, interactive: false },
+                },
+              ]);
+              return vector === null
+                ? null
+                : queryEmbeddingAsk.output.parse(vector);
+            },
+          },
         ),
       );
-      // Preparation preserves request order and returns one list per input.
+      // Preparation preserves request order and each field's missing dependencies.
       for (const [index, request] of requests.entries())
-        request.questions.set(request.field, prepared[index]!);
+        request.preparations.set(request.field, prepared[index]!);
     }),
   );
   return inputs;
@@ -492,6 +517,29 @@ const blank = (value: unknown) =>
  * The `fields` reconciler and its column declarations, built from the
  * manifest; `ask` is the field Ask (a test binds a stand-in producer).
  */
+function fieldDependenciesReady(
+  c: Pure,
+  preparation: PreparedFieldQuestions | undefined,
+  held: boolean,
+  options: { request: boolean; fill: boolean },
+): boolean {
+  if (held) return false;
+  let ready = true;
+  for (const text of preparation?.queryEmbeddings ?? []) {
+    const vector = c.answer(
+      queryEmbeddingAsk,
+      { text, interactive: false },
+      options,
+    );
+    if (vector.status !== "answered") ready = false;
+  }
+  if (ready && preparation?.incomplete && options.request)
+    throw new WorkPausedError(
+      "The field's semantic search candidates are not ready",
+    );
+  return ready;
+}
+
 export function fieldsReconciler(
   ask: AskKind<FieldAskInput, FieldAnswer> = fieldAsk,
 ): Reconciler<FieldsInput> {
@@ -528,7 +576,13 @@ export function fieldsReconciler(
       ...analysisSources,
     ],
     writes: [...writeRefs.values()],
-    asks: [ask, fieldBaselineAsk, analysisAsk("location"), analysisAsk("run")],
+    asks: [
+      ask,
+      fieldBaselineAsk,
+      queryEmbeddingAsk,
+      analysisAsk("location"),
+      analysisAsk("run"),
+    ],
     load: (reads, keys) => load(reads, keys, ask === fieldAsk),
     reconcile(input, c) {
       const plan = fieldsPlans().get(input.entity)!;
@@ -576,7 +630,7 @@ export function fieldsReconciler(
               ]),
             ),
             precedents: [...(input.precedents.get(field.key) ?? [])],
-            questions: input.questions?.get(field.key),
+            questions: input.preparations?.get(field.key)?.questions,
           };
           // The cutover's value stands while its basis and value are unchanged
           // and no person has since ruled that value out on another record.
@@ -596,12 +650,18 @@ export function fieldsReconciler(
                 valueKey(value),
             );
           // Asking for a blank field changes no accepted record.
-          const answer = held
-            ? null
-            : c.answer(ask, askInput, {
-                request: field.apply !== "offer",
-                fill: currentUndecided && !prune,
-              });
+          const options = {
+            request: field.apply !== "offer",
+            fill: currentUndecided && !prune,
+          };
+          const answer = fieldDependenciesReady(
+            c,
+            input.preparations?.get(field.key),
+            held,
+            options,
+          )
+            ? c.answer(ask, askInput, options)
+            : null;
           if (answer?.status === "answered") proposal = answer.output.proposal;
         }
         // A person's decision on a column this scope owns is applied here;

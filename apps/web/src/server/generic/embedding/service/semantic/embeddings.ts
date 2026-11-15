@@ -14,6 +14,7 @@ import { fundingResumeAt } from "~/server/ai/budget-window";
 import {
   markPreparationIncomplete,
   preparingWithoutProviders,
+  readPreparationQueryEmbedding,
 } from "~/server/ai/evaluation-inputs";
 import {
   gatewayConfigured,
@@ -265,27 +266,36 @@ export async function embedQuery(
   query: string,
   opts?: { db?: Database; runId?: RunId; interactive?: boolean },
 ): Promise<number[] | null> {
+  if (!query.trim()) return null;
+  const { queryEmbeddingAsk } =
+    await import("~/server/generic/embedding/module");
+  const input = queryEmbeddingAsk.input.parse({
+    text: query,
+    interactive: opts?.interactive ?? false,
+  });
+  const normalized = input.text;
+  // Preparation may consume a stored vector, but cannot claim or produce it.
+  // The scoped reader also captures missing Answers as input dependencies.
+  if (preparingWithoutProviders()) {
+    const vector = await readPreparationQueryEmbedding(normalized, async () => {
+      if (!opts?.db) return null;
+      const { readAskAnswer } = await import("~/server/kernel/api");
+      return (await readAskAnswer(opts.db, queryEmbeddingAsk, input)) ?? null;
+    });
+    if (!vector) markPreparationIncomplete();
+    return vector;
+  }
   if (!semanticEmbeddingsConfigured()) return null;
-  const normalized = query.trim().replace(/\s+/g, " ").toLowerCase();
-  if (!normalized) return null;
   const cached = queryEmbeddingCache.get(normalized);
   if (cached) return cached;
-  // A provider-free preparation (a settled-suggestion recheck) must not pay
-  // for an embedding; its prepared inputs are incomplete instead.
-  if (preparingWithoutProviders()) {
-    markPreparationIncomplete();
-    return null;
-  }
+  if (!opts?.db) return null;
   const pending = pendingQueryEmbeddings.get(normalized);
   if (pending) return pending;
-  const request = embedTexts([normalized], {
-    operation: "queryEmbedding",
-    db: opts?.db,
-    runId: opts?.runId,
-    interactive: opts?.interactive,
-    feature: SEMANTIC_QUERY_FEATURE.feature,
+  const { withAsk } = await import("~/server/kernel/api");
+  const request = withAsk(opts.db, queryEmbeddingAsk, input, {
+    runId: opts.runId,
   })
-    .then(([embedding]) => {
+    .then((embedding) => {
       if (embedding) queryEmbeddingCache.set(normalized, embedding);
       return embedding ?? null;
     })
