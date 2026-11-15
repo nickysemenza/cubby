@@ -598,7 +598,9 @@ lane, upstream rank, `availableAt`, `seq`. An ETA is that rank times the median
 duration of that queue, or `availableAt` for a timer, and is null with too few
 observations. Every source is checked against the viewer's access (Email
 evidence is viewer-owned); credentials are scrubbed; a raw error is capped at
-16 KB and the response at 256 KB. Labels come from the twin presentation
+16 KB and the response at 256 KB. Stored raw errors put the deepest driver
+cause before wrapping messages, so a large SQL statement cannot consume the
+cap before its SQLSTATE and reason. Labels come from the twin presentation
 owners; no client derives a stage or humanizes a key.
 
 The capability is declared in the entity's domain module and supplies the

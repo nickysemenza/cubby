@@ -89,9 +89,13 @@ const WAIT_CAUSE = {
   rate_limit: "rate_limit",
 } satisfies Record<ExecutionWaitReason, KernelWaitCause>;
 
-/** A raw error's stored form: scrubbed causes, capped at 16 KB. */
+/** Store driver causes before large wrappers can consume the 16 KB raw-error cap. */
 export function rawError(error: UnparsedError): string {
-  const text = JSON.stringify(describeErrorCauses(error));
+  const details = describeErrorCauses(error);
+  const text = JSON.stringify({
+    ...details,
+    causes: [...details.causes].reverse(),
+  });
   const bytes = new TextEncoder().encode(text);
   return bytes.byteLength <= MACHINERY_RAW_ERROR_BYTES
     ? text
