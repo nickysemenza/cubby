@@ -314,7 +314,22 @@ describe("background result alerts", () => {
         },
       })
       .where(eq(device.id, install.id));
-    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    const discoveryRunId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "mail_discovery",
+      trigger: "manual",
+      execution: false,
+      input: {
+        mailboxId: "synthetic-alert-mailbox",
+        scopedQueries: [],
+        executionPolicy: "import",
+      },
+    });
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "mail_import",
+      trigger: "discovery",
+      parentRunId: discoveryRunId,
+      execution: false,
+    });
     await getDb(ctx.db)
       .update(run)
       .set({ trigger: "discovery" })
@@ -366,6 +381,38 @@ describe("background result alerts", () => {
       trade: "other",
     });
     expect(await pending()).toHaveLength(1);
+    await getDb(ctx.db)
+      .update(run)
+      .set({ trigger: "manual" })
+      .where(eq(run.id, runId));
+    await createRepoEntity(unattended, "task", {
+      name: "Interactive agent task",
+      trade: "other",
+    });
+    expect(await pending()).toHaveLength(1);
+    await getDb(ctx.db)
+      .update(run)
+      .set({ trigger: "discovery" })
+      .where(eq(run.id, runId));
+    for (const parent of [
+      { purpose: "ai_suggest", trigger: "manual" },
+      { purpose: "mail_discovery", trigger: "foreground" },
+      { purpose: "mail_discovery", trigger: "backfill" },
+    ] as const) {
+      await getDb(ctx.db)
+        .update(run)
+        .set(parent)
+        .where(eq(run.id, discoveryRunId));
+      await createRepoEntity(unattended, "task", {
+        name: "Interactive ancestry task",
+        trade: "other",
+      });
+      expect(await pending()).toHaveLength(1);
+    }
+    await getDb(ctx.db)
+      .update(run)
+      .set({ purpose: "mail_discovery", trigger: "manual" })
+      .where(eq(run.id, discoveryRunId));
 
     const { dispatchBackgroundAlerts } =
       await import("~/server/generic/push/repo/delivery");
@@ -545,5 +592,20 @@ describe("background result alerts", () => {
       },
     });
     expect(groupedSends).toBe(2);
+
+    for (const purpose of ["maintenance", "connection_discovery"] as const) {
+      const backgroundRunId = await ensureRun(ctx.db, ctx.actor, {
+        purpose,
+        trigger: "manual",
+        execution: false,
+      });
+      const before = (await pending()).length;
+      await createRepoEntity(
+        { ...ctx, actor: { ...ctx.actor, runId: backgroundRunId } },
+        "task",
+        { name: "Manually launched background result", trade: "other" },
+      );
+      expect(await pending()).toHaveLength(before + 1);
+    }
   });
 });

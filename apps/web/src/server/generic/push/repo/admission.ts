@@ -1,6 +1,6 @@
 import { auditLogActionSchema } from "@cubby/schemas/audit";
 import { backgroundResultAlertEntities } from "@cubby/schemas/entity-roster";
-import { runTrigger } from "@cubby/schemas/run-fields";
+import { RUN_KINDS, runTrigger } from "@cubby/schemas/run-fields";
 import { sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
@@ -17,6 +17,10 @@ import {
   repositoryQueries,
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
+
+const backgroundRunPurposes = Object.entries(RUN_KINDS)
+  .filter(([, kind]) => kind.trigger === "scheduled")
+  .map(([purpose]) => purpose);
 
 /** Admit committed creation receipts in the writer's transaction, never by a time cursor. */
 export async function admitBackgroundAlerts(
@@ -40,13 +44,16 @@ export async function admitBackgroundAlerts(
         -- includes-deleted: Run ancestry retains attribution after retirement.
         a.provenance IS NULL AND EXISTS (
           WITH RECURSIVE lineage AS (
-            SELECT id, trigger, "parentRunId", "predecessorRunId" FROM "Run" WHERE id = a."runId"
+            SELECT id, purpose, trigger, "parentRunId", "predecessorRunId" FROM "Run" WHERE id = a."runId"
             UNION
-            SELECT r.id, r.trigger, r."parentRunId", r."predecessorRunId" FROM "Run" r JOIN lineage l
+            SELECT r.id, r.purpose, r.trigger, r."parentRunId", r."predecessorRunId" FROM "Run" r JOIN lineage l
               ON r.id = l."parentRunId" OR r.id = l."predecessorRunId"
           ) SELECT 1 FROM lineage
-          HAVING bool_or(trigger IN (${runTrigger.enum.discovery}, ${runTrigger.enum.scheduled}))
-            AND NOT bool_or(trigger IN (${runTrigger.enum.foreground}, ${runTrigger.enum.manual}, ${runTrigger.enum.backfill}))
+          -- A manual launch of a declared background workflow retains its background origin.
+          HAVING bool_or(trigger IN (${runTrigger.enum.discovery}, ${runTrigger.enum.scheduled})
+              OR (trigger = ${runTrigger.enum.manual} AND purpose = ANY(${textArrayParam(backgroundRunPurposes)})))
+            AND NOT bool_or(trigger IN (${runTrigger.enum.foreground}, ${runTrigger.enum.backfill})
+              OR (trigger = ${runTrigger.enum.manual} AND NOT (purpose = ANY(${textArrayParam(backgroundRunPurposes)}))))
         )
       )
     ON CONFLICT DO NOTHING RETURNING id`);

@@ -77,10 +77,13 @@ See [background derived data](entities.md#background-derived-data) for snapshot 
 Opted-in household members receive Apple push alerts for committed unattended
 Task, Purchase, Expense and Shipment creations. Entity declarations own eligibility,
 amount fields and related-result grouping; an Expense belonging to a Purchase
-appears as that Purchase. Supporting records, updates, duplicate matches, manual
-and foreground imports, interactive agent sessions and unapplied proposals do not
-notify. Run-attributed creation receipts prove unattended origin through their
-scheduled or discovery ancestry. Kernel apply receipts alone do not prove origin.
+appears as that Purchase. Supporting records, updates, duplicate matches, direct
+manual creation, foreground imports, interactive agent sessions and unapplied
+proposals do not notify. Run-attributed creation receipts prove unattended origin
+through their scheduled or discovery ancestry. Manually launching a workflow
+whose Run declaration is scheduled also qualifies its background results. Manual
+interactive work, foreground and backfill ancestors remain excluded. Kernel apply
+receipts alone do not prove origin.
 
 A creation receipt admits each enabled device's delivery in the same transaction.
 Delivery identity is the device and created record, independent of retries or Run
