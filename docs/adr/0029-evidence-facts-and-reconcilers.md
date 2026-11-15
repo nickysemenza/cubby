@@ -372,6 +372,13 @@ timeout, including for locked fallback runs, so contention is a retryable lock
 wait rather than a terminated session. A nested writer that already holds the
 gate retains the outer transaction's timeouts and does not reset its budget.
 
+A locked background fallback tries the gate without waiting before it reads
+inside the transaction. Busy admission releases its claim as a conflict and
+retains the dirty work, so a gate wait cannot consume the budget needed for
+recomputation. Admitted work keeps every revision and sequence fence. Member
+work retains its bounded gate wait. A failed locked load settles its original
+cause before issuing another query on that transaction.
+
 Publication batches dependency replacement, scope state, cleared Drift and
 claim settlement in one SQL statement after output and downstream invalidation.
 Unchanged dependency edges stay in place; removed and inserted edges are disjoint.

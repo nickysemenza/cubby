@@ -1507,6 +1507,7 @@ async function runLocked(
       await enterWriteTransaction(q, {
         lane: reconciler.lane,
         mode: options.mode,
+        nonblockingGate: options.mode === "background",
       });
       const memberships = await relatedMemberships(
         tx,
@@ -1530,7 +1531,7 @@ async function runLocked(
         lockedRevisions,
         hideBaseline: options.hideBaseline ?? false,
       });
-      if (isConflict(computed!.error)) throw computed!.error;
+      if (computed!.error !== null) throw computed!.error;
       const currentMemberships = await relatedMemberships(
         tx,
         registry,
@@ -1556,7 +1557,7 @@ async function runLocked(
       );
     });
   } catch (error) {
-    if (isConflict(error)) {
+    if (isConflict(error) || error instanceof HouseholdWriteBusyError) {
       await releaseConflicts(repositoryQueries(db), [claimed]);
       return outcome(scope, "conflict");
     }
