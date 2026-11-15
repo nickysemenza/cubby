@@ -192,6 +192,12 @@ Placed spans use `cubby.workload = queue.placed` or `scheduled.placed`, and the
 callee returns its request's `cf-placement`, which the caller records as
 `cloudflare.forwarded_placement`; span `cloudflare.colo` names the ingress colo,
 so placed latency shows in Postgres span durations, not colo.
+Forwarding failures retain event kind, fetch/response phase, HTTP status,
+elapsed time, placement and the response's Cloudflare ray in the Sentry error
+context. Placed execution failures capture the original exception with event
+kind and elapsed time. Neither context records envelopes or response bodies.
+Both preserve an unknown execution outcome: transport failure or a thrown
+callee does not establish that no work committed, so neither resends inline.
 Local dev and the workerd harness have no binding and run events in place.
 
 Every background invocation — one queue permit, one telemetry batch, the hourly

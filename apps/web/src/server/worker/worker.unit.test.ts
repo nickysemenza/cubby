@@ -1,11 +1,41 @@
+import * as Sentry from "@sentry/tanstackstart-react";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getAppOrigin, getAuthBindings, withCfEnv } from "~/server/cf-env";
 
 import { handleHttpRequest } from "./http";
+import { forwardToPlaced } from "./placed";
 import { handleQueueInvocation } from "./queue";
 import { handleScheduledInvocation } from "./scheduled";
+
+const sent: Sentry.ErrorEvent[] = [];
+let sentryClient: Sentry.NodeClient | undefined;
+
+function recordSentryEvents() {
+  sent.length = 0;
+  sentryClient = new Sentry.NodeClient({
+    dsn: "https://public@o0.ingest.sentry.io/0",
+    stackParser: Sentry.defaultStackParser,
+    integrations: [],
+    transport: () => ({
+      send: async () => ({ statusCode: 200 }),
+      flush: async () => true,
+    }),
+    beforeSend(event) {
+      sent.push(event);
+      return null;
+    },
+  });
+  Sentry.setCurrentClient(sentryClient);
+  sentryClient.init();
+}
+
+afterEach(async () => {
+  await sentryClient?.close();
+  sentryClient = undefined;
+  Sentry.getCurrentScope().setClient(undefined);
+});
 
 const version = {
   id: "fixture-version",
@@ -129,15 +159,52 @@ describe("Worker event composition", () => {
       );
       expect(response.status).toBe(404);
     }
+    recordSentryEvents();
+    const env = fromPartial<Env>({
+      BETTER_AUTH_SECRET: "synthetic-secret",
+      CF_VERSION_METADATA: version,
+      BACKGROUND_WORKER: {
+        fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+          handleHttpRequest(new Request(input, init), env, context),
+      },
+    });
+    await expect(
+      forwardToPlaced(env, {
+        event: "queue",
+        queue: "future-queue",
+        bodies: [],
+      }),
+    ).rejects.toThrow("Unexpected queue: future-queue");
+    await sentryClient?.flush(1000);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.contexts?.background_execution).toEqual({
+      event: "queue",
+      duration_ms: expect.any(Number),
+      execution_outcome: "unknown",
+    });
+    expect(sent[0]?.exception?.values?.[0]).toMatchObject({
+      value: "Unexpected queue: future-queue",
+      mechanism: { handled: false, type: "auto.http.cloudflare" },
+    });
   });
 
-  it("applies placed outcomes and throws only for transport failures", async () => {
+  it("applies placed outcomes and preserves unknown transport failures without resending", async () => {
+    recordSentryEvents();
     const ack = vi.fn();
     const retry = vi.fn();
     const fetch = vi
       .fn()
       .mockResolvedValueOnce(
         Response.json([{ action: "retry", delaySeconds: 30 }]),
+      )
+      .mockResolvedValueOnce(
+        new Response("synthetic private upstream body", {
+          status: 503,
+          headers: {
+            "x-cubby-placement": "remote",
+            "cf-ray": "1234567890abcdef-SJC",
+          },
+        }),
       )
       .mockRejectedValueOnce(new Error("synthetic transport failure"));
     const env = fromPartial<Env>({
@@ -152,8 +219,37 @@ describe("Worker event composition", () => {
     await handleQueueInvocation(batch, env, context);
     expect(retry).toHaveBeenCalledWith({ delaySeconds: 30 });
     await expect(handleQueueInvocation(batch, env, context)).rejects.toThrow(
+      "Background forwarding failed: 503",
+    );
+    await sentryClient?.flush(1000);
+    expect(sent[0]?.contexts?.background_forward).toEqual({
+      event: "queue",
+      phase: "response",
+      status: 503,
+      duration_ms: expect.any(Number),
+      placement: "remote",
+      cf_ray: "1234567890abcdef-SJC",
+      execution_outcome: "unknown",
+    });
+    expect(sent[0]?.exception?.values?.[0]?.mechanism).toMatchObject({
+      handled: false,
+      type: "auto.faas.cloudflare.queue",
+    });
+    expect(JSON.stringify(sent)).not.toContain(
+      "synthetic private upstream body",
+    );
+    await expect(handleQueueInvocation(batch, env, context)).rejects.toThrow(
       "synthetic transport failure",
     );
+    await sentryClient?.flush(1000);
+    expect(sent).toHaveLength(2);
+    expect(sent[1]?.contexts?.background_forward).toEqual({
+      event: "queue",
+      phase: "fetch",
+      duration_ms: expect.any(Number),
+      execution_outcome: "unknown",
+    });
+    expect(fetch).toHaveBeenCalledTimes(3);
     expect(ack).not.toHaveBeenCalled();
     expect(retry).toHaveBeenCalledTimes(1);
   });

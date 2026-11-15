@@ -236,7 +236,9 @@ and each field keeps only its policy's basis and resolution context. Preparation
 checks stored basis rows as a batch; a missing or changed record contributes no
 questions. A changed source is refused by the
 publication fence. Text-only choice rosters load identities, labels and ranking facts without
-display media. Each question has its own provider-free input capture;
+display media. Their candidate cap is applied in SQL after purchase-count and
+name ordering, so discarded roster rows never enter the Worker heap. Each question
+has its own provider-free input capture;
 the actual producer checks the stored row and frozen questions again before
 any model transport.
 Semantic query embeddings are durable Answers owned by the embedding module.

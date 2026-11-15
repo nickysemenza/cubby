@@ -57,38 +57,68 @@ export function isPlacedRequest(request: Request, env: Env) {
  */
 export async function forwardToPlaced(env: Env, event: PlacedEvent) {
   if (!env.BACKGROUND_WORKER) return null;
-  const response = await env.BACKGROUND_WORKER.fetch(
-    `https://internal${PLACED_PATH}`,
-    {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        [KEY_HEADER]: forwardKey(env),
+  const startedAt = performance.now();
+  let response: Response | undefined;
+  try {
+    const forwarded: Response = await env.BACKGROUND_WORKER.fetch(
+      `https://internal${PLACED_PATH}`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          [KEY_HEADER]: forwardKey(env),
+        },
+        body: JSON.stringify(event),
       },
-      body: JSON.stringify(event),
-    },
-  );
-  const placement =
-    response.headers.get(PLACEMENT_HEADER) ??
-    response.headers.get("cf-placement") ??
-    undefined;
-  if (response.status === 404) {
+    );
+    response = forwarded;
+    const placement =
+      response.headers.get(PLACEMENT_HEADER) ??
+      response.headers.get("cf-placement") ??
+      undefined;
+    if (response.status === 404) {
+      annotateActiveSpan({
+        "cubby.forward": "fallback",
+        "cloudflare.forwarded_placement": placement,
+      });
+      Sentry.captureException(
+        new Error("Background forwarding refused; running in place"),
+      );
+      return null;
+    }
     annotateActiveSpan({
-      "cubby.forward": "fallback",
+      "cubby.forward": "placed",
       "cloudflare.forwarded_placement": placement,
     });
-    Sentry.captureException(
-      new Error("Background forwarding refused; running in place"),
-    );
-    return null;
+    if (!response.ok)
+      throw new Error(`Background forwarding failed: ${response.status}`);
+    return response;
+  } catch (error) {
+    // Capture on this invocation's event, not a sampled span. Never record the
+    // envelope or upstream body: an HTTP failure does not prove work was unsent.
+    Sentry.captureException(error, {
+      mechanism: {
+        handled: false,
+        type: `auto.faas.cloudflare.${event.event}`,
+      },
+      captureContext: {
+        contexts: {
+          background_forward: {
+            event: event.event,
+            phase: response ? "response" : "fetch",
+            status: response?.status,
+            duration_ms: Math.round(performance.now() - startedAt),
+            placement:
+              response?.headers.get(PLACEMENT_HEADER) ??
+              response?.headers.get("cf-placement"),
+            cf_ray: response?.headers.get("cf-ray"),
+            execution_outcome: "unknown",
+          },
+        },
+      },
+    });
+    throw error;
   }
-  annotateActiveSpan({
-    "cubby.forward": "placed",
-    "cloudflare.forwarded_placement": placement,
-  });
-  if (!response.ok)
-    throw new Error(`Background forwarding failed: ${response.status}`);
-  return response;
 }
 
 /** Reports where the placed callee ran back to its caller. */
