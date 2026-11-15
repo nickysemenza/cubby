@@ -34,6 +34,7 @@ import {
 import { piTokenUsage } from "@cubby/shared/ai/pi-providers";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
+import { piTelemetry } from "@cubby/worker-tracing/pi";
 import type { Context } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
@@ -405,6 +406,10 @@ export class PurchaseImportRunAgent
       {
         models,
         registry: this.registry,
+        telemetry: await piTelemetry(() => ({
+          "cubby.run.id": this.identity()?.runId,
+          "cubby.run.kind": this.identity()?.purpose,
+        })),
         settings: {
           // The coordinator works one tool at a time; see cubby-ai-provider.
           toolExecution: "sequential",

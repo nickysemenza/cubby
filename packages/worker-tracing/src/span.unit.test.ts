@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+import * as nativeTracing from "./index";
+import { piTelemetry } from "./pi";
 
 import {
   type CfSpan,
@@ -91,5 +94,57 @@ describe("enterInvocationSpan", () => {
     await expect(
       enterInvocationSpan(tracing, "work", async () => "ok"),
     ).resolves.toBe("ok");
+  });
+});
+
+describe("Pi telemetry privacy", () => {
+  it("keeps content and provider diagnostics out of native spans and preserves failures", async () => {
+    const { attrs, tracing } = fakeTracing();
+    const native = vi
+      .spyOn(nativeTracing, "loadWorkerTracing")
+      .mockResolvedValue(tracing);
+    const error = new Error("synthetic private prompt");
+    const telemetry = await piTelemetry(() => ({
+      "cubby.run.kind": "mail_import",
+    }));
+    try {
+      let callbackStarted = false;
+      const result = telemetry.startSpan(
+        {
+          name: "pi.ai.request",
+          attributes: { model: "synthetic/model", prompt: "synthetic prompt" },
+        },
+        (span) => {
+          callbackStarted = true;
+          span.setAttributes({
+            "usage.input": 23,
+            completion: "synthetic answer",
+          });
+          span.addEvent("pi.ai.block", {
+            tool: "synthetic_tool",
+            arguments: "synthetic input",
+          });
+          span.setStatus({
+            status: "error",
+            error: { name: "provider_error", message: error.message },
+          });
+          throw error;
+        },
+      );
+      expect(callbackStarted).toBe(true);
+      await expect(result).rejects.toBe(error);
+      expect(Object.fromEntries(attrs)).toEqual({
+        "cubby.run.kind": "mail_import",
+        model: "synthetic/model",
+        "usage.input": 23,
+        "event.pi.ai.block.count": 1,
+        "event.pi.ai.block.tool": "synthetic_tool",
+        status: "error",
+        error: true,
+        "error.type": "Error",
+      });
+    } finally {
+      native.mockRestore();
+    }
   });
 });

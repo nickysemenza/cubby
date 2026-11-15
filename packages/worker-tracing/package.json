@@ -7,6 +7,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./pi": "./src/pi.ts",
     "./sentry-data-collection": "./src/sentry-data-collection.ts",
     "./sentry-dsn": "./src/sentry-dsn.ts",
     "./scrub-error-message": "./src/scrub-error-message.ts"
@@ -16,6 +17,7 @@
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "@earendil-works/pi-telemetry": "1.5.0",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
   }
