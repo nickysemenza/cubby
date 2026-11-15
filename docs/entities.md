@@ -1807,7 +1807,8 @@ and apply the descendant scope in memory; a shared in-flight tree serves setting
 Product matched/mismatched quantity filters use the published Quantity Variance; a missing variance
 has no comparison state, and an edit keeps the previous membership until publication.
 
-Work Problems project filter values, readiness and related predicates into a materialized facts
+Work Problems prune excluded reason declarations before preparing their filter contexts, predicates
+or routing expressions. They project admitted filter values, readiness and related predicates into a materialized facts
 relation of not-deleted records that can match a certain or possible Problem, per entity and
 request, then compute membership and label/authority columns once in its
 base, admitting only records matching a certain or possible Problem. Bound values are part of
