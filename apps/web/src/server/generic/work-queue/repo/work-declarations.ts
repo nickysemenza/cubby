@@ -268,6 +268,12 @@ export const entityProblemSources = (
         };
         for (const [index, definition] of definitions.entries()) {
           if (definition.source.kind !== "entity") continue;
+          if (
+            !scopeAdmitsReasons(scope, [
+              { key: definition.key, label: definition.title },
+            ])
+          )
+            continue;
           const filters = read.parseFilters(
             compileProblemFilters(entity, definition.source.filters),
           );
@@ -298,7 +304,8 @@ export const entityProblemSources = (
         const routedColumns: Record<string, SQL> = {};
         const routedNames = new Map<string, string>();
         if (typeof read.columns === "function")
-          for (const [index, source] of sources.entries())
+          for (const [index, source] of sources.entries()) {
+            if (!scopeAdmitsReasons(scope, source.reasons)) continue;
             for (const [key, value] of Object.entries(read.columns(source))) {
               const expression = Array.isArray(value)
                 ? sql`ARRAY[${sql.join(
@@ -316,6 +323,7 @@ export const entityProblemSources = (
               }
               routes.set(`${index}:${key}`, name);
             }
+          }
         const factRows = getDb(db)
           .select({
             code: sql`${read.table.shortcode}`.as("code"),
