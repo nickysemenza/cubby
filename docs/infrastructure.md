@@ -327,8 +327,8 @@ same phase.
 
 Rich alert images use a Notification Service extension on iOS and macOS. Each
 app identity needs its `.NotificationService` App ID and matching platform
-provisioning profile. Release uses the `AppStore <bundle>.NotificationService iOS`
-and `AppStore <bundle>.NotificationService macOS` profiles. The extension fetches
+provisioning profile. Release uses the `AppStore Cubby Notification Service iOS`
+and `AppStore Cubby Notification Service macOS` profiles. The extension fetches
 only the optional public thumbnail, with a bounded size and timeout; it has no
 household session or push credentials. Signed hardware delivery and attachments
 remain distinct from unsigned compilation and APNs acceptance.
