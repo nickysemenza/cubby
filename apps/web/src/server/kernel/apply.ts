@@ -42,7 +42,7 @@ import {
   type AskCondition,
 } from "./ask-gap";
 import { auditApply } from "./audit";
-import { insertRows, physicalValues } from "./bulk-write";
+import { insertRows, insertRowsStatement, physicalValues } from "./bulk-write";
 import {
   ClaimLapsedError,
   LOCKED_RUN_AFTER_CONFLICTS,
@@ -680,12 +680,17 @@ async function fileBatchAsks(q: Q, plans: readonly Plan[]) {
 
 /** One state read for every pending ask of this batch. */
 async function batchAsks(q: Q, plans: readonly Plan[]) {
+  // Filing removes every old link for active plans with no missing answers.
+  const pending = plans.filter(
+    (plan) => plan.heldBaseline || plan.computed.missing.length > 0,
+  );
+  if (!pending.length) return new Map<string, AskCondition[]>();
   const result = await q.execute<
     AskCondition & { kind: string; key: string }
   >(sql`
     SELECT s."scopeKind" AS kind, s."scopeKey" AS key, a."inputHash", a.state, a.attempts, a."maxAttempts", a."cancelledAt" IS NOT NULL AS cancelled
     FROM "AskScope" s JOIN "Ask" a ON a.id = s."askId"
-    JOIN unnest(${orderedTextArrayParam(plans.map((plan) => plan.computed.scope.kind))}, ${orderedTextArrayParam(plans.map((plan) => plan.computed.scope.key))}) AS wanted(kind, key)
+    JOIN unnest(${orderedTextArrayParam(pending.map((plan) => plan.computed.scope.kind))}, ${orderedTextArrayParam(pending.map((plan) => plan.computed.scope.key))}) AS wanted(kind, key)
       ON s."scopeKind" = wanted.kind AND s."scopeKey" = wanted.key`);
   const byScope = new Map<string, AskCondition[]>();
   for (const row of result.rows) {
@@ -1097,34 +1102,6 @@ async function applyBatch(
       excludes: plans.map((plan) => plan.computed.scope),
       reason: `output:${plans[0]!.computed.scope.kind}`,
     });
-    const dependencies = plans.map((plan) => ({
-      kind: plan.computed.scope.kind,
-      key: plan.computed.scope.key,
-      keys: [...plan.computed.keys.keys()],
-    }));
-    await q.execute(sql`
-      DELETE FROM "ScopeDep" d USING unnest(${orderedTextArrayParam(states.map((state) => state.scopeKind))}, ${orderedTextArrayParam(states.map((state) => state.scopeKey))}) AS wanted(kind,key)
-      WHERE d."scopeKind"=wanted.kind AND d."scopeKey"=wanted.key`);
-    await q.execute(sql`
-      INSERT INTO "ScopeDep" ("scopeKind", "scopeKey", key)
-      SELECT wanted.kind,wanted.key,dependency.value
-      FROM jsonb_to_recordset(${JSON.stringify(dependencies)}::jsonb) AS wanted(kind text,key text,keys jsonb)
-      CROSS JOIN LATERAL jsonb_array_elements_text(wanted.keys) dependency(value)
-      ON CONFLICT DO NOTHING`);
-    await insertRows(
-      q,
-      scopeState,
-      states,
-      sql`ON CONFLICT ("scopeKind", "scopeKey") DO UPDATE SET
-      version = excluded.version, rules = excluded.rules, gaps = excluded.gaps, inputs = excluded.inputs, stage = excluded.stage,
-      "nextActor" = excluded."nextActor", "firstGap" = excluded."firstGap", "inputsHash" = excluded."inputsHash", "durationMs" = excluded."durationMs",
-      "errorClass" = NULL, error = NULL, "reconciledAt" = excluded."reconciledAt", "inputsChangedAt" = excluded."inputsChangedAt"`,
-    );
-    const advanced = plans.filter((plan) => !plan.heldBaseline);
-    if (advanced.length)
-      await q.execute(sql`
-      DELETE FROM "Drift" d USING unnest(${orderedTextArrayParam(advanced.map((plan) => plan.computed.scope.kind))}, ${orderedTextArrayParam(advanced.map((plan) => plan.computed.scope.key))}) AS wanted(kind, key)
-      WHERE d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key`);
     const followups = plans
       .filter(
         (plan) =>
@@ -1150,20 +1127,61 @@ async function applyBatch(
       );
     }
     if (downstream || followups.length) await wakeAfterCommit(tx);
-    // A scope dirtied again during its run stays dirty and is released for
-    // the next claim; holding its claim would stall it for the whole lease.
+    const stateWrite = insertRowsStatement(
+      scopeState,
+      states,
+      sql`ON CONFLICT ("scopeKind", "scopeKey") DO UPDATE SET
+      version = excluded.version, rules = excluded.rules, gaps = excluded.gaps, inputs = excluded.inputs, stage = excluded.stage,
+      "nextActor" = excluded."nextActor", "firstGap" = excluded."firstGap", "inputsHash" = excluded."inputsHash", "durationMs" = excluded."durationMs",
+      "errorClass" = NULL, error = NULL, "reconciledAt" = excluded."reconciledAt", "inputsChangedAt" = excluded."inputsChangedAt"`,
+    );
+    if (!stateWrite)
+      throw new KernelContractError("An applied batch needs scope state");
+    const metadata = plans.map((plan) => ({
+      kind: plan.computed.scope.kind,
+      key: plan.computed.scope.key,
+      seq: plan.claim.seq,
+      token: plan.claim.token,
+      keys: [...plan.computed.keys.keys()],
+      clearDrift: !plan.heldBaseline,
+    }));
+    // The dependency delete and insert touch disjoint key sets. All metadata
+    // remains in this fenced transaction; explicit follow-ups have already
+    // raised seq before the unchanged claim deletion/release conditions run.
     await q.execute(sql`
-      WITH wanted AS (
-        SELECT * FROM jsonb_to_recordset(${JSON.stringify(plans.map((plan) => ({ kind: plan.computed.scope.kind, key: plan.computed.scope.key, seq: plan.claim.seq, token: plan.claim.token })))}::jsonb) AS w(kind text, key text, seq bigint, token uuid)
+      WITH wanted AS MATERIALIZED (
+        SELECT * FROM jsonb_to_recordset(${JSON.stringify(metadata)}::jsonb)
+          AS w(kind text, key text, seq bigint, token uuid, keys jsonb, "clearDrift" boolean)
+      ), dependencies AS MATERIALIZED (
+        SELECT wanted.kind, wanted.key, dependency.value AS dependency
+        FROM wanted CROSS JOIN LATERAL jsonb_array_elements_text(wanted.keys) dependency(value)
+      ), removed_dependencies AS (
+        DELETE FROM "ScopeDep" d USING wanted
+        WHERE d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key
+          AND NOT EXISTS (SELECT 1 FROM dependencies k
+            WHERE k.kind = d."scopeKind" AND k.key = d."scopeKey" AND k.dependency = d.key)
+        RETURNING 1
+      ), added_dependencies AS (
+        INSERT INTO "ScopeDep" ("scopeKind", "scopeKey", key)
+        SELECT kind, key, dependency FROM dependencies
+        ON CONFLICT DO NOTHING RETURNING 1
+      ), written_state AS (
+        ${stateWrite} RETURNING 1
+      ), cleared_drift AS (
+        DELETE FROM "Drift" d USING wanted
+        WHERE wanted."clearDrift" AND d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key
+        RETURNING 1
       ), done AS (
         DELETE FROM "ScopeDirty" d USING wanted
         WHERE d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key AND d.seq = wanted.seq AND d."claimToken" = wanted.token
         RETURNING d."scopeKind", d."scopeKey"
-      )
-      UPDATE "ScopeDirty" d SET "claimToken" = NULL, "claimDeadline" = NULL
-      FROM wanted
-      WHERE d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key AND d."claimToken" = wanted.token
-        AND NOT EXISTS (SELECT 1 FROM done WHERE done."scopeKind" = d."scopeKind" AND done."scopeKey" = d."scopeKey")`);
+      ), released AS (
+        UPDATE "ScopeDirty" d SET "claimToken" = NULL, "claimDeadline" = NULL
+        FROM wanted
+        WHERE d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key AND d."claimToken" = wanted.token
+          AND NOT EXISTS (SELECT 1 FROM done WHERE done."scopeKind" = d."scopeKind" AND done."scopeKey" = d."scopeKey")
+        RETURNING 1
+      ) SELECT count(*) AS states FROM written_state`);
     if (entities.size)
       await recordChange(tx, { kind: "source", categories: [...entities] });
   });

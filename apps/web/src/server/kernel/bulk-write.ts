@@ -27,12 +27,11 @@ export function physicalValues(
 }
 
 /** One statement for a table, regardless of rows or their optional column sets. */
-export async function insertRows(
-  q: Q,
+export function insertRowsStatement(
   table: PgTable,
   rows: readonly ColumnValues[],
   suffix: SQL = sql``,
-): Promise<void> {
+): SQL | undefined {
   if (!rows.length) return;
   const columns = getTableColumns(table);
   const properties = [
@@ -66,7 +65,7 @@ export async function insertRows(
       column.default === undefined ? sql`NULL` : sql`${column.default}`;
     return sql`CASE WHEN incoming.value ? ${column.name} THEN ${value} ELSE ${fallback} END`;
   });
-  await q.execute(sql`
+  return sql`
     INSERT INTO ${table} (${sql.join(
       properties.map((property) => sql.identifier(columns[property]!.name)),
       sql`, `,
@@ -74,5 +73,16 @@ export async function insertRows(
     SELECT ${sql.join(projection, sql`, `)}
     FROM jsonb_array_elements(${canonicalJson(filled)}::jsonb) AS incoming(value)
     CROSS JOIN LATERAL jsonb_populate_record(NULL::${table}, incoming.value) AS decoded
-    ${suffix}`);
+    ${suffix}`;
+}
+
+/** Direct execution and CTE publication share the same defaults and row codec. */
+export async function insertRows(
+  q: Q,
+  table: PgTable,
+  rows: readonly ColumnValues[],
+  suffix: SQL = sql``,
+): Promise<void> {
+  const statement = insertRowsStatement(table, rows, suffix);
+  if (statement) await q.execute(statement);
 }

@@ -243,8 +243,11 @@ array order, values and output policy remain part of the fence. A mismatch
 declares a pre-send refusal to the produce ledger. The ledger re-queues only
 when no transport left during the entire call; an earlier transmission still
 leaves the outcome unknown.
-Precedents rank corrected values first, then newest update at millisecond
-precision and record identity, so batch membership cannot reorder tied peers.
+Precedent candidates load together per entity under the same declared column
+revisions. Each field keeps separate corrected and ordinary candidate sets and
+the existing per-parent limit. Precedents rank corrected values first, then
+newest update at millisecond precision and record identity, so batching fields
+or records cannot reorder tied peers.
 
 A Catalog target with no owned columns may declare `coalesceCreation(values)`
 to combine equal natural keys in the same batch. In canonical scope-key order,
@@ -368,6 +371,14 @@ happen before the transaction opens. The lock timeout stays below the transactio
 timeout, including for locked fallback runs, so contention is a retryable lock
 wait rather than a terminated session. A nested writer that already holds the
 gate retains the outer transaction's timeouts and does not reset its budget.
+
+Publication batches dependency replacement, scope state, cleared Drift and
+claim settlement in one SQL statement after output and downstream invalidation.
+Unchanged dependency edges stay in place; removed and inserted edges are disjoint.
+Claim cleanup still compares the exact claimed sequence and token, including
+follow-up work raised by publication. Ask filing removes stale links before
+state reads, so active scopes with no missing questions need no Ask-state query;
+held baselines retain their links and are always read.
 
 The fence is `ScopeDirty.seq`. A run reads the scope's `seq` when it claims,
 loads and computes outside any transaction, then in the apply transaction
