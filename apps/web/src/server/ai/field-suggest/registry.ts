@@ -508,13 +508,13 @@ const FIELD_SUGGEST_OVERRIDES = {
   "expense.vendor": {
     ...FIELD_SUGGEST_DECISIONS["expense.vendor"],
     roster: async (db) => {
-      const vendors = await vendorOptions(db);
-      return vendors.slice(0, VENDOR_ROSTER_CAP).map((v) => v.name);
+      const vendors = await vendorOptions(db, VENDOR_ROSTER_CAP);
+      return vendors.map((v) => v.name);
     },
   } satisfies TextRosterSuggestSpec,
   "product.brandId": {
     ...FIELD_SUGGEST_DECISIONS["product.brandId"],
-    roster: async (db) => (await vendorOptions(db)).slice(0, VENDOR_ROSTER_CAP),
+    roster: (db) => vendorOptions(db, VENDOR_ROSTER_CAP),
     idOf: (c) => c.id,
     labelOf: (c) => c.name,
     renderLine: (c) => `${c.id} | ${c.name}`,
@@ -522,8 +522,8 @@ const FIELD_SUGGEST_OVERRIDES = {
   "purchase.vendorId": {
     ...FIELD_SUGGEST_DECISIONS["purchase.vendorId"],
     roster: async (db) => {
-      const vendors = await vendorOptions(db);
-      return vendors.slice(0, VENDOR_ROSTER_CAP).map((v) => ({
+      const vendors = await vendorOptions(db, VENDOR_ROSTER_CAP);
+      return vendors.map((v) => ({
         id: v.id,
         name: v.name,
       }));

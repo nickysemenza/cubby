@@ -52,7 +52,6 @@ import {
   getPurchaseExpenses,
   purchaseScaffold,
 } from "~/server/domains/purchase/repo/purchase";
-import { vendorOptions } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityMutationCommand } from "~/server/entity-kernel/contracts";
 import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log-read";
@@ -1634,7 +1633,10 @@ describe("expense repository — charge resolution on update", () => {
         pagination: page,
       })
     ).count;
-    const vendorsBefore = (await vendorOptions(ctx.db)).length;
+    const vendorsBefore = await getDb(ctx.db)
+      .select({ id: vendor.id, name: vendor.name })
+      .from(vendor)
+      .orderBy(vendor.id);
 
     await deleteExpenses(ctx.db, [doomed.id], ctx.actor);
 
@@ -1648,10 +1650,12 @@ describe("expense repository — charge resolution on update", () => {
       // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
 
-    expect((await vendorOptions(ctx.db)).map((v) => v.name)).not.toContain(
-      "Ghost Supply Co",
-    );
-    expect((await vendorOptions(ctx.db)).length).toBe(vendorsBefore);
+    expect(
+      await getDb(ctx.db)
+        .select({ id: vendor.id, name: vendor.name })
+        .from(vendor)
+        .orderBy(vendor.id),
+    ).toEqual(vendorsBefore);
     expect(
       (
         await purchaseScaffold.read(ctx.db, {

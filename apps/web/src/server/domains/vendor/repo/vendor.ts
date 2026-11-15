@@ -425,6 +425,7 @@ export const readVendor = vendorReader.getByShortcode;
 /** Text-only field choices; display media is not part of their input. */
 export const vendorOptions = async (
   db: Database,
+  limit: number,
 ): Promise<VendorOptionsOut> => {
   const rows = await getDb(db)
     .select({
@@ -434,7 +435,8 @@ export const vendorOptions = async (
     })
     .from(vendor)
     .where(notDeleted(vendor))
-    .orderBy(desc(vendorPurchaseCount), asc(vendor.name));
+    .orderBy(desc(vendorPurchaseCount), asc(vendor.name))
+    .limit(limit);
 
   return rows.map((row) => ({
     id: parseShortcodeFor("vendor", row.shortcode),
