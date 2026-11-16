@@ -701,13 +701,22 @@ Wrappers restrict the prompt
 catalog, script discovery and dispatch to `entity_read` and
 `purchase_import_read`, still narrowed by the Mail manifest and checked by
 the delegated MCP handler. Full schemas are discovered inside the sandbox
-with `describeTool`. Mail's ordinary `entity_read` is deferred through Pi's
+with `describeTool`. Read calls return structured JSON objects directly. The
+MCP runner validates domain outputs; Pi's programmatic channel declares the
+shared object transport contract rather than copying the entity output unions.
+Structured reads are limited to 256 KiB and fail without partial JSON when
+larger; request selected fields, compact records or smaller pages. The limit
+applies to both script and ordinary calls when Code Mode is installed. This channel
+is installed only for Mail Runs with Code Mode enabled. Photo and ordinary
+Mail Runs retain their text results.
+Mail's ordinary `entity_read` is deferred through Pi's
 `tool_search`, so its schema is loaded only when requested. Each durable claim
 unloads deferred tools; the next Email's context folds the system deltas so
 previously loaded schemas and the Code prompt section are absent. This ordinary read path is also the fallback after a
 script error. Writers stay immediately available. Ordinary
-`purchase_import_read` stays available for attachment originals, whose media
-Pi's schema-less Code Mode mapping cannot forward. Claims,
+`purchase_import_read` stays available for attachment originals. Scripts receive
+the same byte-free attachment descriptor as the agent text; ordinary calls
+retain the original media. Claims,
 writes, escalation, settlement, model generation and generic host services
 are unavailable to scripts. Ordinary writers retain their host-owned nested
 calls. Pi's conversation store is cleared before each script invocation,
@@ -733,6 +742,11 @@ Compare identical synthetic corpus, models, effort and repeats with
 `MAIL_REPLAY_READ_CODE` unset and set to `1`. `MAIL_REPLAY_SCRIPTED=1` exercises
 both orchestration paths without inference; its identical two-read workload
 proves plumbing, not token savings or extraction quality.
+An input case can include `followingEmails` to settle several originals in one
+Run. Outcomes are checked by each Email's durable identity, and costs cover
+the whole Run. Case disagreements include every Email in the Run. Reports
+include the existing per-request context breakdowns;
+model text and source content are not copied into those measurements.
 The scripted code variant also raises a script error and verifies an ordinary
 read before continuing the import. Live comparison uses
 the existing pricing snapshot and shared spending ledger below. Keep all

@@ -25,6 +25,9 @@ describe("cubbyToolResult Email reads", () => {
       cubbyToolResult({ content, isError: true }).diagnostics,
     ).toBeUndefined();
     expect(
+      cubbyToolResult({ content, isError: true }, true).structuredOutput,
+    ).toBeUndefined();
+    expect(
       cubbyToolResult({
         content,
         isError: true,
@@ -113,6 +116,25 @@ describe("cubbyToolResult Email reads", () => {
     ).length;
     expect(bytes).toBeGreaterThan(MAIL_READ_RESPONSE_MAX_BYTES - 10_000);
     expect(bytes).toBeLessThanOrEqual(MAIL_READ_RESPONSE_MAX_BYTES);
+    const structured = cubbyToolResult(
+      { content: [], structuredContent: read },
+      true,
+    );
+    expect(structured.output).toEqual(result.output);
+    expect(structured.structuredOutput).toEqual(
+      JSON.parse(text?.type === "text" ? text.text : "null"),
+    );
+    expect(structured.structuredOutput).not.toHaveProperty(
+      "originalAttachment.dataBase64",
+    );
+    expect(result.structuredOutput).toBeUndefined();
+    const oversized = cubbyToolResult(
+      { structuredContent: { value: "x".repeat(300_000) } },
+      true,
+    );
+    expect(oversized.isError).toBe(true);
+    expect(oversized.structuredOutput).toBeUndefined();
+    expect(oversized.diagnostics?.[0]?.code).toBe("read_output_limit");
   });
 });
 
