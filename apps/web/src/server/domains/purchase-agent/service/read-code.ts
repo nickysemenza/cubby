@@ -1,10 +1,6 @@
 import type { CodemodeSandboxBase } from "@earendil-works/pi-codemode/portable";
 import { parseCodemodeSource } from "@earendil-works/pi-codemode/source";
-import {
-  wrapSection,
-  wrapTool,
-  type ToolRegistration,
-} from "@earendil-works/pi-durable";
+import { wrapSection, type ToolRegistration } from "@earendil-works/pi-durable";
 import {
   createCodemodeExtension,
   CodemodeStoreDoc,
@@ -35,8 +31,8 @@ export function readCodeExtension(sandbox: CodemodeSandboxBase) {
   return {
     ...extension,
     name: "cubby.read-code",
+    tools: extension.tools?.map(boundedReadCodeTool),
     wraps: [
-      wrapTool("codemode", boundedReadCodeTool),
       wrapSection("codemode", (section) => ({
         ...section,
         render: (input, context) =>
