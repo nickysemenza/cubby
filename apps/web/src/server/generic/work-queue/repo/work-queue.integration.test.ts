@@ -15,6 +15,7 @@ import {
 import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
+import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
@@ -776,5 +777,46 @@ describe("composed Work queue engine", () => {
     expect(
       (await problems("human")).items.map((row) => row.reasonKeys),
     ).toEqual([["duplicateInventory"]]);
+    const pendingProject = await createRepoEntity(ctx, "project", {
+      name: "Synthetic source pending project",
+      kind: "household",
+    });
+    for (const record of [
+      {
+        entity: "product",
+        recordId: product.entityId,
+        field: "model",
+        suggestedValue: "Synthetic revised model",
+      },
+      {
+        entity: "project",
+        recordId: pendingProject.entityId,
+        field: "emoji",
+        suggestedValue: "🧰",
+      },
+    ])
+      await seedFieldSuggestion(ctx.db, record);
+    const pending = async (filters: WorkQueueInput) => {
+      const result = await readComposedQueue(ctx.db, {
+        input: {
+          family: "suggestion",
+          reason: "suggestions:field",
+          query: "Synthetic source",
+          ...filters,
+        },
+        memberPartyId: null,
+        memberOnly: false,
+      });
+      return result.items.map((row) => row.id).sort();
+    };
+    expect(await pending({ entity: "product" })).toEqual([product.id]);
+    expect(await pending({ entityExclude: "project" })).toEqual([product.id]);
+    expect(await pending({ entity: ["product", "project"] })).toEqual(
+      [product.id, pendingProject.output.id].sort(),
+    );
+    expect(
+      await pending({ entity: "inventory", entityPresence: "has" }),
+    ).toEqual([product.id, pendingProject.output.id].sort());
+    expect(await pending({ entityPresence: "none" })).toEqual([]);
   });
 });

@@ -24,6 +24,8 @@ export interface WorkScope {
     /** Fresh verdicts for this single-record read; never a publication. */
     readonly quality?: DataQuality;
   };
+  /** Requested type filter over the source relation's unqualified entity column. */
+  readonly entityFilter?: SQL;
   /** Requested reason keys (any-of); a source keeps only these. */
   readonly reasons?: readonly string[];
   readonly reasonExclude?: readonly string[];

@@ -237,6 +237,17 @@ async function queryWorkQueue(
   const input = workQueueInput.parse(read.input);
   const scope: WorkScope = {
     record: read.record,
+    entityFilter: and(
+      ...compileDeclaredFilters(
+        {
+          ...filterSet,
+          descriptors: filterSet.descriptors.filter(
+            (descriptor) => descriptor.columnId === "entity",
+          ),
+        },
+        listFilterValues.parse(input),
+      ),
+    ),
     reasons: oneOrManyValues(input.reason),
     reasonExclude: oneOrManyValues(input.reasonExclude),
   };
