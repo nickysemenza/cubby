@@ -2087,13 +2087,14 @@ describe("mail research admission", () => {
       .update(runOperation)
       .set({ operationId: `migrated-target:${crypto.randomUUID()}` })
       .where(eq(runOperation.runId, parent.id));
-    await db
-      .update(emailTable)
-      .set({
+    await updateEmailStateWhere(
+      ctx.db,
+      {
         status: "unsettled",
         classificationReason: "Synthetic current classification",
-      })
-      .where(eq(emailTable.runId, parent.id));
+      },
+      eq(emailTable.runId, parent.id),
+    );
     const receipts = await db.select().from(runOperation);
     const before = (await loadRunDetail(ctx.db, parent.shortcode)).targets;
     expect(before).toMatchObject([
@@ -2125,12 +2126,13 @@ describe("mail research admission", () => {
       status: "completed",
       detail: "Synthetic successor resolved the source",
     });
-    await db
-      .update(emailTable)
-      .set({
+    await updateEmailStateWhere(
+      ctx.db,
+      {
         classificationReason: "Synthetic later classification",
-      })
-      .where(eq(emailTable.runId, child.id));
+      },
+      eq(emailTable.runId, child.id),
+    );
     expect((await loadRunDetail(ctx.db, parent.shortcode)).targets).toEqual(
       before,
     );

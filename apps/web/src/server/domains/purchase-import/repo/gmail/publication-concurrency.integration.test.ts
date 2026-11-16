@@ -107,7 +107,9 @@ describe("Gmail final publication concurrency", () => {
         : "a".repeat(64),
       content: {
         snippet: null,
-        bodyText: "Synthetic frozen original",
+        bodyText: sameChecksum
+          ? "Synthetic changed evidence"
+          : "Synthetic frozen original",
         bodyHtml: null,
       },
     });

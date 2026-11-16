@@ -53,6 +53,7 @@ import {
 import { storedMailOutcome } from "~/server/domains/purchase-import/repo/mail-outcome/outcome";
 import { readMailProductCandidates } from "~/server/domains/purchase-import/repo/mail-rule-evidence";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
+import { updateShipmentWhere } from "~/server/domains/shipment/repo/shipment-mutations";
 import { describeToolError } from "~/server/mcp/tools/tool-error";
 import { activeEmailPurchaseDecision } from "~/server/testing/email-link.fixtures";
 import {
@@ -299,7 +300,12 @@ describe("Mail import claim", () => {
 
     // A later notice for the same package links only the Purchase it holds.
     const target = await order("SYN-CARRIER");
-    await getDb(ctx.db).update(shipment).set({ purchaseId: target.id });
+    await updateShipmentWhere(
+      ctx.db,
+      { purchaseId: target.id },
+      eq(shipment.trackingNumber, "100000000001"),
+      ctx.actor,
+    );
     const later = await retain(
       "carrier-later",
       "Your shipment is scheduled for delivery tomorrow 100000000001",

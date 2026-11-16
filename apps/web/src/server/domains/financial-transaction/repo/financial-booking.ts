@@ -1138,8 +1138,17 @@ export async function commitFinancialBooking(
         }));
       await decide(database, actor, choices);
     }
-    const { sourceOrderObservation } = await import("~/server/db/schema");
-    const orders = await getDb(database).select().from(sourceOrderObservation);
+    const { acceptedOrders } =
+      await import("~/server/domains/purchase-import/repo/accepted-order-read");
+    const targetId = review.purchaseId
+      ? await resolveOrThrow(database, "purchase", review.purchaseId)
+      : null;
+    const orders = targetId
+      ? await getDb(database)
+          .select()
+          .from(acceptedOrders)
+          .where(eq(acceptedOrders.purchaseId, targetId))
+      : [];
     if (orders.length)
       await (
         await import("~/server/domains/purchase-import/repo/settle-order-evidence")
