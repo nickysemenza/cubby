@@ -98,6 +98,7 @@ const replayCases = z
   .max(100);
 const scripted = process.env.MAIL_REPLAY_SCRIPTED === "1";
 const readCode = process.env.MAIL_REPLAY_READ_CODE === "1";
+const bulkReads = !readCode && process.env.MAIL_REPLAY_BULK_READS === "1";
 // Identical read workload in both scripted variants; only model orchestration changes.
 const scriptedReads: ScriptStep[] = readCode
   ? [
@@ -249,6 +250,7 @@ describe("isolated Mail coordinator replay", () => {
         synthetic: !inputUrl,
         scripted,
         readMode: readCode ? "code" : "ordinary",
+        bulkReads,
         primary,
         escalation,
         cases: reports.length,
@@ -680,7 +682,11 @@ describe("isolated Mail coordinator replay", () => {
                       ...allowances.agent,
                       ...(sample.readFanout && {
                         READ_FANOUT_NAMES: JSON.stringify(sample.readFanout),
-                        READ_FANOUT_MODE: readCode ? "code" : "ordinary",
+                        READ_FANOUT_MODE: readCode
+                          ? "code"
+                          : bulkReads
+                            ? "bulk"
+                            : "ordinary",
                       }),
                     },
                   },
@@ -800,7 +806,9 @@ describe("isolated Mail coordinator replay", () => {
                         .object({
                           action: z.literal("resolve"),
                           entity: z.literal("product"),
-                          names: z.array(z.string()).length(1),
+                          names: bulkReads
+                            ? z.array(z.string()).length(8)
+                            : z.array(z.string()).length(1),
                         })
                         .safeParse(part.input);
                       return query.success ? query.data.names : [];

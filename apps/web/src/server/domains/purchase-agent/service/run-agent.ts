@@ -880,12 +880,9 @@ export class PurchaseImportRunAgent
       ),
     );
     if (readCode && this.agentEnv.readCodeSandbox) {
-      const { readCodeTool } = await import("./read-code");
+      const { readCodeExtension } = await import("./read-code");
       this.registry.install(
-        defineExtension({
-          name: "cubby.read-code",
-          tools: [readCodeTool(await this.agentEnv.readCodeSandbox())],
-        }),
+        readCodeExtension(await this.agentEnv.readCodeSandbox()),
       );
     }
     if (workflow.skills)

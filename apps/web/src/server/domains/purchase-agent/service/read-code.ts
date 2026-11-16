@@ -1,7 +1,12 @@
 import type { CodemodeSandboxBase } from "@earendil-works/pi-codemode/portable";
 import { parseCodemodeSource } from "@earendil-works/pi-codemode/source";
 import {
-  createCodemodeTool,
+  wrapSection,
+  wrapTool,
+  type ToolRegistration,
+} from "@earendil-works/pi-durable";
+import {
+  createCodemodeExtension,
   CodemodeStoreDoc,
 } from "@earendil-works/pi-durable/codemode";
 import { z } from "zod";
@@ -20,12 +25,42 @@ const nestedCalls = z.object({
   ),
 });
 
-/** Pi owns validation, nested tasks and replay; this adapter limits its authority. */
-export function readCodeTool(sandbox: CodemodeSandboxBase) {
-  const tool = createCodemodeTool({ sandbox, models: false });
+/** Pi owns discovery, prompt rendering and replay; wrappers narrow script authority. */
+export function readCodeExtension(sandbox: CodemodeSandboxBase) {
+  const extension = createCodemodeExtension({
+    sandbox,
+    models: false,
+    inlineBudget: 800,
+  });
+  return {
+    ...extension,
+    name: "cubby.read-code",
+    wraps: [
+      wrapTool("codemode", boundedReadCodeTool),
+      wrapSection("codemode", (section) => ({
+        ...section,
+        render: (input, context) =>
+          section.render(
+            {
+              ...input,
+              agent: {
+                ...input.agent,
+                callable: input.agent.callable.filter((tool) =>
+                  codeReadableTool(tool.name),
+                ),
+              },
+            },
+            context,
+          ),
+      })),
+    ],
+  };
+}
+
+function boundedReadCodeTool(tool: ToolRegistration) {
   return {
     ...tool,
-    description: `Run JavaScript to compose read-only Mail import queries and filter intermediate results. Use top-level await and text(value) to return selected evidence. Only tools.mcp__cubby__entity_read and tools.mcp__cubby__purchase_import_read are available. Discover inputs with text(await describeTool("mcp__cubby__entity_read")); searchTools() and describeNamespace() are also async. Tool results are text: parse JSON when appropriate. Read attachment originals through the ordinary mcp__cubby__purchase_import_read tool to see their media. Writes, claims, escalation and settlement use their ordinary tools. No network, modules, bindings or model generation. store()/load() are cleared before each script; durable records are the only memory between Emails. Maximum 32 reads per execution attempt, 30 seconds per script, 32,000 source characters and 2000 selected-output tokens. An optional first line can lower these output and time limits: // @options: {"max_output_tokens":1000,"timeout_ms":10000}.`,
+    description: `Compose authorized read-only tools with JavaScript; return selected evidence with text(value). Prefer ordinary bulk queries for simple batches. Use code for dependent reads or filtering intermediate results. Available signatures are in the codemode prompt section; await searchTools() or describeTool(name) for others. Tools return JSON text. No network, modules or models. Script memory resets per invocation. Limits: 32 reads, 30 seconds, 32,000 source characters, 2000 output tokens. Lower limits with // @options: {"max_output_tokens":1000,"timeout_ms":10000}. Read attachment media and perform writes through ordinary tools.`,
     execute: async (raw, api, context) => {
       const input = codeInput.parse(raw);
       const source = parseCodemodeSource(input.code);

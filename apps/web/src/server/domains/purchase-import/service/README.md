@@ -690,10 +690,12 @@ isolated replay harness. The default uses ordinary tools. The host enables it
 only beside a model peer; production configuration has no enabling variable.
 Photo inventory and external MCP retain their ordinary tools.
 
-The experiment uses Pi's `createCodemodeTool` and its durable nested-tool
-replay. Its callable catalog and dispatch both admit only `entity_read` and
+The experiment uses Pi's `createCodemodeExtension` and its durable nested-tool
+replay. Its prompt catalog has an 800-token inline declaration budget; tools
+outside that budget remain discoverable on demand. Wrappers restrict the prompt
+catalog, script discovery and dispatch to `entity_read` and
 `purchase_import_read`, still narrowed by the Mail manifest and checked by
-the delegated MCP handler. Their schemas are discovered inside the sandbox
+the delegated MCP handler. Full schemas are discovered inside the sandbox
 with `describeTool`; direct `entity_read` is hidden from the model. Ordinary
 `purchase_import_read` stays available for attachment originals, whose media
 Pi's schema-less Code Mode mapping cannot forward. Claims,
@@ -732,6 +734,10 @@ are empty; this measures orchestration overhead rather than representative
 catalog matching quality. Production prompts and gateway peers receive no
 benchmark instructions. Bulk resolution can already avoid these artificial
 single-name round trips; this benchmark alone cannot justify adoption.
+`MAIL_REPLAY_BULK_READS=1` selects one ordinary resolution with all eight names
+for the same workload and verifies every requested name in the transcript.
+Compare Code Mode against this bulk baseline before attributing a benefit to
+scripting.
 
 `eval:mail-replay:stdin` replays the synthetic originals in
 `apps/web/tooling/ai/mail-import-comparison.json` through the current writers;
