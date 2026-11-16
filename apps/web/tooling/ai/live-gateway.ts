@@ -48,6 +48,8 @@ type RouteUsage = {
   /** Public schema metadata only; never prompts, arguments or source content. */
   firstToolNames?: string[];
   firstToolSchemaChars?: number;
+  maxToolSchemaChars?: number;
+  codeOfferedRequests?: number;
 };
 let usage: Record<string, RouteUsage> = {};
 const decisionBody = z.object({ questions: z.record(z.string(), z.unknown()) });
@@ -324,17 +326,25 @@ export default {
       failedStatuses: [],
       models: {},
     });
-    if (body && url.pathname === "/openai/responses" && entry.requests === 0) {
+    if (body && url.pathname === "/openai/responses") {
       try {
         const envelope = z
           .object({
             tools: z.array(z.looseObject({ name: z.string() })).optional(),
           })
           .parse(JSON.parse(new TextDecoder().decode(body)));
-        entry.firstToolNames = (envelope.tools ?? []).map((tool) => tool.name);
-        entry.firstToolSchemaChars = JSON.stringify(
-          envelope.tools ?? [],
-        ).length;
+        const names = (envelope.tools ?? []).map((tool) => tool.name);
+        const characters = JSON.stringify(envelope.tools ?? []).length;
+        if (entry.requests === 0) {
+          entry.firstToolNames = names;
+          entry.firstToolSchemaChars = characters;
+        }
+        entry.maxToolSchemaChars = Math.max(
+          entry.maxToolSchemaChars ?? 0,
+          characters,
+        );
+        entry.codeOfferedRequests =
+          (entry.codeOfferedRequests ?? 0) + Number(names.includes("codemode"));
       } catch {
         // SILENT: optional catalog telemetry must not change provider forwarding.
       }
