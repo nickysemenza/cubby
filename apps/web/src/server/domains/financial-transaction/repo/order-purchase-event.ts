@@ -18,6 +18,10 @@ import {
 } from "~/server/domains/financial-transaction/repo/purchase-record";
 import { planLineMatch } from "~/server/domains/purchase-import/policy/accepted-source";
 import {
+  canonicalOrderId,
+  normalizeOrderKey,
+} from "~/server/domains/purchase-import/policy/order-identity";
+import {
   orderEventKey,
   paymentBankEventKey,
   createOrderPaymentMatcher,
@@ -283,6 +287,14 @@ export function reconcileOrderPurchase(
         scopeChoices.set(field, choice);
     }
   const header = scopeChoices;
+  const printedOrderId = canonicalOrderId(candidate.orderId);
+  const storedOrderId = existingPurchase?.orderId;
+  const orderId = !printedOrderId
+    ? canonicalOrderId(storedOrderId ?? null)
+    : storedOrderId &&
+        normalizeOrderKey(storedOrderId) === normalizeOrderKey(printedOrderId)
+      ? canonicalOrderId(storedOrderId)
+      : printedOrderId;
   const receiptDateNote =
     "Order date uses email receipt time because the confirmation supplies no order date.";
   const headerValue = (field: string, fallback: unknown) => {
@@ -296,7 +308,7 @@ export function reconcileOrderPurchase(
       {
         vendorId: accepted.observation.vendorId,
         vendorAccountId: existingPurchase?.vendorAccountId ?? null,
-        orderId: candidate.orderId,
+        orderId,
         displayLabel: candidate.merchant,
         date: accepted.date ?? existingPurchase?.date ?? null,
         statedTotal:
@@ -380,7 +392,9 @@ export function reconcileOrderPurchase(
       !row.deletedAt &&
       row.id !== purchaseIdentity.id &&
       row.vendorId === accepted.observation.vendorId &&
-      row.orderId === candidate.orderId,
+      row.orderId !== null &&
+      orderId !== null &&
+      normalizeOrderKey(row.orderId) === normalizeOrderKey(orderId),
   );
   if (otherOrderOwner) {
     const identity = c.decision(
@@ -647,11 +661,10 @@ export function reconcileOrderPurchase(
       const retainedId =
         retainedLine?.kind === "none"
           ? null
-          : (line.binding?.legacyExpenseId ??
-            (retainedLine?.kind === "set" &&
-            typeof retainedLine.value === "string"
-              ? retainedLine.value
-              : null));
+          : retainedLine?.kind === "set" &&
+              typeof retainedLine.value === "string"
+            ? retainedLine.value
+            : (line.binding?.legacyExpenseId ?? null);
       if (
         !retainedId &&
         !lineMatch.originalExpenses.has(line.lineIndex) &&

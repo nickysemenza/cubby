@@ -2064,7 +2064,7 @@ export const foldChargeInto = async (
     throw new Error("Purchase fold requires two live records");
 };
 
-const foldChargeContents = async (
+export const foldChargeContents = async (
   tx: DrizzleTransaction,
   deadId: PurchaseId,
   survivorId: PurchaseId,
