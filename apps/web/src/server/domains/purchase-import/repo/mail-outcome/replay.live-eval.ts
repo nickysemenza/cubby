@@ -99,11 +99,20 @@ const replayCases = z
 const scripted = process.env.MAIL_REPLAY_SCRIPTED === "1";
 const readCode = process.env.MAIL_REPLAY_READ_CODE === "1";
 const bulkReads = process.env.MAIL_REPLAY_BULK_READS === "1";
-// Identical read workload in both scripted variants; only model orchestration changes.
+// Shared two-read workload; Code Mode also verifies ordinary recovery after an error.
 const scriptedReads: ScriptStep[] = [
   call("load-reads", "tool_search", { query: "entity_read", limit: 1 }),
   ...(readCode
     ? [
+        call("read-code-failure", "codemode", {
+          code: 'throw new Error("Synthetic script failure")',
+        }),
+        { check: "read-code-failure", includes: "Synthetic script failure" },
+        mcpRead("read-code-recovery", "entity_read", {
+          action: "resolve",
+          entity: "product",
+          names: ["Synthetic ceramic mug"],
+        }),
         call("read-code", "codemode", {
           code: `if (typeof fetch !== "undefined" || typeof process !== "undefined" || typeof require !== "undefined" || "mcp__cubby__purchase_import" in tools || "claim_next_import_work" in tools || typeof models !== "undefined") throw new Error("Unexpected sandbox authority"); const matches = await Promise.all(["Synthetic ceramic mug", "Synthetic tea towel"].map(async name => JSON.parse(await tools.mcp__cubby__entity_read({action:"resolve",entity:"product",names:[name]})))); text({kind:"read-code-success",successfulReads:matches.length,matches});`,
         }),
