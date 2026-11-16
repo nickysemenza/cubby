@@ -51,6 +51,7 @@ import {
   type EntryRecord,
 } from "@earendil-works/pi-durable";
 import type { ToolExecutionApi } from "@earendil-works/pi-durable";
+import { createToolSearchExtension } from "@earendil-works/pi-durable/tool-search";
 import * as Sentry from "@sentry/cloudflare";
 import { Agent } from "agents";
 import {
@@ -876,9 +877,10 @@ export class PurchaseImportRunAgent
         () => this.services(),
         (api, context) => this.toolGeneration(api, context),
         purpose === "mail_import" ? runId : undefined,
-        readCode,
       ),
     );
+    if (purpose === "mail_import")
+      this.registry.install(createToolSearchExtension());
     if (readCode && this.agentEnv.readCodeSandbox) {
       const { readCodeExtension } = await import("./read-code");
       this.registry.install(

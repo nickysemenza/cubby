@@ -696,7 +696,10 @@ outside that budget remain discoverable on demand. Wrappers restrict the prompt
 catalog, script discovery and dispatch to `entity_read` and
 `purchase_import_read`, still narrowed by the Mail manifest and checked by
 the delegated MCP handler. Full schemas are discovered inside the sandbox
-with `describeTool`; direct `entity_read` is hidden from the model. Ordinary
+with `describeTool`. Mail's ordinary `entity_read` is deferred through Pi's
+`tool_search`, so its schema is loaded only when requested and stays available
+for the rest of the Run. This ordinary read path is also the fallback after a
+script error. Writers stay immediately available. Ordinary
 `purchase_import_read` stays available for attachment originals, whose media
 Pi's schema-less Code Mode mapping cannot forward. Claims,
 writes, escalation, settlement, model generation and generic host services

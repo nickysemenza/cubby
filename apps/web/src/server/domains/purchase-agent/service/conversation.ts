@@ -118,8 +118,13 @@ function assistantMessage(
     };
     if (!result) return { ...part, state: "input-available" };
     const durationMs = Math.max(0, result.timestamp - message.timestamp);
+    const parsedDetails = z.json().safeParse(result.details);
     const details =
-      result.details === undefined ? undefined : z.json().parse(result.details);
+      result.details === undefined
+        ? undefined
+        : parsedDetails.success
+          ? parsedDetails.data
+          : { error: parsedDetails.error.message };
     if (result.isError)
       return {
         ...part,
