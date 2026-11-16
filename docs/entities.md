@@ -2862,7 +2862,8 @@ margins in `meta.summary`: reasons use all memberships, duplicate keys in one it
 the grand total and Type margins count each item once. Summary and Pivot reuse the same eligibility,
 routing, member fence, deferrals and completeness metadata as Records. An active Reason filter limits
 the summarized keys so a drill-down cannot widen the population. The engine prunes sources a reason
-filter or record scope cannot admit; the filtered population materializes once for the view, totals
+filter or record scope cannot admit; pending Suggestions apply Type filters before resolving their
+record identities; the filtered population materializes once for the view, totals
 and counts; filter and stable sort precede LIMIT/OFFSET; quality gaps and display images hydrate for
 the page only.
 

@@ -108,12 +108,15 @@ const admits = (
     include: string | string[] | undefined,
     exclude: string | string[] | undefined,
     value: string | null,
+    presence?: WorkQueueInput["entityPresence"],
   ) => {
     if (value === null) return true;
     const included = oneOrManyValues(include);
     const excluded = oneOrManyValues(exclude);
     return (
-      (!included || included.includes(value)) &&
+      ((included === undefined && presence === undefined) ||
+        (included?.includes(value) ?? false) ||
+        presence === "has") &&
       !(excluded ?? []).includes(value)
     );
   };
@@ -127,7 +130,12 @@ const admits = (
       input.executorExclude,
       source.executor === "dynamic" ? null : source.executor,
     ) &&
-    pick(input.entity, input.entityExclude, source.entity) &&
+    pick(
+      input.entity,
+      input.entityExclude,
+      source.entity,
+      input.entityPresence,
+    ) &&
     scopeAdmitsReasons(scope, source.reasons)
   );
 };
@@ -237,6 +245,17 @@ async function queryWorkQueue(
   const input = workQueueInput.parse(read.input);
   const scope: WorkScope = {
     record: read.record,
+    entityFilter: and(
+      ...compileDeclaredFilters(
+        {
+          ...filterSet,
+          descriptors: filterSet.descriptors.filter(
+            (descriptor) => descriptor.columnId === "entity",
+          ),
+        },
+        listFilterValues.parse(input),
+      ),
+    ),
     reasons: oneOrManyValues(input.reason),
     reasonExclude: oneOrManyValues(input.reasonExclude),
   };

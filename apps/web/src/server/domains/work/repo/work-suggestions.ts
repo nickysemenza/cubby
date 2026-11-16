@@ -38,6 +38,10 @@ const source: WorkSource = {
     [UNAPPLIED_CORRECTION_REASON]: "Unapplied member correction",
   }).map(([family, label]) => ({ key: `suggestions:${family}`, label })),
   candidates: async (db, scope) => {
+    const entityFilter = and(
+      scope.entityFilter,
+      scope.record ? sql`refs.entity = ${scope.record.entity}` : undefined,
+    );
     const liveIdentity = sql`${notDeleted(alias(entityIdentity, "work_identity"))} AND work_identity."mergedIntoId" IS NULL`;
     const queries = await Promise.all(
       shortcodeEntities
@@ -84,7 +88,7 @@ const source: WorkSource = {
                   reason.key.slice("suggestions:".length),
                 ),
               ),
-            )}) refs`,
+            )}) refs ${entityFilter ? sql`WHERE ${entityFilter}` : sql``}`,
         },
         {
           name: "work_pending_records",
