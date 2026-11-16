@@ -281,9 +281,7 @@ async function importedPurchaseRechecks(
       sourceId: acceptedOrders.id,
       checksum: acceptedOrders.checksum,
       outputFingerprint: acceptedOrders.contentFingerprint,
-      evidenceAt: sql<Date>`${acceptedOrders.createdAt}`.mapWith(
-        (value) => new Date(String(value)),
-      ),
+      evidenceAt: acceptedOrders.createdAt,
     })
     .from(acceptedOrders)
     .innerJoin(purchase, eq(purchase.id, acceptedOrders.purchaseId))

@@ -1498,6 +1498,7 @@ export async function commitPurchaseImport(
               observationId: observation.id,
               lineIds: lines.map((row) => row.stableLineId),
               targetPurchaseId: order.targetPurchaseId,
+              vendorAccountId: evidence[index]?.input.vendorAccountId ?? null,
             };
           }),
         };
@@ -1565,6 +1566,7 @@ export async function commitPurchaseImport(
                 scopes,
               });
             for (const [field, value] of Object.entries({
+              vendorAccountId: prepared.vendorAccountId ?? undefined,
               defaultTrade: input.defaultTrade,
               defaultProjectId: projectId,
             }))

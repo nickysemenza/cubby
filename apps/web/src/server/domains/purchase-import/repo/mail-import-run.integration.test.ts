@@ -30,11 +30,11 @@ import {
   run,
   runFinding,
   runOperation,
-  emailReview,
   vendor,
   vendorAccount,
   purchase,
 } from "~/server/db/schema";
+import { emailReviewsRead as emailReview } from "~/server/domains/email/repo/email-decision-sql";
 import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
@@ -291,6 +291,11 @@ describe("mail research admission", () => {
         expect(result?.outcome).not.toBe("conflict");
         if (!result?.purchaseId)
           throw new Error("Synthetic accepted receipt missing");
+        const [acceptedPurchase] = await getDb(ctx.db)
+          .select({ vendorAccountId: purchase.vendorAccountId })
+          .from(purchase)
+          .where(eq(purchase.shortcode, result.purchaseId));
+        expect(acceptedPurchase?.vendorAccountId).toBe(vendorAccountRow.id);
         purchases.set(orderId, result.purchaseId);
       };
       await history("SYN-RECOVERY-42", "a");

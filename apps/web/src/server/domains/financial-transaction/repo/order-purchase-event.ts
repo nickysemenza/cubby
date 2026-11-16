@@ -307,7 +307,9 @@ export function reconcileOrderPurchase(
       purchaseKey,
       {
         vendorId: accepted.observation.vendorId,
-        vendorAccountId: existingPurchase?.vendorAccountId ?? null,
+        vendorAccountId:
+          existingPurchase?.vendorAccountId ??
+          headerValue("vendorAccountId", null),
         orderId,
         displayLabel: candidate.merchant,
         date: accepted.date ?? existingPurchase?.date ?? null,
