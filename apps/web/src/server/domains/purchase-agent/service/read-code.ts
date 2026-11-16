@@ -61,7 +61,8 @@ function boundedReadCodeTool(tool: ToolRegistration) {
   return {
     ...tool,
     deferred: true,
-    description: `Compose read-only tools with top-level await and text(value). Exact script names: tools.mcp__cubby__entity_read and tools.mcp__cubby__purchase_import_read. Prefer ordinary bulk queries for simple batches; load entity_read with tool_search. Use code for dependent reads or filtering results, and return only needed evidence, never full candidate records. Ordinary tool schemas apply; discover others with await describeTool(name). Tools return JSON text. No network, modules or models. Memory resets per invocation. Limits: 32 reads, 30 seconds, 32,000 source characters, 2000 output tokens. Lower limits with // @options: {"max_output_tokens":1000,"timeout_ms":10000}. Use ordinary tools for attachment media, writes and recovery after a script error.`,
+    description: `Compose read-only tools with JavaScript and return selected evidence.
+Use top-level await and text(value). Exact script names: tools.mcp__cubby__entity_read and tools.mcp__cubby__purchase_import_read. Prefer ordinary bulk queries for simple batches; load entity_read with tool_search. Use code for dependent reads or filtering results, and return only needed evidence, never full candidate records. Ordinary tool schemas apply; discover others with await describeTool(name). Tools return JSON text. No network, modules or models. Memory resets per invocation. Limits: 32 reads, 30 seconds, 32,000 source characters, 2000 output tokens. Lower limits with // @options: {"max_output_tokens":1000,"timeout_ms":10000}. Use ordinary tools for attachment media, writes and recovery after a script error.`,
     execute: async (raw, api, context) => {
       const input = codeInput.parse(raw);
       const source = parseCodemodeSource(input.code);
