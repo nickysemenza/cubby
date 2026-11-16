@@ -46,7 +46,9 @@ shows all of its machinery.
    table that holds both a source observation and mutable state splits them:
    the observation columns are insert-only and the state columns belong to a
    reconciler (for Email: headers, body and attachments are evidence;
-   relevance, link and outcome columns belong to `emailState`).
+   relevance, link and outcome columns belong to `emailState`). A system header
+   update with the current values is a no-op; changing back to an earlier value
+   appends a new observation rather than replaying the older one.
 
    The traced repository boundary refuses updates, including conflict updates,
    to these observation columns, even inside a kernel apply:
@@ -236,7 +238,9 @@ table, and a row read once serves the rest of the batch. `load` may read
 Answers through `reads.answers`, so a scope whose inputs depend on an Answer
 reconciles in its first round. Apply locks the union of input revisions and dirty claims once,
 then writes each table as a set. Identity reservations, RecordKeys, bindings,
-audits, dependencies and cached scope outcomes are batch writes. Audit rows
+audits, dependencies and cached scope outcomes are batch writes. Kernel publication
+alone audits owned column changes; domain receipts describe independent source
+operations. Audit rows
 retain their individual scope provenance. Derived audit entries use the system
 actor and cite their evidence and Decisions; those inputs retain their originating
 Run and member authorship. Authored source changes retain their actor and Run.

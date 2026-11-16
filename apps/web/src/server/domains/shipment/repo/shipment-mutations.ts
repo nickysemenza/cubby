@@ -7,7 +7,7 @@ import { databaseForTransaction, isTransaction } from "~/server/db/helpers";
 import { recordKey } from "~/server/db/kernel-schema";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { shipment } from "~/server/db/schema";
-import { jsonSnapshot } from "~/server/lib/canonical-json";
+import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
 /** An accepted package projection is retained before its reconciler publishes a Shipment. */
 export async function appendShipmentHeader(
@@ -138,8 +138,7 @@ export async function updateShipmentWhere(
     if (rows.some((row) => !owners.some((owner) => owner.entityId === row.id)))
       throw new Error("Shipment has no reconciliation scope");
     if (actor.channel === "system" || actor.runId) {
-      const { append, evidenceRow, recordIdentity } =
-        await import("~/server/kernel/api");
+      const { append, evidenceRow } = await import("~/server/kernel/api");
       const { shipmentPackageEvidence } =
         await import("~/server/domains/shipment/repo/shipment-event");
       const observed = jsonSnapshot.parse(
@@ -153,21 +152,26 @@ export async function updateShipmentWhere(
       );
       await append(
         database,
-        rows.map((row) => {
-          const owner = owners.find((owner) => owner.entityId === row.id)!;
-          return evidenceRow(shipmentPackageEvidence, {
-            id: recordIdentity(
-              { kind: "shipment", key: owner.scopeKey },
-              "ShipmentPackageObservation",
-              JSON.stringify(observed),
+        rows
+          .filter((row) =>
+            shipmentColumns.some(
+              (field) =>
+                values[field] !== undefined &&
+                canonicalJson(jsonSnapshot.parse(row[field])) !==
+                  canonicalJson(jsonSnapshot.parse(values[field])),
             ),
-            scopeKey: owner.scopeKey,
-            sourceKey: `projection:${owner.scopeKey}`,
-            packageKey: "header",
-            actorUserId: actor.userId,
-            values: observed,
-          });
-        }),
+          )
+          .map((row) => {
+            const owner = owners.find((owner) => owner.entityId === row.id)!;
+            return evidenceRow(shipmentPackageEvidence, {
+              createdAt: new Date(),
+              scopeKey: owner.scopeKey,
+              sourceKey: `projection:${owner.scopeKey}`,
+              packageKey: "header",
+              actorUserId: actor.userId,
+              values: observed,
+            });
+          }),
       );
     } else
       await decide(

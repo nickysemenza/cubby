@@ -19,6 +19,7 @@ import {
   auditLog,
   shipment,
   shipmentObservation,
+  shipmentPackageObservation,
   shipmentSourceCapture,
   shipmentSourcePackage,
   vendor,
@@ -347,6 +348,21 @@ describe("Shipment retained evidence", () => {
     await recordShipmentEvidence(ctx.db, proof, ctx.actor);
     expect(await getDb(ctx.db).select().from(runFinding)).toEqual(findings);
     await setCarrierFixture(code, alphaId);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(shipment)
+          .where(eq(shipment.shortcode, code))
+      )[0]?.carrierId,
+    ).toBe(alphaId);
+    const unchangedHeaders = await getDb(ctx.db)
+      .select()
+      .from(shipmentPackageObservation);
+    await setCarrierFixture(code, alphaId);
+    expect(
+      await getDb(ctx.db).select().from(shipmentPackageObservation),
+    ).toEqual(unchangedHeaders);
     const other = await recordShipmentEvidence(
       ctx.db,
       capture("collision-peer", [packet("EXAMPLE-PEER")]),
@@ -773,12 +789,12 @@ describe("Shipment retained evidence", () => {
       orderId: "SYN-SHIP-9",
     });
     // Order numbers are unique only per Vendor: a notice naming no Vendor never links.
-    expect(await linkShipmentsByOrderId(ctx.db, ctx.actor)).toBe(0);
+    expect(await linkShipmentsByOrderId(ctx.db)).toBe(0);
     await getDb(ctx.db)
       .update(orderMail)
       .set({ vendorId: seller.id })
       .where(eq(orderMail.id, message!.orderMailId!));
-    expect(await linkShipmentsByOrderId(ctx.db, ctx.actor)).toBe(1);
+    expect(await linkShipmentsByOrderId(ctx.db)).toBe(1);
     expect(await read()).toEqual({
       orderId: "SYN-SHIP-9",
       purchaseId: order.id,

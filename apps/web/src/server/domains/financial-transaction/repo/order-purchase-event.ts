@@ -301,7 +301,7 @@ export function reconcileOrderPurchase(
     const chosen = header.get(field);
     return chosen ? (chosen.kind === "none" ? null : chosen.value) : fallback;
   };
-  const publishHeader = () =>
+  const publishHeader = (itemizationAccepted: boolean) =>
     write(
       purchaseRecords,
       purchaseKey,
@@ -309,7 +309,9 @@ export function reconcileOrderPurchase(
         vendorId: accepted.observation.vendorId,
         vendorAccountId:
           existingPurchase?.vendorAccountId ??
-          headerValue("vendorAccountId", null),
+          (!existingPurchase || itemizationAccepted
+            ? headerValue("vendorAccountId", null)
+            : null),
         orderId,
         displayLabel: candidate.merchant,
         date: accepted.date ?? existingPurchase?.date ?? null,
@@ -355,7 +357,13 @@ export function reconcileOrderPurchase(
       },
       Object.fromEntries(
         [...header]
-          .filter(([field]) => purchaseRecords.columns.includes(field))
+          .filter(
+            ([field]) =>
+              purchaseRecords.columns.includes(field) &&
+              (field !== "vendorAccountId" ||
+                !existingPurchase ||
+                itemizationAccepted),
+          )
           .map(([field, choice]) => [field, choice.id]),
       ),
     );
@@ -364,7 +372,7 @@ export function reconcileOrderPurchase(
     !accepted.date ||
     (!accepted.policy.unpriced && accepted.totalMinor === null)
   ) {
-    publishHeader();
+    publishHeader(false);
     c.gap.evidence(
       `order details: ${accepted.policy.semanticPlan.writeBlockReason ?? "missing accepted order"}`,
       "agent",
@@ -593,7 +601,9 @@ export function reconcileOrderPurchase(
     return keep(c);
   }
   const usedLines = new Set<string>();
-  const purchaseId = publishHeader();
+  const purchaseId = existingPurchase
+    ? purchaseIdentity.id
+    : publishHeader(true);
   if (unlinkedSpending) {
     c.gap.decision(
       "how this order corresponds to existing unlinked item spending",
@@ -1070,6 +1080,7 @@ export function reconcileOrderPurchase(
       if (!keys.has(key)) c.retire(target, key, "remove");
   for (const key of c.existing(bookingVendors))
     c.retire(bookingVendors, key, "keep");
+  if (existingPurchase) publishHeader(true);
   if (!matched.size) c.gap.evidence("the bank charge", sourceActor("the bank"));
   return c.done();
 }

@@ -13,7 +13,6 @@ import { shipment, vendor } from "~/server/db/schema";
 import { normalizeTrackingNumber } from "~/server/domains/shipment/repo/carrier-recognition";
 import { updateShipmentWhere } from "~/server/domains/shipment/repo/shipment-mutations";
 import { createAppError } from "~/server/errors/app-error";
-import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 
 /** Distinct known carriers under one number stay separate: they can be a real handoff. */
 export const shipmentTrackingReferenceKey = (ref: {
@@ -134,15 +133,5 @@ export async function repointShipmentCarrierReferences(
       eq(shipment.id, row.id),
       actor,
     );
-    await logAuditEntries(tx, actor, [
-      {
-        entityKind: "shipment",
-        entityId: row.id,
-        action: "update",
-        changes: {
-          extraTrackingNumbers: { from: row.extraTrackingNumbers, to: updated },
-        },
-      },
-    ]);
   }
 }

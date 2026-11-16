@@ -1,4 +1,3 @@
-import { systemActor } from "@cubby/schemas/context";
 import { emailLinkEvidenceKind } from "@cubby/schemas/email-fields";
 import { MAIL_IMPORT_GAP_EXECUTOR } from "@cubby/schemas/email-fields";
 /**
@@ -1163,9 +1162,7 @@ export async function importPendingEmails(
   let senderAfter: { mailboxId: string; afterId: string } | null = null;
   try {
     // A Purchase that gained a Shipment's order number holds that Shipment.
-    await withTransactionDatabase(db, (tx) =>
-      linkShipmentsByOrderId(tx, systemActor()),
-    );
+    await withTransactionDatabase(db, (tx) => linkShipmentsByOrderId(tx));
   } catch (error) {
     errors.push(error);
   }

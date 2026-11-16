@@ -2,8 +2,7 @@ import { dataQuality } from "@cubby/schemas/data-quality";
 import type { ShipmentObservationInput } from "@cubby/schemas/shipment-evidence";
 import { datedShipmentEventTime } from "@cubby/schemas/shipment-evidence";
 import type { ShipmentPurpose } from "@cubby/schemas/shipment-fields";
-import { generateShortcode } from "@cubby/shared";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
@@ -23,6 +22,8 @@ import {
   recordShipmentEvidence,
 } from "~/server/domains/shipment/repo/evidence";
 import { canonicalShipment } from "~/server/domains/shipment/repo/evidence-internal";
+import { shipmentPackageEvidence } from "~/server/domains/shipment/repo/shipment-event";
+import { updateShipmentWhere } from "~/server/domains/shipment/repo/shipment-mutations";
 import {
   readShipmentTimeline,
   shipmentEventSummary,
@@ -30,12 +31,18 @@ import {
 import { executeEntity } from "~/server/entity-kernel";
 import { tombstoneEntityIdentities } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import {
+  append,
+  evidenceRow,
+  householdWrite,
+  reconcileNow,
+  recordIdentity,
+} from "~/server/kernel/api";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   storedQuality,
   storedQualityIds,
 } from "~/server/testing/quality.fixtures";
-import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 
 import {
   shipmentChecks,
@@ -178,10 +185,12 @@ describe("Shipment evidence quality", () => {
       ctx.actor,
     );
     // Imported live associations need no separate member review.
-    await unwrapDb(ctx.db)
-      .update(shipment)
-      .set({ purchaseAssociationReviewed: false })
-      .where(eq(shipment.id, parcel.row.id));
+    await updateShipmentWhere(
+      ctx.db,
+      { purchaseAssociationReviewed: false },
+      eq(shipment.id, parcel.row.id),
+      ctx.actor,
+    );
     await unwrapDb(ctx.db)
       .update(purchase)
       .set({ deletedAt: new Date() })
@@ -190,10 +199,12 @@ describe("Shipment evidence quality", () => {
       "shipment_purchase_association",
     );
     // Reviewing an existing link does not make a deleted Purchase valid.
-    await unwrapDb(ctx.db)
-      .update(shipment)
-      .set({ purchaseAssociationReviewed: true })
-      .where(eq(shipment.id, parcel.row.id));
+    await updateShipmentWhere(
+      ctx.db,
+      { purchaseAssociationReviewed: true },
+      eq(shipment.id, parcel.row.id),
+      ctx.actor,
+    );
     await refresh();
     const filtered = await shipmentScaffold.read(ctx.db, {
       filters: { dataGap: ["shipment_purchase_association"] },
@@ -405,15 +416,44 @@ describe("Shipment evidence quality", () => {
 
   it("backfills stored rows, retains them across reads and input changes, and recomputes older rules versions", async () => {
     // Historical records have no endpoint capture; cross the actual page boundary.
-    const historical = await insertEntityFixtures(
-      ctx.db,
-      shipment,
-      "shipment",
-      Array.from({ length: 200 }, (_, index) => ({
-        name: `Synthetic historical parcel ${index}`,
-        shortcode: generateShortcode("shipment"),
-      })),
-    );
+    const headers = Array.from({ length: 200 }, (_, index) => ({
+      key: `synthetic-history:${crypto.randomUUID()}`,
+      name: `Synthetic historical parcel ${index}`,
+    }));
+    await householdWrite(ctx.db, async (database) => {
+      await append(
+        database,
+        headers.map(({ key, name }) =>
+          evidenceRow(shipmentPackageEvidence, {
+            id: recordIdentity(
+              { kind: "shipment", key },
+              "ShipmentPackageObservation",
+              key,
+            ),
+            scopeKey: key,
+            sourceKey: "manual",
+            packageKey: key,
+            actorUserId: ctx.actor.userId,
+            values: { name },
+            manual: true,
+          }),
+        ),
+      );
+      await reconcileNow(
+        database,
+        headers.map(({ key }) => ({ kind: "shipment", key })),
+      );
+    });
+    const historical = await unwrapDb(ctx.db)
+      .select()
+      .from(shipment)
+      .where(
+        inArray(
+          shipment.name,
+          headers.map(({ name }) => name),
+        ),
+      );
+    expect(historical).toHaveLength(200);
     const parcel = await seed([shipped, delivered]);
     const stored = async () =>
       (

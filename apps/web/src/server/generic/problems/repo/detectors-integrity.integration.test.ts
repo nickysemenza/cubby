@@ -1,7 +1,11 @@
 import { entitySchema, type Entity } from "@cubby/schemas/entity";
 import type { EdgeRole } from "@cubby/schemas/entity-integrity";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
-import { parseEntityId, userId } from "@cubby/schemas/identifiers";
+import {
+  parseEntityId,
+  userId,
+  type LedgerPartyId,
+} from "@cubby/schemas/identifiers";
 import { acceptedSourceOrder } from "@cubby/schemas/purchase-import";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { moneyToMinor } from "@cubby/shared";
@@ -31,6 +35,7 @@ import {
   importSourceOrder,
   importSourceProduct,
   ledgerParty,
+  ledgerTransfer,
   ledgerSourceClaim,
   mailboxCursor,
   photoRunImage,
@@ -251,10 +256,11 @@ const mkPurchase = async (db: Database) => {
   });
 };
 
-const mkFinancialAccount = (db: Database) =>
+const mkFinancialAccount = (db: Database, ledgerPartyId?: LedgerPartyId) =>
   insertWithShortcode(db, "financialAccount", {
     name: uniq("Financial account"),
     identity: { kind: "cash" },
+    ledgerPartyId,
   });
 
 const mkFinancialTransaction = async (db: Database) => {
@@ -917,13 +923,22 @@ const SOURCE_FACTORIES = {
   },
 
   "FinancialTransaction.ledgerTransferId": async (db, targetId) => {
-    const account = await mkFinancialAccount(db);
+    const transferId = parseEntityId("ledgerTransfer", targetId);
+    const [transfer] = await getDb(db)
+      .select()
+      .from(ledgerTransfer)
+      .where(eq(ledgerTransfer.id, transferId));
+    if (!transfer?.date)
+      throw new Error("Synthetic dated transfer target missing");
+    const account = await mkFinancialAccount(db, transfer.fromPartyId);
     return insertWithShortcode(db, "financialTransaction", {
       accountId: account.id,
-      ledgerTransferId: parseEntityId("ledgerTransfer", targetId),
-      kind: "purchase",
-      status: "pending",
-      amount: moneyToMinor(1),
+      ledgerTransferId: transferId,
+      kind: "account_transfer",
+      status: "posted",
+      amount: transfer.amount,
+      transactionDate: transfer.date,
+      postedDate: transfer.date,
     });
   },
 

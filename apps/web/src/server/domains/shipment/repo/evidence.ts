@@ -145,7 +145,7 @@ async function writeShipmentEvidence(
         state,
       );
     if (source.emailId)
-      await recordShipmentOrderId(tdb, actor, {
+      await recordShipmentOrderId(tdb, {
         emailId: source.emailId,
         purchaseId,
         shipmentIds: [...new Set(state.shipmentIds)],
@@ -166,7 +166,6 @@ async function writeShipmentEvidence(
  */
 async function recordShipmentOrderId(
   db: Database,
-  actor: ActorContext,
   input: {
     emailId: EmailId;
     purchaseId: PurchaseId | null;
@@ -212,17 +211,7 @@ async function recordShipmentOrderId(
     ),
   ).then((rows) => rows.map((row) => ({ id: row.id })));
   if (!recorded.length) return;
-  await logAuditEntries(
-    db,
-    actor,
-    recorded.map((row) => ({
-      entityKind: "shipment" as const,
-      entityId: row.id,
-      action: "update" as const,
-      changes: { orderId: { from: null, to: orderId } },
-    })),
-  );
-  await linkShipmentsByOrderId(db, actor, {
+  await linkShipmentsByOrderId(db, {
     shipmentIds: recorded.map((row) => row.id),
   });
 }
@@ -235,7 +224,6 @@ async function recordShipmentOrderId(
  */
 export async function linkShipmentsByOrderId(
   db: Database,
-  actor: ActorContext,
   scope: {
     shipmentIds?: readonly ShipmentId[];
     purchaseIds?: readonly PurchaseId[];
@@ -307,14 +295,6 @@ export async function linkShipmentsByOrderId(
     ).then((rows) => rows.map((row) => ({ id: row.id })));
     if (!row) continue;
     linked += 1;
-    await logAuditEntries(db, actor, [
-      {
-        entityKind: "shipment",
-        entityId: row.id,
-        action: "update",
-        changes: { purchaseId: { from: null, to: candidate.purchaseId } },
-      },
-    ]);
   }
   if (linked)
     await recordChange(db, { kind: "source", categories: ["shipment"] });
@@ -490,14 +470,6 @@ export async function associateShipment(
       eq(shipment.id, row.id),
       actor,
     );
-    await logAuditEntries(tdb, actor, [
-      {
-        entityKind: "shipment",
-        entityId: row.id,
-        action: "update",
-        changes: { purchaseId: { from: row.purchaseId, to: purchaseId } },
-      },
-    ]);
     await recordChange(tdb, { kind: "source", categories: ["shipment"] });
     return { shipmentId: parseShortcodeFor("shipment", row.shortcode) };
   });
@@ -603,17 +575,6 @@ export async function mergeShipment(
       eq(shipment.id, target.id),
       actor,
     );
-    if (mergedCarrierId !== target.carrierId)
-      await logAuditEntries(tdb, actor, [
-        {
-          entityKind: "shipment",
-          entityId: target.id,
-          action: "update",
-          changes: {
-            carrierId: { from: target.carrierId, to: mergedCarrierId },
-          },
-        },
-      ]);
     await getDb(tdb)
       .update(shipmentObservation)
       .set({ shipmentId: target.id })
@@ -788,14 +749,6 @@ export async function editShipmentReferences(
       eq(shipment.id, row.id),
       actor,
     );
-    await logAuditEntries(tdb, actor, [
-      {
-        entityKind: "shipment",
-        entityId: row.id,
-        action: "update",
-        changes,
-      },
-    ]);
     await recordChange(tdb, { kind: "source", categories: ["shipment"] });
     return { shipmentId };
   });
