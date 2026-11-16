@@ -25,6 +25,8 @@ import { combinedChargeAllocations } from "~/server/domains/purchase-import/poli
 import {
   paymentBankEventKey,
   createOrderPaymentMatcher,
+  reviewedOrderHead,
+  orderSourceHeadField,
 } from "~/server/domains/purchase-import/policy/payment-keys";
 import {
   completePaymentMatches,
@@ -69,7 +71,7 @@ export type PaymentMatchInput = {
 };
 
 /** One accepted head per original; later raw retrievals cannot change these facts. */
-export function acceptedOrderHeads(orders: readonly Order[]) {
+export function acceptedOrderHeads(orders: readonly Order[], c: Pure) {
   const heads = new Map<string, Order>();
   for (const row of orders) {
     const identity = `${orderEventKey(row)}\0${row.sourceKind}\0${row.sourceExternalKey || row.sourceClaimId}`;
@@ -82,7 +84,29 @@ export function acceptedOrderHeads(orders: readonly Order[]) {
     )
       heads.set(identity, row);
   }
-  return [...heads.values()];
+  const selected = [...heads.values()];
+  const byId = new Map(selected.map((row) => [row.id, row]));
+  return selected.filter((row) => {
+    const choice = c.decision(
+      "assignment",
+      orderEventKey(row),
+      orderSourceHeadField(row),
+    );
+    const parsed = reviewedOrderHead.safeParse(
+      choice?.kind === "set" ? choice.value : null,
+    );
+    if (!parsed.success || !parsed.data.supersedes.includes(row.id))
+      return true;
+    const replacement = byId.get(parsed.data.observationId);
+    return (
+      !replacement ||
+      orderEventKey(replacement) !== orderEventKey(row) ||
+      replacement.sourceKind !== row.sourceKind ||
+      !(row.sourceClaimId
+        ? replacement.sourceClaimId === row.sourceClaimId
+        : replacement.sourceExternalKey === row.sourceExternalKey)
+    );
+  });
 }
 
 const paymentSetKey = (order: Order) =>
@@ -261,7 +285,7 @@ function planOrder(
   c: Pure,
   paymentsFor: PaymentsFor,
 ) {
-  const sameEvent = acceptedOrderHeads(input.orders).filter(
+  const sameEvent = acceptedOrderHeads(input.orders, c).filter(
     (row) => paymentSetKey(row) === paymentSetKey(order),
   );
   const rows = sameEvent.flatMap((row) => paymentsFor(row));
@@ -498,7 +522,7 @@ export const paymentMatching: Pick<
     const belongs = createOrderPaymentMatcher(input.orders, input.payments);
     const paymentsFor: PaymentsFor = (order) =>
       input.payments.filter((payment) => belongs(payment, order));
-    const heads = acceptedOrderHeads(input.orders);
+    const heads = acceptedOrderHeads(input.orders, c);
     const events = new Map(heads.map((row) => [paymentSetKey(row), row]));
     for (const order of events.values()) {
       if (

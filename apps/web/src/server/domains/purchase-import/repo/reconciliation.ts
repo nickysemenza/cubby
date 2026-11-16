@@ -27,6 +27,10 @@ import {
   sourceFinancialFacts,
 } from "~/server/domains/purchase-import/policy/import-lines";
 import {
+  reviewedOrderHead,
+  orderSourceHeadField,
+} from "~/server/domains/purchase-import/policy/payment-keys";
+import {
   runFindingColumns,
   runFindingStatus,
   updateRunFinding,
@@ -659,7 +663,7 @@ export async function commitSourceOrderReconciliation(
   intent: "financial" | "product_binding" = "financial",
 ) {
   const { databaseForTransaction } = await import("~/server/db/helpers");
-  const { appendOrderPayments, orderEventKey } =
+  const { appendOrderPayments, orderEventKey, orderPaymentKeys } =
     await import("~/server/domains/purchase-import/repo/order-evidence");
   const { settleOrderEvidence } =
     await import("~/server/domains/purchase-import/repo/settle-order-evidence");
@@ -810,6 +814,38 @@ export async function commitSourceOrderReconciliation(
       scopes: [scope],
     },
   ];
+  if (
+    state.association?.acceptedObservationId &&
+    state.association.acceptedObservationId !== head.id
+  ) {
+    const field = orderSourceHeadField(head);
+    const previous = priorChoices.find((row) => row.field === field);
+    const retained = reviewedOrderHead.safeParse(
+      previous?.kind === "set" ? previous.value : null,
+    );
+    decisions.push({
+      channel: "assignment",
+      kind: "set",
+      subject: key,
+      field,
+      value: {
+        observationId: head.id,
+        supersedes: [
+          ...new Set([
+            ...(retained.success ? retained.data.supersedes : []),
+            state.association.acceptedObservationId,
+          ]),
+        ],
+      },
+      scopes: [
+        scope,
+        ...orderPaymentKeys(head).map((key) => ({
+          kind: "purchaseEvent",
+          key,
+        })),
+      ],
+    });
+  }
   // The review independently checked these unchanged bank allocations and
   // their payment facts. Preserve that settlement even when the cost changes.
   for (const allocation of state.allocations)

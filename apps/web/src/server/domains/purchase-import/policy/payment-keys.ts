@@ -1,4 +1,5 @@
 import { moneyToMinor } from "@cubby/shared";
+import { z } from "zod";
 
 import type {
   purchasePaymentEvidence,
@@ -77,6 +78,19 @@ type OrderOriginal = Pick<
   | "extraction"
   | "createdAt"
 >;
+
+/** An explicit review supersedes only the named accepted captures. */
+export const reviewedOrderHead = z.object({
+  observationId: z.string(),
+  supersedes: z.array(z.string()),
+});
+export const orderSourceHeadField = (
+  row: Pick<
+    OrderOriginal,
+    "sourceClaimId" | "sourceKind" | "sourceExternalKey"
+  >,
+) =>
+  `source-head:${row.sourceClaimId ?? `${row.sourceKind}:${row.sourceExternalKey}`}`;
 
 /** Binding choices do not retrieve a new original or create another payment fact. */
 export function sameOrderOriginal(

@@ -433,6 +433,37 @@ describe("canonical source claim families", () => {
       .where(eq(importSourceOrder.sourceClaimId, f.firstAlias.id));
     expect(first?.originalOrder?.checksum).toBe(f.first.source.checksum);
     expect(first?.checksum).toBe(refreshed.source.checksum);
+    const later = await memberImport(ctx.db, ctx.actor, {
+      key: "family-after-reviewed-refresh",
+      orders: [
+        {
+          ...refreshed,
+          source: { ...refreshed.source, checksum: "c".repeat(64) },
+          extraction: {
+            ...refreshed.extraction,
+            candidate: {
+              ...refreshed.extraction.candidate!,
+              payments: [
+                {
+                  ...refreshed.extraction.candidate!.payments[0]!,
+                  chargedAt: "2026-09-04T12:00:00.000Z",
+                },
+              ],
+            },
+          },
+        },
+      ],
+      defaultTrade: "other",
+    });
+    expect(later.committed.items[0]?.outcome).toBe("conflict");
+    expect(await f.db.select().from(expense)).toEqual(beforeExpenses);
+    expect(await f.db.select().from(inventoryEntry)).toEqual(beforeStock);
+    expect(
+      await f.db
+        .select()
+        .from(importSourceOrder)
+        .where(eq(importSourceOrder.id, first!.id)),
+    ).toEqual([first]);
   });
 
   it("refuses duplicate family order associations even when they name the same Purchase", async () => {

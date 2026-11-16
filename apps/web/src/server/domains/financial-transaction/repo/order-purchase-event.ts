@@ -114,7 +114,7 @@ export function reconcileOrderPurchase(
     orderObservations,
     input.payments,
   );
-  const heads = acceptedOrderHeads(orderObservations);
+  const heads = acceptedOrderHeads(orderObservations, c);
   for (const row of heads)
     if (row.emailId) c.emit({ kind: "emailState", key: row.emailId });
   const sourceHeads = input.orders.filter((row) =>
