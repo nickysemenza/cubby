@@ -109,40 +109,39 @@ const scripted = process.env.MAIL_REPLAY_SCRIPTED === "1";
 const readCode = process.env.MAIL_REPLAY_READ_CODE === "1";
 const bulkReads = process.env.MAIL_REPLAY_BULK_READS === "1";
 // Shared two-read workload; Code Mode also verifies ordinary recovery after an error.
-const scriptedReads: ScriptStep[] = [
-  call("load-reads", "tool_search", { query: "entity_read", limit: 1 }),
-  ...(readCode
-    ? [
-        call("load-code", "tool_search", { query: "codemode", limit: 1 }),
-        call("read-code-failure", "codemode", {
-          code: 'throw new Error("Synthetic script failure")',
-        }),
-        { check: "read-code-failure", includes: "Synthetic script failure" },
-        mcpRead("read-code-recovery", "entity_read", {
-          action: "resolve",
-          entity: "product",
-          names: ["Synthetic ceramic mug"],
-        }),
-        call("read-code", "codemode", {
-          code: `if (typeof fetch !== "undefined" || typeof process !== "undefined" || typeof require !== "undefined" || "mcp__cubby__purchase_import" in tools || "claim_next_import_work" in tools || typeof models !== "undefined") throw new Error("Unexpected sandbox authority"); const matches = await Promise.all(["Synthetic ceramic mug", "Synthetic tea towel"].map(async name => JSON.parse(await tools.mcp__cubby__entity_read({action:"resolve",entity:"product",names:[name]})))); text({kind:"read-code-success",successfulReads:matches.length,matches});`,
-        }),
-        { check: "read-code", includes: "readCalls" },
-        { check: "read-code", includes: "read-code-success" },
-        { check: "read-code", includes: '"successfulReads":2' },
-      ]
-    : [
-        mcpRead("read-mug", "entity_read", {
-          action: "resolve",
-          entity: "product",
-          names: ["Synthetic ceramic mug"],
-        }),
-        mcpRead("read-towel", "entity_read", {
-          action: "resolve",
-          entity: "product",
-          names: ["Synthetic tea towel"],
-        }),
-      ]),
-];
+const scriptedReads: ScriptStep[] = readCode
+  ? [
+      call("load-code", "tool_search", { query: "codemode", limit: 1 }),
+      call("read-code-failure", "codemode", {
+        code: 'throw new Error("Synthetic script failure")',
+      }),
+      { check: "read-code-failure", includes: "Synthetic script failure" },
+      call("load-reads", "tool_search", { query: "entity_read", limit: 1 }),
+      mcpRead("read-code-recovery", "entity_read", {
+        action: "resolve",
+        entity: "product",
+        names: ["Synthetic ceramic mug"],
+      }),
+      call("read-code", "codemode", {
+        code: `if (typeof fetch !== "undefined" || typeof process !== "undefined" || typeof require !== "undefined" || "mcp__cubby__purchase_import" in tools || "claim_next_import_work" in tools || typeof models !== "undefined") throw new Error("Unexpected sandbox authority"); const matches = await Promise.all(["Synthetic ceramic mug", "Synthetic tea towel"].map(async name => JSON.parse(await tools.mcp__cubby__entity_read({action:"resolve",entity:"product",names:[name]})))); text({kind:"read-code-success",successfulReads:matches.length,matches});`,
+      }),
+      { check: "read-code", includes: "readCalls" },
+      { check: "read-code", includes: "read-code-success" },
+      { check: "read-code", includes: '"successfulReads":2' },
+    ]
+  : [
+      call("load-reads", "tool_search", { query: "entity_read", limit: 1 }),
+      mcpRead("read-mug", "entity_read", {
+        action: "resolve",
+        entity: "product",
+        names: ["Synthetic ceramic mug"],
+      }),
+      mcpRead("read-towel", "entity_read", {
+        action: "resolve",
+        entity: "product",
+        names: ["Synthetic tea towel"],
+      }),
+    ];
 const evaluationBudget = scripted ? null : await liveReplayBudget();
 const inputUrl = process.env.MAIL_REPLAY_INPUT_URL;
 if (process.env.CI && inputUrl)
