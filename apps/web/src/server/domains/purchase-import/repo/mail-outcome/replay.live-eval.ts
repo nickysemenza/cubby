@@ -90,6 +90,8 @@ const replayCases = z
         .object({ name: z.string().min(1), address: z.email() })
         .optional(),
       baseline: mailImportOutcome,
+      /** Trusted synthetic benchmark configuration, never derived from Email prose. */
+      readFanout: z.array(z.string().min(1)).length(8).optional(),
     }),
   )
   .min(1)
@@ -301,6 +303,7 @@ describe("isolated Mail coordinator replay", () => {
         const settleBy = caseStartedAt + CASE_BUDGET_MS - REPORT_RESERVE_MS;
         let admittedAt = caseStartedAt;
         let diagnose = async (): Promise<string[]> => [];
+        let fanoutVerified = false;
         const queueCapture = captureBackgroundQueue();
         try {
           const { party } = await memberImportWorld(ctx.db, ctx.actor, {
@@ -672,7 +675,14 @@ describe("isolated Mail coordinator replay", () => {
                 models: {
                   agent: {
                     ...peer,
-                    vars: { ...peer.vars, ...allowances.agent },
+                    vars: {
+                      ...peer.vars,
+                      ...allowances.agent,
+                      ...(sample.readFanout && {
+                        READ_FANOUT_NAMES: JSON.stringify(sample.readFanout),
+                        READ_FANOUT_MODE: readCode ? "code" : "ordinary",
+                      }),
+                    },
                   },
                   gateway: {
                     ...peer,
@@ -723,8 +733,88 @@ describe("isolated Mail coordinator replay", () => {
                       (part) =>
                         part.type === "tool" && part.toolName === "codemode",
                     );
+                  const fanoutDiagnostics: string[] = [];
+                  if (sample.readFanout) {
+                    const returnedNames: string[] = [];
+                    let successfulNestedReads = 0;
+                    const inspect = (value: unknown): void => {
+                      if (typeof value === "string") {
+                        try {
+                          inspect(JSON.parse(value));
+                        } catch {
+                          /* SILENT: ordinary prose is not a structured result. */
+                        }
+                      } else if (Array.isArray(value)) value.forEach(inspect);
+                      else if (value && typeof value === "object") {
+                        const matches = z
+                          .object({
+                            fanoutMatches: z.array(
+                              z.object({ name: z.string() }),
+                            ),
+                          })
+                          .safeParse(value);
+                        if (matches.success)
+                          returnedNames.push(
+                            ...matches.data.fanoutMatches.map(
+                              (row) => row.name,
+                            ),
+                          );
+                        const summary = z
+                          .object({
+                            readCalls: z.array(
+                              z.object({
+                                name: z.string(),
+                                status: z.string(),
+                              }),
+                            ),
+                          })
+                          .safeParse(value);
+                        if (summary.success)
+                          successfulNestedReads +=
+                            summary.data.readCalls.filter(
+                              (row) =>
+                                row.name === "mcp__cubby__entity_read" &&
+                                row.status === "ok",
+                            ).length;
+                        Object.values(value).forEach(inspect);
+                      }
+                    };
+                    calls.forEach((part) => {
+                      if (part.type === "tool") inspect(part.output);
+                    });
+                    const directNames = conversation.messages
+                      .flatMap((message) => message.parts)
+                      .flatMap((part) => {
+                        if (
+                          part.type !== "tool" ||
+                          part.toolName !== "mcp__cubby__entity_read" ||
+                          part.state !== "output-available"
+                        )
+                          return [];
+                        const query = z
+                          .object({
+                            action: z.literal("resolve"),
+                            entity: z.literal("product"),
+                            names: z.array(z.string()).length(1),
+                          })
+                          .safeParse(part.input);
+                        return query.success ? query.data.names : [];
+                      });
+                    const observed = readCode ? returnedNames : directNames;
+                    fanoutVerified =
+                      sample.readFanout.every((name) =>
+                        observed.includes(name),
+                      ) &&
+                      (!readCode ||
+                        (calls.length === 1 &&
+                          successfulNestedReads === sample.readFanout.length));
+                    fanoutDiagnostics.push(
+                      `read fanout: ${JSON.stringify({ verified: fanoutVerified, directNames, returnedNames, successfulNestedReads })}`,
+                    );
+                  }
                   return [
                     ...logs,
+                    ...fanoutDiagnostics,
                     `peer usage: ${await peer.text()}`,
                     `code usage: ${JSON.stringify({ calls: calls.length, errors: calls.filter((part) => part.type === "tool" && part.state === "output-error").length })}`,
                   ];
@@ -753,13 +843,18 @@ describe("isolated Mail coordinator replay", () => {
             );
           }
           expect(observedOutcome).not.toBeNull();
+          expect(
+            !sample.readFanout || fanoutVerified,
+            "The live model must complete the configured independent read workload",
+          ).toBe(true);
           // Private cases retain report-only grading. Synthetic facts must
           // agree; free-form gap wording is not a different disposition.
-          const requiredDisagreements = inputUrl
-            ? []
-            : mailReplayDisagreement(sample.baseline, observedOutcome).filter(
-                (field) => field !== "reason" && field !== "lines",
-              );
+          const requiredDisagreements =
+            inputUrl && !sample.readFanout
+              ? []
+              : mailReplayDisagreement(sample.baseline, observedOutcome).filter(
+                  (field) => field !== "reason" && field !== "lines",
+                );
           expect(requiredDisagreements).toEqual([]);
         } catch (error) {
           if (!reports.some((report) => report.case === index + 1))

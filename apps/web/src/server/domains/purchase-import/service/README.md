@@ -722,6 +722,17 @@ settlement latency, actual models, failures, escalations and outcome differences
 Adopt only with lower cost per correctly settled source and no increase in
 incorrect outcomes or member interventions; fewer turns alone is insufficient.
 
+`mail-import-read-fanout.json` is a controlled synthetic orchestration workload.
+Its trusted `readFanout` configuration asks the live agent peer to perform eight
+independent single-name Product resolutions before importing the order. The
+ordinary mode uses direct calls; Code Mode must use one script with eight
+successful nested reads and return the named results. Transcript checks reject
+a run that skips either workload. The catalog is empty, so the expected matches
+are empty; this measures orchestration overhead rather than representative
+catalog matching quality. Production prompts and gateway peers receive no
+benchmark instructions. Bulk resolution can already avoid these artificial
+single-name round trips; this benchmark alone cannot justify adoption.
+
 `eval:mail-replay:stdin` replays the synthetic originals in
 `apps/web/tooling/ai/mail-import-comparison.json` through the current writers;
 live replay requires explicit spending authority. Live `eval:mail-replay`

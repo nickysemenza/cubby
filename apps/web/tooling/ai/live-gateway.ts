@@ -32,6 +32,9 @@ type Env = {
   RESPONSES_EFFORT?: string;
   /** Explicitly authorized, budget-guarded OpenAI paid evaluation. */
   ALLOW_PAID?: string;
+  /** Synthetic orchestration benchmark; supplied only to the agent peer. */
+  READ_FANOUT_NAMES?: string;
+  READ_FANOUT_MODE?: string;
   /** Shared host-owned physical-call allowance. */
   EVAL_BUDGET_URL?: string;
 };
@@ -275,6 +278,26 @@ export default {
         }),
       );
       body = new TextEncoder().encode(JSON.stringify(swapped)).buffer;
+    }
+    if (env.READ_FANOUT_NAMES && url.pathname === "/openai/responses" && body) {
+      const names = z
+        .array(z.string().min(1))
+        .min(2)
+        .max(16)
+        .parse(JSON.parse(env.READ_FANOUT_NAMES));
+      const parsed = z
+        .looseObject({ instructions: z.string().optional() })
+        .parse(JSON.parse(new TextDecoder().decode(body)));
+      const orchestration =
+        env.READ_FANOUT_MODE === "code"
+          ? "Use exactly one codemode call to run these queries with Promise.all via tools.mcp__cubby__entity_read, and text({fanoutMatches: results}) where results contains one {name,matches} object per query. Each nested tool returns JSON text; parse it. The query inputs above are complete; schema discovery is unnecessary."
+          : "Use eight separate ordinary mcp__cubby__entity_read calls, one name per call.";
+      body = new TextEncoder().encode(
+        JSON.stringify({
+          ...parsed,
+          instructions: `${parsed.instructions ?? ""}\nSynthetic read-fan-out benchmark: after claiming the Email and before writing its outcome, perform one independent entity_read query per name: ${JSON.stringify(names)}. Each query must use {action:"resolve",entity:"product",names:[name]}. ${orchestration} Do not combine names into a batched query: this controlled benchmark compares orchestration of independent reads. Do this workload once per Email, not once per turn. An empty catalog result is valid. Then complete the ordinary Mail import workflow using the Email's evidence.`,
+        }),
+      ).buffer;
     }
     const model = body && wireModel(body);
     const admission = await reserveEvaluation(env, request, route, body, model);

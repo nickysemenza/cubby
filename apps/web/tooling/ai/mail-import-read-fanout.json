@@ -1,0 +1,65 @@
+[
+  {
+    "subject": "Your Synthetic Shop order SYN-7001 is confirmed",
+    "sender": "Synthetic Shop <orders@shop.example>",
+    "receivedAt": "2026-11-04T18:00:00Z",
+    "headers": {
+      "From": "Synthetic Shop <orders@shop.example>",
+      "To": "Sam Synthetic <sam.synthetic@example.com>"
+    },
+    "owner": {
+      "name": "Sam Synthetic",
+      "address": "sam.synthetic@example.com"
+    },
+    "bodyText": "Hi Sam, thanks for your order!\nOrder SYN-7001, placed November 3, 2026.\n1 x Synthetic ceramic mug: $5.00\n1 x Synthetic tea towel: $5.00\n1 x Synthetic refill tablet box: $5.00\n1 x Synthetic linen napkin: $5.00\n1 x Synthetic bamboo tray: $5.00\n1 x Synthetic glass jar: $5.00\n1 x Synthetic cotton apron: $5.00\n1 x Synthetic wooden spoon: $5.00\nSubtotal: $40.00\nOrder total: $40.00, charged to Visa ending 0000.",
+    "bodyHtml": null,
+    "baseline": {
+      "kind": "imported",
+      "total": 40,
+      "lines": [
+        {
+          "name": "Synthetic ceramic mug",
+          "cost": 5
+        },
+        {
+          "name": "Synthetic tea towel",
+          "cost": 5
+        },
+        {
+          "name": "Synthetic refill tablet box",
+          "cost": 5
+        },
+        {
+          "name": "Synthetic linen napkin",
+          "cost": 5
+        },
+        {
+          "name": "Synthetic bamboo tray",
+          "cost": 5
+        },
+        {
+          "name": "Synthetic glass jar",
+          "cost": 5
+        },
+        {
+          "name": "Synthetic cotton apron",
+          "cost": 5
+        },
+        {
+          "name": "Synthetic wooden spoon",
+          "cost": 5
+        }
+      ]
+    },
+    "readFanout": [
+      "Synthetic ceramic mug",
+      "Synthetic tea towel",
+      "Synthetic refill tablet box",
+      "Synthetic linen napkin",
+      "Synthetic bamboo tray",
+      "Synthetic glass jar",
+      "Synthetic cotton apron",
+      "Synthetic wooden spoon"
+    ]
+  }
+]
