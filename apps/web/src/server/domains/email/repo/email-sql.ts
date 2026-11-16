@@ -47,9 +47,19 @@ export const emailPurchaseAssociationsSql = (
  SELECT evidence."purchaseId" FROM (${emailAcceptedEvidenceSql(includeDeleted, accountOwnerScope)}) evidence
  UNION ${emailLinkedDecisionPurchasesSql(includeDeleted, accountOwnerScope)}
 `;
+/** Bound candidates before evaluating the canonical per-Email association policy. */
 export const purchaseAssociatedEmailsSql = (purchaseId: SQL): SQL => sql`
- SELECT "Email".* FROM "Email" WHERE ${notDeleted("Email")}
- AND EXISTS (SELECT 1 FROM (${emailPurchaseAssociationsSql()}) association WHERE association."purchaseId"=${purchaseId})
+ WITH candidate_ids AS MATERIALIZED (
+   SELECT accepted."emailId" AS id FROM ${acceptedOrderPurchasesSql} accepted
+     WHERE accepted."boundPurchaseId"=${purchaseId} AND accepted."emailId" IS NOT NULL
+   UNION
+   SELECT decision."emailId" AS id FROM ${emailLinkDecisionsSql} decision
+     WHERE decision."purchaseId"=${purchaseId} AND decision.active
+ ), eligible AS MATERIALIZED (
+   SELECT candidate.* FROM candidate_ids ids JOIN "Email" candidate ON candidate.id=ids.id AND ${notDeleted("candidate")}
+ )
+ SELECT "Email".* FROM eligible "Email"
+ WHERE EXISTS (SELECT 1 FROM (${emailPurchaseAssociationsSql()}) association WHERE association."purchaseId"=${purchaseId})
 `;
 export const emailSourceClaimCandidateSql = sql`EXISTS (
  SELECT 1 FROM "SourceOrderObservation" accepted WHERE accepted."emailId"="Email".id
