@@ -118,14 +118,14 @@ function assistantMessage(
     };
     if (!result) return { ...part, state: "input-available" };
     const durationMs = Math.max(0, result.timestamp - message.timestamp);
+    const details =
+      result.details === undefined ? undefined : z.json().parse(result.details);
     if (result.isError)
       return {
         ...part,
         state: "output-error",
         errorText: String(toolOutput(result)),
-        ...(result.details === undefined
-          ? {}
-          : { output: { details: result.details } }),
+        ...(details === undefined ? {} : { output: { details } }),
         durationMs,
       };
     return {
@@ -133,9 +133,9 @@ function assistantMessage(
       state: "output-available",
       // Execution details belong to the inspector, not the model's tool text.
       output:
-        result.details === undefined
+        details === undefined
           ? toolOutput(result)
-          : { output: toolOutput(result), details: result.details },
+          : { output: toolOutput(result), details },
       durationMs,
     };
   });
