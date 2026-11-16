@@ -659,8 +659,7 @@ export async function commitSourceOrderReconciliation(
   intent: "financial" | "product_binding" = "financial",
 ) {
   const { databaseForTransaction } = await import("~/server/db/helpers");
-  const { importWriterInput } = await import("@cubby/schemas/purchase-import");
-  const { appendOrderEvidence, orderEventKey } =
+  const { appendOrderPayments, orderEventKey } =
     await import("~/server/domains/purchase-import/repo/order-evidence");
   const { settleOrderEvidence } =
     await import("~/server/domains/purchase-import/repo/settle-order-evidence");
@@ -776,28 +775,10 @@ export async function commitSourceOrderReconciliation(
     resolvedProducts.set(binding.lineIndex, id);
   }
   await products.flush();
-  const accepted = await appendOrderEvidence(database, [
-    {
-      orderKey: fix.orderKey,
-      emailId: prior.emailId,
-      input: importWriterInput.parse({
-        runId: prior.runId,
-        ledgerPartyId: ownerId,
-        vendorId: target.vendorId,
-        vendorAccountId: target.vendorAccountId,
-        source: fix.source,
-        extraction: fix.proposedExtraction,
-        primaryDocumentImageId: prior.primaryDocumentImageId,
-        screenshotImageId: prior.screenshotImageId,
-        productResolutions: [...resolvedProducts].flatMap(
-          ([lineIndex, productId]) =>
-            productId ? [{ kind: "existing", lineIndex, productId }] : [],
-        ),
-      }),
-    },
-  ]);
-  const head = accepted[0];
-  if (!head) throw new Error("The accepted repair is missing");
+  // The locked review already proves these immutable source bytes. Product
+  // and line choices are Decisions, not another source capture.
+  const head = prior;
+  await appendOrderPayments(database, [head]);
   const key = orderEventKey(head);
   const priorChoices = await tx
     .selectDistinctOn([decision.field])

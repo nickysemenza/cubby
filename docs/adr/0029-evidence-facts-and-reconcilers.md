@@ -155,7 +155,7 @@ Disposal and reversal quantities are not acquisition candidates.
 A held capture can publish its Purchase header and financial review while retaining
 all recorded spending. The review proves the member, canonical source identity
 and live Purchase owner from the capture and its economic event. Its source claim
-tracks the review Run; the immutable capture retains its original Run provenance.
+tracks the review Run; the immutable capture retains its original Run provenance. Applying a review reuses its proven capture and publishes payment evidence from those bytes. Product and line choices are Decisions, without another source capture. Historical provenance retains the first capture independently of the current accepted head.
 Publishing a review does not advance an accepted source association.
 The import commit counts member decision and unsupported gaps as findings;
 pending bank evidence stays visible as background settlement work.

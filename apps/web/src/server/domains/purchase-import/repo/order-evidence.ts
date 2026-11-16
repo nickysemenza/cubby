@@ -284,6 +284,15 @@ export async function appendOrderEvidence(
     if (!observation) throw new Error("Accepted extraction is missing");
     return observation;
   });
+  await appendOrderPayments(db, observations);
+  return observations;
+}
+
+/** Publish payment facts from already captured bytes without duplicating the capture. */
+export async function appendOrderPayments(
+  db: Database,
+  observations: readonly (typeof sourceOrderObservation.$inferSelect)[],
+): Promise<void> {
   const identities = requestedRows(
     observations.map((row) => ({
       ledgerPartyId: row.ledgerPartyId,
@@ -388,5 +397,4 @@ export async function appendOrderEvidence(
           ),
     ),
   );
-  return observations;
 }

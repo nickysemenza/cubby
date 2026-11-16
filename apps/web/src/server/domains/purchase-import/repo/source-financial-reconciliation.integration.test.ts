@@ -1023,27 +1023,20 @@ describe("accepted source financial reconciliation", () => {
     });
     expect(await state()).toEqual(after);
     const observations = await database.select().from(sourceOrderObservation);
-    // The retained original and proposal remain immutable; acceptance adds one
-    // canonical fact instead of rewriting either predecessor observation.
-    expect(observations).toHaveLength(3);
-    expect(observations).toEqual(expect.arrayContaining(pendingFacts));
+    // Acceptance reuses the reviewed capture; choices belong to Decisions.
+    expect(observations).toEqual(pendingFacts);
     expect(
       observations.find((row) => row.checksum === "a".repeat(64))!.extraction
         .candidate!.printedGrandTotal,
     ).toBe(40);
-    const normalized = observations.find(
-      (row) => !pendingFacts.some((prior) => prior.id === row.id),
-    );
-    if (!normalized)
-      throw new Error("Synthetic accepted correction fact missing");
-    expect(after.orders[0]!.acceptedObservationId).toBe(normalized.id);
+    expect(after.orders[0]!.acceptedObservationId).toBe(proposal.id);
     expect(
       await database
         .select({ purchaseId: acceptedOrders.purchaseId })
         .from(acceptedOrders)
-        .where(eq(acceptedOrders.id, normalized.id)),
+        .where(eq(acceptedOrders.id, proposal.id)),
     ).toEqual([{ purchaseId: accepted.id }]);
-    expect(normalized.extraction.candidate?.printedGrandTotal).toBe(45);
+    expect(proposal.extraction.candidate?.printedGrandTotal).toBe(45);
   });
 
   it("rejects a reviewed correction after a human changes its ledger", async () => {

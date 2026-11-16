@@ -40,7 +40,6 @@ import {
   sourceOrderObservation,
 } from "~/server/db/schema";
 import { orderEventKey } from "~/server/domains/purchase-import/policy/payment-keys";
-import { acceptedOrders } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import {
   type LiveSourceOrder,
   readImportSourceClaimFamily,
@@ -370,7 +369,7 @@ export async function promoteHistoricalAcceptedObservation(
   return observation.id;
 }
 
-/** A historical accepted extraction whose bytes were overwritten remains unknown. */
+/** Read the association's selected immutable capture and prove its original ownership. */
 export async function acceptedSourceExtraction(
   tx: Pick<DrizzleTransaction, "select">,
   order: LiveSourceOrder,
@@ -378,8 +377,8 @@ export async function acceptedSourceExtraction(
   if (order.acceptedObservationId) {
     const [observation] = await tx
       .select()
-      .from(acceptedOrders)
-      .where(eq(acceptedOrders.id, order.acceptedObservationId));
+      .from(sourceOrderObservation)
+      .where(eq(sourceOrderObservation.id, order.acceptedObservationId));
     let ownedClaim = observation?.sourceClaimId === order.sourceClaimId;
     if (observation && observation.sourceClaimId === null) {
       const [claim] = await tx
@@ -404,13 +403,11 @@ export async function acceptedSourceExtraction(
     }
     if (
       !observation ||
-      !observation.purchaseId ||
       !ownedClaim ||
       observation.orderKey !== order.orderKey ||
-      !(await sourceObservationIdentityMatches(
+      !(await sourceObservationOwnsPurchase(
         tx,
-        "purchase",
-        observation.purchaseId,
+        observation,
         order.purchaseId,
       )) ||
       observation.checksum !== order.checksum
@@ -463,19 +460,24 @@ export async function recordReviewedSourceMetadata(
     state.association?.sourceClaimId ??
     state.observation.sourceClaimId ??
     state.family.root.id;
+  // The first capture is provenance even when a later capture is accepted.
+  // The reviewed state has already proved this source family and Purchase.
   const [first] = await tx
     .select()
-    .from(acceptedOrders)
+    .from(sourceOrderObservation)
     .where(
       and(
         or(
           inArray(
-            acceptedOrders.sourceClaimId,
+            sourceOrderObservation.sourceClaimId,
             state.family.members.map((row) => row.id),
           ),
           and(
-            isNull(acceptedOrders.sourceClaimId),
-            eq(acceptedOrders.ledgerPartyId, state.family.root.ledgerPartyId),
+            isNull(sourceOrderObservation.sourceClaimId),
+            eq(
+              sourceOrderObservation.ledgerPartyId,
+              state.family.root.ledgerPartyId,
+            ),
             sql`EXISTS (SELECT 1 FROM ${
               requestedRows(
                 state.family.members.map((row) => ({
@@ -486,14 +488,24 @@ export async function recordReviewedSourceMetadata(
                 "family_source",
               ).from
             }
-          WHERE family_source.kind=${acceptedOrders.sourceKind} AND family_source."externalKey"=${acceptedOrders.sourceExternalKey})`,
+          WHERE family_source.kind=${sourceOrderObservation.sourceKind} AND family_source."externalKey"=${sourceOrderObservation.sourceExternalKey})`,
           ),
         ),
-        eq(acceptedOrders.orderKey, fix.orderKey),
-        eq(acceptedOrders.purchaseId, state.target.id),
+        eq(sourceOrderObservation.orderKey, fix.orderKey),
+        or(
+          isNull(sourceOrderObservation.purchaseId),
+          sourceObservationIdentitySql(
+            "purchase",
+            sourceOrderObservation.purchaseId,
+            sql`${state.target.id}`,
+          ),
+        ),
       ),
     )
-    .orderBy(asc(acceptedOrders.createdAt), asc(acceptedOrders.id))
+    .orderBy(
+      asc(sourceOrderObservation.createdAt),
+      asc(sourceOrderObservation.id),
+    )
     .limit(1);
   if (!first)
     throw new Error("Reviewed source observation provenance is missing");
