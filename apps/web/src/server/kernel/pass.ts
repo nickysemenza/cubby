@@ -7,10 +7,12 @@ import { kernelWaitCause } from "@cubby/schemas/kernel/machinery";
 import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db/database";
+import { withDatabaseRequestMetrics } from "~/server/db/db-observability";
 import {
   repositoryQueries,
   repositoryTransactionDatabase,
 } from "~/server/db/repository-access.boundary";
+import { withTrace } from "~/server/observability/tracing";
 
 import {
   claimPass,
@@ -115,21 +117,26 @@ export async function runOnePass(
   db: Database,
   registry: KernelRegistry,
 ): Promise<boolean> {
-  const claimed = await claimPass(db, [...registry.passes.values()]);
-  if (!claimed) return false;
-  const pass = registry.passes.get(claimed.name)!;
-  const target = {
-    table: "Pass" as const,
-    name: claimed.name,
-    key: claimed.key,
-  };
-  const claim = passClaim(db, claimed);
-  try {
-    // SAFETY: the cursor column holds the JSON the pass last returned.
-    const result = await pass.run(db, claimed.cursor as Json | null, claim);
-    await claim.fenced(async (tx) => {
-      await result.publish?.(tx);
-      await repositoryQueries(tx).execute(sql`
+  return withTrace("kernel.pass.page", (span) =>
+    withDatabaseRequestMetrics(span, async () => {
+      const claimed = await claimPass(db, [...registry.passes.values()]);
+      span.setAttribute("kernel.pass.claimed", claimed !== null);
+      if (!claimed) return false;
+      span.setAttribute("kernel.pass.name", claimed.name);
+      const pass = registry.passes.get(claimed.name)!;
+      const target = {
+        table: "Pass" as const,
+        name: claimed.name,
+        key: claimed.key,
+      };
+      const claim = passClaim(db, claimed);
+      try {
+        // SAFETY: the cursor column holds the JSON the pass last returned.
+        const result = await pass.run(db, claimed.cursor as Json | null, claim);
+        span.setAttribute("kernel.pass.result_done", result.done);
+        await claim.fenced(async (tx) => {
+          await result.publish?.(tx);
+          await repositoryQueries(tx).execute(sql`
         UPDATE "Pass" SET cursor = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN
             CASE WHEN cursor ? ${"legacyJobs"} THEN
               coalesce(nullif(${JSON.stringify(result.cursor)}::jsonb, 'null'::jsonb), '{}'::jsonb) || jsonb_build_object(${"legacyJobs"}::text, cursor->${"legacyJobs"})
@@ -140,16 +147,19 @@ export async function runOnePass(
           attempts = 0, "claimToken" = NULL, "claimDeadline" = NULL,
           "waitCause" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${result.done ? null : (result.waitCause ?? null)} ELSE NULL END, "lastError" = NULL, "updatedAt" = now()
         WHERE name = ${claimed.name} AND key = ${claimed.key}`);
-    });
-  } catch (error) {
-    await settleFailure(
-      repositoryQueries(db),
-      target,
-      claimed.token,
-      claimed.attempts,
-      error,
-      claimed.wakeVersion,
-    );
-  }
-  return true;
+        });
+      } catch (error) {
+        span.setError("Pass page failed");
+        await settleFailure(
+          repositoryQueries(db),
+          target,
+          claimed.token,
+          claimed.attempts,
+          error,
+          claimed.wakeVersion,
+        );
+      }
+      return true;
+    }),
+  );
 }

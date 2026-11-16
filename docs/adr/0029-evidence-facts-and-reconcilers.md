@@ -519,6 +519,11 @@ they held has this owner:
 | The Needs-you publication                                        | The list projection over `ScopeState` (section 10).                                                                                                                       |
 | Calendar invalidation                                            | The post-commit fast path stays; a failed mark persists a `calendar.invalidate` Pass keyed by origin that retries the idempotent `markDirty` call.                        |
 
+A `kernel.pass.page` trace measures one claim attempt through page execution,
+publication and failure settlement. It records the registered pass name, whether
+a page was claimed, its completion result and the existing database activity
+metrics. It exports no pass key, cursor or source input.
+
 Synchronous `reconcileNow` returns one final outcome per requested scope.
 Input-fence conflicts that are retried within the call are intermediate results.
 
