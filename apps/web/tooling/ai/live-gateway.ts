@@ -295,7 +295,7 @@ export default {
         .parse(JSON.parse(new TextDecoder().decode(body)));
       const orchestration =
         env.READ_FANOUT_MODE === "code-bulk"
-          ? "First load codemode with tool_search (query codemode, limit 1) if it is not offered. Then use one codemode call containing one tools.mcp__cubby__entity_read resolve query with all eight names. Parse its JSON text and text({fanoutMatches: matches.results.map(row => ({name: row.name, exact: row.exact, candidates: row.candidates.map(candidate => ({id: candidate.id, name: candidate.name}))}))}). Do not print full candidate records. The query inputs above are complete; schema discovery is unnecessary."
+          ? "First load codemode with tool_search (query codemode, limit 1) if it is not offered. Then use one codemode call containing one tools.mcp__cubby__entity_read resolve query with all eight names. Assign the parsed JSON directly to response; its top-level field is results, with no matches wrapper. Then text({fanoutMatches: response.results.map(row => ({name: row.name, exact: row.exact, candidates: row.candidates.map(candidate => ({id: candidate.id, name: candidate.name}))}))}). Do not print full candidate records. The query inputs above are complete; schema discovery is unnecessary."
           : env.READ_FANOUT_MODE === "code"
             ? "Use exactly one codemode call to run these queries with Promise.all via tools.mcp__cubby__entity_read, and text({fanoutMatches: results}) where results contains one {name,matches} object per query. Each nested tool returns JSON text; parse it. The query inputs above are complete; schema discovery is unnecessary."
             : env.READ_FANOUT_MODE === "bulk"
@@ -330,11 +330,26 @@ export default {
       try {
         const envelope = z
           .object({
-            tools: z.array(z.looseObject({ name: z.string() })).optional(),
+            tools: z.array(z.unknown()).optional(),
+            input: z.union([z.string(), z.array(z.unknown())]).optional(),
           })
           .parse(JSON.parse(new TextDecoder().decode(body)));
-        const names = (envelope.tools ?? []).map((tool) => tool.name);
-        const characters = JSON.stringify(envelope.tools ?? []).length;
+        const declarations = [...(envelope.tools ?? [])];
+        if (Array.isArray(envelope.input))
+          for (const item of envelope.input) {
+            const batch = z
+              .object({
+                type: z.enum(["additional_tools", "tool_search_output"]),
+                tools: z.array(z.unknown()),
+              })
+              .safeParse(item);
+            if (batch.success) declarations.push(...batch.data.tools);
+          }
+        const tools = z
+          .array(z.looseObject({ name: z.string() }))
+          .parse(declarations);
+        const names = [...new Set(tools.map((tool) => tool.name))];
+        const characters = JSON.stringify(tools).length;
         if (entry.requests === 0) {
           entry.firstToolNames = names;
           entry.firstToolSchemaChars = characters;

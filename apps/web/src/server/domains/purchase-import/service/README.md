@@ -536,7 +536,8 @@ cache. Bindings, the OAuth client and deploy constraints are in
   resumption regenerates funding-paused dispatches. Manual pauses stay stopped.
 - Every model call goes through AI Gateway `cubby` on the Worker's `AI`
   binding, by the shared pi-ai providers (`@cubby/shared/ai/pi-providers`). The
-  gateway shim disables parallel tool calls: pi ends a run on a terminating
+  gateway shim disables parallel tool calls for top-level declarations and
+  Responses transcript tool batches: pi ends a run on a terminating
   tool only when it is the round's sole call. A paid- or credit-admission
   refusal (household AI budget, Run no longer executable) reaches the
   coordinator as an HTTP 403 carrying its reason, not a network error.
