@@ -6,7 +6,7 @@ import {
   statementMerchantSupportInput,
 } from "@cubby/schemas/statement-answers";
 import { statementDecisionInput } from "@cubby/schemas/statement-decision";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
@@ -984,6 +984,12 @@ describe("statement spending review and re-import", () => {
       ...(await getDb(ctx.db).select().from(financialTransaction)).map(
         (row) => ({ kind: "purchaseEvent", key: row.id }),
       ),
+      ...(
+        await getDb(ctx.db)
+          .select()
+          .from(scopeDirty)
+          .where(inArray(scopeDirty.scopeKind, ["bankEvent", "purchaseEvent"]))
+      ).map((row) => ({ kind: row.scopeKind, key: row.scopeKey })),
     ];
     const state = async () => ({
       ledger: await ledgerRows(),
@@ -1125,8 +1131,8 @@ describe("statement spending review and re-import", () => {
           ctx.actor,
         );
       const outcome = await reconcileNow(ctx.db, [scope]);
-      expect(outcome[0]?.gaps.map((gap) => gap.input)).toEqual([
-        expect.stringContaining("the chosen Purchase"),
+      expect(outcome[0]?.gaps).toEqual([
+        expect.objectContaining({ kind: "decision" }),
       ]);
       expect(await liveMoney()).toMatchObject({ allocated: 0n });
     }
@@ -1510,13 +1516,13 @@ describe("statement spending review and re-import", () => {
       allocated: 0n,
     });
     expect(await resolveForRead(ctx.db, booked!.shortcode)).toBeNull();
-    // The removal's delete policy is the scope's own output and leaves no work.
+    await expectFixedPoint();
+    // The complete money derivation leaves no work, including payment indexes.
     expect(
       (await getDb(ctx.db).select().from(scopeDirty)).filter(
         (row) => row.scopeKind === "purchaseEvent",
       ),
     ).toEqual([]);
-    await expectFixedPoint();
   });
   it("holds a revised amount against a statement Purchase a member added lines to", async () => {
     const setup = await fixture("added-line", "member", 40);

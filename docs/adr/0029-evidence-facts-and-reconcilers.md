@@ -11,7 +11,7 @@ force, including ADR 0026's occurrence, head-selection and proof rules.
 The implemented money scopes are `bankEvent`, `purchaseEvent`, `transferPair`
 and `emailState`. Purchase events accept statement and Order/Email evidence.
 Payment matching is a phase of `purchaseEvent`, not a second binding writer:
-payment keys plan bindings and bank/order keys publish money. `shipment`,
+payment keys plan bindings and bank/order keys publish money. Order and payment evidence creates matching scopes. Bank publication raises payment keys to invalidate existing consumers without creating matching scopes for amounts that have no order evidence. Bank rows discover transfer pairing only for the transfer kinds that the pairing policy accepts; authored transfer evidence discovers its own scope. `shipment`,
 `fields` and the catalog scopes retain their declared owners. Product identity
 continues using its existing publication and review path.
 
@@ -576,7 +576,7 @@ and MCP resolve through the same function.
 
 A delete is a `reject` decision. It runs the entity's existing transactional
 delete policy and search cleanup, and marks the `RecordKey` rejected so the
-record is not created again when its evidence returns. Repeating the rejection
+record is not created again when its evidence returns. Public repository deletion records this rejection even when its policy has already soft-deleted the row. Derivation retirement runs the policy without adding a member rejection. Repeating the rejection
 retains its first timestamp and resolves the same owner and delete policy. Rejecting one row of
 evidence removes its record only when no other evidence, merge or allocation
 holds the record. A record with decisions

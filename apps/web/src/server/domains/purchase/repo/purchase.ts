@@ -2379,11 +2379,17 @@ export const deletePurchases = (
 ) =>
   withTransaction(db, async (tx) => {
     await enterWriteTransaction(tx, { lane: "money", mode: "member" });
-    return removePurchases(
+    const ids = await resolveAllOrThrow(tx, "purchase", shortcodes);
+    const result = await removePurchases(tx, ids, actor);
+    const { rejectPurchaseEventWhere } =
+      await import("~/server/domains/financial-transaction/repo/purchase-event-mutations");
+    await rejectPurchaseEventWhere(
       tx,
-      await resolveAllOrThrow(tx, "purchase", shortcodes),
+      "purchase",
+      inArray(purchase.id, ids),
       actor,
     );
+    return result;
   });
 
 /** The Purchase delete policy by id; the kernel's removal of a Purchase runs it too. */

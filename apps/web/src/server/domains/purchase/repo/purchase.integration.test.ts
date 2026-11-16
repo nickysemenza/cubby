@@ -23,6 +23,7 @@ import { getDb, insertAndReturn, withTransaction } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   auditLog,
+  recordKey,
   entityAttachment,
   expense,
   image,
@@ -924,6 +925,27 @@ describe("purchase repository — deletion cascades", () => {
     });
 
     await deletePurchases(ctx.db, [chargeId], ctx.actor);
+    const owners = await getDb(ctx.db)
+      .select()
+      .from(recordKey)
+      .where(eq(recordKey.entityId, chargeUuid));
+    expect(owners).toEqual([
+      expect.objectContaining({ rejectedAt: expect.any(Date) }),
+    ]);
+    const { reconcileNow } = await import("~/server/kernel/api");
+    const outcomes = await reconcileNow(
+      ctx.db,
+      owners.map((owner) => ({ kind: owner.scopeKind, key: owner.scopeKey })),
+    );
+    expect(outcomes.every((outcome) => !outcome.error)).toBe(true);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(purchase)
+          .where(eq(purchase.id, chargeUuid))
+      )[0]?.deletedAt,
+    ).toBeInstanceOf(Date);
 
     // An expense IS the money — deleting a charge must never delete spend. The
     // line survives at full cost and falls back to reading as "no vendor

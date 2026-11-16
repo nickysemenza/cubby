@@ -395,6 +395,7 @@ describe("explicit member-search cache expiry", () => {
         checksum: original.rawChecksum,
       })
       .where(eq(importSourceClaim.id, fixture.association.sourceClaimId));
+    await fixture.retainSource(original.id);
     await getDb(ctx.db)
       .update(emailTable)
       .set({ searchExpiresAt: new Date("2026-10-09T12:00:00Z") })

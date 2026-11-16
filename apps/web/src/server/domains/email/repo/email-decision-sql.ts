@@ -1,11 +1,12 @@
 import { emailLinkEvidenceKind } from "@cubby/schemas/email-fields";
+import { entitySchema } from "@cubby/schemas/entity";
 import {
   decisionChannel,
   decisionKind,
   decisionActorKind,
 } from "@cubby/schemas/kernel/stage";
 import { feedbackAuthority } from "@cubby/schemas/suggestion";
-import { sql } from "drizzle-orm";
+import { sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -17,11 +18,18 @@ import {
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { decisionProjectionColumns } from "~/server/domains/email/repo/decision-projection";
 
+/** Decisions retain UUIDs or public codes; reads resolve the same identity as the kernel. */
+const purchaseReference = (identity: SQLWrapper, value: SQL) => sql`
+  ${identity}.kind=${sqlEnumConstant(entitySchema, entitySchema.enum.purchase)}
+  AND (${identity}.id::text=lower(${value}) OR ${identity}.shortcode=upper(btrim(${value})))`;
+
 /** Current member links projected from decision slots, including their original evidence. */
 export const emailLinkDecisionsSql = sql`(
   WITH current AS (
     SELECT DISTINCT ON (subject, slot) * FROM "Decision"
-    WHERE channel=${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)} ORDER BY subject, slot, at DESC, id DESC
+    WHERE channel=${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)}
+      AND (subject LIKE 'email:%' OR subject LIKE 'emailEvent:%')
+    ORDER BY subject, slot, at DESC, id DESC
   ) SELECT DISTINCT ON (d.subject, coalesce(target."mergedIntoId",target.id,substring(d.field from 6)::uuid), coalesce(linked_event.id,(d.value->>'eventId')::uuid))
     d.id, coalesce(linked_event.id,(d.value->>'eventId')::uuid) AS "eventId",
     coalesce(target."mergedIntoId",target.id,substring(d.field from 6)::uuid) AS "purchaseId",
@@ -40,12 +48,12 @@ export const emailLinkDecisionsSql = sql`(
   LEFT JOIN "Email" live_email ON live_email.id=substring(d.subject from 7)::uuid AND ${notDeleted("live_email")}
   LEFT JOIN "OrderMailEvent" linked_event ON linked_event."orderMailId"=live_email."orderMailId"
     AND d.value->>${"decision"}=${sqlEnumConstant(emailLinkEvidenceKind, emailLinkEvidenceKind.enum.linked)}
-    AND EXISTS (SELECT 1 FROM current ep JOIN "Entity" ep_target ON ep_target.id=(ep.value#>>'{}')::uuid
+    AND EXISTS (SELECT 1 FROM current ep JOIN "Entity" ep_target ON ${purchaseReference(sql.identifier("ep_target"), sql`ep.value#>>'{}'`)}
       WHERE ep.subject='emailEvent:' || linked_event.id AND ep.field='purchaseId' AND ep.kind=${sqlEnumConstant(decisionKind, decisionKind.enum.set)}
       AND coalesce(ep_target."mergedIntoId",ep_target.id)=coalesce(target."mergedIntoId",target.id))
   LEFT JOIN current event_pointer ON event_pointer.subject='emailEvent:' || coalesce(linked_event.id::text,d.value->>'eventId') AND event_pointer.field='purchaseId'
-  LEFT JOIN "Entity" pointer_target ON pointer_target.id=(pointer.value#>>'{}')::uuid AND pointer.kind=${sqlEnumConstant(decisionKind, decisionKind.enum.set)}
-  LEFT JOIN "Entity" event_target ON event_target.id=(event_pointer.value#>>'{}')::uuid AND event_pointer.kind=${sqlEnumConstant(decisionKind, decisionKind.enum.set)}
+  LEFT JOIN "Entity" pointer_target ON ${purchaseReference(sql.identifier("pointer_target"), sql`pointer.value#>>'{}'`)} AND pointer.kind=${sqlEnumConstant(decisionKind, decisionKind.enum.set)}
+  LEFT JOIN "Entity" event_target ON ${purchaseReference(sql.identifier("event_target"), sql`event_pointer.value#>>'{}'`)} AND event_pointer.kind=${sqlEnumConstant(decisionKind, decisionKind.enum.set)}
   LEFT JOIN "Purchase" live_purchase ON live_purchase.id=coalesce(target."mergedIntoId",target.id,substring(d.field from 6)::uuid) AND ${notDeleted("live_purchase")}
   LEFT JOIN current review ON review.subject=d.subject AND review.field='review-status:' || d.id
   WHERE d.subject LIKE 'email:%' AND d.field LIKE 'link:%' AND d.kind=${sqlEnumConstant(decisionKind, decisionKind.enum.set)}

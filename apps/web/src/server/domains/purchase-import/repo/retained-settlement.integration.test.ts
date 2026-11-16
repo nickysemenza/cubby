@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, notDeleted } from "~/server/db/helpers";
+import { scopeState, scopeDirty } from "~/server/db/kernel-schema";
 import { evidenceBinding } from "~/server/db/kernel-schema";
 import {
   financialTransactionAllocation,
@@ -175,12 +176,32 @@ describe("settlement from retained order evidence", () => {
         await reconcileNow(ctx.db, [orderScope]);
       };
       const addCharge = async () => {
+        const [consumer] = await getDb(ctx.db)
+          .select()
+          .from(scopeState)
+          .where(eq(scopeState.scopeKey, matching.key));
+        const [beforeWake] = await getDb(ctx.db)
+          .select()
+          .from(scopeDirty)
+          .where(eq(scopeDirty.scopeKey, matching.key));
         const bank = await charge(setup.card.id, {
           amount: 27,
           postedDate: "2026-09-02",
           merchant: setup.vendor.name,
         });
         await reconcileNow(ctx.db, [{ kind: "purchaseEvent", key: bank.id }]);
+        const [afterWake] = await getDb(ctx.db)
+          .select()
+          .from(scopeDirty)
+          .where(eq(scopeDirty.scopeKey, matching.key));
+        expect({
+          exists: !!afterWake,
+          advanced: Number(afterWake?.seq ?? 0) > Number(beforeWake?.seq ?? 0),
+        }).toEqual(
+          consumer
+            ? { exists: true, advanced: true }
+            : { exists: false, advanced: false },
+        );
         return bank;
       };
       const category = await insertWithShortcode(ctx.db, "spendingCategory", {

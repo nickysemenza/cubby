@@ -64,4 +64,5 @@ export const acceptedOrders = new QueryBuilder()
     >`"SourceOrderObservation"."boundPurchaseId"`.as("purchaseId"),
   })
   .from(sql`${acceptedOrderPurchasesSql} "SourceOrderObservation"`)
+  .where(sql`"SourceOrderObservation"."boundPurchaseId" IS NOT NULL`)
   .as("accepted_orders");

@@ -12,6 +12,7 @@ import {
   financialTransactionAllocation,
   expense,
 } from "~/server/db/schema";
+import { isTransferPairKind } from "~/server/domains/ledger-transfer/policy/transfer-kind";
 import { createAppError } from "~/server/errors/app-error";
 import { jsonSnapshot } from "~/server/lib/canonical-json";
 
@@ -116,12 +117,7 @@ async function admitTransferLegs(
       "CONSTRAINT_VIOLATION",
       "Transfer evidence must be unallocated and have no live booked Expenses. Review recorded spending before using it as transfer evidence.",
     );
-  const changed = rows.filter(
-    (row) =>
-      !["account_transfer", "credit_card_payment", "loan_payment"].includes(
-        row.kind,
-      ),
-  );
+  const changed = rows.filter((row) => !isTransferPairKind(row.kind));
   if (changed.length) {
     const { updateBankTransactions } =
       await import("~/server/domains/financial-transaction/repo/bank-mutations");

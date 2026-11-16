@@ -16,6 +16,7 @@ import {
 } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { manualTransactionEvidence } from "~/server/domains/financial-transaction/repo/manual-evidence";
+import { isTransferPairKind } from "~/server/domains/ledger-transfer/policy/transfer-kind";
 import {
   defineModule,
   defineReconciler,
@@ -211,13 +212,7 @@ const transferPair = defineReconciler<Input>({
       const anchor = input.transactions.find(
         (row) => row.id === input.key && live(row),
       );
-      if (
-        !anchor ||
-        !["account_transfer", "credit_card_payment", "loan_payment"].includes(
-          anchor.kind,
-        )
-      )
-        return keep(c);
+      if (!anchor || !isTransferPairKind(anchor.kind)) return keep(c);
       if (anchor.amount < 0n) {
         for (const row of transferPairCandidates(input.transactions, anchor))
           c.emit({ kind: "transferPair", key: row.id });
