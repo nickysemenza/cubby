@@ -447,9 +447,20 @@ async function stageGmailAttachments(
   identity: MessageIdentity,
   normalized: GmailNormalizedMessage,
   orderMailId: string | null,
+  checksum: string,
   transientAttachments: Map<string, string>,
   storage: OrderMailAttachmentStorage,
 ) {
+  const [retained] = orderMailId
+    ? await readRetainedMail(db, {
+        ledgerPartyIds: [ledgerPartyId.parse(identity.ledgerPartyId)],
+        mailboxId: identity.mailboxId,
+        messageId: identity.messageId,
+        orderMailIds: [orderMailId],
+      })
+    : [];
+  // A refreshed original owns separate attachments even when part labels match.
+  if (retained?.rawChecksum !== checksum) orderMailId = null;
   for (const attachment of normalized.attachments) {
     if (
       orderMailId &&
@@ -726,6 +737,7 @@ async function acquireEligible(
         identity,
         normalized,
         prior?.orderMailId ?? null,
+        checksum,
         transientAttachments,
         storage,
       )
@@ -931,6 +943,15 @@ async function relatedEmailPreview(
     (await deferClassificationRefresh(db, executionPolicy, email))
   )
     return null;
+  const [original] = email.orderMailId
+    ? await readRetainedMail(db, {
+        ledgerPartyIds: [email.ledgerPartyId],
+        mailboxId: email.mailboxId,
+        messageId: email.messageId,
+        orderMailIds: [email.orderMailId],
+      })
+    : [];
+  if (!original || original.rawChecksum !== email.checksum) return null;
   const preview = await extractEmailCandidatePreview(
     db,
     {

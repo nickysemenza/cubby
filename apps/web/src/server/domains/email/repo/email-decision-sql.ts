@@ -39,6 +39,9 @@ export const emailLinkDecisionsSql = sql`(
     coalesce(review.value #>> '{}',${"resolved"}) AS status,
     ((d.value->>${"active"})::boolean IS DISTINCT FROM false AND
       live_purchase.id IS NOT NULL AND live_email.id IS NOT NULL AND
+      (d."actorKind"=${sqlEnumConstant(decisionActorKind, decisionActorKind.enum.member)} OR
+        coalesce(linked_event.id,(d.value->>'eventId')::uuid) IS NULL OR
+        (active_event.id IS NOT NULL AND active_event."supersededAt" IS NULL)) AND
       (d.value->>${"decision"}=${sqlEnumConstant(emailLinkEvidenceKind, emailLinkEvidenceKind.enum.dismissed)} OR
         coalesce(event_target."mergedIntoId",event_target.id,pointer_target."mergedIntoId",pointer_target.id) = live_purchase.id)) AS active,
     live_email.id AS "emailId", (d.value->>'originalId')::uuid AS "originalId",
@@ -52,6 +55,8 @@ export const emailLinkDecisionsSql = sql`(
       WHERE ep.subject='emailEvent:' || linked_event.id AND ep.field='purchaseId' AND ep.kind=${sqlEnumConstant(decisionKind, decisionKind.enum.set)}
       AND coalesce(ep_target."mergedIntoId",ep_target.id)=coalesce(target."mergedIntoId",target.id))
   LEFT JOIN current event_pointer ON event_pointer.subject='emailEvent:' || coalesce(linked_event.id::text,d.value->>'eventId') AND event_pointer.field='purchaseId'
+  LEFT JOIN "OrderMailEvent" active_event ON active_event.id=coalesce(linked_event.id,(d.value->>'eventId')::uuid)
+    AND active_event."orderMailId"=live_email."orderMailId"
   LEFT JOIN "Entity" pointer_target ON ${purchaseReference(sql.identifier("pointer_target"), sql`pointer.value#>>'{}'`)} AND pointer.kind=${sqlEnumConstant(decisionKind, decisionKind.enum.set)}
   LEFT JOIN "Entity" event_target ON ${purchaseReference(sql.identifier("event_target"), sql`event_pointer.value#>>'{}'`)} AND event_pointer.kind=${sqlEnumConstant(decisionKind, decisionKind.enum.set)}
   LEFT JOIN "Purchase" live_purchase ON live_purchase.id=coalesce(target."mergedIntoId",target.id,substring(d.field from 6)::uuid) AND ${notDeleted("live_purchase")}

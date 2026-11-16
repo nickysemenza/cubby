@@ -16,6 +16,10 @@ spend. Corrections and replacements preserve source observations and reject
 stale proposals. Changed accepted financial facts require explicit
 reconciliation; exact replay remains automatic. The server enforces identity,
 money and replay contracts while the member's client supplies judgment.
+Committed import receipts retain the actual kernel audit ids they produced.
+Batch review follows those receipts and retained direct judgment writes; rule
+publication alone grants no Run authority, and inherited findings remain
+report-only until the current Run has its own write receipt.
 
 A changed source is recorded as a new observation before reconciliation; it
 does not refresh accepted payment evidence automatically. Commit rechecks the

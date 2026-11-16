@@ -44,7 +44,9 @@ export async function readExistingConnectionSuggestions(
         evidence: {
           reasons: row.evidence ? [row.evidence] : [],
           contradictions: row.conflictReasons,
-          unknowns: row.actionable ? [] : ["Product identity needs evidence"],
+          unknowns: row.actionable
+            ? []
+            : ["Not actionable: Product identity needs evidence"],
         },
         fingerprint: row.fingerprint,
         review: {

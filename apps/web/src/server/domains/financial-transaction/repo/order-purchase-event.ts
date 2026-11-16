@@ -521,7 +521,13 @@ export function reconcileOrderPurchase(
       (row) =>
         row.purchaseId === purchaseIdentity.id &&
         !row.deletedAt &&
-        row.lineBasis === "item_line",
+        row.lineBasis === "item_line" &&
+        !seeds.some(
+          (seed) =>
+            !seed.baseline &&
+            seed.target === expenseRecords &&
+            c.recordId(expenseRecords, seed.naturalKey) === row.id,
+        ),
     )
     .map((row) => {
       const projected = { ...row };

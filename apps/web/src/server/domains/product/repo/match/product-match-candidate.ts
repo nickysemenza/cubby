@@ -8,6 +8,7 @@ import {
 import {
   suggestionChildHandle,
   suggestionProducer,
+  suggestionSubjects,
   type SuggestionProducer,
 } from "@cubby/schemas/suggestion";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -587,12 +588,14 @@ export async function listProductMatchRows(
     .limit(options.limit ?? 2147483647);
   // Open detector advice is hidden once either snapshot moved; agent rows
   // fingerprint live. One set-based snapshot read serves every pair.
-  const pairs = rows.map((row) => {
+  const pairs = rows.flatMap((row) => {
     const data = pairProjection.parse(row.data);
+    const subject = suggestionSubjects.product_pair.safeParse(row.subject);
+    if (!subject.success) return [];
     const ids = [parseEntityId("product", row.recordId), data.otherId] as const;
     const live =
       data.source === "agent" || (row.status === "pending" && !row.suppression);
-    return { row, data, ids, live };
+    return [{ row, data, ids, live }];
   });
   const snapshots = await productIdentitySnapshots(
     db,

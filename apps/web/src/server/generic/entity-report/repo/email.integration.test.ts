@@ -1,5 +1,6 @@
 import { entityReportOut } from "@cubby/schemas/entity-report";
 import { testUserId } from "@cubby/schemas/testing";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { eq } from "drizzle-orm";
 import { seedEmailLinkDecision } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
@@ -22,8 +23,12 @@ import {
 import { emailReviewReport } from "~/server/domains/email/repo/report-email";
 import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { queueSearchClassification } from "~/server/domains/purchase-import/repo/gmail/reclassify-state";
-import { startAgentRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
+import {
+  retainAcceptedSourceFixture,
+  startAgentRunFixture,
+} from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { reconcileNow } from "~/server/kernel/api";
 import {
   createProductFixture,
   makeProductInput,
@@ -147,7 +152,7 @@ describe("Email review report", () => {
         .insert(orderMail)
         .values({
           ledgerPartyId: ownerId,
-          rawChecksum: `synthetic-navigation:${messageId}`,
+          rawChecksum: await sha256Hex(`synthetic-navigation:${messageId}`),
         })
         .returning();
       if (!original) throw new Error("Synthetic original missing");
@@ -215,13 +220,22 @@ describe("Email review report", () => {
         })
         .returning();
       if (!alias) throw new Error("Synthetic alias missing");
-      await getDb(ctx.db).insert(importSourceOrder).values({
-        sourceClaimId: alias.id,
-        orderKey: "synthetic-navigation",
-        purchaseId: purchase.id,
-        checksum: source.original.rawChecksum,
-        outputFingerprint: "synthetic-navigation-output",
-      });
+      const [accepted] = await getDb(ctx.db)
+        .insert(importSourceOrder)
+        .values({
+          sourceClaimId: alias.id,
+          orderKey: "synthetic-navigation",
+          purchaseId: purchase.id,
+          checksum: source.original.rawChecksum,
+          outputFingerprint: "synthetic-navigation-output",
+        })
+        .returning();
+      if (!accepted) throw new Error("Synthetic accepted source missing");
+      await retainAcceptedSourceFixture(
+        ctx.db,
+        accepted.id,
+        source.original.id,
+      );
     }
     for (const source of [lifecycle, dismissed, foreign]) {
       const [event] = await getDb(ctx.db)
@@ -241,6 +255,21 @@ describe("Email review report", () => {
         decidedByUserId: ctx.actor.userId,
       });
     }
+    const outcomes = await reconcileNow(
+      ctx.db,
+      [
+        selected,
+        attachment,
+        lifecycle,
+        dismissed,
+        context,
+        collision,
+        foreign,
+      ].map(({ email }) => ({ kind: "emailState", key: email.id })),
+    );
+    expect(outcomes.filter((outcome) => outcome.status === "failed")).toEqual(
+      [],
+    );
     const report = async (id: string) =>
       (
         await buildEntityReport(

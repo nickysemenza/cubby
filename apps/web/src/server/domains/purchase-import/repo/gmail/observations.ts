@@ -236,16 +236,22 @@ export async function recordEmailClassificationObservation(
       .from(emailClassificationObservation)
       .where(eq(emailClassificationObservation.id, id));
     if (parsed.stage === "resolution" && actor && !actor.runId)
-      await decide(databaseForTransaction(tx), actor, [
-        {
-          channel: "assignment",
-          kind: "set",
+      await decide(
+        databaseForTransaction(tx),
+        actor,
+        Object.entries({
+          classification: parsed.classification,
+          classificationReason: parsed.reason,
+          classificationVersion: parsed.classificationVersion,
+        }).map(([field, value]) => ({
+          channel: "assignment" as const,
+          kind: "set" as const,
           subject: recordSubject("email", email.id),
-          field: "classification",
-          value: parsed.classification,
+          field,
+          value,
           scopes: [{ kind: "emailState", key: email.id }],
-        },
-      ]);
+        })),
+      );
     if (!observation)
       throw new Error(
         "Email classification observation insert returned no row",

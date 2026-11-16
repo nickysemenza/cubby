@@ -1,4 +1,5 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { eq, sql } from "drizzle-orm";
 import {
   seedEmailClassificationFeedback,
@@ -18,6 +19,7 @@ import {
   orderMailAttachment,
   orderMailEvent,
 } from "~/server/db/schema";
+import { retainAcceptedSourceFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeEntity } from "~/server/entity-kernel";
 import { buildKernelContext } from "~/server/entity-kernel/reference-universe.fixtures";
@@ -46,7 +48,7 @@ describe("Email generic persisted reads", () => {
       .insert(orderMail)
       .values({
         ledgerPartyId: party.id,
-        rawChecksum: `checksum:${messageId}`,
+        rawChecksum: await sha256Hex(`synthetic:${messageId}`),
       })
       .returning();
     if (!content) throw new Error("Synthetic original did not persist");
@@ -316,19 +318,24 @@ describe("Email generic persisted reads", () => {
           kind,
           externalKey: `${externalKey}:historical-alias`,
           canonicalClaimId: root.id,
-          checksum: "synthetic-historical-source-checksum",
+          checksum: await sha256Hex("synthetic-historical-source"),
           firstRunId,
           lastRunId: firstRunId,
         })
         .returning();
       if (!alias) throw new Error("Synthetic alias did not persist");
-      await getDb(ctx.db).insert(importSourceOrder).values({
-        sourceClaimId: alias.id,
-        orderKey: "synthetic-order",
-        purchaseId: purchase.id,
-        checksum: alias.checksum,
-        outputFingerprint: "synthetic-output",
-      });
+      const [accepted] = await getDb(ctx.db)
+        .insert(importSourceOrder)
+        .values({
+          sourceClaimId: alias.id,
+          orderKey: "synthetic-order",
+          purchaseId: purchase.id,
+          checksum: alias.checksum,
+          outputFingerprint: "synthetic-output",
+        })
+        .returning();
+      if (!accepted) throw new Error("Synthetic accepted source missing");
+      await retainAcceptedSourceFixture(ctx.db, accepted.id, content.id);
     }
     for (const messageId of ["lifecycle", "dismissed", "superseded"]) {
       const content = emails.get(messageId)!;
@@ -345,6 +352,7 @@ describe("Email generic persisted reads", () => {
         eventId: event.id,
         purchaseId: purchase.id,
         decision: messageId === "dismissed" ? "dismissed" : "linked",
+        proposedBy: messageId === "superseded" ? "heuristic" : "member",
         evidenceChecksum: content.rawChecksum,
         decidedByUserId: ctx.actor.userId,
       });

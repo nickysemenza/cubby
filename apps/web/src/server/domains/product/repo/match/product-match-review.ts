@@ -75,7 +75,13 @@ function candidate(
     keeper: publicSide(keeper),
     other: publicSide(other),
     ...details,
-    conflictReasons: details.identityConflict ? pair.conflictReasons : [],
+    conflictReasons: details.identityConflict
+      ? pair.conflictReasons.length
+        ? pair.conflictReasons
+        : details.evidence
+          ? [details.evidence]
+          : []
+      : [],
     variant: storedVariantComparison(
       pair.variantEvidence,
       keeper.name,

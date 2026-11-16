@@ -87,6 +87,7 @@ import {
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   purchase,
+  ledgerTransfer,
   entityExternalId,
   email as emailTable,
   emailFinancialAssociation,
@@ -483,6 +484,31 @@ const pointEdgeAt = async (
     physical(edge);
   const table = sql.identifier(tableName);
   const column = sql.identifier(columnName);
+  if (
+    tableName === "FinancialTransaction" &&
+    columnName === "ledgerTransferId"
+  ) {
+    const [transfer] = await getDb(db)
+      .select()
+      .from(ledgerTransfer)
+      .where(eq(ledgerTransfer.id, parseEntityId("ledgerTransfer", targetId)));
+    if (!transfer?.date) return false;
+    const account = await insertWithShortcode(db, "financialAccount", {
+      name: "Synthetic transfer deletion account",
+      identity: { kind: "cash" },
+      ledgerPartyId: transfer.fromPartyId,
+    });
+    await insertWithShortcode(db, "financialTransaction", {
+      accountId: account.id,
+      ledgerTransferId: transfer.id,
+      kind: "account_transfer",
+      status: "posted",
+      amount: transfer.amount,
+      transactionDate: transfer.date,
+      postedDate: transfer.date,
+    });
+    return true;
+  }
   if (
     tableName === "Product" &&
     ["ingredientId", "categoryId", "growsPlantId", "brandId"].includes(

@@ -457,10 +457,6 @@ export async function publishPreparedEmailRelevanceCorrection(
   await updateEmailStateWhere(
     tx,
     {
-      classification: input.classification,
-      classificationStage: "resolution",
-      classificationReason: input.reason,
-      classificationVersion: MAILBOX_RESEARCH_VERSION,
       contentClearedAt: null,
       updatedAt: new Date(),
     },

@@ -10,7 +10,7 @@ import { and, eq, or, inArray } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, withTransaction } from "~/server/db/helpers";
@@ -46,6 +46,7 @@ import {
   runFinding,
 } from "~/server/testing/run-finding.fixtures";
 
+import * as extraction from "../operations/agents/extract";
 import {
   memberImport,
   retainedMailFixture,
@@ -66,6 +67,7 @@ import {
 // source, spend ledger and settlement together; no mocked writer can prove it.
 describe("accepted source financial reconciliation", () => {
   const ctx = withTestDb();
+  afterEach(() => vi.restoreAllMocks());
   const candidate: ExtractedOrderCandidate = {
     orderId: "SYNTHETIC-RECONCILE-1",
     orderedAt: "2026-09-01T18:00:00Z",
@@ -1688,6 +1690,9 @@ describe("accepted source financial reconciliation", () => {
   });
 
   it("reviews orphan spending and preserves disposals when importing a later purchase", async () => {
+    vi.spyOn(extraction, "auditPurchaseImportBatch").mockResolvedValue({
+      findings: [],
+    });
     const { database } = await world();
     const good = await createProductIdentityFixture(
       ctx.db,

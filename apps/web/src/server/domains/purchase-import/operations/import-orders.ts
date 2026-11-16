@@ -1082,6 +1082,7 @@ async function finalizeReviewRun(
  */
 const recordedCommit = commitPurchaseImportOut.extend({
   requiresReview: z.boolean().default(false),
+  auditIds: z.array(z.string()).default([]),
 });
 
 type CommittedImport = {
@@ -1708,7 +1709,9 @@ export async function commitPurchaseImport(
         for (const row of acceptedCaptures.rows)
           acceptedReplayObservations.add(row.id);
         await decide(database, actor, decisions);
-        const outcomes = await settleOrderEvidence(database, observations);
+        const { result: outcomes, auditIds } = await (
+          await import("~/server/generic/audit-log/repo/audit-receipts")
+        ).withAuditReceipts(() => settleOrderEvidence(database, observations));
         await verifyDeletedPurchaseReimport(database, reimports.proofs);
         if (input.defaultTrade === undefined) {
           const createdExpenses = await getDb(database)
@@ -2139,7 +2142,11 @@ export async function commitPurchaseImport(
           status: requiresReview ? "needs_review" : "running",
           items,
         });
-        await ledger.complete(getDb(database), { ...result, requiresReview });
+        await ledger.complete(getDb(database), {
+          ...result,
+          requiresReview,
+          auditIds,
+        });
         const memberImport = scope.purpose === "file_import" && !requiresReview;
         await getDb(database)
           .update(runTable)

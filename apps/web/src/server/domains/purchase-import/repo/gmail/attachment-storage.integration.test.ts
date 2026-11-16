@@ -412,7 +412,9 @@ describe("Gmail ingestion and attachment storage", () => {
       sender: "orders@forgewear.example",
       subject: "Receipt",
       receivedAt: new Date("2026-08-31T00:00:00.000Z"),
-      rawChecksum: "legacy",
+      rawChecksum: await originalChecksum(
+        normalizeMessage("synthetic-google-subject", message("msg-legacy")),
+      ),
     });
     if (!mail) throw new Error("test setup: legacy mail");
     const [legacy] = await getDb(ctx.db)
@@ -456,6 +458,41 @@ describe("Gmail ingestion and attachment storage", () => {
     // Relevance reads the original once; retention adopts the existing object.
     expect(fetches).toBe(1);
     expect(objects.size).toBe(0);
+    const originals = await getDb(ctx.db).select().from(orderMail);
+    await ingestGmailMessages(
+      ctx.db,
+      provider({
+        getMessage: async (id) => {
+          const source = message(id);
+          return {
+            ...source,
+            payload: {
+              ...source.payload,
+              headers: [
+                { name: "From", value: "orders@forgewear.example" },
+                { name: "Subject", value: "Synthetic revised receipt" },
+              ],
+            },
+          };
+        },
+        getAttachment: async () => {
+          fetches += 1;
+          return { data: PDF_BYTES.toString("base64url") };
+        },
+      }),
+      {
+        ledgerPartyId: party.id,
+        mailboxId: "synthetic-google-subject",
+        messageIds: ["msg-legacy"],
+        storage,
+      },
+    );
+    expect(await attachments()).toHaveLength(2);
+    expect(fetches).toBe(2);
+    expect(objects.size).toBe(1);
+    expect(await getDb(ctx.db).select().from(orderMail)).toEqual(
+      expect.arrayContaining(originals),
+    );
   });
 
   it("bounds transient attachment payloads across consecutive messages", async () => {

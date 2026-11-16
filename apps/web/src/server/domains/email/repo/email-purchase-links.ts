@@ -19,6 +19,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
+import { feedbackAuthority } from "@cubby/schemas/suggestion";
 import { sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
@@ -100,7 +101,7 @@ export const emailPurchaseEvidenceSql = (
   WHERE original."id" = "Email"."orderMailId"
     ${purchaseIds ? sql`AND p."id" IN (${purchaseIds})` : sql``}
     AND original."ledgerPartyId" = "Email"."ledgerPartyId"
-    AND event."supersededAt" IS NULL
+    AND (event."supersededAt" IS NULL OR decision.authority=${feedbackAuthority.enum.member})
     AND ${accountOwnerScope === "respect" ? sql`(account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")` : sql`true`}
   UNION ALL
   ${emailSuggestedEvidenceSql(accountOwnerScope, purchaseIds)}

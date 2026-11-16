@@ -19,6 +19,7 @@ import {
   auditLog,
   email,
   orderMail,
+  purchase as purchaseTable,
   recordKey,
   evidenceBinding,
   entityExternalId,
@@ -286,82 +287,102 @@ export async function importedPurchaseFixture(
       sortOrder: 0,
     });
   }
-  // Freeze the completed predecessor fixture only after its source identity
-  // has been configured. Missing captured details stay explicitly unreadable.
   const retainSource = async (originalId: typeof orderMail.$inferSelect.id) => {
     if (!association) throw new Error("Synthetic accepted association missing");
-    const [accepted] = await getDb(db)
-      .select()
-      .from(importSourceOrder)
-      .where(eq(importSourceOrder.id, association.id))
-      .limit(1);
-    if (!accepted) throw new Error("Synthetic accepted association missing");
-    const [claim] = await getDb(db)
-      .select()
-      .from(importSourceClaim)
-      .where(eq(importSourceClaim.id, accepted.sourceClaimId))
-      .limit(1);
-    if (!claim) throw new Error("Synthetic accepted source missing");
-    const [root] = claim.canonicalClaimId
-      ? await getDb(db)
-          .select()
-          .from(importSourceClaim)
-          .where(eq(importSourceClaim.id, claim.canonicalClaimId))
-          .limit(1)
-      : [claim];
-    const [message] = await getDb(db)
-      .select()
-      .from(email)
-      .where(eq(email.orderMailId, originalId));
-    const [owner] = await getDb(db)
-      .select()
-      .from(recordKey)
-      .where(
-        and(eq(recordKey.entity, "purchase"), eq(recordKey.entityId, order.id)),
-      );
-    if (!root || !message || !owner)
-      throw new Error("Synthetic accepted source owner missing");
-    const { appendOrderEvidence } =
-      await import("~/server/domains/purchase-import/repo/order-evidence");
-    const [fact] = await appendOrderEvidence(db, [
-      {
-        input: importWriterInput.parse({
-          runId: parent.id,
-          ledgerPartyId: party.id,
-          vendorId: vendor.id,
-          vendorAccountId: null,
-          source: {
-            kind: root.kind,
-            externalKey: root.externalKey,
-            checksum: accepted.checksum,
-          },
-          extraction: {
-            status: "unreadable",
-            detail: "Synthetic retained identity has no captured extraction",
-          },
-          primaryDocumentImageId: null,
-          screenshotImageId: null,
-        }),
-        orderKey: accepted.orderKey,
-        emailId: message.id,
-        retainedSubject: { sourceClaimId: claim.id, purchaseId: order.id },
-      },
-    ]);
-    if (!fact) throw new Error("Synthetic accepted capture missing");
-    await getDb(db)
-      .insert(evidenceBinding)
-      .values({
-        factKind: "orderObservation",
-        factId: fact.id,
-        basis: "baseline",
-        eventKey: owner.scopeKey,
-        scopeKind: owner.scopeKind,
-        scopeKey: owner.scopeKey,
-      })
-      .onConflictDoNothing();
-    const { reconcileNow } = await import("~/server/kernel/api");
-    await reconcileNow(db, [{ kind: "emailState", key: message.id }]);
-    return fact;
+    return retainAcceptedSourceFixture(db, association.id, originalId);
   };
   return { party, parent, order, item, association, retainSource };
+}
+
+/** Adopt a retained synthetic accepted association without inventing extraction. */
+export async function retainAcceptedSourceFixture(
+  db: Database,
+  sourceOrderId: typeof importSourceOrder.$inferSelect.id,
+  originalId: typeof orderMail.$inferSelect.id,
+) {
+  const [accepted] = await getDb(db)
+    .select()
+    .from(importSourceOrder)
+    .where(eq(importSourceOrder.id, sourceOrderId))
+    .limit(1);
+  if (!accepted?.purchaseId)
+    throw new Error("Synthetic accepted association missing");
+  const [purchase] = await getDb(db)
+    .select()
+    .from(purchaseTable)
+    .where(eq(purchaseTable.id, accepted.purchaseId));
+  if (!purchase?.vendorId)
+    throw new Error("Synthetic accepted Purchase Vendor missing");
+  const [claim] = await getDb(db)
+    .select()
+    .from(importSourceClaim)
+    .where(eq(importSourceClaim.id, accepted.sourceClaimId))
+    .limit(1);
+  if (!claim) throw new Error("Synthetic accepted source missing");
+  const [root] = claim.canonicalClaimId
+    ? await getDb(db)
+        .select()
+        .from(importSourceClaim)
+        .where(eq(importSourceClaim.id, claim.canonicalClaimId))
+        .limit(1)
+    : [claim];
+  const [message] = await getDb(db)
+    .select()
+    .from(email)
+    .where(eq(email.orderMailId, originalId));
+  const [owner] = await getDb(db)
+    .select()
+    .from(recordKey)
+    .where(
+      and(
+        eq(recordKey.entity, "purchase"),
+        eq(recordKey.entityId, accepted.purchaseId),
+      ),
+    );
+  if (!root || !message || !owner)
+    throw new Error("Synthetic accepted source owner missing");
+  const { appendOrderEvidence } =
+    await import("~/server/domains/purchase-import/repo/order-evidence");
+  const [fact] = await appendOrderEvidence(db, [
+    {
+      input: importWriterInput.parse({
+        runId: root.firstRunId,
+        ledgerPartyId: root.ledgerPartyId,
+        vendorId: purchase.vendorId,
+        vendorAccountId: null,
+        source: {
+          kind: root.kind,
+          externalKey: root.externalKey,
+          checksum: accepted.checksum,
+        },
+        extraction: {
+          status: "unreadable",
+          detail: "Synthetic retained identity has no captured extraction",
+        },
+        primaryDocumentImageId: null,
+        screenshotImageId: null,
+      }),
+      orderKey: accepted.orderKey,
+      emailId: message.id,
+      retainedSubject: {
+        sourceClaimId: claim.id,
+        purchaseId: accepted.purchaseId,
+      },
+    },
+  ]);
+  if (!fact) throw new Error("Synthetic accepted capture missing");
+  await getDb(db)
+    .insert(evidenceBinding)
+    .values({
+      factKind: "orderObservation",
+      factId: fact.id,
+      basis: "baseline",
+      eventKey: owner.scopeKey,
+      scopeKind: owner.scopeKind,
+      scopeKey: owner.scopeKey,
+    })
+    .onConflictDoNothing();
+  const { reconcileNow } = await import("~/server/kernel/api");
+  await reconcileNow(db, [{ kind: "emailState", key: message.id }]);
+  return fact;
 }

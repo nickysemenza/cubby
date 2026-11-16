@@ -897,11 +897,24 @@ still owns that original's evidence.
 Original source correspondences retain record
 identities and later member overrides; matching against current mutable values
 alone cannot undo a member's rename or cost decision.
+Separately authored supplemental Expense records remain under their own retained
+facts or Decisions; they do not become unexplained lines in the source's
+itemization comparison. Source changes still require complete correspondence.
+
+Attachment reuse is fenced by the retained original's checksum. A new original
+captures its own attachment bytes even when its part labels match the previous
+original; the previous original and its attachments remain unchanged.
+Automatic candidate extraction admits only the checksum-bound retained original;
+a refreshed capture with a different checksum stays retained without being
+silently admitted under the Email's first-observation identity.
 
 Email classification observations retain each change in source or request proof;
 consecutive identical publications replay. An observation alone grants no routing
 authority: its application marker publishes the effective classification, while
-member Decisions retain precedence. Routing status and retained-content updates do
+member Decisions retain classification, reason and version precedence. A member
+resolution keeps its reviewed checksum; retaining the original Email identity
+does not append another prediction at that identity's checksum.
+Routing status and retained-content updates do
 not append another classifier result. Contradictions against accepted sources stay
 independent observations and preserve the accepted original.
 
@@ -909,7 +922,8 @@ Email link history retains superseded receipts and their original producer and
 review metadata. Current links follow canonical Purchase identities and preserve
 each event pointer, including several events that refer to the same Purchase.
 Automatic exact-order links use the shared eligibility policy; amount/date matches
-remain suggestions.
+remain suggestions. Superseded extraction events retire automatic links;
+member link and dismissal Decisions survive a later extraction.
 
 Email evidence reads, link filters and link state consume the same typed
 relationship result after it exists. A pending computation keeps its live

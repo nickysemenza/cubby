@@ -34,6 +34,7 @@ import {
   isNotNull,
   isNull,
   ne,
+  not,
   or,
   sql,
 } from "drizzle-orm";
@@ -79,6 +80,10 @@ import {
   loadAggregateReplacementSnapshot,
   redistributeReplacementAttributions,
 } from "./aggregate-replacement";
+import {
+  importRunAuditReceiptSql,
+  purchaseAuditTargetSql,
+} from "./audit-batch";
 import { commitSourceOrderReconciliation } from "./reconciliation";
 import { lockPartySettlement } from "./settlement-lock";
 import { existingExpenses, lineProductResolver } from "./writer";
@@ -182,17 +187,26 @@ const assertRunProvenance = async (
   if (!finding.runId) return;
   const auditEntity = auditEntitySchema.parse(finding.entityKind);
   const runId = runEntityId.parse(finding.runId);
-  // The run's newest audit row for the target is its last write to it.
+  const target =
+    auditEntity === "purchase"
+      ? purchaseAuditTargetSql(
+          sql`${finding.entityId}::uuid`,
+          sql`${auditLog.entityKind}`,
+          sql`${auditLog.entityId}`,
+        )
+      : and(
+          eq(auditLog.entityKind, auditEntity),
+          eq(auditLog.entityId, finding.entityId),
+        );
+  const receipts = importRunAuditReceiptSql(
+    sql`SELECT ${runId}::uuid`,
+    sql`${auditLog.id}`,
+  );
+  // Receipts preserve Run authority when the kernel publishes under the system actor.
   const [mutation] = await tx
     .select({ createdAt: auditLog.createdAt })
     .from(auditLog)
-    .where(
-      and(
-        eq(auditLog.runId, runId),
-        eq(auditLog.entityKind, auditEntity),
-        eq(auditLog.entityId, finding.entityId),
-      ),
-    )
+    .where(and(target, or(eq(auditLog.runId, runId), receipts)))
     .orderBy(desc(auditLog.createdAt))
     .limit(1);
   if (!mutation) {
@@ -205,10 +219,10 @@ const assertRunProvenance = async (
     .from(auditLog)
     .where(
       and(
-        eq(auditLog.entityKind, auditEntity),
-        eq(auditLog.entityId, finding.entityId),
+        target,
         gt(auditLog.createdAt, mutation.createdAt),
         or(isNull(auditLog.runId), ne(auditLog.runId, runId)),
+        not(receipts),
       ),
     )
     .limit(1);
