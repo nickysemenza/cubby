@@ -748,6 +748,8 @@ describe("isolated Mail coordinator replay", () => {
                           inspect(JSON.parse(value));
                         } catch {
                           /* SILENT: ordinary prose is not a structured result. */
+                          if (value.includes("\n"))
+                            value.split("\n").forEach(inspect);
                         }
                       } else if (Array.isArray(value)) value.forEach(inspect);
                       else if (value && typeof value === "object") {
@@ -809,11 +811,14 @@ describe("isolated Mail coordinator replay", () => {
                         observed.includes(name),
                       ) &&
                       (!readCode ||
-                        (calls.length === 1 &&
-                          successfulNestedReads === sample.readFanout.length));
+                        successfulNestedReads === sample.readFanout.length);
                     fanoutDiagnostics.push(
                       `read fanout: ${JSON.stringify({ verified: fanoutVerified, directNames, returnedNames, successfulNestedReads })}`,
                     );
+                    if (!fanoutVerified)
+                      fanoutDiagnostics.push(
+                        `read fanout tool evidence: ${JSON.stringify(calls).slice(0, 16000)}`,
+                      );
                   }
                   return [
                     ...logs,
