@@ -10,7 +10,6 @@ import { expect, it } from "vitest";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { mailHandlingReceipt, email, run } from "~/server/db/schema";
-import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import { recordDeletedHistoryEvent } from "~/server/domains/purchase-import/operations/gmail/discovery";
 import { originalChecksum } from "~/server/domains/purchase-import/repo/gmail/checksum";
 import { loadMailDiscoveryRead } from "~/server/domains/purchase-import/repo/gmail/discovery-run-read";
@@ -154,11 +153,23 @@ it("retains reused discovery decisions without consuming queued reclassification
     },
   ]);
   await reconcileNow(ctx.db, [{ kind: "emailState", key: selected.id }]);
-  await updateEmailStateWhere(
-    ctx.db,
-    { classification: null, classificationStage: null },
-    eq(email.id, frozen.id),
-  );
+  await decide(ctx.db, ctx.actor, [
+    {
+      channel: "assignment",
+      kind: "none",
+      subject: `email:${frozen.id}`,
+      field: "classification",
+      scopes: [{ kind: "emailState", key: frozen.id }],
+    },
+    {
+      channel: "assignment",
+      kind: "none",
+      subject: `email:${frozen.id}`,
+      field: "classificationStage",
+      scopes: [{ kind: "emailState", key: frozen.id }],
+    },
+  ]);
+  await reconcileNow(ctx.db, [{ kind: "emailState", key: frozen.id }]);
   for (const owner of owners) {
     const ownerRef = { userId: ctx.actor.userId, ledgerPartyId: party.id };
     const read = await loadMailDiscoveryRead(

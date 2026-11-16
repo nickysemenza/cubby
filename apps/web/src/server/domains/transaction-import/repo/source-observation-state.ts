@@ -1,3 +1,4 @@
+import { entitySchema } from "@cubby/schemas/entity";
 import type {
   FinancialAccountId,
   SourceTransactionRecordId,
@@ -43,7 +44,7 @@ export const sourceObservationFacts = sql`(
     own.value AS "externalId", legacy.value AS "legacyExternalId", reference.value AS "legacyReference",
     o.shortcode AS "chargeKey",
     COALESCE(coalesce((judgments.values->>'currentObservationId')::uuid,o."currentObservationId") = r.id, false) AS current,
-    CASE WHEN judgments.values ? 'accountId' THEN (judgments.values->>'accountId')::uuid ELSE o."accountId" END AS "accountId",
+    CASE WHEN judgments.values ? 'accountId' THEN coalesce(account_choice."mergedIntoId",account_choice.id) ELSE o."accountId" END AS "accountId",
     coalesce(judgments.values->>'disposition',o.disposition) AS disposition,
     CASE WHEN judgments.values ? 'dispositionReason' THEN (judgments.values->>'dispositionReason') ELSE o."dispositionReason" END AS "dispositionReason",
     CASE WHEN judgments.values ? 'dispositionNote' THEN (judgments.values->>'dispositionNote') ELSE o."dispositionNote" END AS "dispositionNote",
@@ -54,14 +55,14 @@ export const sourceObservationFacts = sql`(
     o."withdrawalImportId" AS "withdrawalImportId",
     o."lastObservedAt" AS "lastObservedAt",
     greatest(a."updatedAt", judgments."updatedAt", o."updatedAt") AS "updatedAt",
-    a.notes, CASE WHEN o."reviewState" IN (${sourceOccurrenceReviewState.enum.identity_conflict},${sourceOccurrenceReviewState.enum.ownership_conflict}) THEN o."reviewState" ELSE coalesce(judgments.values->>'reviewState',o."reviewState") END AS "storedReviewState", o.version AS "occurrenceVersion", o."acceptedTransactionId",
+    a.notes, CASE WHEN o."reviewState" IN (${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.identity_conflict)},${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ownership_conflict)}) THEN o."reviewState" ELSE coalesce(judgments.values->>'reviewState',o."reviewState") END AS "storedReviewState", o.version AS "occurrenceVersion", o."acceptedTransactionId",
     ft.shortcode AS "transactionShortcode"
   FROM "SourceTransactionRecord" r
   JOIN "SourceOccurrence" o ON o.id = r."occurrenceId"
   LEFT JOIN LATERAL (
     SELECT jsonb_object_agg(field,value) AS values, max(at) AS "updatedAt" FROM (
       SELECT DISTINCT ON (slot) field,value,at FROM "Decision"
-      WHERE subject='sourceObservation:' || r.id AND channel=${decisionChannel.enum.assignment}
+      WHERE subject='sourceObservation:' || r.id AND channel=${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)}
       ORDER BY slot,at DESC,id DESC
     ) choices
   ) annotations ON true
@@ -69,10 +70,13 @@ export const sourceObservationFacts = sql`(
     annotations.values->>'notes' AS notes, annotations."updatedAt") a ON true
   LEFT JOIN LATERAL (
     SELECT jsonb_object_agg(field,value) AS values, max(at) AS "updatedAt" FROM (
-      SELECT DISTINCT ON (slot) field,value,at FROM "Decision" WHERE subject='bank:' || o.id AND channel=${decisionChannel.enum.assignment}
+      SELECT DISTINCT ON (slot) field,value,at FROM "Decision" WHERE subject='bank:' || o.id AND channel=${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)}
       ORDER BY slot,at DESC,id DESC
     ) choices
   ) judgments ON true
+  LEFT JOIN "Entity" account_choice ON account_choice.kind=${sqlEnumConstant(entitySchema, entitySchema.enum.financialAccount)}
+    AND (account_choice.id::text=judgments.values->>'accountId'
+      OR account_choice.shortcode=upper(btrim(judgments.values->>'accountId')))
   LEFT JOIN "FinancialTransaction" ft ON ft.id = o."acceptedTransactionId" AND ${notDeleted("ft")}
   LEFT JOIN "FinancialEvidenceAlias" own ON own."observationId" = r.id AND own.kind = 'externalId'
   LEFT JOIN "FinancialEvidenceAlias" legacy ON legacy."observationId" = r.id AND legacy.kind = 'legacyExternalId'
@@ -99,13 +103,13 @@ const sourceObservationRead = (
       : sourcePageHistory(observationIds);
   return sql`(${history.relations} SELECT observation.*,
   CASE WHEN observation.disposition = ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)} THEN ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)}
-    WHEN observation."supersededByRowId" IS NOT NULL THEN ${sourceTransactionRecordMatchState.enum.superseded}
-    WHEN observation."transactionShortcode" IS NULL AND (observation."reviewState" <> ${sourceOccurrenceReviewState.enum.ready} OR cardinality(observation."historicalTransactionIds") > 0 OR observation."acceptedTransactionId" IS NOT NULL) THEN ${sourceTransactionRecordMatchState.enum.held}
-    WHEN observation."transactionShortcode" IS NOT NULL THEN ${sourceTransactionRecordMatchState.enum.matched} ELSE ${sourceTransactionRecordMatchState.enum.unmatched} END AS "matchState"
+    WHEN observation."supersededByRowId" IS NOT NULL THEN ${sqlEnumConstant(sourceTransactionRecordMatchState, sourceTransactionRecordMatchState.enum.superseded)}
+    WHEN observation."transactionShortcode" IS NULL AND (observation."reviewState" <> ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)} OR cardinality(observation."historicalTransactionIds") > 0 OR observation."acceptedTransactionId" IS NOT NULL) THEN ${sqlEnumConstant(sourceTransactionRecordMatchState, sourceTransactionRecordMatchState.enum.held)}
+    WHEN observation."transactionShortcode" IS NOT NULL THEN ${sqlEnumConstant(sourceTransactionRecordMatchState, sourceTransactionRecordMatchState.enum.matched)} ELSE ${sqlEnumConstant(sourceTransactionRecordMatchState, sourceTransactionRecordMatchState.enum.unmatched)} END AS "matchState"
   FROM (
     SELECT facts.*,
-      CASE WHEN facts."storedReviewState"=${sourceOccurrenceReviewState.enum.ready} AND unresolved.id IS NOT NULL
-        THEN ${sourceOccurrenceReviewState.enum.ownership_conflict} ELSE facts."storedReviewState" END AS "reviewState",
+      CASE WHEN facts."storedReviewState"=${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)} AND unresolved.id IS NOT NULL
+        THEN ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ownership_conflict)} ELSE facts."storedReviewState" END AS "reviewState",
       coalesce(history.codes, ARRAY[]::text[]) AS "historicalTransactionIds"
     FROM ${sourceObservationFacts} facts
     LEFT JOIN ${history.unresolved} unresolved ON unresolved.id=facts."occurrenceId"
@@ -123,7 +127,7 @@ export const sourceObservationsForPage = (
 
 const occurrenceStateColumns = (
   unresolved: SQL,
-) => sql`o.source, o.shortcode AS "chargeKey", o.id AS "occurrenceId", CASE WHEN o."reviewState"=${sourceOccurrenceReviewState.enum.ready} AND ${unresolved} THEN ${sourceOccurrenceReviewState.enum.ownership_conflict} ELSE o."reviewState" END AS "reviewState", o.version, o."acceptedTransactionId",
+) => sql`o.source, o.shortcode AS "chargeKey", o.id AS "occurrenceId", CASE WHEN o."reviewState"=${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)} AND ${unresolved} THEN ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ownership_conflict)} ELSE o."reviewState" END AS "reviewState", o.version, o."acceptedTransactionId",
     o.disposition = ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)} AS ignored, (o."supersededByOccurrenceId" IS NOT NULL OR o."replacementObservationId" IS NOT NULL) AS superseded,
     ft.shortcode`;
 
@@ -204,22 +208,22 @@ export const sourceObservationField = (
   if (key === "matchState") {
     return sql`(SELECT CASE
       WHEN facts.disposition=${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)} THEN ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)}
-      WHEN facts."supersededByRowId" IS NOT NULL THEN ${sourceTransactionRecordMatchState.enum.superseded}
+      WHEN facts."supersededByRowId" IS NOT NULL THEN ${sqlEnumConstant(sourceTransactionRecordMatchState, sourceTransactionRecordMatchState.enum.superseded)}
       WHEN facts."transactionShortcode" IS NULL AND (
-        facts."storedReviewState" <> ${sourceOccurrenceReviewState.enum.ready}
+        facts."storedReviewState" <> ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}
         OR ${sourceOccurrenceHasUnresolvedHistory(sql`facts."occurrenceId"`, sql`facts."acceptedTransactionId"`)}
         OR EXISTS (${sourceHistoricalTransactionRows(sql`facts.id`, sql`ARRAY[facts."occurrenceId"]`)})
         OR facts."acceptedTransactionId" IS NOT NULL
-      ) THEN ${sourceTransactionRecordMatchState.enum.held}
-      WHEN facts."transactionShortcode" IS NOT NULL THEN ${sourceTransactionRecordMatchState.enum.matched}
-      ELSE ${sourceTransactionRecordMatchState.enum.unmatched} END
+      ) THEN ${sqlEnumConstant(sourceTransactionRecordMatchState, sourceTransactionRecordMatchState.enum.held)}
+      WHEN facts."transactionShortcode" IS NOT NULL THEN ${sqlEnumConstant(sourceTransactionRecordMatchState, sourceTransactionRecordMatchState.enum.matched)}
+      ELSE ${sqlEnumConstant(sourceTransactionRecordMatchState, sourceTransactionRecordMatchState.enum.unmatched)} END
       FROM ${sourceObservationFacts} facts WHERE facts.id=${id})`;
   }
   if (key === "reviewState") {
     // The point helper owns an inner "owner" alias; keep its root distinct.
-    return sql`(SELECT CASE WHEN point_owner."reviewState"=${sourceOccurrenceReviewState.enum.ready}
+    return sql`(SELECT CASE WHEN point_owner."reviewState"=${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}
       AND ${sourceOccurrenceHasUnresolvedHistory(sql`point_owner.id`, sql`point_owner."acceptedTransactionId"`)}
-      THEN ${sourceOccurrenceReviewState.enum.ownership_conflict} ELSE point_owner."reviewState" END
+      THEN ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ownership_conflict)} ELSE point_owner."reviewState" END
       FROM "SourceOccurrence" point_owner JOIN "SourceTransactionRecord" record ON record."occurrenceId"=point_owner.id WHERE record.id=${id})`;
   }
   if (key === "historicalTransactionIds") {

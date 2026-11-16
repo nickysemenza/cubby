@@ -142,7 +142,7 @@ async function loadOccurrenceClosures(
       ];
       const sets = selections.map(
         ([name, table, value]) =>
-          sql`${name}::text, (SELECT coalesce(jsonb_agg(data ORDER BY identity), '[]'::jsonb) FROM (SELECT ${sql.raw(table === "judgments" ? 'r."observationId"::text' : table === "memberships" ? 'jsonb_build_array(r."importId", r."statementRowId")::text' : "r.id::text")} AS identity, ${sql.raw(value)} AS data FROM ${sql.identifier(table)} r ORDER BY identity LIMIT 1001) captured)`,
+          sql`${name}::text, (SELECT coalesce(jsonb_agg(data ORDER BY identity), '[]'::jsonb) FROM (SELECT ${sql.raw(table === "memberships" ? 'jsonb_build_array(r."importId", r."statementRowId")::text' : "r.id::text")} AS identity, ${sql.raw(value)} AS data FROM ${sql.identifier(table)} r ORDER BY identity LIMIT 1001) captured)`,
       );
       const loaded = await query.execute(
         sql`${definitions}, bundle AS MATERIALIZED (SELECT jsonb_build_object(${sql.join(sets, sql`, `)}) AS data)

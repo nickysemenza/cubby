@@ -5,7 +5,7 @@ LOCK TABLE "ImportSourceClaim", "ImportSourceOrder", "ImportSourceProduct",
  "RecordKey", "EvidenceBinding", "Decision", "FactKey", "ScopeDirty",
  "Email", "OrderMailAttachment", "PurchasePaymentEvidence", "EmailPurchaseDecision",
  "EmailReview", "EmailFinancialAssociation", "EmailClassificationObservation",
- "LedgerParty", "ManualEntry" IN ACCESS EXCLUSIVE MODE;
+ "LedgerParty", "ManualEntry", "SourceObservationAnnotation" IN ACCESS EXCLUSIVE MODE;
 --> statement-breakpoint
 CREATE TEMP TABLE order_email_money_before ON COMMIT DROP AS
 SELECT 'Expense'::text source, to_jsonb(r) row FROM "Expense" r
@@ -140,6 +140,15 @@ UNION SELECT 'row:Email:'||"emailId",'email.prediction',id::text FROM "EmailClas
 UNION SELECT 'row:EmailClassificationObservation:'||id,'email.prediction',id::text FROM "EmailClassificationObservation"
 ON CONFLICT DO NOTHING;
 --> statement-breakpoint
+-- Observation-local notes and lineage remain distinct from occurrence judgments.
+INSERT INTO "Decision" (id,channel,subject,slot,field,kind,value,"actorKind","actorId",at)
+SELECT overlay(overlay(md5('source-annotation:'||a."observationId"||':'||field.key) placing '8' from 13 for 1) placing '8' from 17 for 1)::uuid,
+ 'assignment','sourceObservation:'||a."observationId",field.key,field.key,'set',field.value,
+ 'system','cubby-system',a."updatedAt"
+FROM "SourceObservationAnnotation" a CROSS JOIN LATERAL jsonb_each(jsonb_build_object(
+ 'notes',a.notes,'supersededByObservationId',a."supersededByObservationId")) field
+ON CONFLICT DO NOTHING;
+--> statement-breakpoint
 -- Keep original decision ids, timestamps and full reviewed payloads. The new
 -- projection reads these slots; legacy rows remain immutable source history.
 INSERT INTO "Decision" (id,channel,subject,slot,field,kind,value,"actorKind","actorId",at)
@@ -216,6 +225,12 @@ DO $$ DECLARE changed bigint; BEGIN
  IF EXISTS (SELECT 1 FROM order_email_accepted accepted LEFT JOIN "SourceOrderObservation" o
   ON o.id=accepted."observationId" WHERE o.id IS NULL) THEN
   RAISE EXCEPTION 'Order evidence adoption lost an accepted source identity';
+ END IF;
+ IF EXISTS (SELECT 1 FROM "SourceObservationAnnotation" a
+  CROSS JOIN LATERAL jsonb_each(jsonb_build_object('notes',a.notes,'supersededByObservationId',a."supersededByObservationId")) field
+  LEFT JOIN "Decision" d ON d.id=overlay(overlay(md5('source-annotation:'||a."observationId"||':'||field.key) placing '8' from 13 for 1) placing '8' from 17 for 1)::uuid
+  WHERE d.id IS NULL OR d.value IS DISTINCT FROM field.value OR d.at IS DISTINCT FROM a."updatedAt") THEN
+  RAISE EXCEPTION 'Order evidence adoption lost observation annotation content';
  END IF;
  IF changed<>0 THEN RAISE EXCEPTION 'Order evidence adoption changed % money rows',changed; END IF;
  IF EXISTS (SELECT 1 FROM order_email_sources_before before LEFT JOIN "SourceOrderObservation" after USING (id)

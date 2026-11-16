@@ -28,7 +28,7 @@ import {
 import { minorToMoney } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
@@ -1809,6 +1809,8 @@ export async function commitPurchaseImport(
             and(
               eq(recordKey.scopeKind, "purchaseEvent"),
               eq(recordKey.entity, "purchase"),
+              isNull(recordKey.rejectedAt),
+              isNull(recordKey.mergedAt),
             ),
           );
         const purchases = await getDb(database)

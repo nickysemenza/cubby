@@ -501,7 +501,7 @@ export const emailState = defineReconciler<Input>({
       }
     }
     const member = choices.get("classification");
-    if (member) {
+    if (member?.kind === "set") {
       projected.classificationStage = "resolution";
       provenance.classificationStage = member.id;
     }
@@ -551,6 +551,7 @@ export const emailState = defineReconciler<Input>({
           (value) =>
             value.entity === "purchase" &&
             !value.mergedAt &&
+            !value.rejectedAt &&
             value.scopeKind === "purchaseEvent" &&
             value.scopeKey ===
               (binding.scope.kind === "purchaseEvent" &&

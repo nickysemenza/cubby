@@ -37,6 +37,7 @@ import {
   emailClassificationObservation,
   importSourceClaim,
   importSourceOrder,
+  sourceOrderObservation,
   mailboxCursor,
   email as emailTable,
   orderMail,
@@ -1020,13 +1021,17 @@ describe("public mail tool", () => {
     };
     const readInput = { mailboxId, messageId: mail.messageId };
     const deleted = await importOrder("deleted-import-first");
+    const [beforeRemoval] = await getDb(ctx.db)
+      .select()
+      .from(sourceOrderObservation);
+    if (!beforeRemoval) throw new Error("Synthetic accepted capture missing");
     await deletePurchases(ctx.db, [deleted], ctx.actor);
 
     const [retained, ...extra] = await getDb(ctx.db)
       .select()
-      .from(importSourceOrder);
+      .from(sourceOrderObservation);
     expect(extra).toEqual([]);
-    expect(retained).toMatchObject({ purchaseId: null });
+    expect(retained).toEqual(beforeRemoval);
     expect(await readMail(ctx.db, readInput, ctx.actor)).toMatchObject({
       purchaseIds: [deleted],
       purchaseAssociations: [

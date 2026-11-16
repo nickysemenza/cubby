@@ -110,6 +110,18 @@ it("adopts retained orders, Email decisions and transfers without changing money
     expect(
       (
         await client.query(
+          `SELECT field,value FROM "Decision" WHERE subject=$1 ORDER BY field`,
+          [`sourceObservation:${cutoverId(19)}`],
+        )
+      ).rows,
+    ).toEqual([
+      { field: "notes", value: "Synthetic member note" },
+      { field: "supersededByObservationId", value: null },
+    ]);
+
+    expect(
+      (
+        await client.query(
           `SELECT o.extraction,b.basis FROM "SourceOrderObservation" o
        JOIN "EvidenceBinding" b ON b."factKind"='orderObservation' AND b."factId"=o.id::text
        WHERE o."orderKey"=$1`,

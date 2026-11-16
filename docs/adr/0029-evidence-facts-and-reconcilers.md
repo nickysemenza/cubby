@@ -703,7 +703,7 @@ reconciled value a `set` decision when a person holds it or a legacy Answer
 when Cubby does. The derivation treats a baseline binding as fixed, below a
 member decision and above automatic matching. Accepted order identity requires
 an effective binding to its Purchase owner; a captured Purchase pointer alone
-is not acceptance. An accepted identity without a captured extraction retains
+is not acceptance. Accepted history retains rejected owners with their deletion status; active linkage requires a live owner. An accepted identity without a captured extraction retains
 its source key, owner and checksum with explicitly unreadable evidence, without
 reconstructing prices or lines from mutable records. A value Cubby held stands
 without an ask while its basis and value are unchanged and no person has

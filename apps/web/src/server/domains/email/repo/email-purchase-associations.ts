@@ -32,10 +32,13 @@ export async function readEmailAcceptedSourceOrders(
       },
     })
     .from(sourceOrderObservation)
+    .innerJoin(
+      sql`${acceptedOrderPurchasesSql} accepted`,
+      sql`accepted.id=${sourceOrderObservation.id} AND accepted."acceptedPurchaseId" IS NOT NULL`,
+    )
     .leftJoin(
       purchase,
-      sql`${purchase.id} = (
-      SELECT accepted."boundPurchaseId"::uuid FROM ${acceptedOrderPurchasesSql} accepted WHERE accepted.id=${sourceOrderObservation.id})`,
+      sql`${purchase.id} = accepted."acceptedPurchaseId"::uuid`,
     )
     .where(eq(sourceOrderObservation.emailId, emailId))
     .orderBy(asc(purchase.shortcode), asc(sourceOrderObservation.id));

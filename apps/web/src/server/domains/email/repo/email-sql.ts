@@ -23,7 +23,7 @@ export const emailAcceptedEvidenceSql = (
  SELECT accepted.id AS "sourceOrderId", p.id AS "purchaseId", accepted.checksum AS "evidenceChecksum",
    accepted."createdAt" AS "acceptedAt", accepted.checksum IS DISTINCT FROM "Email".checksum AS changed
  FROM ${acceptedOrderPurchasesSql} accepted
- JOIN "Purchase" p ON p.id=accepted."boundPurchaseId" AND ${includeDeleted ? sql`true` : notDeleted("p")}
+ JOIN "Purchase" p ON p.id=${includeDeleted ? sql`accepted."acceptedPurchaseId"` : sql`accepted."boundPurchaseId"`} AND ${includeDeleted ? sql`true` : notDeleted("p")}
  LEFT JOIN "VendorAccount" account ON account.id=p."vendorAccountId" AND ${notDeleted("account")}
  WHERE accepted."emailId"="Email".id AND accepted."ledgerPartyId"="Email"."ledgerPartyId"
    ${purchaseIds ? sql`AND p.id IN (${purchaseIds})` : sql``}

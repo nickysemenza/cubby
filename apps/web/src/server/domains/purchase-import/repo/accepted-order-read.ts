@@ -11,16 +11,17 @@ import { decisionProjectionColumns } from "~/server/domains/email/repo/decision-
 
 /** Accepted observations point at the reconciler's canonical Purchase identity. */
 export const acceptedOrderPurchasesSql = sql`(
-  SELECT observation.*, owner."entityId" AS "boundPurchaseId"
+  SELECT observation.*, owner."entityId" AS "acceptedPurchaseId",
+    CASE WHEN owner."rejectedAt" IS NULL THEN owner."entityId" END AS "boundPurchaseId"
   FROM "SourceOrderObservation" observation
   LEFT JOIN LATERAL (
     SELECT * FROM "EvidenceBinding" binding WHERE binding."factKind"='orderObservation'
       AND binding."factId"=observation.id::text
-    ORDER BY CASE binding.basis WHEN ${bindingBasis.enum.decision} THEN 0 WHEN ${bindingBasis.enum.baseline} THEN 1 ELSE 2 END LIMIT 1
+    ORDER BY CASE binding.basis WHEN ${sqlEnumConstant(bindingBasis, bindingBasis.enum.decision)} THEN 0 WHEN ${sqlEnumConstant(bindingBasis, bindingBasis.enum.baseline)} THEN 1 ELSE 2 END LIMIT 1
   ) binding ON true
-  LEFT JOIN "RecordKey" owner ON owner.entity=${entitySchema.enum.purchase} AND owner."scopeKind"='purchaseEvent'
-    AND owner."scopeKey"=CASE WHEN binding.basis=${bindingBasis.enum.baseline} AND binding."scopeKind"='purchaseEvent'
-      THEN binding."scopeKey" ELSE binding."eventKey" END AND owner."mergedAt" IS NULL AND owner."rejectedAt" IS NULL
+  LEFT JOIN "RecordKey" owner ON owner.entity=${sqlEnumConstant(entitySchema, entitySchema.enum.purchase)} AND owner."scopeKind"='purchaseEvent'
+    AND owner."scopeKey"=CASE WHEN binding.basis=${sqlEnumConstant(bindingBasis, bindingBasis.enum.baseline)} AND binding."scopeKind"='purchaseEvent'
+      THEN binding."scopeKey" ELSE binding."eventKey" END AND owner."mergedAt" IS NULL
 )`;
 
 /** Immutable accepted line identity joined to its current record without repointing the evidence. */
