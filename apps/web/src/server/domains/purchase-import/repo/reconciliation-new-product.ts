@@ -41,16 +41,21 @@ type ReviewedLine = SourceOrderReconciliationResolution["lines"][number];
  * that contradicts the order identity or the item's quantity or price. Partial
  * lifecycle mail is a consistent subset, and unknown history stays unknown.
  */
-async function acceptedSiblingConflicts(
+export async function acceptedSiblingConflicts(
   tx: DrizzleTransaction,
-  state: ReconciliationState,
+  state: Pick<
+    ReconciliationState,
+    "observation" | "sourceOrders" | "productBindings"
+  > & { associationId?: string },
   line: ExtractedPurchaseLine,
 ) {
-  const ours = state.observation.extraction.candidate;
-  let competingBindings = 0;
-  let contradicting = 0;
+  const siblings = [];
   for (const order of state.sourceOrders) {
-    if (order.id === state.association?.id) continue;
+    if (
+      order.id === state.associationId ||
+      order.acceptedObservationId === state.observation.id
+    )
+      continue;
     const candidate = (await acceptedSourceExtraction(tx, order))?.extraction
       .candidate;
     const [observation] = order.acceptedObservationId
@@ -67,6 +72,31 @@ async function acceptedSiblingConflicts(
       ...(observation?.productBindings.filter((binding) => binding.productId) ??
         []),
     ];
+    siblings.push({ candidate, bindings });
+  }
+  return sourceItemConflicts(
+    state.observation.extraction.candidate,
+    line,
+    siblings,
+  );
+}
+
+/** Shared item ownership and contradiction policy for retained and canonical accepted sources. */
+export function sourceItemConflicts(
+  ours:
+    | (typeof sourceOrderObservation.$inferSelect.extraction)["candidate"]
+    | undefined,
+  line: ExtractedPurchaseLine,
+  siblings: readonly {
+    candidate:
+      | (typeof sourceOrderObservation.$inferSelect.extraction)["candidate"]
+      | undefined;
+    bindings: readonly { lineIndex: number }[];
+  }[],
+) {
+  let competingBindings = 0;
+  let contradicting = 0;
+  for (const { candidate, bindings } of siblings) {
     if (!candidate || !ours) {
       // A real binding with unknown line history cannot be declared unrelated.
       if (bindings.length) competingBindings++;
@@ -137,7 +167,11 @@ async function newProductRepairLine(
     (claim) => claim.expenseId === selected?.id,
   ).length;
   const siblings = line
-    ? await acceptedSiblingConflicts(tx, state, line)
+    ? await acceptedSiblingConflicts(
+        tx,
+        { ...state, associationId: state.association?.id },
+        line,
+      )
     : { competingBindings: 0, contradicting: 0 };
   if (
     !line ||
@@ -160,14 +194,14 @@ async function newProductRepairLine(
   return line;
 }
 
-async function freezePreparedNewProductLine(
+export async function freezePreparedNewProductLine(
   tx: DrizzleTransaction,
-  state: ReconciliationState,
+  line: ExtractedPurchaseLine,
+  vendorId: typeof sourceOrderObservation.$inferSelect.vendorId,
   binding: ReviewedLine,
   order: typeof importPreparedOrder.$inferSelect,
   lines: readonly (typeof importPreparedLine.$inferSelect)[],
 ) {
-  const line = await newProductRepairLine(tx, state, binding);
   const stored = lines.find((row) => row.position === binding.lineIndex);
   if (
     !stored ||
@@ -192,12 +226,7 @@ async function freezePreparedNewProductLine(
       ...distinct,
       productId: await resolveOrThrow(tx, "product", distinct.productId),
     });
-  await assertNewLineProductIdentity(
-    tx,
-    line,
-    state.target.vendorId,
-    distinctFrom,
-  );
+  await assertNewLineProductIdentity(tx, line, vendorId, distinctFrom);
   if (
     binding.newProduct?.preparedFingerprint &&
     binding.newProduct.preparedFingerprint !== preparedFingerprint
@@ -235,77 +264,25 @@ export async function reviewPreparedNewProducts(
       );
   if (!source)
     throw new Error("Accepted original preparation ownership is unknown.");
-  const readOrders = (runId: RunId | null) =>
-    tx
-      .select({ order: importPreparedOrder })
-      .from(importPreparedOrder)
-      .innerJoin(
-        run,
-        and(
-          runId ? eq(importPreparedOrder.runId, runId) : undefined,
-          eq(run.id, importPreparedOrder.runId),
-          eq(run.ledgerPartyId, state.family.root.ledgerPartyId),
-          notDeleted(run),
-        ),
-      )
-      .where(
-        and(
-          eq(importPreparedOrder.sourceKind, source.kind),
-          eq(importPreparedOrder.sourceExternalKey, source.externalKey),
-          eq(importPreparedOrder.sourceChecksum, state.observation.checksum),
-          eq(importPreparedOrder.evidenceChecksum, state.observation.checksum),
-        ),
-      )
-      .limit(51)
-      .for("share", { of: importPreparedOrder });
-  const matchingOrders = async (
-    orders: Awaited<ReturnType<typeof readOrders>>,
-  ) => {
-    const matches = [];
-    for (const { order } of orders)
-      if (
-        (await reconciliationFingerprint(
-          importExtractionOutcome.parse(order.extraction),
-        )) === (await reconciliationFingerprint(state.observation.extraction))
-      )
-        matches.push(order);
-    return matches;
-  };
-  // Later equivalent reviews must not make a valid original ambiguous or
-  // consume its bounded lookup. Fallback history is inspected only if needed.
-  let orders = await readOrders(state.observation.runId);
-  let matches = await matchingOrders(orders);
-  if (!matches.length && state.observation.runId) {
-    orders = await readOrders(null);
-    matches = await matchingOrders(orders);
-  }
-  const [order] = matches;
-  if (
-    orders.length > 50 ||
-    matches.length !== 1 ||
-    !order ||
-    !order.vendorId ||
-    !(await sourceObservationIdentityMatches(
-      tx,
-      "vendor",
-      order.vendorId,
-      state.target.vendorId,
-    ))
-  )
-    throw createAppError(
-      "PURCHASE_IMPORT_REVIEW_STALE",
-      "Accepted original preparation is missing, changed or ambiguous.",
-    );
-  const lines = await tx
-    .select()
-    .from(importPreparedLine)
-    .where(eq(importPreparedLine.preparedOrderId, order.id))
-    .for("share");
+  const { order, lines } = await readAcceptedPreparation(
+    tx,
+    state.observation,
+    source,
+    state.family.root.ledgerPartyId,
+    state.target.vendorId,
+  );
   const prepared = new Map<number, string>();
   for (const binding of requests) {
     prepared.set(
       binding.lineIndex,
-      await freezePreparedNewProductLine(tx, state, binding, order, lines),
+      await freezePreparedNewProductLine(
+        tx,
+        await newProductRepairLine(tx, state, binding),
+        state.target.vendorId,
+        binding,
+        order,
+        lines,
+      ),
     );
   }
   return {
@@ -322,4 +299,94 @@ export async function reviewPreparedNewProducts(
         : binding,
     ),
   };
+}
+
+/** Read the immutable original preparation under its member and source ownership. */
+export async function readAcceptedPreparation(
+  tx: DrizzleTransaction,
+  observation: typeof sourceOrderObservation.$inferSelect,
+  source: { kind: string; externalKey: string },
+  ownerId: NonNullable<
+    typeof sourceOrderObservation.$inferSelect.ledgerPartyId
+  >,
+  vendorId: typeof sourceOrderObservation.$inferSelect.vendorId,
+  selection?: { run: string; stableOrderId: string },
+) {
+  const selectedRunId = selection
+    ? await resolveOrThrow(tx, "run", selection.run)
+    : null;
+  const readOrders = (runId: RunId | null) =>
+    tx
+      .select({ order: importPreparedOrder })
+      .from(importPreparedOrder)
+      .innerJoin(
+        run,
+        and(
+          selectedRunId
+            ? eq(importPreparedOrder.runId, selectedRunId)
+            : runId
+              ? eq(importPreparedOrder.runId, runId)
+              : undefined,
+          eq(run.id, importPreparedOrder.runId),
+          eq(run.ledgerPartyId, ownerId),
+          notDeleted(run),
+        ),
+      )
+      .where(
+        and(
+          eq(importPreparedOrder.sourceKind, source.kind),
+          selection
+            ? eq(importPreparedOrder.stableOrderId, selection.stableOrderId)
+            : undefined,
+          eq(importPreparedOrder.sourceExternalKey, source.externalKey),
+          eq(importPreparedOrder.sourceChecksum, observation.checksum),
+          eq(importPreparedOrder.evidenceChecksum, observation.checksum),
+        ),
+      )
+      .limit(51)
+      .for("share", { of: importPreparedOrder });
+  const matchingOrders = async (
+    orders: Awaited<ReturnType<typeof readOrders>>,
+  ) => {
+    const matches = [];
+    for (const { order } of orders)
+      if (
+        (await reconciliationFingerprint(
+          importExtractionOutcome.parse(order.extraction),
+        )) === (await reconciliationFingerprint(observation.extraction))
+      )
+        matches.push(order);
+    return matches;
+  };
+  // Later equivalent reviews must not make a valid original ambiguous or
+  // consume its bounded lookup. Fallback history is inspected only if needed.
+  let orders = await readOrders(observation.runId);
+  let matches = await matchingOrders(orders);
+  if (!matches.length && observation.runId && !selection) {
+    orders = await readOrders(null);
+    matches = await matchingOrders(orders);
+  }
+  const [order] = matches;
+  if (
+    orders.length > 50 ||
+    matches.length !== 1 ||
+    !order ||
+    !order.vendorId ||
+    !(await sourceObservationIdentityMatches(
+      tx,
+      "vendor",
+      order.vendorId,
+      vendorId,
+    ))
+  )
+    throw createAppError(
+      "PURCHASE_IMPORT_REVIEW_STALE",
+      "Accepted original preparation is missing, changed or ambiguous.",
+    );
+  const lines = await tx
+    .select()
+    .from(importPreparedLine)
+    .where(eq(importPreparedLine.preparedOrderId, order.id))
+    .for("share");
+  return { order, lines };
 }

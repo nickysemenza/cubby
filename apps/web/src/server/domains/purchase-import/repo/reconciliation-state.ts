@@ -31,6 +31,7 @@ import {
 } from "~/server/db/schema";
 import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
+import { acceptedOrderLinesSql } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import { paymentEvidenceDollars } from "~/server/domains/purchase-import/repo/payment-evidence";
 import {
   isLiveSourceOrder,
@@ -45,8 +46,9 @@ import {
   acceptedSourceExtraction,
   reconciliationFingerprint,
   sourceObservationIdentitySql,
+  sourceObservationOwnsPurchase,
 } from "./reconciliation-observations";
-import { lockPartySettlement } from "./retained-settlement";
+import { lockPartySettlement } from "./settlement-lock";
 
 export type ReconciliationFix = Extract<
   ProposedImportFix,
@@ -168,11 +170,6 @@ export async function loadSourceReconciliationState(
     ? await tx
         .select({
           observation: sourceOrderObservation,
-          samePurchase: sourceObservationIdentitySql(
-            "purchase",
-            sourceOrderObservation.purchaseId,
-            sql`${target.id}`,
-          ),
           sameVendor: sourceObservationIdentitySql(
             "vendor",
             sourceOrderObservation.vendorId,
@@ -186,8 +183,15 @@ export async function loadSourceReconciliationState(
   if (
     !observed ||
     !observation ||
-    !family.members.some((claim) => claim.id === observation.sourceClaimId) ||
-    !observed.samePurchase ||
+    !(observation.sourceClaimId
+      ? family.members.some((claim) => claim.id === observation.sourceClaimId)
+      : observation.ledgerPartyId === family.root.ledgerPartyId &&
+        family.members.some(
+          (claim) =>
+            claim.kind === observation.sourceKind &&
+            claim.externalKey === observation.sourceExternalKey,
+        )) ||
+    !(await sourceObservationOwnsPurchase(tx, observation, target.id)) ||
     !observed.sameVendor ||
     observation.orderKey !== fix.orderKey ||
     observation.checksum !== fix.source.checksum ||
@@ -321,6 +325,14 @@ export async function loadSourceReconciliationState(
         )
         .for("update")
     : [];
+  const originalItemQuantities = await tx.execute<{
+    expenseId: string;
+    quantity: number | null;
+  }>(sql`
+    SELECT accepted."expenseId", (accepted.extraction#>'{candidate,lines}')->accepted."lineIndex"->'quantity' AS quantity
+    FROM ${acceptedOrderLinesSql} accepted
+    WHERE accepted."purchaseId"=${target.id} AND accepted."expenseId" IS NOT NULL
+      AND accepted.extraction#>>'{candidate,currency}' <> 'USD'`);
   const allProductIds = new Set(
     expenses.flatMap((row) => (row.productId ? [row.productId] : [])),
   );
@@ -409,6 +421,7 @@ export async function loadSourceReconciliationState(
     financialAccounts,
     sourceOrders,
     productBindings,
+    originalItemQuantities: originalItemQuantities.rows,
     products,
     inventory,
     parties,

@@ -5,7 +5,6 @@ import {
   type ProductId,
   type VendorShortcode,
 } from "@cubby/schemas/identifiers";
-import { ledgerPartyKind } from "@cubby/schemas/ledger-party-fields";
 import {
   rawOwnPhotoProductEvidence as photoProductEvidence,
   type RawOwnPhotoProductCandidate as PhotoProductCandidate,
@@ -35,9 +34,6 @@ import {
   expense,
   product,
   purchase,
-  importSourceOrder,
-  importSourceClaim,
-  sourceOrderObservation,
   ledgerParty,
   vendor,
 } from "~/server/db/schema";
@@ -55,7 +51,7 @@ import {
 } from "~/server/domains/product/repo/match/product-identity-overlap";
 import { unknownProductVariantComparison } from "~/server/domains/product/repo/product-variant-comparison";
 import { loadProductQuantitySummaries } from "~/server/domains/product/repo/quantity-ledger";
-import { sourceObservationIdentitySql } from "~/server/domains/purchase-import/repo/reconciliation-observations";
+import { acceptedOrders } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { liveAliasSqlText } from "~/server/lib/live-row";
@@ -84,52 +80,25 @@ export async function loadPhotoAcceptedSourceLines(
   if (!purchaseIds.length) return result;
   const orders = await getDb(db)
     .select({
-      id: importSourceOrder.id,
-      purchaseId: importSourceOrder.purchaseId,
-      extraction: sourceOrderObservation.extraction,
+      id: acceptedOrders.id,
+      purchaseId: acceptedOrders.purchaseId,
+      extraction: acceptedOrders.extraction,
     })
-    .from(importSourceOrder)
-    .innerJoin(
-      importSourceClaim,
-      eq(importSourceClaim.id, importSourceOrder.sourceClaimId),
-    )
+    .from(acceptedOrders)
     .innerJoin(
       ledgerParty,
       and(
-        eq(ledgerParty.id, importSourceClaim.ledgerPartyId),
+        eq(ledgerParty.id, acceptedOrders.ledgerPartyId),
         eq(ledgerParty.userId, actor.userId),
-        eq(ledgerParty.kind, ledgerPartyKind.enum.member),
         notDeleted(ledgerParty),
       ),
     )
     .innerJoin(
       purchase,
-      and(eq(purchase.id, importSourceOrder.purchaseId), notDeleted(purchase)),
+      and(eq(purchase.id, acceptedOrders.purchaseId), notDeleted(purchase)),
     )
-    .innerJoin(
-      sourceOrderObservation,
-      and(
-        eq(sourceOrderObservation.id, importSourceOrder.acceptedObservationId),
-        eq(
-          sourceOrderObservation.sourceClaimId,
-          importSourceOrder.sourceClaimId,
-        ),
-        eq(sourceOrderObservation.orderKey, importSourceOrder.orderKey),
-        sourceObservationIdentitySql(
-          "purchase",
-          sourceOrderObservation.purchaseId,
-          importSourceOrder.purchaseId,
-        ),
-        sourceObservationIdentitySql(
-          "vendor",
-          sourceOrderObservation.vendorId,
-          purchase.vendorId,
-        ),
-        eq(sourceOrderObservation.checksum, importSourceOrder.checksum),
-      ),
-    )
-    .where(inArray(importSourceOrder.purchaseId, purchaseIds))
-    .orderBy(importSourceOrder.id)
+    .where(inArray(acceptedOrders.purchaseId, purchaseIds))
+    .orderBy(acceptedOrders.id)
     .limit(1000);
   for (const order of orders) {
     const parsed = importExtractionOutcome.safeParse(order.extraction);

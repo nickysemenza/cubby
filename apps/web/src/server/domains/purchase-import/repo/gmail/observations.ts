@@ -28,7 +28,7 @@ import {
   email as emailTable,
   run,
 } from "~/server/db/schema";
-import { appendEmailReview } from "~/server/domains/email/repo/email-review-store";
+import { appendEmailReview } from "~/server/domains/email/repo/email-review-write";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { publishRunFinding } from "~/server/domains/run/repo/run-finding";
 import { recordChange } from "~/server/generic/changes/repo/change";
@@ -70,23 +70,36 @@ export async function snapshotStoredEmailPrediction(
         )
         .limit(1)
     : [];
+  const { append, evidenceRow, recordIdentity } =
+    await import("~/server/kernel/api");
+  const { emailPredictionEvidence } =
+    await import("~/server/domains/email/repo/email-state");
+  const values = {
+    ...emailClassificationObservationInput.parse({
+      emailId: email.id,
+      runId: owner?.id ?? null,
+      checksum: email.checksum,
+      classification: email.classification,
+      stage: stage.success ? stage.data : null,
+      reason: email.classificationReason,
+      classificationVersion: email.classificationVersion,
+    }),
+    createdAt: new Date(
+      Math.max(Date.now(), (history[0]?.createdAt.getTime() ?? 0) + 1),
+    ),
+  };
+  const id = recordIdentity(
+    { kind: "emailState", key: email.id },
+    "EmailClassificationObservation",
+    JSON.stringify({ ...values, createdAt: undefined }),
+  );
+  await append(databaseForTransaction(tx), [
+    evidenceRow(emailPredictionEvidence, { ...values, id }),
+  ]);
   const [snapshot] = await tx
-    .insert(emailClassificationObservation)
-    .values({
-      ...emailClassificationObservationInput.parse({
-        emailId: email.id,
-        runId: owner?.id ?? null,
-        checksum: email.checksum,
-        classification: email.classification,
-        stage: stage.success ? stage.data : null,
-        reason: email.classificationReason,
-        classificationVersion: email.classificationVersion,
-      }),
-      createdAt: new Date(
-        Math.max(Date.now(), (history[0]?.createdAt.getTime() ?? 0) + 1),
-      ),
-    })
-    .returning();
+    .select()
+    .from(emailClassificationObservation)
+    .where(eq(emailClassificationObservation.id, id));
   if (!snapshot)
     throw new Error("Email historical prediction insert returned no row");
   await recordChange(tx, { kind: "source", categories: ["email"] });
@@ -191,12 +204,20 @@ export async function recordEmailClassificationObservation(
       : parsed.runId
         ? "automatic"
         : "unknown";
-    const [observation] = await tx
-      .insert(emailClassificationObservation)
-      .values({
+    const { append, evidenceRow, recordIdentity, decide, recordSubject } =
+      await import("~/server/kernel/api");
+    const { emailPredictionEvidence } =
+      await import("~/server/domains/email/repo/email-state");
+    const id = recordIdentity(
+      { kind: "emailState", key: email.id },
+      "EmailClassificationObservation",
+      JSON.stringify({ ...parsed, publication: suppliedEvidence }),
+    );
+    await append(databaseForTransaction(tx), [
+      evidenceRow(emailPredictionEvidence, {
         ...parsed,
+        id,
         publication: suppliedEvidence,
-        // An automatic resolution is itself the routing it decided.
         application:
           parsed.stage === "resolution" && resolutionAuthority === "automatic"
             ? "applied"
@@ -204,8 +225,23 @@ export async function recordEmailClassificationObservation(
         createdAt: new Date(
           Math.max(Date.now(), (previous?.createdAt.getTime() ?? 0) + 1),
         ),
-      })
-      .returning();
+      }),
+    ]);
+    const [observation] = await tx
+      .select()
+      .from(emailClassificationObservation)
+      .where(eq(emailClassificationObservation.id, id));
+    if (parsed.stage === "resolution" && actor && !actor.runId)
+      await decide(databaseForTransaction(tx), actor, [
+        {
+          channel: "assignment",
+          kind: "set",
+          subject: recordSubject("email", email.id),
+          field: "classification",
+          value: parsed.classification,
+          scopes: [{ kind: "emailState", key: email.id }],
+        },
+      ]);
     if (!observation)
       throw new Error(
         "Email classification observation insert returned no row",

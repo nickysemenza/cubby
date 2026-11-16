@@ -1,19 +1,6 @@
-import { financialTransactionKind } from "@cubby/schemas/financial-transaction";
-import {
-  type FinancialAccountId,
-  type LedgerPartyId,
-} from "@cubby/schemas/identifiers";
 import { type PaymentTender } from "@cubby/schemas/purchase-import";
-import { minorToMoney } from "@cubby/shared";
 
-import type {
-  purchase,
-  purchasePaymentEvidence,
-} from "~/server/db/retained-tables";
-import {
-  matchCompletePaymentSet,
-  type SettlementCandidate,
-} from "~/server/domains/purchase-import/policy/import-lines";
+import type { purchasePaymentEvidence } from "~/server/db/retained-tables";
 
 export type RetainedPayment = Readonly<
   Pick<
@@ -24,31 +11,6 @@ export type RetainedPayment = Readonly<
 
 export type RetainedPaymentRow = RetainedPayment &
   Pick<typeof purchasePaymentEvidence.$inferSelect, "sourceClaimId">;
-
-export type RetainedSettlementDiscoveryFacts = Readonly<{
-  target: Readonly<
-    Pick<typeof purchase.$inferSelect, "vendorId" | "date"> & {
-      statedTotal: number | null;
-    }
-  > | null;
-  hasAllocation: boolean;
-  hasNegativeAllocation: boolean;
-  payments: readonly RetainedPayment[] | "conflicting_sources";
-  ownerIds: readonly LedgerPartyId[];
-}>;
-
-export type Charge = SettlementCandidate & {
-  kind: ReturnType<typeof financialTransactionKind.parse>;
-  accountId: FinancialAccountId;
-};
-
-export type RetainedSettlementOutcome =
-  | "allocated"
-  | "already_allocated"
-  | "no_evidence"
-  | "conflicting_sources"
-  | "incomplete"
-  | "competing";
 
 // Sources record the same payment at different precision (a full timestamp
 // and card on the page, a date only in an export), so they agree on amount
@@ -64,9 +26,9 @@ export function normalizePaymentSet(
 ): RetainedPayment[] | "conflicting_sources" {
   const bySource = new Map<string, RetainedPayment[]>();
   for (const row of rows) {
-    const set = bySource.get(row.sourceClaimId) ?? [];
+    const set = bySource.get(row.sourceClaimId ?? "unclaimed") ?? [];
     set.push(row);
-    bySource.set(row.sourceClaimId, set);
+    bySource.set(row.sourceClaimId ?? "unclaimed", set);
   }
   const sets = [...bySource.values()];
   const signature = (set: RetainedPayment[]) =>
@@ -116,29 +78,3 @@ export const anchorPayments = (
         ...payment,
         chargedAt: new Date(`${orderDate}T12:00:00.000Z`),
       }));
-
-export const toPolicyPayments = (payments: RetainedPayment[]) =>
-  payments.map((payment) => ({
-    amount: minorToMoney(payment.amountMinor),
-    chargedAt: payment.chargedAt?.toISOString(),
-    cardLastFour: payment.cardLastFour ?? undefined,
-    tender: payment.tender,
-  }));
-
-/** A charge absent from every payment's exact matcher cannot appear in its full plan. */
-export function retainedSettlementDiscoveryCouldMatch(
-  facts: RetainedSettlementDiscoveryFacts | undefined,
-  charge: SettlementCandidate,
-  existingCharge: boolean,
-) {
-  // Attachment previews can change an existing charge; the full planner uses
-  // its stored representation instead of the supplied additional charge.
-  if (existingCharge || !facts) return true;
-  return (
-    facts.payments !== "conflicting_sources" &&
-    anchorPayments(facts.payments, facts.target?.date ?? null).some(
-      (payment) =>
-        matchCompletePaymentSet(toPolicyPayments([payment]), [charge]) !== null,
-    )
-  );
-}

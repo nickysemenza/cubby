@@ -48,7 +48,6 @@ import {
   vendor,
 } from "~/server/db/schema";
 import { financialAccountSearch } from "~/server/domains/financial-account/repo/search-read-financial-account";
-import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
   resolveMemberAssignee,
   lockLedgerPartiesForReference,
@@ -72,6 +71,7 @@ import { loadFinancialAccountTransactionEvidence } from "~/server/generic/field-
 import { listScaffold } from "~/server/generic/list/repo/list";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { enterHouseholdGate } from "~/server/kernel/gate";
 
 import { accountPartyPeriodItemsSql } from "./funding-sql";
 
@@ -435,15 +435,7 @@ export const createFinancialAccount = defineMutationWriter({
         ? withCardIdentityFields(data.identity, data)
         : data.identity;
     const id = await withTransaction(db, async (tx) => {
-      await lockFinancialEvidenceKeys(
-        tx,
-        "account-alias",
-        data.sourceAliases.flatMap((alias) =>
-          alias.externalAccountId
-            ? [`${alias.source}\0${alias.externalAccountId}`]
-            : [],
-        ),
-      );
+      await enterHouseholdGate(tx);
       await assertAliasesAvailable(tx, data.sourceAliases);
       const {
         ledgerPartyId,
@@ -555,15 +547,7 @@ export const updateFinancialAccount = defineMutationWriter({
         data.primaryCardholderId,
       );
       if (data.sourceAliases !== undefined) {
-        await lockFinancialEvidenceKeys(
-          tx,
-          "account-alias",
-          data.sourceAliases.flatMap((alias) =>
-            alias.externalAccountId
-              ? [`${alias.source}\0${alias.externalAccountId}`]
-              : [],
-          ),
-        );
+        await enterHouseholdGate(tx);
         await assertAliasesAvailable(tx, data.sourceAliases, accountId);
       }
       const ledgerPartyId =

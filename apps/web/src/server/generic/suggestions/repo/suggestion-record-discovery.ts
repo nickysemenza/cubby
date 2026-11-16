@@ -28,11 +28,6 @@ export const one = sql`jsonb_build_array(${primary})`;
 
 export const reviewQueryBuilder = new QueryBuilder();
 
-export const leg = (end: "outflow" | "inflow") => sql`jsonb_build_array(
-  ${ref(sql`${entities.financialAccount}`, sql`s.judgment->${end}->>'accountId'`)},
-  ${ref(sql`${entities.financialTransaction}`, sql`s.judgment->${end}->>'transactionId'`)},
-  ${ref(sql`${entities.ledgerParty}`, sql`s.judgment->${end}->'owner'->>'id'`)})`;
-
 /**
  * Families reviewed as Suggestions. Problems findings, grading rosters and mail
  * decisions have their own owners.

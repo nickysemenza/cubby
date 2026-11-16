@@ -4,25 +4,21 @@ import {
   type AcceptFinancialTransferPairInput,
   type AcceptFinancialTransferPairOut,
 } from "@cubby/schemas/household-contribution";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { settledMoney } from "@cubby/schemas/money";
-import { moneyToMinor } from "@cubby/shared";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { minorToMoney } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { minorToDollarsSql } from "~/server/db/computed/money";
-import {
-  databaseForTransaction,
-  notDeleted,
-  withHouseholdWrite,
-} from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers";
+import { recordKey } from "~/server/db/kernel-schema";
+import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import {
   financialAccount,
   financialTransaction,
   ledgerParty,
+  ledgerTransfer,
 } from "~/server/db/schema";
 import {
-  createLedgerTransfer,
   transferEvidenceLegFields,
   transferEvidenceLegProblem,
 } from "~/server/domains/ledger-transfer/repo/ledger-transfer";
@@ -32,49 +28,41 @@ const refuse = (reason: string): AcceptFinancialTransferPairOut => ({
   reason,
 });
 
-/**
- * Accept one suggested transfer pair: create the Ledger Transfer from the
- * outflow account's owner to the inflow account's owner and link both legs as
- * its evidence, in one transaction. Every precondition the household can fix
- * is refused as data naming the record; nothing persists on a refusal. A
- * same-owner pair is an internal move (`fromPartyId = toPartyId`).
- */
+/** A reviewed pair is a decision; transferPair alone publishes the movement and its legs. */
 export async function acceptFinancialTransferPair(
   db: Database,
   input: AcceptFinancialTransferPairInput,
   actor: ActorContext,
 ): Promise<AcceptFinancialTransferPairOut> {
-  const result = await withHouseholdWrite(db, async (tx) => {
+  const { householdWrite, decide, reconcileNow, recordSubject } =
+    await import("~/server/kernel/api");
+  return householdWrite(db, async (database) => {
     const codes = [input.outflowTransactionId, input.inflowTransactionId];
     if (codes[0] === codes[1])
-      return refuse(
-        `${codes[0]} was given as both legs; a transfer pair needs two transactions.`,
-      );
-    const rows = await tx
+      return refuse("A transfer pair needs two distinct transactions.");
+    const rows = await repositoryQueries(database)
       .select({
+        id: financialTransaction.id,
         shortcode: financialTransaction.shortcode,
-        amount: minorToDollarsSql(
-          financialTransaction.amount,
-          "numeric",
-        ).mapWith(Number),
+        amount: financialTransaction.amount,
+        kind: financialTransaction.kind,
         date: sql<
           string | null
-        >`COALESCE(${financialTransaction.postedDate}, ${financialTransaction.transactionDate})`,
-        ledgerTransferId: financialTransaction.ledgerTransferId,
+        >`coalesce(${financialTransaction.transactionDate}, ${financialTransaction.postedDate})`,
         accountId: financialTransaction.accountId,
-        accountName: financialAccount.name,
+        ledgerTransferId: financialTransaction.ledgerTransferId,
+        partyId: ledgerParty.shortcode,
         ...transferEvidenceLegFields,
-        partyShortcode: ledgerParty.shortcode,
       })
       .from(financialTransaction)
       .innerJoin(
         financialAccount,
-        eq(financialTransaction.accountId, financialAccount.id),
+        eq(financialAccount.id, financialTransaction.accountId),
       )
       .leftJoin(
         ledgerParty,
         and(
-          eq(financialAccount.ledgerPartyId, ledgerParty.id),
+          eq(ledgerParty.id, financialAccount.ledgerPartyId),
           notDeleted(ledgerParty),
         ),
       )
@@ -83,99 +71,98 @@ export async function acceptFinancialTransferPair(
           inArray(financialTransaction.shortcode, codes),
           notDeleted(financialTransaction),
         ),
-      )
-      .for("update", { of: financialTransaction });
-    const byCode = new Map(
-      rows.map((row) => [
-        row.shortcode,
-        { ...row, amount: Number(row.amount) },
-      ]),
-    );
-    const outflow = byCode.get(input.outflowTransactionId);
-    const inflow = byCode.get(input.inflowTransactionId);
-    if (!outflow)
-      return refuse(
-        `${input.outflowTransactionId} is not a live financial transaction.`,
       );
-    if (!inflow)
+    const outflow = rows.find((row) => row.shortcode === codes[0]);
+    const inflow = rows.find((row) => row.shortcode === codes[1]);
+    if (!outflow || !inflow)
+      return refuse("Transfer evidence must name live financial transactions.");
+    if (outflow.amount <= 0n || inflow.amount >= 0n)
       return refuse(
-        `${input.inflowTransactionId} is not a live financial transaction.`,
+        "Opposite signs required: the outflow must be positive and the inflow negative.",
       );
-    // Positive amounts leave an account; negative amounts arrive.
-    if (!(outflow.amount > 0 && inflow.amount < 0))
+    if (outflow.amount !== -inflow.amount)
       return refuse(
-        `Opposite signs required: outflow ${outflow.shortcode} is ${outflow.amount} and inflow ${inflow.shortcode} is ${inflow.amount}; the outflow must be positive and the inflow negative.`,
-      );
-    if (
-      !settledMoney.safeParse(outflow.amount).success ||
-      !settledMoney.safeParse(inflow.amount).success
-    )
-      return refuse(
-        "Transfer evidence amounts must be exact, supported whole-cent amounts.",
-      );
-    if (moneyToMinor(outflow.amount) !== -moneyToMinor(inflow.amount))
-      return refuse(
-        `Amounts differ: ${outflow.shortcode} is ${outflow.amount} and ${inflow.shortcode} is ${inflow.amount}.`,
+        "Amounts differ; transfer legs must be equal and opposite.",
       );
     if (outflow.accountId === inflow.accountId)
       return refuse(
-        `${outflow.shortcode} and ${inflow.shortcode} are both on account ${outflow.accountShortcode}; a transfer pair spans two accounts.`,
+        `Both legs are both on account ${outflow.accountShortcode}; a pair spans distinct accounts.`,
       );
-    // The same evidence rules createLedgerTransfer enforces, rechecked under
-    // the row lock so a fixable leg is refused as data instead of thrown.
     for (const leg of [outflow, inflow]) {
       const problem = transferEvidenceLegProblem(leg);
       if (problem) return refuse(`${leg.shortcode} ${problem}.`);
-    }
-    for (const leg of [outflow, inflow])
-      if (!leg.partyShortcode)
+      if (!leg.partyId)
         return refuse(
-          `Account ${leg.accountShortcode} (${leg.accountName}) has no owner; set its owner before accepting ${leg.shortcode}.`,
+          `Account ${leg.accountShortcode} has no owner; set its owner before accepting this pair.`,
         );
-    for (const leg of [outflow, inflow])
       if (leg.ledgerTransferId)
         return refuse(`${leg.shortcode} already evidences a ledger transfer.`);
-    if (!outflow.date || !inflow.date)
-      return refuse(
-        `${(outflow.date ? inflow : outflow).shortcode} has no posted or transaction date.`,
-      );
-
-    const date = outflow.date < inflow.date ? outflow.date : inflow.date;
-    const fromPartyId = parseShortcodeFor(
-      "ledgerParty",
-      outflow.partyShortcode!,
-    );
-    const toPartyId = parseShortcodeFor("ledgerParty", inflow.partyShortcode!);
-    const amount = Math.abs(outflow.amount);
-    const { output } = await createLedgerTransfer(
-      databaseForTransaction(tx),
+      if (!leg.date)
+        return refuse(`${leg.shortcode} has no posted or transaction date.`);
+    }
+    const scope = { kind: "transferPair", key: outflow.id };
+    await decide(database, actor, [
       {
-        fromPartyId,
-        toPartyId,
-        amount,
-        date,
-        notes: null,
-        sourceClaims: [],
-        evidenceTransactionIds: [
-          input.outflowTransactionId,
-          input.inflowTransactionId,
-        ],
+        channel: "identity",
+        kind: "same",
+        subject: `transferPair:${outflow.id}`,
+        field: recordSubject("financialTransaction", inflow.id),
+        scopes: [scope],
       },
+      {
+        channel: "assignment",
+        kind: "set",
+        subject: `transferPair:${outflow.id}`,
+        field: "transactions",
+        value: [outflow.id, inflow.id],
+        scopes: [scope],
+      },
+    ]);
+    const { updateBankTransactions } =
+      await import("~/server/domains/financial-transaction/repo/bank-mutations");
+    await updateBankTransactions(
+      database,
+      [outflow, inflow]
+        .filter(
+          (row) =>
+            !["account_transfer", "credit_card_payment"].includes(row.kind),
+        )
+        .map((row) => ({ id: row.id, values: { kind: "account_transfer" } })),
       actor,
     );
-    if (!output)
-      throw new Error(
-        "Created ledger transfer was not readable in its transaction",
+    const [outcome] = await reconcileNow(database, [scope]);
+    const [owner] = await repositoryQueries(database)
+      .select()
+      .from(recordKey)
+      .where(
+        and(
+          eq(recordKey.entity, "ledgerTransfer"),
+          eq(recordKey.scopeKind, scope.kind),
+          eq(recordKey.scopeKey, scope.key),
+        ),
       );
-    return {
+    if (!owner)
+      return refuse(
+        outcome?.gaps[0]?.input ??
+          outcome?.error ??
+          "Transfer evidence is unresolved.",
+      );
+    const [stored] = await repositoryQueries(database)
+      .select()
+      .from(ledgerTransfer)
+      .where(
+        eq(ledgerTransfer.id, parseEntityId("ledgerTransfer", owner.entityId)),
+      );
+    if (!stored)
+      throw new Error("Transfer reconciler did not publish its record");
+    return acceptFinancialTransferPairOut.parse({
       canProceed: true,
-      transferId: output.id,
-      fromPartyId,
-      toPartyId,
-      amount,
-      date,
-      internalMove: fromPartyId === toPartyId,
-    } satisfies AcceptFinancialTransferPairOut;
+      transferId: stored.shortcode,
+      fromPartyId: parseShortcodeFor("ledgerParty", outflow.partyId!),
+      toPartyId: parseShortcodeFor("ledgerParty", inflow.partyId!),
+      amount: minorToMoney(stored.amount),
+      date: stored.date,
+      internalMove: stored.fromPartyId === stored.toPartyId,
+    });
   });
-  return acceptFinancialTransferPairOut.parse(result);
 }

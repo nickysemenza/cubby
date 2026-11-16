@@ -1,22 +1,20 @@
-import type { ProductId } from "@cubby/schemas/identifiers";
+import { parseEntityId, type ProductId } from "@cubby/schemas/identifiers";
 import { acceptedSourceOrder } from "@cubby/schemas/purchase-import";
 import { createLogger } from "@cubby/worker-tracing";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
-import {
-  importSourceProduct,
-  expense,
-  entityLink,
-  importSourceOrder,
-  importSourceClaim,
-  purchase,
-  product,
-} from "~/server/db/schema";
+import { uuidArrayParam } from "~/server/db/helpers/query";
+import { entityLink } from "~/server/db/schema";
 import { amazonAsin } from "~/server/domains/product/repo/amazon-asin";
 import { lookupProductIdentifierSources } from "~/server/domains/product/repo/product-identifier-source";
+import {
+  acceptedOrderPurchasesSql,
+  acceptedOrderLinesSql,
+} from "~/server/domains/purchase-import/repo/accepted-order-read";
+import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 
 const log = createLogger("product-identity-claims");
 
@@ -65,70 +63,41 @@ export async function loadProductIdentifierClaims(
   } = {},
 ) {
   if (targetId && typeof targetId !== "string" && !targetId.length) return [];
-  const rows = await getDb(db)
-    .select({
-      bindings: sql<unknown>`jsonb_agg(jsonb_build_object(
-        'bindingId', ${importSourceProduct.id},
-        'productId', ${product.id},
-        'lineIndex', ${importSourceProduct.lineIndex}
-      ))`,
-      sourceOrderId: importSourceOrder.id,
-      sourceClaimId: importSourceClaim.id,
-      original: importSourceOrder.originalOrder,
-      acceptedChecksum: importSourceOrder.checksum,
-      originalExternalKey: importSourceClaim.externalKey,
-      vendorId: purchase.vendorId,
+  const result = await getDb(db).execute(sql`
+    SELECT accepted.id AS "sourceOrderId", coalesce(accepted."sourceClaimId",accepted.id) AS "sourceClaimId",
+      jsonb_build_object('checksum',accepted.checksum,'extraction',accepted.extraction) AS original,
+      accepted.checksum AS "acceptedChecksum", accepted."sourceExternalKey" AS "originalExternalKey", accepted."vendorId",
+      -- Derived association identities retain the UUID version and variant contract.
+      jsonb_agg(jsonb_build_object('bindingId',overlay(overlay(md5(accepted.id::text || ':' || binding."lineIndex"::text) placing '8' from 13 for 1) placing '8' from 17 for 1)::uuid,
+        'productId',catalog.id,'lineIndex',binding."lineIndex")) AS bindings
+    FROM ${acceptedOrderPurchasesSql} accepted
+    JOIN ${acceptedOrderLinesSql} binding ON binding."sourceOrderId"=accepted.id
+    JOIN "Purchase" receipt_purchase ON receipt_purchase.id=accepted."boundPurchaseId" AND ${notDeleted("receipt_purchase")}
+    LEFT JOIN "Expense" line ON line.id=binding."expenseId" AND line."purchaseId"=receipt_purchase.id AND ${notDeleted("line")}
+    LEFT JOIN "Entity" ordered_identity ON ordered_identity.id=binding."productId"
+    LEFT JOIN ${entityLink} ON ${entityLink.fromEntityId}=receipt_purchase.id
+      AND ${entityLink.toEntityId}=coalesce(ordered_identity."mergedIntoId",ordered_identity.id)
+      AND ${liveLinks("purchaseProduct")}
+    JOIN "Entity" identity ON identity.id=CASE WHEN binding."expenseId" IS NOT NULL
+      THEN line."productId" ELSE ${entityLink.toEntityId} END
+    JOIN "Product" catalog ON catalog.id=coalesce(identity."mergedIntoId",identity.id) AND ${notDeleted("catalog")}
+    WHERE ${targetId ? sql`catalog.id=ANY(${uuidArrayParam(typeof targetId === "string" ? [targetId] : [...targetId])})` : sql`true`}
+    GROUP BY accepted.id,accepted."sourceClaimId",accepted.checksum,accepted.extraction,accepted."sourceExternalKey",accepted."vendorId"`);
+  const rows = z
+    .object({
+      rows: z.array(
+        z.object({
+          sourceOrderId: z.string(),
+          sourceClaimId: z.string(),
+          original: z.json(),
+          acceptedChecksum: z.string(),
+          originalExternalKey: z.string(),
+          vendorId: z.string(),
+          bindings: z.json(),
+        }),
+      ),
     })
-    .from(importSourceProduct)
-    .innerJoin(
-      importSourceOrder,
-      eq(importSourceOrder.id, importSourceProduct.sourceOrderId),
-    )
-    .innerJoin(
-      importSourceClaim,
-      eq(importSourceClaim.id, importSourceOrder.sourceClaimId),
-    )
-    .innerJoin(purchase, eq(purchase.id, importSourceOrder.purchaseId))
-    .leftJoin(
-      expense,
-      and(
-        eq(expense.id, importSourceProduct.expenseId),
-        eq(expense.purchaseId, purchase.id),
-        notDeleted(expense),
-      ),
-    )
-    .leftJoin(
-      entityLink,
-      and(
-        eq(entityLink.kind, "purchaseProduct"),
-        eq(entityLink.fromEntityId, purchase.id),
-        eq(entityLink.toEntityId, importSourceProduct.productId),
-        notDeleted(entityLink),
-      ),
-    )
-    // An incomplete order can name Products without inventing an Expense.
-    // That identity must still have its current generic Purchase/Product link.
-    .innerJoin(
-      product,
-      eq(
-        product.id,
-        sql`CASE WHEN ${importSourceProduct.expenseId} IS NOT NULL
-      THEN ${expense.productId} ELSE ${entityLink.toEntityId} END`,
-      ),
-    )
-    .where(
-      and(
-        notDeleted(product),
-        notDeleted(purchase),
-        targetId
-          ? inArray(
-              product.id,
-              typeof targetId === "string" ? [targetId] : [...targetId],
-            )
-          : undefined,
-      ),
-    )
-    .groupBy(importSourceOrder.id, importSourceClaim.id, purchase.id);
+    .parse(result).rows;
   const candidates = [];
   // Keep the receipt and its live bindings in one statement, without sending
   // the entire receipt once per line. Validate the whole accepted order first.
@@ -170,7 +139,7 @@ export async function loadProductIdentifierClaims(
     db,
     candidates.map(({ row, line }) => ({
       url: line.productUrl,
-      vendorId: row.vendorId,
+      vendorId: parseEntityId("vendor", row.vendorId),
     })),
   );
   const claims = [];

@@ -73,9 +73,6 @@ export function sourceTransactionRecordOccurrenceId(
   return `v2:${sha256Hex(payload)}`;
 }
 
-export const PROVIDER_IDENTITY_REVIEW =
-  "This provider identity has ambiguous historical account evidence; resolve its charge identity before continuing.";
-
 const rawProviderIds = z.object({
   id: z.string().optional(),
   account_id: z.string().optional(),

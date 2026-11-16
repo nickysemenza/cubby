@@ -105,6 +105,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { rankOf } from "~/server/db/helpers/related";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { requestedRows } from "~/server/db/helpers/requested";
@@ -118,7 +119,6 @@ import {
   image,
   ingredient,
   inventoryEntry,
-  importSourceProduct,
   location,
   mealFoodEntry,
   photoGroupProposal,
@@ -2469,11 +2469,16 @@ const liveLinksToProducts =
     ).map((row) => ({ productId: parseEntityId("product", row.productId) }));
 
 const PRODUCT_RETAINING_DEPENDENTS = {
-  "ImportSourceProduct.productId": (tx, ids) =>
-    tx
-      .select({ productId: importSourceProduct.productId })
-      .from(importSourceProduct)
-      .where(inArray(importSourceProduct.productId, ids)),
+  "ImportSourceProduct.productId": async (tx, ids) => {
+    const { originalProductReferencesSql } =
+      await import("~/server/domains/product/repo/original-product-references");
+    const retained = await tx.execute<{ productId: string }>(sql`
+      SELECT DISTINCT original."productId" FROM ${originalProductReferencesSql} original
+      WHERE original."productId" = ANY(${uuidArrayParam(ids)})`);
+    return retained.rows.map((row) => ({
+      productId: parseEntityId("product", row.productId),
+    }));
+  },
   "Planting.sourceProductId": async (tx, ids) => {
     const rows = await tx.query.planting.findMany({
       where: {

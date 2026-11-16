@@ -18,7 +18,6 @@ import {
   email as emailTable,
   expense,
   product,
-  importSourceOrder,
   orderMailAttachment,
   purchase,
   vendor,
@@ -32,6 +31,7 @@ import {
   type ProductHit,
 } from "~/server/domains/product/repo/find-by-external-ids";
 import { lookupProductIdentifierSources } from "~/server/domains/product/repo/product-identifier-source";
+import { acceptedOrders } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import {
   carrierFromHost,
   carrierFromNumber,
@@ -411,15 +411,15 @@ export async function readMailRuleCandidates(
   const accepted = rows.length
     ? await getDb(db)
         .select({
-          purchaseId: importSourceOrder.purchaseId,
-          checksum: importSourceOrder.checksum,
-          sourceClaimId: importSourceOrder.sourceClaimId,
-          orderKey: importSourceOrder.orderKey,
+          purchaseId: acceptedOrders.purchaseId,
+          checksum: acceptedOrders.checksum,
+          sourceClaimId: acceptedOrders.sourceClaimId,
+          orderKey: acceptedOrders.orderKey,
         })
-        .from(importSourceOrder)
+        .from(acceptedOrders)
         .where(
           inArray(
-            importSourceOrder.purchaseId,
+            acceptedOrders.purchaseId,
             rows.map((row) => row.id),
           ),
         )

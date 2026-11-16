@@ -288,9 +288,17 @@ export async function mergeRecords(
     a: string;
     b: string;
     basis: "proof" | "decision";
+    keepId?: string;
     actor?: ActorContext;
   },
 ): Promise<MergeVerdict> {
+  if (
+    merge.keepId &&
+    (merge.basis !== "decision" || ![merge.a, merge.b].includes(merge.keepId))
+  )
+    throw new KernelContractError(
+      "Only a member identity decision can name one of its records as survivor",
+    );
   const { target } = merge;
   const port =
     target.merge ??
@@ -310,9 +318,16 @@ export async function mergeRecords(
         : sql<string>`''`,
     })
     .from(target.table)
-    .where(inArray(idColumn(target.table), [merge.a, merge.b]));
+    .where(
+      and(
+        inArray(idColumn(target.table), [merge.a, merge.b]),
+        getTableColumns(target.table).deletedAt
+          ? isNull(getTableColumns(target.table).deletedAt!)
+          : undefined,
+      ),
+    );
   if (rows.length !== 2) return { merged: false, reason: "unknown-record" };
-  const [first, second] = [...rows].sort((x, y) =>
+  const [first] = [...rows].sort((x, y) =>
     x.created === y.created
       ? x.id < y.id
         ? -1
@@ -321,8 +336,8 @@ export async function mergeRecords(
         ? -1
         : 1,
   );
-  const keepId = first!.id;
-  const loserId = second!.id;
+  const keepId = merge.keepId ?? first!.id;
+  const loserId = rows.find((row) => row.id !== keepId)!.id;
   if (merge.basis === "proof") {
     const [minted] = await q
       .select({ minted: sql<boolean>`bool_or(${recordKey.minted})` })
@@ -399,6 +414,31 @@ export async function mergeRecords(
           eq(recordKey.scopeKey, owner.key),
         ),
       );
+    const remaining = await q
+      .select({ id: recordKey.entityId })
+      .from(recordKey)
+      .where(
+        and(
+          eq(recordKey.scopeKind, owner.kind),
+          eq(recordKey.scopeKey, owner.key),
+          eq(recordKey.entity, entity),
+          isNull(recordKey.mergedAt),
+          isNull(recordKey.rejectedAt),
+        ),
+      );
+    // A grouped accepted scope can still own another primary record. Its
+    // surviving records keep their owner and the absorbed key stays rejected.
+    if (remaining.length) continue;
+    await q.execute(sql`
+      UPDATE "RecordKey" child SET "scopeKind" = ${survivor!.kind}, "scopeKey" = ${survivor!.key},
+        "naturalKey" = CASE WHEN EXISTS (
+          SELECT 1 FROM "RecordKey" existing WHERE existing."scopeKind" = ${survivor!.kind} AND existing."scopeKey" = ${survivor!.key}
+          AND existing.entity = child.entity AND existing."naturalKey" = child."naturalKey"
+        ) THEN 'merged:' || ${owner.key} || ':' || child."naturalKey" ELSE child."naturalKey" END
+      WHERE child."scopeKind" = ${owner.kind} AND child."scopeKey" = ${owner.key} AND child."mergedAt" IS NULL`);
+    // Retarget the event below, retaining the emitting scope's ownership.
+    // Transferring ownership would let the survivor's next desired-binding
+    // set remove absorbed evidence it reads but does not itself derive.
     const reconciler = registry.reconcilers.get(owner.kind);
     await q.execute(sql`
       INSERT INTO "ScopeState" ("scopeKind", "scopeKey", version, rules, stage, "mergedIntoKey", "reconciledAt")
@@ -418,27 +458,23 @@ export async function mergeRecords(
   return { merged: true, keepId, loserId, keys, scopes: [...scopes.values()] };
 }
 
-/** Mark a record's keys rejected so its evidence does not create it again. */
+/** Rejection retains its first timestamp and always returns its owners, including on replay. */
 export async function markRejected(
   q: Q,
   entity: string,
   entityId: string,
 ): Promise<ScopeRef[]> {
-  const rows = await q
-    .update(recordKey)
-    .set({ rejectedAt: new Date() })
-    .where(
-      and(
-        eq(recordKey.entity, entity),
-        eq(recordKey.entityId, entityId),
-        sql`${recordKey.rejectedAt} IS NULL`,
-      ),
+  const result = await q.execute<{ kind: string; key: string }>(sql`
+    WITH rejected AS (
+      UPDATE ${recordKey} SET "rejectedAt" = now()
+      WHERE ${recordKey.entity} = ${entity} AND ${recordKey.entityId} = ${entityId}::uuid
+        AND ${recordKey.rejectedAt} IS NULL
+      RETURNING "scopeKind", "scopeKey"
     )
-    .returning({
-      scopeKind: recordKey.scopeKind,
-      scopeKey: recordKey.scopeKey,
-    });
-  return rows.map((row) => ({ kind: row.scopeKind, key: row.scopeKey }));
+    SELECT ${recordKey.scopeKind} AS kind, ${recordKey.scopeKey} AS key
+    FROM ${recordKey}
+    WHERE ${recordKey.entity} = ${entity} AND ${recordKey.entityId} = ${entityId}::uuid`);
+  return result.rows;
 }
 
 /** Clear a rejection: the record may be created again from its evidence. */

@@ -12,8 +12,6 @@ import {
   entityExternalId,
   externalSource,
   expense,
-  importSourceOrder,
-  importSourceProduct,
   inventoryEntry,
   product,
   purchase,
@@ -21,6 +19,7 @@ import {
 } from "~/server/db/schema";
 import { listProductMatchRows } from "~/server/domains/product/repo/match/product-match-candidate";
 import { syncProductExternalIds } from "~/server/domains/product/repo/update-helpers";
+import { acceptedOrders } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import {
   createProductFixture,
@@ -29,7 +28,7 @@ import {
   dollarExpenseColumns,
 } from "~/server/testing/repo.fixtures";
 
-import { lockPartySettlement } from "../repo/retained-settlement";
+import { lockPartySettlement } from "../repo/settlement-lock";
 import { startImportRunFixture } from "../service/import-run.fixtures";
 import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
 import {
@@ -305,7 +304,8 @@ describe("purchase import identifier collisions", () => {
     const second = await prepareMemberImport(ctx.db, ctx.actor, {
       key: "second-original",
       orders: [await f.order("second", "SYNTHETIC-REUSE", f.copper)],
-      defaultTrade: "other",
+      // A real header correction makes apply wait on the held Purchase row.
+      defaultTrade: "plumbing",
     });
     const [existing] = await getDb(ctx.db).select().from(purchase);
     if (!existing) throw new Error("Imported Purchase missing.");
@@ -375,9 +375,7 @@ describe("purchase import identifier collisions", () => {
       await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
     ).toEqual(beforeExpenses);
     expect(await getDb(ctx.db).select().from(purchase)).toHaveLength(1);
-    expect(await getDb(ctx.db).select().from(importSourceOrder)).toHaveLength(
-      2,
-    );
+    expect(await getDb(ctx.db).select().from(acceptedOrders)).toHaveLength(2);
     expect(
       await getDb(ctx.db)
         .select({ externalId: entityExternalId.externalId })
@@ -459,14 +457,22 @@ describe("purchase import identifier collisions", () => {
     expect(
       await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
     ).toHaveLength(2);
-    expect(await getDb(ctx.db).select().from(importSourceOrder)).toHaveLength(
-      4,
-    );
-    // Equivalent second sources retain both orders without duplicating the
-    // accepted Product bindings, Expenses or physical receipts.
-    expect(await getDb(ctx.db).select().from(importSourceProduct)).toHaveLength(
-      2,
-    );
+    const sources = await getDb(ctx.db)
+      .select({ purchaseId: acceptedOrders.purchaseId })
+      .from(acceptedOrders);
+    expect(sources).toHaveLength(4);
+    const ownerCounts = new Map<string, number>();
+    for (const source of sources) {
+      if (!source.purchaseId)
+        throw new Error("Accepted source lost its Purchase binding");
+      ownerCounts.set(
+        source.purchaseId,
+        (ownerCounts.get(source.purchaseId) ?? 0) + 1,
+      );
+    }
+    // Both originals bind each of the two Purchases; live Expense Product
+    // decisions below retain the two exact catalog identities.
+    expect([...ownerCounts.values()].sort()).toEqual([2, 2]);
     expect(
       await getDb(ctx.db).select().from(sourceOrderObservation),
     ).toHaveLength(4);

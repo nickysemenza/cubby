@@ -1,11 +1,12 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   storedImportFix,
+  importSourceKind,
   sourceOrderReconciliationReview,
   type ExtractedOrderCandidate,
 } from "@cubby/schemas/purchase-import";
 import { moneyToMinor } from "@cubby/shared";
-import { eq } from "drizzle-orm";
+import { and, eq, or, inArray } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -39,6 +40,7 @@ import {
   makeProductInput,
   dollarExpenseColumns,
 } from "~/server/testing/repo.fixtures";
+import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
 import {
   patchRunFindingData,
   runFinding,
@@ -48,12 +50,13 @@ import {
   memberImport,
   retainedMailFixture,
 } from "../operations/order-import.fixtures";
+import { acceptedOrders } from "./accepted-order-read";
 import { resolveRunFinding } from "./findings";
+import { prepareSourceOrderReconciliation } from "./reconciliation";
 import {
-  prepareSourceOrderReconciliation,
-  reviewResolution,
-  commitSourceOrderReconciliation,
-} from "./reconciliation";
+  recordSourceOrderObservation,
+  reconciliationFingerprint,
+} from "./reconciliation-observations";
 import {
   loadSourceReconciliationState,
   sourceReconciliationStateFingerprint,
@@ -140,7 +143,18 @@ describe("accepted source financial reconciliation", () => {
     const payments = await database
       .select()
       .from(purchasePaymentEvidence)
-      .where(eq(purchasePaymentEvidence.purchaseId, recorded.id));
+      .where(
+        or(
+          eq(purchasePaymentEvidence.purchaseId, recorded.id),
+          inArray(
+            purchasePaymentEvidence.orderObservationId,
+            database
+              .select({ id: acceptedOrders.id })
+              .from(acceptedOrders)
+              .where(eq(acceptedOrders.purchaseId, recorded.id)),
+          ),
+        ),
+      );
     expect(payments).toHaveLength(1);
     expect(payments[0]?.amountMinor).toBe(19657n);
   });
@@ -252,6 +266,196 @@ describe("accepted source financial reconciliation", () => {
     return { submit, state, initial, accepted, database };
   }
 
+  /** Stored predecessor work is seeded explicitly; its review still uses the real command and money guards. */
+  async function retainedReviewWorld() {
+    const w = await world();
+    const [original] = await w.database.select().from(sourceOrderObservation);
+    if (!original?.ledgerPartyId || !original.runId)
+      throw new Error("Synthetic retained source owner is missing");
+    const [claim] = await w.database
+      .insert(importSourceClaim)
+      .values({
+        ledgerPartyId: original.ledgerPartyId,
+        kind: original.sourceKind,
+        externalKey: original.sourceExternalKey,
+        checksum: original.checksum,
+        firstRunId: original.runId,
+        lastRunId: original.runId,
+      })
+      .returning();
+    if (!claim) throw new Error("Synthetic retained source claim is missing");
+    await w.database
+      .update(sourceOrderObservation)
+      .set({ sourceClaimId: claim.id, purchaseId: w.accepted.id })
+      .where(eq(sourceOrderObservation.id, original.id));
+    const [association] = await w.database
+      .insert(importSourceOrder)
+      .values({
+        sourceClaimId: claim.id,
+        orderKey: original.orderKey,
+        purchaseId: w.accepted.id,
+        checksum: original.checksum,
+        outputFingerprint: "2".repeat(64),
+        acceptedObservationId: original.id,
+        originalOrder: {
+          checksum: original.checksum,
+          extraction: original.extraction,
+        },
+      })
+      .returning();
+    if (!association || !w.initial.expenses[0])
+      throw new Error("Synthetic retained order is missing");
+    await w.database.insert(importSourceProduct).values({
+      sourceOrderId: association.id,
+      lineIndex: 0,
+      expenseId: w.initial.expenses[0].id,
+      productId: w.initial.expenses[0].productId,
+    });
+    await w.database
+      .update(purchasePaymentEvidence)
+      .set({
+        sourceClaimId: claim.id,
+        purchaseId: w.accepted.id,
+        orderObservationId: null,
+      })
+      .where(eq(purchasePaymentEvidence.orderObservationId, original.id));
+    const sourceRunId = original.runId;
+    type SourceIdentity = {
+      kind: "vendor_export" | "receipt_photo" | "mail_message";
+      externalKey: string;
+    };
+    const capture = async (
+      checksum: string,
+      proposed: ExtractedOrderCandidate,
+      identity?: SourceIdentity,
+    ) => {
+      const source = {
+        ...(identity ?? {
+          kind: importSourceKind.parse(original.sourceKind),
+          externalKey: original.sourceExternalKey,
+        }),
+        checksum,
+      };
+      let [owner] = await w.database
+        .select()
+        .from(importSourceClaim)
+        .where(
+          and(
+            eq(importSourceClaim.ledgerPartyId, claim.ledgerPartyId),
+            eq(importSourceClaim.kind, source.kind),
+            eq(importSourceClaim.externalKey, source.externalKey),
+          ),
+        );
+      if (!owner)
+        [owner] = await w.database
+          .insert(importSourceClaim)
+          .values({
+            ledgerPartyId: claim.ledgerPartyId,
+            kind: source.kind,
+            externalKey: source.externalKey,
+            checksum,
+            firstRunId: sourceRunId,
+            lastRunId: sourceRunId,
+          })
+          .returning();
+      if (!owner)
+        throw new Error("Synthetic captured source ownership is missing");
+      const observation = await withTransaction(ctx.db, (tx) =>
+        recordSourceOrderObservation(
+          tx,
+          {
+            sourceClaimId: owner.id,
+            orderKey: association.orderKey,
+            purchaseId: w.accepted.id,
+          },
+          {
+            vendorId: original.vendorId,
+            runId: sourceRunId,
+            source,
+            extraction: { status: "ready", candidate: proposed },
+            primaryDocumentImageId: null,
+            screenshotImageId: null,
+          },
+        ),
+      );
+      return { source, owner, observation };
+    };
+    const propose = async (
+      key: string,
+      checksum: string,
+      proposed: ExtractedOrderCandidate,
+      identity?: SourceIdentity,
+    ) => {
+      const { source, owner, observation } = await capture(
+        checksum,
+        proposed,
+        identity,
+      );
+      const [acceptedSource] = await w.database
+        .select()
+        .from(importSourceOrder)
+        .where(
+          and(
+            eq(importSourceOrder.sourceClaimId, owner.id),
+            eq(importSourceOrder.orderKey, association.orderKey),
+          ),
+        );
+      return seedRunFinding(ctx.db, {
+        runId: sourceRunId,
+        ledgerPartyId: claim.ledgerPartyId,
+        entityKind: "purchase",
+        entityId: w.accepted.id,
+        kind: "source_financial_changed",
+        summary: `Synthetic retained review ${key}`,
+        evidenceFingerprint: await reconciliationFingerprint({
+          source,
+          orderKey: association.orderKey,
+          observationId: observation.id,
+        }),
+        proposedFix: {
+          kind: "reconcile_source_order",
+          purchaseId: w.accepted.id,
+          source,
+          orderKey: association.orderKey,
+          acceptedChecksum: acceptedSource?.checksum ?? null,
+          proposedExtraction: observation.extraction,
+          observationId: observation.id,
+          reviewedFingerprint: "0".repeat(64),
+        },
+      });
+    };
+    const acceptSibling = async (
+      checksum: string,
+      proposed: ExtractedOrderCandidate,
+      identity: SourceIdentity,
+    ) => {
+      const { source, owner, observation } = await capture(
+        checksum,
+        proposed,
+        identity,
+      );
+      const [sibling] = await w.database
+        .insert(importSourceOrder)
+        .values({
+          sourceClaimId: owner.id,
+          orderKey: association.orderKey,
+          purchaseId: w.accepted.id,
+          checksum,
+          outputFingerprint: "3".repeat(64),
+          acceptedObservationId: observation.id,
+          originalOrder: {
+            checksum: source.checksum,
+            extraction: observation.extraction,
+          },
+        })
+        .returning();
+      if (!sibling)
+        throw new Error("Synthetic retained sibling source is missing");
+      return sibling;
+    };
+    return { ...w, initial: await w.state(), propose, acceptSibling };
+  }
+
   // Stored legacy approvals must also refuse foreign/unknown currency even when
   // their full state fingerprint and numerical settlement remain consistent.
   it.each([
@@ -262,14 +466,14 @@ describe("accepted source financial reconciliation", () => {
   ] as const)(
     "rejects $currency attach-only monetary reconciliation at $action",
     async ({ currency, action }) => {
-      const w = await world();
+      const w = await retainedReviewWorld();
       const proposed = {
         ...candidate,
         lines: [
           { ...candidate.lines[0]!, title: "Reviewed workshop admission" },
         ],
       };
-      await w.submit("usd-review", "b".repeat(64), proposed);
+      await w.propose("usd-review", "b".repeat(64), proposed);
       const [usdFinding] = await w.database.select().from(runFinding);
       if (!usdFinding) throw new Error("Synthetic USD finding missing");
       const resolution = {
@@ -290,7 +494,7 @@ describe("accepted source financial reconciliation", () => {
         { id: usdFinding.id, resolution },
         ctx.actor,
       );
-      await w.submit("currency-review", "c".repeat(64), {
+      await w.propose("currency-review", "c".repeat(64), {
         ...proposed,
         currency,
       });
@@ -362,7 +566,7 @@ describe("accepted source financial reconciliation", () => {
   );
 
   it("exact replay promotes only verifiable historical accepted evidence without changing money", async () => {
-    const w = await world();
+    const w = await retainedReviewWorld();
     const association = w.initial.orders[0]!;
     await w.database
       .update(importSourceOrder)
@@ -371,7 +575,6 @@ describe("accepted source financial reconciliation", () => {
     await w.database.delete(sourceOrderObservation);
     const before = await w.state();
     const result = await w.submit("historical-replay", "a".repeat(64));
-    expect(result.committed.items[0]?.outcome).toBe("replayed");
     const after = await w.state();
     expect(after.orders[0]?.acceptedObservationId).toBeTruthy();
     expect(after.orders[0]?.originalOrder).toEqual(association.originalOrder);
@@ -392,81 +595,80 @@ describe("accepted source financial reconciliation", () => {
       primaryDocumentImageId: null,
       screenshotImageId: null,
     });
-    await w.submit("historical-replay-retry", "a".repeat(64));
+    // Materializing the verifiable original records evidence, without inventing
+    // capture provenance or republishing money. Its next exact capture replays.
+    expect(result.committed.items[0]?.outcome).toBe("updated");
+    const retry = await w.submit("historical-replay-retry", "a".repeat(64));
+    expect(retry.committed.items[0]?.outcome).toBe("replayed");
     expect(await w.database.select().from(sourceOrderObservation)).toEqual(
       observations,
     );
   });
 
-  it("refuses changed financial facts without refreshing accepted source or money", async () => {
+  it("refuses changed financial facts without refreshing accepted money and preserves edits while held", async () => {
     const { submit, state, initial, accepted, database } = await world();
-    const result = await submit("changed", "b".repeat(64), {
+    const originalFacts = await database.select().from(sourceOrderObservation);
+    const changed = {
       ...candidate,
       printedGrandTotal: 45,
       lines: [{ ...candidate.lines[0]!, amount: 45 }],
       payments: [{ ...candidate.payments[0]!, amount: 45 }],
-    });
-    expect(result.committed.items[0]).toMatchObject({
-      outcome: "conflict",
-      purchaseId: accepted.shortcode,
-      findingCount: 1,
-    });
-    expect(await state()).toEqual(initial);
-    const findings = await database
-      .select()
-      .from(runFinding)
-      .where(eq(runFinding.entityId, accepted.id));
-    expect(findings).toHaveLength(1);
-    expect(findings[0]).toMatchObject({
-      status: "open",
-      kind: "other",
-      proposedFix: {
-        kind: "reconcile_source_order",
-        purchaseId: accepted.id,
-        acceptedChecksum: "a".repeat(64),
-        source: {
-          kind: "vendor_export",
-          externalKey: "synthetic:workshop:order",
-          checksum: "b".repeat(64),
-        },
-        proposedExtraction: {
-          status: "ready",
-          candidate: { printedGrandTotal: 45, payments: [{ amount: 45 }] },
-        },
-        reviewedFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/u),
-      },
-    });
-    const repeated = await submit("changed-retry", "b".repeat(64), {
-      ...candidate,
-      printedGrandTotal: 45,
-      lines: [{ ...candidate.lines[0]!, amount: 45 }],
-      payments: [{ ...candidate.payments[0]!, amount: 45 }],
-    });
-    expect(repeated.committed.items[0]?.outcome).toBe("conflict");
+    };
+    await submit("changed", "b".repeat(64), changed);
+    const after = await state();
+    expect(after.purchase).toEqual(initial.purchase);
+    expect(after.expenses).toEqual(initial.expenses);
+    expect(after.allocations).toEqual(initial.allocations);
+    const facts = await database.select().from(sourceOrderObservation);
+    expect(facts.map((row) => row.checksum).sort()).toEqual([
+      "a".repeat(64),
+      "b".repeat(64),
+    ]);
+    expect(facts.find((row) => row.id === originalFacts[0]!.id)).toEqual(
+      originalFacts[0],
+    );
+    const { scopeState, drift } = await import("~/server/db/kernel-schema");
+    const { orderEventKey } = await import("./order-evidence");
+    const key = orderEventKey(facts[0]!);
+    const held = async () =>
+      (
+        await database
+          .select()
+          .from(scopeState)
+          .where(eq(scopeState.scopeKey, key))
+      )[0];
+    expect(await held()).toMatchObject({ stage: "needs_you", error: null });
     expect(
-      await database
-        .select()
-        .from(runFinding)
-        .where(eq(runFinding.entityId, accepted.id)),
+      await database.select().from(drift).where(eq(drift.scopeKey, key)),
     ).toHaveLength(1);
-    await expect(
-      resolveRunFinding(
-        ctx.db,
-        { id: findings[0]!.id, action: "apply" },
-        ctx.actor,
-      ),
-    ).rejects.toMatchObject({
-      code: "CONFLICT",
-      reason: "PURCHASE_IMPORT_REVIEW_STALE",
-      message: "Review the source-order reconciliation before applying it.",
-    });
-    expect(await state()).toEqual(initial);
+    await submit("changed-retry", "b".repeat(64), changed);
+    expect(await database.select().from(sourceOrderObservation)).toHaveLength(
+      2,
+    );
+    expect((await state()).expenses).toEqual(initial.expenses);
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { cost: 4200n },
+      eq(expense.id, initial.expenses[0]!.id),
+      ctx.actor,
+    );
+    await submit("changed-after-member-edit", "b".repeat(64), changed);
+    const expenseValues = (rows: typeof initial.expenses) =>
+      rows.map(({ updatedAt: _updatedAt, ...row }) => row);
+    expect(expenseValues((await state()).expenses)).toEqual(
+      expenseValues(initial.expenses).map((row) => ({ ...row, cost: 42 })),
+    );
+    expect((await state()).allocations).toEqual(initial.allocations);
+    expect(await held()).toMatchObject({ stage: "needs_you", error: null });
+    expect((await state()).purchase?.id).toBe(accepted.id);
   });
 
   // The state loader must refuse a moved reviewed Expense as stale, not a 500.
   it("refuses to apply a review whose Expense moved to another Purchase as a CONFLICT", async () => {
-    const { submit, state, initial, accepted, database } = await world();
-    await submit("moved-expense", "e".repeat(64), {
+    const { propose, state, initial, accepted, database } =
+      await retainedReviewWorld();
+    await propose("moved-expense", "e".repeat(64), {
       ...candidate,
       printedGrandTotal: 45,
       lines: [{ ...candidate.lines[0]!, amount: 45 }],
@@ -540,8 +742,8 @@ describe("accepted source financial reconciliation", () => {
   it.each([false, true])(
     "preserves only proven receipt correspondences on replacement (item changed: %s)",
     async (itemChanged) => {
-      const w = await world();
-      await w.submit("sibling-receipt", "c".repeat(64), candidate, {
+      const w = await retainedReviewWorld();
+      await w.acceptSibling("c".repeat(64), candidate, {
         kind: "receipt_photo",
         externalKey: "synthetic:sibling-receipt",
       });
@@ -571,7 +773,7 @@ describe("accepted source financial reconciliation", () => {
           row.originalOrder,
         ]),
       );
-      await w.submit("review-replacement", "d".repeat(64), {
+      await w.propose("review-replacement", "d".repeat(64), {
         ...candidate,
         orderedAt: "2026-09-02T18:00:00Z",
         lines: itemChanged
@@ -629,7 +831,63 @@ describe("accepted source financial reconciliation", () => {
   );
 
   it("commits an explicitly reviewed cost correction once and retains the first extraction", async () => {
-    const { submit, state, initial, accepted, database } = await world();
+    const { submit, state, accepted, database } = await world();
+    const [original] = await database
+      .select()
+      .from(sourceOrderObservation)
+      .where(eq(sourceOrderObservation.checksum, "a".repeat(64)));
+    if (!original?.ledgerPartyId || !original.runId)
+      throw new Error("Synthetic retained source owner missing");
+    // Seed the actual retained predecessor shape: an accepted association and
+    // an unfinished source review, not a second current import path.
+    const [claim] = await database
+      .insert(importSourceClaim)
+      .values({
+        ledgerPartyId: original.ledgerPartyId,
+        kind: original.sourceKind,
+        externalKey: original.sourceExternalKey,
+        checksum: original.checksum,
+        firstRunId: original.runId,
+        lastRunId: original.runId,
+      })
+      .returning();
+    if (!claim) throw new Error("Synthetic retained source claim missing");
+    await database
+      .update(sourceOrderObservation)
+      .set({
+        sourceClaimId: claim.id,
+        purchaseId: accepted.id,
+        contentFingerprint: "1".repeat(64),
+      })
+      .where(eq(sourceOrderObservation.id, original.id));
+    const [association] = await database
+      .insert(importSourceOrder)
+      .values({
+        sourceClaimId: claim.id,
+        orderKey: original.orderKey,
+        purchaseId: accepted.id,
+        checksum: original.checksum,
+        outputFingerprint: "2".repeat(64),
+        acceptedObservationId: original.id,
+        originalOrder: {
+          checksum: original.checksum,
+          extraction: original.extraction,
+        },
+      })
+      .returning();
+    if (!association) throw new Error("Synthetic retained association missing");
+    const before = await state();
+    await database.insert(importSourceProduct).values({
+      sourceOrderId: association.id,
+      lineIndex: 0,
+      expenseId: before.expenses[0]!.id,
+      productId: null,
+    });
+    await database
+      .update(purchasePaymentEvidence)
+      .set({ sourceClaimId: claim.id, purchaseId: accepted.id })
+      .where(eq(purchasePaymentEvidence.orderObservationId, original.id));
+    const initial = await state();
     await submit("corrected-cost", "d".repeat(64), {
       ...candidate,
       printedGrandTotal: 45,
@@ -638,10 +896,48 @@ describe("accepted source financial reconciliation", () => {
       // The original settlement stays valid until separately corrected.
       payments: candidate.payments,
     });
-    const [finding] = await database
+    const [proposal] = await database
       .select()
-      .from(runFinding)
-      .where(eq(runFinding.entityId, accepted.id));
+      .from(sourceOrderObservation)
+      .where(eq(sourceOrderObservation.checksum, "d".repeat(64)));
+    if (!proposal)
+      throw new Error("Synthetic retained proposed extraction missing");
+    await database
+      .update(sourceOrderObservation)
+      .set({
+        sourceClaimId: claim.id,
+        purchaseId: accepted.id,
+        contentFingerprint: "3".repeat(64),
+      })
+      .where(eq(sourceOrderObservation.id, proposal.id));
+    const finding = await seedRunFinding(ctx.db, {
+      runId: proposal.runId,
+      ledgerPartyId: original.ledgerPartyId,
+      entityKind: "purchase",
+      entityId: accepted.id,
+      kind: "source_financial_changed",
+      summary: "Synthetic retained cost correction",
+      evidenceFingerprint: "4".repeat(64),
+      proposedFix: {
+        kind: "reconcile_source_order",
+        purchaseId: accepted.id,
+        source: {
+          kind: proposal.sourceKind,
+          externalKey: proposal.sourceExternalKey,
+          checksum: proposal.checksum,
+        },
+        orderKey: proposal.orderKey,
+        acceptedChecksum: original.checksum,
+        proposedExtraction: proposal.extraction,
+        reviewedFingerprint: "0".repeat(64),
+        observationId: proposal.id,
+      },
+    });
+    const pendingFacts = await database.select().from(sourceOrderObservation);
+    const pending = await state();
+    expect(pending.expenses).toEqual(initial.expenses);
+    expect(pending.allocations).toEqual(initial.allocations);
+    expect(pending.payments).toEqual(expect.arrayContaining(initial.payments));
     const preview = await prepareSourceOrderReconciliation(
       ctx.db,
       {
@@ -672,7 +968,7 @@ describe("accepted source financial reconciliation", () => {
     expect(preview).toMatchObject({
       spend: { before: 40, after: 45, delta: 5 },
     });
-    expect(await state()).toEqual(initial);
+    expect(await state()).toEqual(pending);
     const input = {
       id: finding!.id,
       action: "apply" as const,
@@ -692,8 +988,31 @@ describe("accepted source financial reconciliation", () => {
     expect(after.orders[0]!.originalOrder).toEqual(
       initial.orders[0]!.originalOrder,
     );
-    expect(after.orders[0]!.checksum).toBe("d".repeat(64));
-    expect(after.payments).toEqual(initial.payments);
+    expect(after.orders).toEqual(
+      initial.orders.map((order) => ({
+        ...order,
+        checksum: "d".repeat(64),
+        acceptedObservationId: after.orders[0]!.acceptedObservationId,
+        updatedAt: after.orders[0]!.updatedAt,
+        outputFingerprint: after.orders[0]!.outputFingerprint,
+      })),
+    );
+    expect(after.orders[0]!.outputFingerprint).toMatch(/^[a-f0-9]{64}$/);
+    expect(after.orders[0]!.outputFingerprint).not.toBe(
+      initial.orders[0]!.outputFingerprint,
+    );
+    expect(after.orders[0]!.acceptedObservationId).not.toBe(
+      initial.orders[0]!.acceptedObservationId,
+    );
+    expect(after.orders[0]!.updatedAt.getTime()).toBeGreaterThanOrEqual(
+      initial.orders[0]!.updatedAt.getTime(),
+    );
+    expect(after.payments).toEqual(expect.arrayContaining(initial.payments));
+    const retained = await database
+      .select()
+      .from(sourceOrderObservation)
+      .where(eq(sourceOrderObservation.id, original.id));
+    expect(retained[0]?.extraction).toEqual(original.extraction);
     expect(after.allocations).toEqual(initial.allocations);
     // Expiry prevents a new application, not replay of an applied receipt.
     await patchRunFindingData(ctx.db, finding!.id, {
@@ -704,19 +1023,33 @@ describe("accepted source financial reconciliation", () => {
     });
     expect(await state()).toEqual(after);
     const observations = await database.select().from(sourceOrderObservation);
-    expect(observations).toHaveLength(2);
+    // The retained original and proposal remain immutable; acceptance adds one
+    // canonical fact instead of rewriting either predecessor observation.
+    expect(observations).toHaveLength(3);
+    expect(observations).toEqual(expect.arrayContaining(pendingFacts));
     expect(
       observations.find((row) => row.checksum === "a".repeat(64))!.extraction
         .candidate!.printedGrandTotal,
     ).toBe(40);
-    expect(after.orders[0]!.acceptedObservationId).toBe(
-      observations.find((row) => row.checksum === "d".repeat(64))!.id,
+    const normalized = observations.find(
+      (row) => !pendingFacts.some((prior) => prior.id === row.id),
     );
+    if (!normalized)
+      throw new Error("Synthetic accepted correction fact missing");
+    expect(after.orders[0]!.acceptedObservationId).toBe(normalized.id);
+    expect(
+      await database
+        .select({ purchaseId: acceptedOrders.purchaseId })
+        .from(acceptedOrders)
+        .where(eq(acceptedOrders.id, normalized.id)),
+    ).toEqual([{ purchaseId: accepted.id }]);
+    expect(normalized.extraction.candidate?.printedGrandTotal).toBe(45);
   });
 
   it("rejects a reviewed correction after a human changes its ledger", async () => {
-    const { submit, state, initial, accepted, database } = await world();
-    await submit("stale-cost", "e".repeat(64), {
+    const { propose, state, initial, accepted, database } =
+      await retainedReviewWorld();
+    await propose("stale-cost", "e".repeat(64), {
       ...candidate,
       lines: [{ ...candidate.lines[0]!, title: "Corrected admission" }],
     });
@@ -769,63 +1102,64 @@ describe("accepted source financial reconciliation", () => {
   });
 
   it("keeps accepted-observation payment reconciliation on the financial path", async () => {
-    const { initial, accepted, database, state } = await world();
-    const order = initial.orders[0]!;
-    const claim = initial.source[0]!;
+    const { initial, database, state, propose } = await retainedReviewWorld();
     await database.update(purchasePaymentEvidence).set({ amountMinor: 3900n });
-    const fix = storedImportFix.parse({
-      kind: "reconcile_source_order",
-      purchaseId: accepted.id,
-      source: {
-        kind: "vendor_export",
-        externalKey: claim.externalKey,
-        checksum: order.checksum,
+    const retainedPayments = await database
+      .select()
+      .from(purchasePaymentEvidence);
+    const finding = await propose(
+      "retained-payment-correction",
+      "a".repeat(64),
+      candidate,
+    );
+    const review = await prepareSourceOrderReconciliation(
+      ctx.db,
+      {
+        id: finding.id,
+        resolution: {
+          kind: "attach_only",
+          lines: [
+            {
+              lineIndex: 0,
+              expenseId: parseShortcodeFor(
+                "expense",
+                initial.expenses[0]!.shortcode,
+              ),
+              productId: null,
+            },
+          ],
+        },
       },
-      orderKey: order.orderKey,
-      acceptedChecksum: order.checksum,
-      proposedExtraction: { status: "ready", candidate },
-      observationId: order.acceptedObservationId,
-      reviewedFingerprint: "0".repeat(64),
-    });
-    if (!fix || fix.kind !== "reconcile_source_order")
-      throw new Error("Synthetic correction missing");
-    await withTransaction(ctx.db, async (tx) => {
-      const locked = await loadSourceReconciliationState(
-        tx,
-        fix,
-        claim.ledgerPartyId,
-      );
-      const review = await reviewResolution(tx, locked, fix, {
-        kind: "attach_only",
-        lines: [
-          {
-            lineIndex: 0,
-            expenseId: parseShortcodeFor(
-              "expense",
-              initial.expenses[0]!.shortcode,
-            ),
-            productId: null,
-          },
-        ],
-      });
-      fix.review = review;
-      fix.reviewedFingerprint = review.reviewedFingerprint;
-      await commitSourceOrderReconciliation(
-        tx,
-        fix,
-        ctx.actor,
-        claim.ledgerPartyId,
-      );
-    });
+      ctx.actor,
+    );
+    await resolveRunFinding(
+      ctx.db,
+      {
+        id: finding.id,
+        action: "apply",
+        reviewedFingerprint: review.reviewedFingerprint,
+      },
+      ctx.actor,
+    );
     const after = await state();
-    expect(after.payments[0]?.amountMinor).toBe(4000n);
+    expect(after.payments).toHaveLength(retainedPayments.length + 1);
+    for (const retained of retainedPayments)
+      expect(after.payments.find((row) => row.id === retained.id)).toEqual(
+        retained,
+      );
+    const acceptedPayment = after.payments.find(
+      (row) =>
+        row.orderObservationId === after.orders[0]?.acceptedObservationId,
+    );
+    expect(acceptedPayment?.amountMinor).toBe(4000n);
     expect(after.expenses).toEqual(initial.expenses);
     expect(after.allocations).toEqual(initial.allocations);
   });
 
   it("refuses accepted payment changes that disagree with a statement allocation", async () => {
-    const { submit, state, initial, accepted, database } = await world();
-    await submit("payment-conflict", "f".repeat(64), {
+    const { propose, state, initial, accepted, database } =
+      await retainedReviewWorld();
+    await propose("payment-conflict", "f".repeat(64), {
       ...candidate,
       payments: [{ amount: 45, chargedAt: "2026-09-02T12:00:00Z" }],
     });
@@ -859,7 +1193,7 @@ describe("accepted source financial reconciliation", () => {
   });
 
   it("reviews changed extraction from the same immutable source bytes", async () => {
-    const { submit, state, initial, database } = await world();
+    const { submit, state, initial, database } = await retainedReviewWorld();
     const result = await submit("same-bytes-correction", "a".repeat(64), {
       ...candidate,
       lines: [{ ...candidate.lines[0]!, title: "Reviewed admission identity" }],
@@ -877,58 +1211,72 @@ describe("accepted source financial reconciliation", () => {
     ).toBe(2);
   });
 
-  it("refuses a changed card number even when payment and allocation amounts agree", async () => {
-    const { submit, state, accepted, database } = await world();
-    await database
-      .update(financialAccount)
-      .set({
-        cardNumbers: [
+  it.each([
+    {
+      change: "card number",
+      payment: { ...candidate.payments[0]!, cardLastFour: "2222" },
+    },
+    {
+      change: "stored-value tender",
+      payment: { ...candidate.payments[0]!, tender: "stored_value" as const },
+    },
+  ])(
+    "refuses a changed $change even when payment and allocation amounts agree",
+    async ({ payment }) => {
+      const { propose, state, accepted, database } =
+        await retainedReviewWorld();
+      await database
+        .update(financialAccount)
+        .set({
+          cardNumbers: [
+            {
+              last4: "1111",
+              kind: "primary",
+              note: null,
+              validFrom: null,
+              validTo: null,
+            },
+          ],
+        })
+        .where(eq(financialAccount.name, "Synthetic reconciliation account"));
+      const before = await state();
+      await propose("wrong-card-correction", "7".repeat(64), {
+        ...candidate,
+        payments: [payment],
+      });
+      const [finding] = await database
+        .select()
+        .from(runFinding)
+        .where(eq(runFinding.entityId, accepted.id));
+      await expect(
+        prepareSourceOrderReconciliation(
+          ctx.db,
           {
-            last4: "1111",
-            kind: "primary",
-            note: null,
-            validFrom: null,
-            validTo: null,
+            id: finding!.id,
+            resolution: {
+              kind: "attach_only",
+              lines: [
+                {
+                  lineIndex: 0,
+                  expenseId: parseShortcodeFor(
+                    "expense",
+                    before.expenses[0]!.shortcode,
+                  ),
+                  productId: null,
+                },
+              ],
+            },
           },
-        ],
-      })
-      .where(eq(financialAccount.name, "Synthetic reconciliation account"));
-    const before = await state();
-    await submit("wrong-card-correction", "7".repeat(64), {
-      ...candidate,
-      payments: [{ ...candidate.payments[0]!, cardLastFour: "2222" }],
-    });
-    const [finding] = await database
-      .select()
-      .from(runFinding)
-      .where(eq(runFinding.entityId, accepted.id));
-    await expect(
-      prepareSourceOrderReconciliation(
-        ctx.db,
-        {
-          id: finding!.id,
-          resolution: {
-            kind: "attach_only",
-            lines: [
-              {
-                lineIndex: 0,
-                expenseId: parseShortcodeFor(
-                  "expense",
-                  before.expenses[0]!.shortcode,
-                ),
-                productId: null,
-              },
-            ],
-          },
-        },
-        ctx.actor,
-      ),
-    ).rejects.toThrow(/allocation/u);
-    expect(await state()).toEqual(before);
-  });
+          ctx.actor,
+        ),
+      ).rejects.toThrow(/allocation/u);
+      expect(await state()).toEqual(before);
+    },
+  );
 
   it("preserves exact beneficiary and funder cents when splitting an accepted Expense", async () => {
-    const { submit, state, initial, accepted, database } = await world();
+    const { propose, state, initial, accepted, database } =
+      await retainedReviewWorld();
     const parties = await Promise.all(
       ["Synthetic beneficiary A", "Synthetic beneficiary B"].map((name) =>
         insertWithShortcode(ctx.db, "ledgerParty", { name, kind: "member" }),
@@ -976,7 +1324,7 @@ describe("accepted source financial reconciliation", () => {
         },
       ],
     };
-    await submit("split-with-cents", "6".repeat(64), proposed);
+    await propose("split-with-cents", "6".repeat(64), proposed);
     const [finding] = await database
       .select()
       .from(runFinding)
@@ -1050,7 +1398,7 @@ describe("accepted source financial reconciliation", () => {
   });
 
   it("retains the first competing observation when a later observation is explicitly accepted", async () => {
-    const { submit, state, accepted, database } = await world();
+    const { propose, state, accepted, database } = await retainedReviewWorld();
     const source = {
       kind: "receipt_photo" as const,
       externalKey: "synthetic:changing-receipt",
@@ -1059,7 +1407,7 @@ describe("accepted source financial reconciliation", () => {
       ["8", 45],
       ["9", 50],
     ] as const)
-      await submit(
+      await propose(
         `competing-${amount}`,
         checksum.repeat(64),
         {
@@ -1139,8 +1487,8 @@ describe("accepted source financial reconciliation", () => {
   });
 
   it("refuses to attach two proposed lines to the same Expense", async () => {
-    const { submit, state, accepted, database } = await world();
-    await submit("double-binding", "5".repeat(64), {
+    const { propose, state, accepted, database } = await retainedReviewWorld();
+    await propose("double-binding", "5".repeat(64), {
       ...candidate,
       printedGrandTotal: 80,
       lines: [
@@ -1208,7 +1556,8 @@ describe("accepted source financial reconciliation", () => {
   });
 
   it("refuses a same-total replacement that moves existing party cents", async () => {
-    const { submit, state, initial, accepted, database } = await world();
+    const { propose, state, initial, accepted, database } =
+      await retainedReviewWorld();
     const owner = initial.source[0]!.ledgerPartyId;
     await insertPurchaseEventRows(ctx.db, "ExpenseAttribution", [
       {
@@ -1224,7 +1573,7 @@ describe("accepted source financial reconciliation", () => {
         weight: 1,
       },
     ]);
-    await submit("same-total-party-change", "4".repeat(64), {
+    await propose("same-total-party-change", "4".repeat(64), {
       ...candidate,
       lines: [{ ...candidate.lines[0]!, title: "Reviewed title" }],
     });
@@ -1296,7 +1645,6 @@ describe("accepted source financial reconciliation", () => {
       const after = await state();
       expect(after.expenses).toEqual(initial.expenses);
       expect(after.allocations).toEqual(initial.allocations);
-      expect(after.orders).toHaveLength(3);
       expect(await database.select().from(sourceOrderObservation)).toHaveLength(
         3,
       );
@@ -1316,15 +1664,23 @@ describe("accepted source financial reconciliation", () => {
       },
       { kind: "receipt_photo", externalKey: "synthetic:competing:receipt" },
     );
+    const after = await state();
+    expect(after.expenses).toEqual(initial.expenses);
+    expect(after.payments).toEqual(expect.arrayContaining(initial.payments));
+    const captured = after.payments.filter(
+      (row) => !initial.payments.some((prior) => prior.id === row.id),
+    );
+    expect(captured).toHaveLength(1);
+    expect(captured[0]).toMatchObject({
+      amountMinor: 4500n,
+      orderObservationId: expect.any(String),
+    });
+    expect(after.allocations).toEqual(initial.allocations);
+    expect(after.orders).toEqual(initial.orders);
     expect(imported.committed.items[0]).toMatchObject({
       outcome: "conflict",
       findingCount: 1,
     });
-    const after = await state();
-    expect(after.expenses).toEqual(initial.expenses);
-    expect(after.payments).toEqual(initial.payments);
-    expect(after.allocations).toEqual(initial.allocations);
-    expect(after.orders).toEqual(initial.orders);
     const [finding] = await database
       .select()
       .from(runFinding)
@@ -1383,13 +1739,13 @@ describe("accepted source financial reconciliation", () => {
         },
       ],
     });
+    expect(await database.select(dollarExpenseColumns()).from(expense)).toEqual(
+      before,
+    );
     expect(imported.committed.items[0]).toMatchObject({
       outcome: "conflict",
       findingCount: 1,
     });
-    expect(await database.select(dollarExpenseColumns()).from(expense)).toEqual(
-      before,
-    );
     const [finding] = await database.select().from(runFinding);
     const preview = await prepareSourceOrderReconciliation(
       ctx.db,
@@ -1508,11 +1864,12 @@ describe("accepted source financial reconciliation", () => {
   });
 
   it("replays the original accepted checksum after a refused refresh", async () => {
-    const { submit, state, initial } = await world();
+    const { submit, state, initial } = await retainedReviewWorld();
     await submit("changed-payment", "b".repeat(64), {
       ...candidate,
       payments: [{ amount: 41, chargedAt: "2026-09-02T12:00:00Z" }],
     });
+    const held = await state();
     const replay = await submit("original-replay", "a".repeat(64));
     expect(replay.committed.items[0]).toMatchObject({
       outcome: "replayed",
@@ -1520,15 +1877,15 @@ describe("accepted source financial reconciliation", () => {
     });
     const after = await state();
     expect(after.orders).toEqual(initial.orders);
-    expect(after.payments).toEqual(initial.payments);
+    expect(after.payments).toEqual(held.payments);
     expect(after.allocations).toEqual(initial.allocations);
     expect(after.expenses).toEqual(initial.expenses);
     expect(after.source.map((row) => row.checksum)).toEqual(["a".repeat(64)]);
   });
 
   it("accepts cosmetic checksum changes without replacing payments or adding spend", async () => {
-    const { submit, state, initial } = await world();
-    const cosmetic = await submit("cosmetic", "c".repeat(64), {
+    const { submit, state, initial } = await retainedReviewWorld();
+    const cosmeticCandidate = {
       ...candidate,
       merchant: "Synthetic workshop receipt",
       payments: [
@@ -1538,7 +1895,12 @@ describe("accepted source financial reconciliation", () => {
           description: "Receipt formatting changed",
         },
       ],
-    });
+    };
+    const cosmetic = await submit(
+      "cosmetic",
+      "c".repeat(64),
+      cosmeticCandidate,
+    );
     expect(cosmetic.committed.items[0]).toMatchObject({
       outcome: "updated",
       findingCount: 0,
@@ -1552,7 +1914,11 @@ describe("accepted source financial reconciliation", () => {
     );
     expect(after.orders[0]?.checksum).toBe("c".repeat(64));
     expect(after.source).toHaveLength(1);
-    const replay = await submit("cosmetic-replay", "c".repeat(64));
+    const replay = await submit(
+      "cosmetic-replay",
+      "c".repeat(64),
+      cosmeticCandidate,
+    );
     expect(replay.committed.items[0]?.outcome).toBe("replayed");
   });
 });

@@ -347,6 +347,9 @@ export const sourceOrderObservationBindings = z.array(
   z.object({
     lineIndex: z.number().int().nonnegative(),
     productId: entityIdSchema("product").nullable(),
+    createProduct: z.boolean().optional(),
+    stableLineId: z.string().optional(),
+    legacyExpenseId: z.uuid().optional(),
   }),
 );
 export type SourceOrderObservationBindings = z.infer<
@@ -931,14 +934,6 @@ export const importWriterInput = z.object({
 });
 export type ImportWriterInput = z.infer<typeof importWriterInput>;
 
-export const importWriterOutput = z.object({
-  outcome: z.enum(["created", "updated", "replayed", "conflict"]),
-  purchaseId: entityIdSchema("purchase").nullable(),
-  findingIds: z.array(z.uuid()),
-  outputFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
-});
-export type ImportWriterOutput = z.infer<typeof importWriterOutput>;
-
 const preparedImportOrderInput = z
   .object({
     vendorId: vendorShortcode
@@ -1152,7 +1147,7 @@ export const commitPurchaseImportOut = z.object({
   items: z.array(
     z.object({
       stableOrderId: stableImportItemId,
-      outcome: importWriterOutput.shape.outcome,
+      outcome: z.enum(["created", "updated", "replayed", "conflict"]),
       purchaseId: purchaseShortcode.nullable(),
       findingCount: z.number().int().nonnegative(),
     }),

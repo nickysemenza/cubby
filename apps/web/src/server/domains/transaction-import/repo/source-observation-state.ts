@@ -4,6 +4,7 @@ import type {
   TransactionImportId,
   FinancialTransactionId,
 } from "@cubby/schemas/identifiers";
+import { decisionChannel } from "@cubby/schemas/kernel/stage";
 import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import type {
   SourceTransactionRecordDisposition,
@@ -41,23 +42,37 @@ export const sourceObservationFacts = sql`(
     r."rawDescription", r."sourceCategory", r."providerStatus", r."providerNotes", r."createdAt", r."deletedAt",
     own.value AS "externalId", legacy.value AS "legacyExternalId", reference.value AS "legacyReference",
     o.shortcode AS "chargeKey",
-    COALESCE(o."currentObservationId" = r.id, false) AS current,
-    o."accountId" AS "accountId",
-    o.disposition AS disposition,
-    o."dispositionReason" AS "dispositionReason",
-    o."dispositionNote" AS "dispositionNote",
-    CASE WHEN o."replacementObservationId" IS NOT NULL THEN o."replacementObservationId"
-      WHEN r.id <> o."currentObservationId" AND a."supersededByObservationId" = o."currentObservationId" THEN a."supersededByObservationId"
+    COALESCE(coalesce((judgments.values->>'currentObservationId')::uuid,o."currentObservationId") = r.id, false) AS current,
+    CASE WHEN judgments.values ? 'accountId' THEN (judgments.values->>'accountId')::uuid ELSE o."accountId" END AS "accountId",
+    coalesce(judgments.values->>'disposition',o.disposition) AS disposition,
+    CASE WHEN judgments.values ? 'dispositionReason' THEN (judgments.values->>'dispositionReason') ELSE o."dispositionReason" END AS "dispositionReason",
+    CASE WHEN judgments.values ? 'dispositionNote' THEN (judgments.values->>'dispositionNote') ELSE o."dispositionNote" END AS "dispositionNote",
+    CASE WHEN judgments.values->>'supersededByRowId' IS NOT NULL THEN (judgments.values->>'supersededByRowId')::uuid WHEN NOT coalesce(judgments.values ? 'supersededByRowId',false) AND o."replacementObservationId" IS NOT NULL THEN o."replacementObservationId"
+      WHEN r.id <> coalesce((judgments.values->>'currentObservationId')::uuid,o."currentObservationId") AND a."supersededByObservationId" = coalesce((judgments.values->>'currentObservationId')::uuid,o."currentObservationId") THEN a."supersededByObservationId"
       ELSE NULL END AS "supersededByRowId",
     o."withdrawnAt" AS "withdrawnAt",
     o."withdrawalImportId" AS "withdrawalImportId",
     o."lastObservedAt" AS "lastObservedAt",
-    greatest(a."updatedAt", o."updatedAt") AS "updatedAt",
-    a.notes, o."reviewState" AS "storedReviewState", o.version AS "occurrenceVersion", o."acceptedTransactionId",
+    greatest(a."updatedAt", judgments."updatedAt", o."updatedAt") AS "updatedAt",
+    a.notes, CASE WHEN o."reviewState" IN (${sourceOccurrenceReviewState.enum.identity_conflict},${sourceOccurrenceReviewState.enum.ownership_conflict}) THEN o."reviewState" ELSE coalesce(judgments.values->>'reviewState',o."reviewState") END AS "storedReviewState", o.version AS "occurrenceVersion", o."acceptedTransactionId",
     ft.shortcode AS "transactionShortcode"
   FROM "SourceTransactionRecord" r
   JOIN "SourceOccurrence" o ON o.id = r."occurrenceId"
-  LEFT JOIN "SourceObservationAnnotation" a ON a."observationId" = r.id
+  LEFT JOIN LATERAL (
+    SELECT jsonb_object_agg(field,value) AS values, max(at) AS "updatedAt" FROM (
+      SELECT DISTINCT ON (slot) field,value,at FROM "Decision"
+      WHERE subject='sourceObservation:' || r.id AND channel=${decisionChannel.enum.assignment}
+      ORDER BY slot,at DESC,id DESC
+    ) choices
+  ) annotations ON true
+  LEFT JOIN LATERAL (SELECT (annotations.values->>'supersededByObservationId')::uuid AS "supersededByObservationId",
+    annotations.values->>'notes' AS notes, annotations."updatedAt") a ON true
+  LEFT JOIN LATERAL (
+    SELECT jsonb_object_agg(field,value) AS values, max(at) AS "updatedAt" FROM (
+      SELECT DISTINCT ON (slot) field,value,at FROM "Decision" WHERE subject='bank:' || o.id AND channel=${decisionChannel.enum.assignment}
+      ORDER BY slot,at DESC,id DESC
+    ) choices
+  ) judgments ON true
   LEFT JOIN "FinancialTransaction" ft ON ft.id = o."acceptedTransactionId" AND ${notDeleted("ft")}
   LEFT JOIN "FinancialEvidenceAlias" own ON own."observationId" = r.id AND own.kind = 'externalId'
   LEFT JOIN "FinancialEvidenceAlias" legacy ON legacy."observationId" = r.id AND legacy.kind = 'legacyExternalId'

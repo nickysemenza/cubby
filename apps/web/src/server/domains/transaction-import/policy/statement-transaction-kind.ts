@@ -50,7 +50,7 @@ const CATEGORY_RULES = new Map<string, KindRule>(
   } satisfies Record<string, KindRule>),
 );
 
-export const foldProviderCategory = (category: string) =>
+const foldProviderCategory = (category: string) =>
   category
     .normalize("NFKC")
     .toLowerCase()
@@ -223,10 +223,7 @@ export function decideStatementKind(input: {
 }
 
 /** Kinds that move money between accounts rather than spend it. */
-export const MONEY_MOVE_KINDS = [
-  "account_transfer",
-  "credit_card_payment",
-] as const;
+const MONEY_MOVE_KINDS = ["account_transfer", "credit_card_payment"] as const;
 const MONEY_MOVES = new Set<KindDecision["kind"]>(MONEY_MOVE_KINDS);
 
 const isMoneyMoveKind = (kind: KindDecision["kind"]) => MONEY_MOVES.has(kind);

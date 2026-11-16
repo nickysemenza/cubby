@@ -14,7 +14,7 @@ import { sql } from "drizzle-orm";
 import { householdLocalDate, shiftPlainDate } from "~/lib/household-date";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { textArrayParam } from "~/server/db/helpers/array-param";
-import { manualEntry, decision, recordKey } from "~/server/db/kernel-schema";
+import { decision, recordKey } from "~/server/db/kernel-schema";
 import {
   expense,
   expenseAttribution,
@@ -25,8 +25,10 @@ import {
   purchase,
   purchasePaymentEvidence,
   sourceOccurrence,
+  sourceOrderObservation,
   spendingCategory,
   vendor,
+  email,
 } from "~/server/db/schema";
 import { financialAccountPurchaser } from "~/server/domains/financial-account/policy/purchaser";
 import { allocationSetViolation } from "~/server/domains/financial-transaction/policy/allocation-set";
@@ -44,6 +46,8 @@ import {
 import { spendingCategoryForDiscovery } from "~/server/domains/financial-transaction/policy/spending-category";
 import { spendingBlocker } from "~/server/domains/financial-transaction/policy/spending-prerequisites";
 import { manualTransactionEvidence } from "~/server/domains/financial-transaction/repo/manual-evidence";
+import { reconcileOrderPurchase } from "~/server/domains/financial-transaction/repo/order-purchase-event";
+import type { Input } from "~/server/domains/financial-transaction/repo/purchase-event-input";
 import {
   allocationRecords,
   attributionRecords,
@@ -54,6 +58,14 @@ import {
   restorePurchaseValues,
 } from "~/server/domains/financial-transaction/repo/purchase-event-records";
 import {
+  orderEvidence,
+  retainedPaymentEvidence,
+} from "~/server/domains/purchase-import/repo/order-evidence";
+import {
+  paymentMatching,
+  type PaymentMatchInput,
+} from "~/server/domains/purchase-import/repo/payment-match";
+import {
   bookingVendorCreations,
   bookingVendorSelection,
 } from "~/server/domains/vendor/policy/booking-vendor";
@@ -62,7 +74,6 @@ import {
   defineReconciler,
   recordSubject,
   source,
-  type Binding,
   type ColumnRef,
   type Pure,
   type ScopeReads,
@@ -75,35 +86,21 @@ import {
   transactionAllocations,
   purchaseAllocations,
   purchaseExpenses,
+  unlinkedProductExpenses,
   expenseAttributions,
   vendorPurchases,
   amountPayments,
   purchasePayments,
+  orderPayments,
   vendorNames,
 } from "./money-read-indexes";
+import { loadOrderPurchaseInput } from "./order-purchase-input";
 import { partlyPaidPurchases } from "./purchase-candidate-index";
 
-type Input = {
-  key: string;
-  bindings: Binding[];
-  transactions: (typeof financialTransaction.$inferSelect)[];
-  accounts: (typeof financialAccount.$inferSelect)[];
-  parties: (typeof ledgerParty.$inferSelect)[];
-  purchases: (typeof purchase.$inferSelect)[];
-  expenses: (typeof expense.$inferSelect)[];
-  allocations: (typeof financialTransactionAllocation.$inferSelect)[];
-  attributions: (typeof expenseAttribution.$inferSelect)[];
-  vendors: (typeof vendor.$inferSelect)[];
-  categories: (typeof spendingCategory.$inferSelect)[];
-  payments: (typeof purchasePaymentEvidence.$inferSelect)[];
-  occurrences: (typeof sourceOccurrence.$inferSelect)[];
-  /** The source occurrences behind each other charge that settles a loaded Purchase. */
-  settlementOccurrences: {
-    transactionId: string;
-    occurrence: typeof sourceOccurrence.$inferSelect;
-  }[];
-  manuals: (typeof manualEntry.$inferSelect)[];
-};
+type BankInput = Omit<
+  Input,
+  "orders" | "orderBindings" | "lumpAttributions" | "carriedExpenseIds"
+>;
 const targets = [
   purchaseRecords,
   expenseRecords,
@@ -112,6 +109,7 @@ const targets = [
   bookingVendors,
 ];
 const tableReads = [
+  source.table(email, ["receivedAt", "mailboxId", "messageId"]),
   source.table(financialTransaction, [
     "accountId",
     "kind",
@@ -123,11 +121,11 @@ const tableReads = [
     "rawDescription",
     "spendingCategoryId",
     "itemizationExpectation",
-    "ledgerTransferId",
     "deletedAt",
   ]),
   source.table(financialAccount, [
     "identity",
+    "fundingPeriods",
     "ledgerPartyId",
     "primaryCardholderId",
     "primaryCardholderMode",
@@ -146,7 +144,7 @@ const tableReads = [
   source.table(
     expense,
     expenseRecords.columns as (keyof typeof expense.$inferSelect)[],
-    [purchaseExpenses],
+    [purchaseExpenses, unlinkedProductExpenses],
   ),
   source.table(
     financialTransactionAllocation,
@@ -180,7 +178,7 @@ const tableReads = [
   source.table(
     purchasePaymentEvidence,
     ["purchaseId", "amountMinor", "chargedAt"],
-    [amountPayments, purchasePayments],
+    [amountPayments, purchasePayments, orderPayments],
   ),
   source.table(
     sourceOccurrence,
@@ -323,7 +321,8 @@ function graph(
         (row) =>
           !row.deletedAt &&
           row.purchaseId === purchaseId &&
-          !without.has(row.id),
+          !without.has(row.id) &&
+          !input.carriedExpenseIds.includes(row.id),
       )
       .map((row) => ({ ...row, costMinor: row.cost })),
     settlements: input.allocations
@@ -347,7 +346,7 @@ function graph(
             deleted: !!transaction.deletedAt,
             accountDeleted: !account || !!account.deletedAt,
             status: transaction.status,
-            ledgerTransferId: transaction.ledgerTransferId,
+            ledgerTransferId: null,
             kind: transaction.kind,
           },
         ];
@@ -374,6 +373,18 @@ export function createPurchaseEvent({
     after: ["bankEvent"],
     reads: [
       ...tableReads,
+      source.evidence(orderEvidence),
+      source.evidence(retainedPaymentEvidence),
+      source.table(sourceOrderObservation, [
+        "extraction",
+        "productBindings",
+        "orderKey",
+        "vendorId",
+        "purchaseId",
+        "sourceKind",
+        "sourceExternalKey",
+        "createdAt",
+      ]),
       source.evidence(manualTransactionEvidence),
       source.bindings,
     ],
@@ -403,7 +414,12 @@ export function createPurchaseEvent({
       const [transactionRows, manuals, decisions, ownAllocationsByScope] =
         await Promise.all([
           each(async (key, scoped) =>
-            (await scoped.rows(financialTransaction, [key])).get(key),
+            (
+              await scoped.rows(
+                financialTransaction,
+                key.startsWith("order:") ? [] : [key],
+              )
+            ).get(key),
           ),
           each(
             async (key, scoped) =>
@@ -422,7 +438,7 @@ export function createPurchaseEvent({
             scoped.lookup(
               financialTransactionAllocation,
               transactionAllocations,
-              [key],
+              key.startsWith("order:") ? [] : [key],
             ),
           ),
         ]);
@@ -592,7 +608,7 @@ export function createPurchaseEvent({
         ),
       );
       const inputs = await Promise.all(
-        keys.map(async (key): Promise<readonly [string, Input]> => {
+        keys.map(async (key): Promise<readonly [string, BankInput]> => {
           const scoped = reads.for(key);
           const transaction = transactionRows.get(key);
           const ownManuals = manuals.get(key) ?? [];
@@ -693,7 +709,7 @@ export function createPurchaseEvent({
               transaction && !booked ? [String(transaction.amount)] : [],
             ),
             scoped.rows(purchase, [
-              key,
+              ...(key.startsWith("order:") ? [] : [key]),
               ...ownIds("Purchase"),
               ...referenceIdsOf(key, "purchase"),
               ...decidedPurchasesOf(key),
@@ -715,7 +731,9 @@ export function createPurchaseEvent({
               ...candidatePurchases.map((row) => row.id),
               ...openPurchases.map((row) => row.id),
               ...ownedPurchases.keys(),
-              ...exactPayments.map((row) => row.purchaseId),
+              ...exactPayments.flatMap((row) =>
+                row.purchaseId ? [row.purchaseId] : [],
+              ),
               ...currentAllocations.map((row) => row.purchaseId),
             ]),
           ];
@@ -734,12 +752,15 @@ export function createPurchaseEvent({
                 purchaseIds,
               ),
             ]);
+          const settlementIds = [
+            ...new Set([
+              ...allocations.map((row) => row.transactionId),
+              ...referenceIdsOf(key, "financialTransaction"),
+            ]),
+          ];
           const [settlementTransactions, attributions, settlementAllocations] =
             await Promise.all([
-              scoped.rows(
-                financialTransaction,
-                allocations.map((row) => row.transactionId),
-              ),
+              scoped.rows(financialTransaction, settlementIds),
               // Only records this scope keeps read attributions; a
               // candidate's capacity never depends on who benefits.
               scoped.lookup(
@@ -760,7 +781,7 @@ export function createPurchaseEvent({
               scoped.lookup(
                 financialTransactionAllocation,
                 transactionAllocations,
-                [...new Set(allocations.map((row) => row.transactionId))],
+                settlementIds,
               ),
             ]);
           const allTransactions = unique([
@@ -836,7 +857,7 @@ export function createPurchaseEvent({
               ),
               settlementOccurrences: [],
               manuals: ownManuals,
-            } satisfies Input,
+            } satisfies BankInput,
           ] as const;
         }),
       );
@@ -855,7 +876,10 @@ export function createPurchaseEvent({
         ]),
       );
       const ownersRead = [
-        ...new Set([...keys, ...[...settlingOf.values()].flat()]),
+        ...new Set([
+          ...keys.filter((key) => !key.startsWith("order:")),
+          ...[...settlingOf.values()].flat(),
+        ]),
       ];
       const owners = await reads.selectEach(
         recordKey,
@@ -891,38 +915,44 @@ export function createPurchaseEvent({
         ),
       ]);
       return new Map(
-        inputs.map(([key, input]) => {
-          const occurrenceOf = (owner: (typeof owners)[number]) =>
-            ownedOccurrences.get(key)!.get(owner.scopeKey);
-          return [
-            key,
-            {
-              ...input,
-              occurrences: ownersOf([key]).flatMap((owner) => {
-                const occurrence = occurrenceOf(owner);
-                return occurrence ? [occurrence] : [];
-              }),
-              settlementOccurrences: [
-                ...ownersOf(settlingOf.get(key)!).flatMap((owner) => {
-                  const occurrence = occurrenceOf(owner);
-                  return occurrence
-                    ? [{ transactionId: owner.entityId, occurrence }]
-                    : [];
-                }),
-                ...settlingAccepted.get(key)!.flatMap((occurrence) =>
-                  occurrence.acceptedTransactionId
-                    ? [
-                        {
-                          transactionId: occurrence.acceptedTransactionId,
-                          occurrence,
-                        },
-                      ]
-                    : [],
-                ),
-              ],
-            },
-          ];
-        }),
+        await Promise.all(
+          inputs.map(async ([key, input]) => {
+            const occurrenceOf = (owner: (typeof owners)[number]) =>
+              ownedOccurrences.get(key)!.get(owner.scopeKey);
+            return [
+              key,
+              await loadOrderPurchaseInput(
+                reads.for(key),
+                {
+                  ...input,
+                  occurrences: ownersOf([key]).flatMap((owner) => {
+                    const occurrence = occurrenceOf(owner);
+                    return occurrence ? [occurrence] : [];
+                  }),
+                  settlementOccurrences: [
+                    ...ownersOf(settlingOf.get(key)!).flatMap((owner) => {
+                      const occurrence = occurrenceOf(owner);
+                      return occurrence
+                        ? [{ transactionId: owner.entityId, occurrence }]
+                        : [];
+                    }),
+                    ...settlingAccepted.get(key)!.flatMap((occurrence) =>
+                      occurrence.acceptedTransactionId
+                        ? [
+                            {
+                              transactionId: occurrence.acceptedTransactionId,
+                              occurrence,
+                            },
+                          ]
+                        : [],
+                    ),
+                  ],
+                },
+                referenceIdsOf(key, "product"),
+              ),
+            ] as const;
+          }),
+        ),
       );
     },
     // oxlint-disable-next-line complexity -- prerequisite, identity and conservation refusals form one atomic money plan.
@@ -940,6 +970,7 @@ export function createPurchaseEvent({
         values: Parameters<Pure["record"]>[2];
         fact?: string;
         decision?: string;
+        baseline?: boolean;
       }[] = [];
       for (const entry of input.manuals) {
         const data = entry.payload;
@@ -963,6 +994,7 @@ export function createPurchaseEvent({
             naturalKey: data.naturalKey,
             values: restorePurchaseValues(data.values),
             fact: entry.id,
+            baseline: !!data.acceptedScope,
           });
       }
       for (const [field, decision] of c.assignments(subject)) {
@@ -988,6 +1020,7 @@ export function createPurchaseEvent({
             naturalKey: data.naturalKey,
             values: restorePurchaseValues(data.values),
             decision: decision.id,
+            baseline: false,
           });
       }
       const combined = new Map<string, (typeof seeds)[number]>();
@@ -996,6 +1029,8 @@ export function createPurchaseEvent({
         combined.set(key, { ...combined.get(key), ...seed });
       }
       seeds = [...combined.values()];
+      const order = reconcileOrderPurchase(input, c, seeds);
+      if (order) return order;
       if (seeds.length) {
         const acceptedTransaction = input.transactions.find(
           (row) => row.id === input.key && !row.deletedAt,
@@ -1930,5 +1965,36 @@ export function createPurchaseEvent({
     },
   });
 
-  return purchaseEvent;
+  // One scope kind owns every evidence binding and money record. Payment keys
+  // plan bindings; bank and order keys publish the resulting purchase graph.
+  return defineReconciler<Input | PaymentMatchInput>({
+    scope: purchaseEvent.scope,
+    lane: purchaseEvent.lane,
+    version: 2,
+    after: [...purchaseEvent.after],
+    reads: [...purchaseEvent.reads, ...paymentMatching.reads],
+    writes: [...purchaseEvent.writes],
+    asks: purchaseEvent.asks,
+    async load(reads, keys) {
+      const paymentKeys = keys.filter((key) => key.startsWith("payment:"));
+      const bookingKeys = keys.filter((key) => !key.startsWith("payment:"));
+      const [payments, bookings] = await Promise.all([
+        paymentKeys.length
+          ? paymentMatching.load(reads, paymentKeys)
+          : new Map<string, PaymentMatchInput>(),
+        bookingKeys.length
+          ? purchaseEvent.load(reads, bookingKeys)
+          : new Map<string, Input>(),
+      ]);
+      return new Map<string, Input | PaymentMatchInput>([
+        ...payments,
+        ...bookings,
+      ]);
+    },
+    reconcile(input, c) {
+      return "totals" in input
+        ? paymentMatching.reconcile(input, c)
+        : purchaseEvent.reconcile(input, c);
+    },
+  });
 }

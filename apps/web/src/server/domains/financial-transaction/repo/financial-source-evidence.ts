@@ -6,7 +6,6 @@ import {
   parseEntityId,
   shortcodeSchema,
   type FinancialTransactionId,
-  type FinancialTransactionShortcode,
 } from "@cubby/schemas/identifiers";
 import { and, asc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { uniq, uniqBy } from "es-toolkit";
@@ -117,89 +116,6 @@ export async function financialSourceRefsFor(
         left.externalId.localeCompare(right.externalId),
     );
   return out;
-}
-
-export async function financialSourceRefsIncluding(
-  db: RepositoryQueryInput,
-  transactionId: string,
-  ref: SourceRef,
-): Promise<SourceRef[]> {
-  return withFinancialSourceRef(
-    (await financialSourceRefsFor(db, [transactionId])).get(transactionId) ??
-      [],
-    ref,
-  );
-}
-
-/** A transaction's retained references with `ref` added, in canonical order. */
-export function withFinancialSourceRef(
-  current: readonly SourceRef[],
-  ref: SourceRef,
-): SourceRef[] {
-  const values = [...current];
-  if (!values.some((value) => refKey(value) === refKey(ref))) values.push(ref);
-  return values.sort(
-    (left, right) =>
-      left.source.localeCompare(right.source) ||
-      left.externalId.localeCompare(right.externalId),
-  );
-}
-
-/**
- * Reserve existing transaction commands, then every occurrence, before
- * settlement row locks. Returns the named transactions' ids, deleted or not.
- */
-export async function lockFinancialTransactionSources(
-  tx: RepositoryQueryTransaction,
-  codes: readonly FinancialTransactionShortcode[],
-  refs: readonly SourceRef[] = [],
-): Promise<{ id: FinancialTransactionId }[]> {
-  const query = repositoryQueries(tx);
-  const targets = codes.length
-    ? await query
-        .select({ id: financialTransaction.id })
-        .from(financialTransaction)
-        .where(inArray(financialTransaction.shortcode, [...codes]))
-    : [];
-  await lockFinancialEvidenceKeys(
-    tx,
-    "reviewed-booking",
-    targets.map((target) => `transaction:${target.id}`),
-  );
-  const retainedRefs = await financialSourceRefsFor(
-    tx,
-    targets.map((target) => target.id),
-  );
-  await lockFinancialEvidenceKeys(
-    tx,
-    "transaction-ref",
-    [...refs, ...[...retainedRefs.values()].flat()]
-      .filter((ref) => !occurrenceCode(ref).success)
-      .map(refKey),
-  );
-  const occurrences = refs.flatMap((ref) => {
-    const code = occurrenceCode(ref);
-    return code.success ? [code.data] : [];
-  });
-  const where = or(
-    targets.length
-      ? inArray(
-          sourceOccurrence.acceptedTransactionId,
-          targets.map((target) => target.id),
-        )
-      : undefined,
-    occurrences.length
-      ? inArray(sourceOccurrence.shortcode, occurrences)
-      : undefined,
-  );
-  if (where)
-    await query
-      .select({ id: sourceOccurrence.id })
-      .from(sourceOccurrence)
-      .where(where)
-      .orderBy(asc(sourceOccurrence.id))
-      .for("update");
-  return targets;
 }
 
 /** Call before party, Purchase and FinancialTransaction row locks, including ordinary money edits. */

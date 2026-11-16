@@ -19,7 +19,6 @@ import {
   transactionImportRecord,
   financialEvidenceAlias,
 } from "~/server/db/schema";
-import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import type {
   Identity,
   ObservationRef,
@@ -45,6 +44,7 @@ import { recordChange } from "~/server/generic/changes/repo/change";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { append, evidenceRow } from "~/server/kernel/api";
+import { enterHouseholdGate } from "~/server/kernel/gate";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
 import { evidenceAuditEntries } from "./intake-audit";
@@ -216,7 +216,7 @@ export async function lockAndLoadSourceIntake(
 ): Promise<SourceIntakeLoaded> {
   const query = unwrapDb(tx);
   const { source } = input.import;
-  await lockFinancialEvidenceKeys(tx, "source", [`intake:${source}`]);
+  await enterHouseholdGate(tx);
   const [existingBatch] = await query
     .select()
     .from(transactionImport)
@@ -356,15 +356,7 @@ export async function lockAndLoadSourceIntake(
       aliasOwnerIds.includes(owner.id) ||
       memberOwnerIds.includes(owner.id),
   );
-  await lockFinancialEvidenceKeys(
-    tx,
-    "reviewed-booking",
-    relevant.flatMap((owner) =>
-      owner.acceptedTransactionId
-        ? [`transaction:${owner.acceptedTransactionId}`]
-        : [],
-    ),
-  );
+  await enterHouseholdGate(tx);
   const targetIds = [
     ...new Set(
       relevant.flatMap((owner) =>

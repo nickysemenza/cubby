@@ -44,10 +44,10 @@ import {
   orderMail,
   orderMailAttachment,
   orderMailEvent,
-  importSourceClaim,
   run,
 } from "~/server/db/schema";
 import { hasAcceptedEmailAssociation } from "~/server/domains/email/repo/email";
+import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import {
   reserveMailAttachmentUpload,
   lockMailAttachmentUpload,
@@ -68,9 +68,8 @@ import {
   HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
   mailSourceIdentityBlocked,
 } from "~/server/domains/purchase-import/repo/mail-source-identity";
-import { readImportSourceClaimFamily } from "~/server/domains/purchase-import/repo/source-claim-family";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { append, evidenceRow } from "~/server/kernel/api";
 
 import { deferClassificationRefresh } from "./admitted-source";
 import {
@@ -341,7 +340,9 @@ export async function saveEmail(
     orderMailId: input.orderMailId,
   };
   await withTransaction(db, async (tx) => {
-    const { row, created } = await findOrCreateWithShortcode(tx, "email", {
+    const { row, created } = await (
+      await import("~/server/domains/purchase-import/repo/order-evidence")
+    ).appendEmailIdentity(databaseForTransaction(tx), {
       where: messageWhere(input),
       values: () => ({
         ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
@@ -371,27 +372,26 @@ export async function saveEmail(
       (row.status === "unsettled" || row.status === "completed");
     const status = keepsSettlement ? row.status : fields.status;
     // Routine routing and provider removal cannot resolve historical ownership.
-    await tx
-      .update(emailTable)
-      .set({
+    await updateEmailStateWhere(
+      tx,
+      {
         ...fields,
         status,
         ...(unchanged && status === row.status
           ? {}
           : { updatedAt: new Date() }),
-      })
-      .where(
-        and(
-          eq(emailTable.id, row.id),
-          or(
-            isNull(emailTable.classificationVersion),
-            ne(
-              emailTable.classificationVersion,
-              HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
-            ),
+      },
+      and(
+        eq(emailTable.id, row.id),
+        or(
+          isNull(emailTable.classificationVersion),
+          ne(
+            emailTable.classificationVersion,
+            HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
           ),
         ),
-      );
+      ),
+    );
   });
 }
 
@@ -406,7 +406,9 @@ export async function markEmailRemoved(
   },
 ) {
   await withTransaction(db, async (tx) => {
-    const { row } = await findOrCreateWithShortcode(tx, "email", {
+    const { row } = await (
+      await import("~/server/domains/purchase-import/repo/order-evidence")
+    ).appendEmailIdentity(databaseForTransaction(tx), {
       where: messageWhere(input),
       values: () => ({
         ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
@@ -444,7 +446,9 @@ export async function saveMailboxMetadata(
     messageId: input.mail.messageId,
   };
   await withTransaction(db, async (tx) => {
-    const { row, created } = await findOrCreateWithShortcode(tx, "email", {
+    const { row, created } = await (
+      await import("~/server/domains/purchase-import/repo/order-evidence")
+    ).appendEmailIdentity(databaseForTransaction(tx), {
       where: messageWhere(identity),
       values: () =>
         ({
@@ -469,10 +473,11 @@ export async function saveMailboxMetadata(
       ).some((key) => fields[key] !== row[key]) ||
       fields.searchExpiresAt?.getTime() !== row.searchExpiresAt?.getTime();
     if (changed)
-      await tx
-        .update(emailTable)
-        .set({ ...fields, updatedAt: new Date() })
-        .where(eq(emailTable.id, row.id));
+      await updateEmailStateWhere(
+        tx,
+        { ...fields, updatedAt: new Date() },
+        eq(emailTable.id, row.id),
+      );
     // A metadata replay saves no source. Legacy supersession still changes a
     // source row even when this mailbox's metadata is already current.
     if (created || changed || superseded)
@@ -815,16 +820,23 @@ export const upsertOrderMail = async (
         "Gmail Email original pointer is outside its owner",
       );
     if (existing) await assertMailSourceIdentityReady(tx, existing);
-    const [row] = existing
-      ? await tx
-          .update(orderMail)
-          .set({ ...fields, updatedAt: new Date() })
-          .where(eq(orderMail.id, existing.id))
-          .returning()
-      : await tx
-          .insert(orderMail)
-          .values({ ledgerPartyId: ownerId, ...fields })
-          .returning();
+    const id =
+      existing?.rawChecksum === fields.rawChecksum
+        ? existing.id
+        : crypto.randomUUID();
+    if (id !== existing?.id)
+      await append(databaseForTransaction(tx), [
+        evidenceRow(
+          (await import("~/server/domains/purchase-import/repo/order-evidence"))
+            .mailOriginalEvidence,
+          {
+            id,
+            ledgerPartyId: ownerId,
+            ...fields,
+          },
+        ),
+      ]);
+    const [row] = await tx.select().from(orderMail).where(eq(orderMail.id, id));
     if (!row)
       throw new GmailPersistenceError("Gmail mail upsert returned no id");
     await assertMailSourceIdentityReady(tx, {
@@ -836,20 +848,6 @@ export const upsertOrderMail = async (
       .update(emailTable)
       .set({ orderMailId: row.id })
       .where(eq(emailTable.id, email.id));
-    const family = await readImportSourceClaimFamily(
-      tx,
-      {
-        ledgerPartyId: row.ledgerPartyId,
-        kind: "mail_message",
-        externalKey: `gmail:${email.mailboxId}:${email.messageId}`,
-      },
-      { lock: "update", writable: true },
-    );
-    if (family && family.root.checksum !== row.rawChecksum)
-      await tx
-        .update(importSourceClaim)
-        .set({ checksum: row.rawChecksum, updatedAt: new Date() })
-        .where(eq(importSourceClaim.id, family.root.id));
     await recordChange(tx, { kind: "source", categories: ["email"] });
     return row.id;
   });

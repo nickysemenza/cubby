@@ -39,6 +39,11 @@ export const purchaseRecords = writes(
         ids.map((id) => parseEntityId("purchase", id)),
         systemActor(),
       )),
+    merge: async (db, input) =>
+      (await import("~/server/kernel/api")).entityMerge("purchase", purchase)(
+        db,
+        input,
+      ),
   },
 );
 

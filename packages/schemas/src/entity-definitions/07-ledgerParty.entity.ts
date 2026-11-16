@@ -10,6 +10,83 @@ export const { definition, readSchemas } = defineEntityModel({
   key: "ledgerParty",
   edges: [
     defineEdge({
+      key: "SourceOrderObservation.ledgerPartyId",
+      from: "row:SourceOrderObservation",
+      to: "ledgerParty",
+      cardinality: "one",
+      inverse: {
+        key: "ledgerParty.incoming.SourceOrderObservation.ledgerPartyId",
+        from: "ledgerParty",
+        to: "row:SourceOrderObservation",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "SourceOrderObservation.ledgerPartyId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "Immutable source extraction history.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "source order observations",
+        description:
+          "The original source owner of an immutable source extraction.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Immutable observation history retains its original subject UUID through deletion and merge.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "preserve-source-observation",
+              effect: "preserve",
+              description:
+                "Immutable extraction history retains its original subject UUID and tombstone without being repointed.",
+            },
+            handler: null,
+            order: 1,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "preserve-source-observation",
+              effect: "preserve",
+              description:
+                "Immutable extraction history retains its original subject UUID and tombstone without being repointed.",
+            },
+            handler: null,
+            order: 1,
+          },
+        },
+      },
+    }),
+
+    defineEdge({
       key: "InventoryEntry.ownerLedgerPartyId",
       from: "inventory",
       to: "ledgerParty",

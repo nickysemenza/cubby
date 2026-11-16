@@ -110,7 +110,7 @@ import {
   sourceTransactionRecord,
   sourceObservationAnnotation,
 } from "~/server/db/schema";
-import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-decision";
+import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-write";
 import { updateBankTransactionsWhere } from "~/server/domains/financial-transaction/repo/bank.fixtures";
 import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";

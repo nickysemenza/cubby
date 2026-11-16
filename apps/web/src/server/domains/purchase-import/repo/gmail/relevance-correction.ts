@@ -22,6 +22,7 @@ import {
   isTransaction,
 } from "~/server/db/helpers";
 import { email as emailTable } from "~/server/db/schema";
+import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import {
   lockMailAttachmentUpload,
   discardMailAttachmentUpload,
@@ -452,19 +453,19 @@ export async function publishPreparedEmailRelevanceCorrection(
     actor,
     { originalCapture },
   );
-  // The resolution above retains the reviewed checksum; Email keeps its
-  // original source observation when retrieval produces different bytes.
-  await tx
-    .update(emailTable)
-    .set({
+  // Email retains its original checksum; the resolution owns reviewed bytes.
+  await updateEmailStateWhere(
+    tx,
+    {
       classification: input.classification,
       classificationStage: "resolution",
       classificationReason: input.reason,
       classificationVersion: MAILBOX_RESEARCH_VERSION,
       contentClearedAt: null,
       updatedAt: new Date(),
-    })
-    .where(eq(emailTable.id, current.id));
+    },
+    eq(emailTable.id, current.id),
+  );
   return correctEmailRelevanceOut.parse({
     id: input.id,
     checksum: current.checksum,

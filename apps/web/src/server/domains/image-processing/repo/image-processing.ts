@@ -97,6 +97,7 @@ import { readConfirmedDescription } from "~/server/domains/image/repo/image-desc
 import { MAIL_ATTACHMENT_UPLOAD_REASON } from "~/server/domains/mail/repo/mail-attachment-uploads";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { enterHouseholdGate } from "~/server/kernel/gate";
 import { WorkSupersededError } from "~/server/kernel/work-errors";
 
 import { queueImageAsk } from "./image-asks";
@@ -585,9 +586,7 @@ export type DeviceImageClaimBatch = {
  * empty and wait for the next ring while rows it could take sit locked.
  */
 export async function lockDevicePulls(db: Database) {
-  await getDb(db).execute(
-    sql`SELECT pg_advisory_xact_lock(hashtextextended('image-device-pull', 0))`,
-  );
+  await enterHouseholdGate(db);
 }
 
 /** An active, member-visible Run's image work leads the claim order. */

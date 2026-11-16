@@ -161,8 +161,11 @@ export function originalExpenseQuantity(
   state: ReconciliationState,
   expenseId: string,
 ) {
-  const quantities = new Set(
-    state.productBindings.flatMap((binding) => {
+  const quantities = new Set([
+    ...state.originalItemQuantities
+      .filter((row) => row.expenseId === expenseId && row.quantity !== null)
+      .map((row) => row.quantity!),
+    ...state.productBindings.flatMap((binding) => {
       if (binding.expenseId !== expenseId) return [];
       const candidate = state.sourceOrders.find(
         (order) => order.id === binding.sourceOrderId,
@@ -174,7 +177,7 @@ export function originalExpenseQuantity(
         ? [quantity]
         : [];
     }),
-  );
+  ]);
   if (quantities.size > 1)
     throw new Error(
       "Original source quantities disagree; review item correspondence before USD pricing.",
@@ -456,29 +459,5 @@ export function planReconciliationFinal(
             ),
           ]
         : [],
-  };
-}
-
-/** Prepare inputs to the shared observation transaction stage. */
-export function planReconciliationObservation(
-  state: ReconciliationState,
-  fix: ReconciliationFix,
-  bindings: { lineIndex: number; productId: ProductId | null }[],
-) {
-  return {
-    identity: {
-      sourceClaimId: state.observation.sourceClaimId,
-      orderKey: fix.orderKey,
-      purchaseId: state.target.id,
-    },
-    input: {
-      runId: state.observation.runId,
-      vendorId: state.target.vendorId,
-      source: fix.source,
-      extraction: fix.proposedExtraction,
-      primaryDocumentImageId: state.observation.primaryDocumentImageId,
-      screenshotImageId: state.observation.screenshotImageId,
-    },
-    bindings,
   };
 }

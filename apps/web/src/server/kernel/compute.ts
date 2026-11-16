@@ -52,6 +52,7 @@ import {
 import {
   createReads,
   idColumn,
+  rowIdentity,
   KernelContractError,
   LockedReadChangedError,
   KeyLedger,
@@ -71,7 +72,7 @@ type Q = Pick<RepositoryQueryClient, "select" | "execute">;
 
 type EntityReference = Pick<
   typeof entityIdentity.$inferSelect,
-  "id" | "kind" | "mergedIntoId" | "deletedAt"
+  "id" | "kind" | "shortcode" | "mergedIntoId" | "deletedAt"
 >;
 
 /** Rounds of demand-driven loading before a scope is failed as unstable. */
@@ -300,7 +301,7 @@ async function computeBatchInPhase(
       const pure = createPure(registry, reconciler, {
         scope,
         shortcodeOwners,
-        entityReferences,
+        entityReferences: new Map(entityReferences),
         owned: owned.get(scope.key) ?? [],
         answers,
         decisions,
@@ -491,7 +492,10 @@ async function loadPatched(
         .where(
           sql`${idColumn(target.table)} = ANY(${columnArrayParam([...ids])})`,
         );
-      patched.set(name, new Map(rows.map((row) => [String(row.id), row])));
+      patched.set(
+        name,
+        new Map(rows.map((row) => [rowIdentity(target.table, row), row])),
+      );
     }),
   );
   return patched;
@@ -648,7 +652,7 @@ async function loadOwned(
         : [];
       storedByTable.set(
         target.name,
-        new Map(rows.map((row) => [String(row.id), row])),
+        new Map(rows.map((row) => [rowIdentity(target.table, row), row])),
       );
     }),
   );
@@ -758,20 +762,22 @@ function createPure(
         record.naturalKey === naturalKey,
     );
     const slot = `${declared.name}\u0000${naturalKey}`;
+    let shared: { id: string; shortcode: string | null } | undefined;
     if (!owned && declared.coalesceCreation) {
       if (declared.columns.length || !declared.createOnly?.length)
         throw new KernelContractError(
           "Only authored Catalog creations may coalesce",
         );
-      const shared = state.creations.get(slot);
-      if (shared) return shared;
+      shared = state.creations.get(slot);
     }
     const id =
-      owned?.entityId ?? recordIdentity(state.scope, declared.name, naturalKey);
+      owned?.entityId ??
+      shared?.id ??
+      recordIdentity(state.scope, declared.name, naturalKey);
     const existingCode =
       typeof owned?.stored?.shortcode === "string"
         ? owned.stored.shortcode
-        : null;
+        : (shared?.shortcode ?? null);
     const code =
       existingCode ??
       (declared.entity && isShortcodeEntity(declared.entity)
@@ -787,6 +793,7 @@ function createPure(
         const reference = {
           id,
           kind: declared.entity,
+          shortcode: code,
           mergedIntoId: null,
           deletedAt: null,
         };
@@ -863,7 +870,7 @@ function createPure(
       disagreements.push(input);
       gap("decision", input, "you");
     },
-    reference(entity, ref) {
+    reference(entity, ref, options) {
       state.tracked.references.add(ref);
       let row =
         state.entityReferences.get(ref) ??
@@ -878,7 +885,11 @@ function createPure(
         visited.add(row.id);
         row = state.entityReferences.get(row.mergedIntoId);
       }
-      return row && row.kind === entity && !row.deletedAt ? row.id : null;
+      return row && row.kind === entity && !row.deletedAt
+        ? options?.format === "shortcode"
+          ? row.shortcode
+          : row.id
+        : null;
     },
     assignments(subject) {
       state.tracked.subjects.add(subject);
@@ -988,17 +999,24 @@ function createPure(
         );
       attachments.push({ target: declared, naturalKey, id });
     },
-    patch(target, id, values) {
+    patch(target, id, values, options) {
       const declared = requireTarget(target);
       for (const column of Object.keys(values))
         if (!declared.columns.includes(column))
           throw new KernelContractError(
             `Reconciler ${reconciler.scope} writes undeclared column ${declared.name}.${column}`,
           );
-      patches.push({ target: declared, id, values: { ...values } });
+      patches.push({
+        target: declared,
+        id,
+        values: { ...values },
+        provenance: options?.provenance ?? {},
+      });
     },
     record(target, naturalKey, values, options) {
       const declared = requireTarget(target);
+      if (declared.projection)
+        throw new KernelContractError("Projection targets use patch");
       const { id, shortcode } = identityOf(declared, naturalKey);
       for (const column of Object.keys(values))
         if (
@@ -1043,6 +1061,7 @@ function createPure(
         naturalKey,
         values: proposed,
         provenance: { ...options?.provenance },
+        authored: options?.authored ?? false,
       });
       return id;
     },
@@ -1061,13 +1080,19 @@ function createPure(
         );
       bindings.push({ fact, eventKey, basis });
     },
-    merge(target, survivor, absorbed, basis) {
+    merge(target, survivor, absorbed, basis, options) {
       const declared = requireTarget(target);
       if (!declared.merge)
         throw new KernelContractError(
           `${declared.name} declares no merge policy for reconciler ${reconciler.scope}`,
         );
-      merges.push({ target: declared, survivor, absorbed, basis });
+      merges.push({
+        target: declared,
+        survivor,
+        absorbed,
+        basis,
+        keepId: options?.keepId,
+      });
     },
     emit(scope) {
       registry.laneOf(scope.kind);

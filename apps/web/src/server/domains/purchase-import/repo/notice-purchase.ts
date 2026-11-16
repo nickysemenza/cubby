@@ -3,7 +3,6 @@ import type { EmailPurchaseDecisionValue } from "@cubby/schemas/email-fields";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   LedgerPartyId,
-  PurchaseId,
   ShortcodeFor,
   VendorId,
 } from "@cubby/schemas/identifiers";
@@ -17,8 +16,8 @@ import { createPurchaseEventRecord } from "~/server/domains/financial-transactio
 import { enterWriteTransaction } from "~/server/kernel/gate";
 
 import { normalizedOrderIdSql, normalizeOrderKey } from "./order-identity";
-import { lockPartySettlement } from "./retained-settlement";
 import { recordRunWrites } from "./run-audit";
+import { lockPartySettlement } from "./settlement-lock";
 
 /**
  * A Purchase waiting for its order details: no live Expense, no accepted
@@ -107,17 +106,4 @@ export async function createNoticePurchase(
     },
   ]);
   return parseShortcodeFor("purchase", created.shortcode);
-}
-
-/** Whether this Purchase still waits for its order details (`awaitingOrderDetailsSql`). */
-export async function isAwaitingOrderDetails(
-  tx: DrizzleTransaction,
-  purchaseId: PurchaseId,
-): Promise<boolean> {
-  const [row] = await tx
-    .select({ awaiting: awaitingOrderDetailsSql(sql`${purchase.id}`) })
-    .from(purchase)
-    .where(eq(purchase.id, purchaseId))
-    .limit(1);
-  return row?.awaiting === true;
 }

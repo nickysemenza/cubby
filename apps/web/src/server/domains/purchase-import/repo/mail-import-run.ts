@@ -62,7 +62,6 @@ import {
 import { requestedRows } from "~/server/db/helpers/requested";
 import {
   ledgerParty,
-  importSourceOrder,
   purchase,
   vendor,
   vendorAccount,
@@ -70,7 +69,6 @@ import {
   orderMail,
   run,
   runOperation,
-  sourceOrderObservation,
 } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { emailPurchaseEvidenceSql } from "~/server/domains/email/repo/email-purchase-links";
@@ -78,6 +76,7 @@ import {
   readRetainedMail,
   type RetainedMail,
 } from "~/server/domains/mail/repo/retained-mail";
+import { acceptedOrders } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import {
   findControlledMailImport,
   CONTROLLED_MAIL_SOURCE_STATUSES,
@@ -275,21 +274,16 @@ async function importedPurchaseRechecks(
       orderId: purchase.orderId,
       vendorId: vendor.shortcode,
       vendorUuid: vendor.id,
-      sourceId: importSourceOrder.id,
-      checksum: importSourceOrder.checksum,
-      outputFingerprint: importSourceOrder.outputFingerprint,
-      evidenceAt:
-        sql<Date>`least(coalesce(${sourceOrderObservation.createdAt}, ${importSourceOrder.createdAt}), ${importSourceOrder.updatedAt})`.mapWith(
-          importSourceOrder.createdAt,
-        ),
+      sourceId: acceptedOrders.id,
+      checksum: acceptedOrders.checksum,
+      outputFingerprint: acceptedOrders.contentFingerprint,
+      evidenceAt: sql<Date>`${acceptedOrders.createdAt}`.mapWith(
+        (value) => new Date(String(value)),
+      ),
     })
-    .from(importSourceOrder)
-    .innerJoin(purchase, eq(purchase.id, importSourceOrder.purchaseId))
+    .from(acceptedOrders)
+    .innerJoin(purchase, eq(purchase.id, acceptedOrders.purchaseId))
     .innerJoin(vendor, eq(vendor.id, purchase.vendorId))
-    .leftJoin(
-      sourceOrderObservation,
-      eq(sourceOrderObservation.id, importSourceOrder.acceptedObservationId),
-    )
     .innerJoin(
       vendorAccount,
       and(
@@ -312,7 +306,7 @@ async function importedPurchaseRechecks(
             ),
       ),
     )
-    .orderBy(asc(importSourceOrder.id));
+    .orderBy(asc(acceptedOrders.id));
   const groups = new Map<string, typeof rows>();
   for (const row of rows)
     groups.set(row.purchaseId, [...(groups.get(row.purchaseId) ?? []), row]);
@@ -1115,7 +1109,7 @@ const awaitedOrderKeySql = normalizedOrderIdSql(
  * was imported or linked. Null while it has not.
  */
 const waitedSourceSettledSql = sql`SELECT max(at) AS at FROM (
-  SELECT greatest(x.created, (SELECT max(accepted."updatedAt") FROM ${importSourceOrder} accepted
+  SELECT greatest(x.created, (SELECT max(accepted."createdAt") FROM ${acceptedOrders} accepted
       WHERE accepted."purchaseId" = x.id)) AS at
   FROM unnest(keyed.ids, keyed.created, keyed.vendor_ids, keyed.parties) AS x(id, created, vendor_id, party)
   WHERE newest.result #>> '{mailOutcome,judgment,waitingOn,kind}' = ${"order"}

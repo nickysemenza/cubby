@@ -1,7 +1,6 @@
 import type { EntityRef } from "@cubby/schemas/entity";
 import {
   connectionCandidate,
-  connectionSuggestionEvidence,
   type ConnectionCandidate,
 } from "@cubby/schemas/entity-connections";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
@@ -11,7 +10,7 @@ import {
   type ExpenseShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseShortcode, nullableMinorToMoney } from "@cubby/shared";
-import { and, eq, getTableColumns, inArray, sql, type SQL } from "drizzle-orm";
+import { and, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import { uniqBy } from "es-toolkit";
 import { z } from "zod";
 
@@ -22,7 +21,6 @@ import {
   expense,
   financialTransactionAllocation,
   inventoryEntry,
-  suggestionTable,
 } from "~/server/db/schema";
 import {
   expenseProjectRecommendationContext,
@@ -190,35 +188,6 @@ function freezeSnapshot(value: ConnectionJson): ConnectionJson {
 
 const relevantSnapshot = (value: unknown) =>
   relevantDependencyEvidence(snapshotJson(value));
-
-export const connectionReadEvidence = connectionSuggestionEvidence.omit({
-  basis: true,
-});
-
-/** Lists validate the candidate; stored snapshots stay in PostgreSQL. */
-export const connectionReadEvidenceSql = (evidence: SQL) => sql<unknown>`CASE
-  WHEN ${evidence} ? 'candidate' THEN jsonb_build_object(
-    'version', ${evidence}->'version', 'candidate', ${evidence}->'candidate'
-  ) ELSE NULL END`;
-
-/** JSONB equality preserves canonical object/array semantics without downloading the snapshot. */
-export async function connectionBasisIsCurrent(
-  db: Database,
-  suggestionId: string,
-  basis: Awaited<ReturnType<typeof captureConnectionBasis>>,
-) {
-  const [match] = await getDb(db)
-    .select({ id: suggestionTable.id })
-    .from(suggestionTable)
-    .where(
-      and(
-        eq(suggestionTable.id, suggestionId),
-        sql`${suggestionTable.data}->'connectionEvidence'->'basis' = ${JSON.stringify(basis)}::jsonb`,
-      ),
-    )
-    .limit(1);
-  return Boolean(match);
-}
 
 const expenseProjectSourceId = ({ relation, source }: ConnectionCandidate) =>
   relation === "expense-project"

@@ -2,9 +2,10 @@ import type { ActorContext } from "@cubby/schemas/context";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { ledgerSourceClaimInput } from "@cubby/schemas/ledger-transfer";
+import { importWriterInput } from "@cubby/schemas/purchase-import";
 import { importSourceKind } from "@cubby/schemas/purchase-import";
 import { moneyToMinor, nullableMinorToMoney } from "@cubby/shared";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { promoteHistoricalAcceptedOrders } from "tooling/historical-accepted-orders";
 import { withTestDb } from "tooling/test-setup";
@@ -44,6 +45,15 @@ import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
 import { loadProductIdentifierClaims } from "~/server/domains/product/repo/product-identity-claims";
+import {
+  acceptedOrderLinesSql,
+  acceptedOrders,
+} from "~/server/domains/purchase-import/repo/accepted-order-read";
+import {
+  appendOrderEvidence,
+  resolveMailOwners,
+} from "~/server/domains/purchase-import/repo/order-evidence";
+import { startImportRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { mergePurchases } from "~/server/domains/purchase/repo/purchase";
 import { mergeVendors } from "~/server/domains/vendor/repo/vendor";
 import {
@@ -80,6 +90,66 @@ const dollarExpense = (row: typeof expense.$inferSelect | undefined) =>
 // fabricated finding, a second spend line, or stock receiving.
 describe("reviewed accepted source Product association", () => {
   const ctx = withTestDb();
+  it("appends accepted order sources before a Purchase exists and replays without changing observations", async () => {
+    const world = await memberImportWorld(ctx.db, ctx.actor);
+    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+      vendorId: world.vendor.id,
+      ledgerPartyId: world.party.id,
+    });
+    const run = await startImportRunFixture(ctx.db, {
+      vendorAccountId: account.id,
+      ledgerPartyId: world.party.id,
+    });
+    const inputs = (
+      [
+        "mail_message",
+        "vendor_export",
+        "receipt_photo",
+        "browser_order",
+      ] as const
+    ).map((kind) => ({
+      orderKey: `${world.vendor.id}/SYNTHETIC-FIRST`,
+      input: importWriterInput.parse({
+        ledgerPartyId: world.party.id,
+        vendorId: world.vendor.id,
+        vendorAccountId: account.id,
+        runId: run.id,
+        source: {
+          kind,
+          externalKey: `synthetic:${kind}`,
+          checksum: "b".repeat(64),
+        },
+        extraction: {
+          status: "ready",
+          candidate: {
+            orderId: "SYNTHETIC-FIRST",
+            orderedAt: "2026-09-01T12:00:00Z",
+            merchant: "Synthetic service merchant",
+            currency: "USD",
+            printedGrandTotal: 12,
+            lines: [
+              { title: "Synthetic service", amount: 12, lineKind: "principal" },
+            ],
+            payments: [{ amount: 12, tender: "card" }],
+          },
+        },
+        primaryDocumentImageId: null,
+        screenshotImageId: null,
+      }),
+    }));
+    const before = await appendOrderEvidence(ctx.db, inputs);
+    expect(before).toHaveLength(4);
+    expect(
+      before.every(
+        (row) => row.purchaseId === null && row.sourceClaimId === null,
+      ),
+    ).toBe(true);
+    expect(await appendOrderEvidence(ctx.db, inputs)).toEqual(before);
+    expect(await getDb(ctx.db).select().from(purchase)).toEqual([]);
+    expect(await resolveMailOwners(ctx.db, [world.party.id])).toEqual(
+      new Map([[world.party.id, ctx.actor.userId]]),
+    );
+  });
   // The imported order is the expensive part of every case, so each variant
   // is seeded once per run (in beforeAll, outside the tests' timeout) and every
   // case gets its own clone of it.
@@ -210,7 +280,7 @@ describe("reviewed accepted source Product association", () => {
       seedWorld(multi, unboundSecond),
     );
     const db = getDb(ctx.db);
-    const association = await db.query.importSourceOrder.findFirst();
+    let association = await db.query.importSourceOrder.findFirst();
     const item = await db.query.expense
       .findFirst({
         where: {
@@ -219,6 +289,77 @@ describe("reviewed accepted source Product association", () => {
         },
       })
       .then(dollarExpense);
+    if (!association && item?.purchaseId) {
+      const [original] = await db.select().from(sourceOrderObservation);
+      if (!original?.ledgerPartyId || !original.runId)
+        throw new Error("Synthetic retained source owner missing");
+      // Historical journeys seed retained predecessor rows explicitly; current imports publish immutable observations.
+      const [claim] = await db
+        .insert(importSourceClaim)
+        .values({
+          ledgerPartyId: original.ledgerPartyId,
+          kind: original.sourceKind,
+          externalKey: original.sourceExternalKey,
+          checksum: original.checksum,
+          firstRunId: original.runId,
+          lastRunId: original.runId,
+        })
+        .returning();
+      if (!claim) throw new Error("Synthetic retained source claim missing");
+      await db
+        .update(sourceOrderObservation)
+        .set({
+          sourceClaimId: claim.id,
+          purchaseId: item.purchaseId,
+        })
+        .where(eq(sourceOrderObservation.id, original.id));
+      [association] = await db
+        .insert(importSourceOrder)
+        .values({
+          sourceClaimId: claim.id,
+          orderKey: original.orderKey,
+          purchaseId: item.purchaseId,
+          checksum: original.checksum,
+          outputFingerprint: "2".repeat(64),
+          acceptedObservationId: original.id,
+          originalOrder: {
+            checksum: original.checksum,
+            extraction: original.extraction,
+          },
+        })
+        .returning();
+      if (!association)
+        throw new Error("Synthetic retained association missing");
+      const correspondence = await db.execute<{
+        lineIndex: number;
+        expenseId: string | null;
+      }>(sql`
+        SELECT "lineIndex","expenseId" FROM ${acceptedOrderLinesSql}
+        WHERE "sourceOrderId"=${original.id}::uuid`);
+      const expenses = await db
+        .select()
+        .from(expense)
+        .where(eq(expense.purchaseId, item.purchaseId));
+      for (const binding of correspondence.rows) {
+        const selected = expenses.find((row) => row.id === binding.expenseId);
+        if (!selected)
+          throw new Error("Synthetic retained item correspondence missing");
+        await db.insert(importSourceProduct).values({
+          sourceOrderId: association.id,
+          lineIndex: binding.lineIndex,
+          expenseId: selected.id,
+          productId: selected.productId,
+        });
+      }
+      await db
+        .update(purchasePaymentEvidence)
+        .set({
+          sourceClaimId: claim.id,
+          purchaseId: item.purchaseId,
+          orderObservationId: null,
+        })
+        .where(eq(purchasePaymentEvidence.orderObservationId, original.id));
+    }
     if (!association || !isLiveSourceOrder(association) || !item)
       throw new Error("Synthetic accepted item missing");
     if (linked)
@@ -321,12 +462,98 @@ describe("reviewed accepted source Product association", () => {
         attributions: await db.select().from(expenseAttribution),
         inventory: await db.select().from(inventoryEntry),
       };
-      const [binding] = await db.select().from(importSourceProduct);
-      expect(binding).toMatchObject({
-        lineIndex: 0,
-        productId: null,
-        expenseId: item.id,
+      const [fact] = await db.select().from(sourceOrderObservation);
+      if (!fact) throw new Error("Synthetic accepted observation missing");
+      const bindings = await db.execute<{
+        lineIndex: number;
+        productId: string | null;
+        expenseId: string | null;
+      }>(sql`
+        SELECT "lineIndex","productId","expenseId" FROM ${acceptedOrderLinesSql}
+        WHERE "sourceOrderId"=${fact.id}::uuid`);
+      expect(bindings.rows).toEqual([
+        { lineIndex: 0, productId: null, expenseId: item.id },
+      ]);
+      const preparedOrders = await db.select().from(importPreparedOrder);
+      const preparedLines = await db.select().from(importPreparedLine);
+      expect(preparedOrders).toHaveLength(1);
+      expect(preparedLines).toHaveLength(1);
+      await db.delete(importPreparedLine);
+      await db.delete(importPreparedOrder);
+      await expect(
+        commitAcceptedSourceOrderReconciliation(
+          ctx.db,
+          {
+            sourceOrderId: fact.id,
+            resolution: {
+              kind: "attach_only",
+              lines: [
+                {
+                  lineIndex: 0,
+                  expenseId: parseShortcodeFor("expense", item.shortcode),
+                  productId: null,
+                  newProduct: { kind: "new" },
+                },
+              ],
+            },
+          },
+          ctx.actor,
+        ),
+      ).rejects.toThrow(/preparation.*missing/i);
+      await db.insert(importPreparedOrder).values(preparedOrders);
+      await db.insert(importPreparedLine).values(preparedLines);
+      const resolution = {
+        kind: "attach_only" as const,
+        lines: [
+          {
+            lineIndex: 0,
+            expenseId: parseShortcodeFor("expense", item.shortcode),
+            productId: seeded.photographed.id,
+          },
+        ],
+      };
+      const preview = await prepareSourceOrderReconciliation(
+        ctx.db,
+        { sourceOrderId: fact.id, resolution },
+        ctx.actor,
+      );
+      expect(preview.spend).toEqual({
+        before: item.cost,
+        after: item.cost,
+        delta: 0,
       });
+      expect(
+        await commitAcceptedSourceOrderReconciliation(
+          ctx.db,
+          { sourceOrderId: fact.id, resolution },
+          ctx.actor,
+        ),
+      ).toMatchObject({ alreadyApplied: false });
+      expect(
+        await commitAcceptedSourceOrderReconciliation(
+          ctx.db,
+          { sourceOrderId: fact.id, resolution },
+          ctx.actor,
+        ),
+      ).toMatchObject({ alreadyApplied: true });
+      const reviewedObservations = await db
+        .select()
+        .from(sourceOrderObservation);
+      expect(reviewedObservations).toHaveLength(before.observations.length + 1);
+      expect(reviewedObservations.find((row) => row.id === fact.id)).toEqual(
+        fact,
+      );
+      expect(
+        reviewedObservations.filter((row) => row.id !== fact.id),
+      ).toMatchObject([
+        {
+          checksum: fact.checksum,
+          extraction: fact.extraction,
+          productBindings: [
+            { lineIndex: 0, productId: seeded.photographed.entityId },
+          ],
+        },
+      ]);
       await updateExpense(
         ctx.db,
         parseShortcodeFor("expense", item.shortcode),
@@ -346,12 +573,17 @@ describe("reviewed accepted source Product association", () => {
       });
       expect({
         sources: await db.select().from(importSourceOrder),
-        observations: await db.select().from(sourceOrderObservation),
+        observations: (await db.select().from(sourceOrderObservation)).filter(
+          (row) => row.id === fact.id,
+        ),
         payments: await db.select().from(purchasePaymentEvidence),
         allocations: await db.select().from(financialTransactionAllocation),
         attributions: await db.select().from(expenseAttribution),
         inventory: await db.select().from(inventoryEntry),
       }).toEqual(before);
+      expect(await db.select().from(sourceOrderObservation)).toEqual(
+        reviewedObservations,
+      );
       expect(await loadProductIdentifierClaims(ctx.db)).toEqual([]);
     },
   );
@@ -1528,7 +1760,10 @@ describe("reviewed accepted source Product association", () => {
     expect(before.observations[0]?.productBindings[1]).toEqual({
       lineIndex: 1,
       productId: w.retainedProduct.entityId,
+      createProduct: false,
+      stableLineId: expect.stringMatching(/^[a-f0-9]{64}:0$/u),
     });
+    expect(w.retainedItem.productId).toBe(w.retainedProduct.entityId);
     const tax = before.expenses.find((row) => row.lineKind === "tax");
     if (!tax) throw new Error("Synthetic tax line missing");
     const review = await w.prepare();
@@ -1860,13 +2095,6 @@ describe("reviewed accepted source Product association", () => {
     ).toEqual(before.observations[0]);
     const accepted = await w.db.query.importSourceOrder.findFirst();
     expect(accepted?.originalOrder).toEqual(w.association.originalOrder);
-    const observation = after.observations.find(
-      (row) => row.id === accepted?.acceptedObservationId,
-    );
-    expect(observation?.productBindings[0]).toEqual({
-      lineIndex: 0,
-      productId: created.id,
-    });
     // The unchanged command recognizes its own applied binding: no fork.
     expect((await w.commit(resolution)).alreadyApplied).toBe(true);
     expect(await w.snapshot()).toEqual(after);
@@ -2602,6 +2830,60 @@ describe("reviewed accepted source Product association", () => {
       })),
     });
     const database = getDb(ctx.db);
+    // The transform consumes retained predecessor associations, while current
+    // imports publish observations. Seed that stored predecessor explicitly.
+    const originals = await database.select().from(acceptedOrders);
+    for (const original of originals) {
+      if (!original.ledgerPartyId || !original.purchaseId || !original.runId)
+        throw new Error("Synthetic predecessor source ownership is missing");
+      const [claim] = await database
+        .insert(importSourceClaim)
+        .values({
+          ledgerPartyId: original.ledgerPartyId,
+          kind: original.sourceKind,
+          externalKey: original.sourceExternalKey,
+          checksum: original.checksum,
+          firstRunId: original.runId,
+          lastRunId: original.runId,
+        })
+        .returning();
+      if (!claim)
+        throw new Error("Synthetic predecessor source claim is missing");
+      const observation = await withTransaction(ctx.db, (tx) =>
+        recordSourceOrderObservation(
+          tx,
+          {
+            sourceClaimId: claim.id,
+            purchaseId: original.purchaseId,
+            orderKey: original.orderKey,
+          },
+          {
+            runId: original.runId,
+            vendorId: original.vendorId,
+            source: {
+              kind: importSourceKind.parse(original.sourceKind),
+              externalKey: original.sourceExternalKey,
+              checksum: original.checksum,
+            },
+            extraction: original.extraction,
+            primaryDocumentImageId: original.primaryDocumentImageId,
+            screenshotImageId: original.screenshotImageId,
+          },
+        ),
+      );
+      await database.insert(importSourceOrder).values({
+        sourceClaimId: claim.id,
+        orderKey: original.orderKey,
+        purchaseId: original.purchaseId,
+        checksum: original.checksum,
+        outputFingerprint: "2".repeat(64),
+        acceptedObservationId: observation.id,
+        originalOrder: {
+          checksum: original.checksum,
+          extraction: original.extraction,
+        },
+      });
+    }
     const orders = await database.select().from(importSourceOrder);
     const known = orders.find((row) => row.checksum === "a".repeat(64));
     const unknown = orders.find((row) => row.checksum === "b".repeat(64));

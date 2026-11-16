@@ -1,6 +1,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { cardLastFoursOn } from "@cubby/schemas/financial-account";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseEntityId } from "@cubby/schemas/identifiers";
+import { decisionChannel } from "@cubby/schemas/kernel/stage";
 import {
   prepareSourceOrderReconciliationInput,
   prepareSourceOrderReconciliationOut,
@@ -15,14 +16,8 @@ import { cents } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import {
-  databaseForTransaction,
-  notDeleted,
-  withTransaction,
-} from "~/server/db/helpers";
-import { expense, ledgerParty, runFinding } from "~/server/db/schema";
-import { validateExpenseInheritance } from "~/server/domains/expense/repo/expense-inheritance";
-import { refreshAutomaticBookingFingerprint } from "~/server/domains/financial-transaction/repo/financial-convergence";
+import { notDeleted, withTransaction } from "~/server/db/helpers";
+import { ledgerParty, runFinding } from "~/server/db/schema";
 import {
   loadExpenseAllocations,
   type ExpenseAllocationRow,
@@ -32,48 +27,24 @@ import {
   sourceFinancialFacts,
 } from "~/server/domains/purchase-import/policy/import-lines";
 import {
-  publishRunFinding,
   runFindingColumns,
   runFindingStatus,
   updateRunFinding,
 } from "~/server/domains/run/repo/run-finding";
 import { createAppError } from "~/server/errors/app-error";
-import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
-import { cascadeRemoval } from "~/server/generic/removal/repo/core";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { enterWriteTransaction } from "~/server/kernel/gate";
 
 import { redistributeReplacementAttributions } from "./aggregate-replacement";
 import { findVendorOrderOwner, vendorOrderOwners } from "./order-identity";
 import { prepareAcceptedSourceOrderReconciliation } from "./reconciliation-accepted";
-import {
-  newReconciliationExpenseContext,
-  applyReconciliationLine,
-  applyReconciliationRemovals,
-  applyReconciliationAssociation,
-  applyReconciliationHeader,
-  applyReconciliationSource,
-} from "./reconciliation-apply";
-import {
-  loadReviewedReconciliation,
-  loadReconciliationExpenseValidation,
-  loadFirstReconciliationObservation,
-} from "./reconciliation-load";
 import { reviewPreparedNewProducts } from "./reconciliation-new-product";
-import { recordSourceOrderObservation } from "./reconciliation-observations";
+import { reconciliationFingerprint } from "./reconciliation-observations";
 import {
   foreignProductBinding,
-  planSourceOrderReconciliation,
-  planReconciliationOutputFingerprint,
-  planReconciliationBindings,
-  planReconciliationLine,
-  planReconciliationRemovals,
-  planReconciliationFinal,
-  planReconciliationObservation,
   originalExpenseQuantity,
   reappliesAcceptedObservation,
 } from "./reconciliation-plan";
-import { prepareReconciliationProducts } from "./reconciliation-product";
 import {
   loadSourceReconciliationState,
   lockFindingSettlement,
@@ -81,7 +52,6 @@ import {
   type ReconciliationFix,
   type ReconciliationState,
 } from "./reconciliation-state";
-import { recordImportedShipmentEvidence } from "./shipment-intake";
 
 function partyCentTargets(
   rows: readonly Pick<
@@ -108,7 +78,7 @@ function partyCentTargets(
 
 // The review policy keeps money, settlement and Product admission gates together.
 // eslint-disable-next-line complexity
-export async function reviewResolution(
+async function reviewResolution(
   tx: DrizzleTransaction,
   state: ReconciliationState,
   fix: ReconciliationFix,
@@ -176,6 +146,7 @@ export async function reviewResolution(
           amount: row.amount,
           chargedAt: row.chargedAt?.toISOString(),
           cardLastFour: row.cardLastFour ?? undefined,
+          tender: row.tender,
         })),
       ),
     ) !== JSON.stringify(paymentFacts(candidate.payments));
@@ -675,143 +646,514 @@ export async function prepareSourceOrderReconciliation(
   });
 }
 
-async function retainUnresolvedProductFinding(
-  tx: DrizzleTransaction,
-  state: ReconciliationState,
-  ownerId: typeof ledgerParty.$inferSelect.id,
-  expenseId: typeof expense.$inferSelect.id,
-  title: string,
-) {
-  await publishRunFinding(tx, {
-    runId: state.observation.runId,
-    ledgerPartyId: ownerId,
-    entityKind: "purchase",
-    entityId: state.target.id,
-    kind: "product_unresolved",
-    summary: `Product resolution is required for “${title}”: The reviewed order line has no matched Product.`,
-    proposedFix: null,
-    evidenceFingerprint: `replacement:${expenseId}`,
-  });
-}
-
-// Every reviewed effect and conservation assertion shares this transaction.
+/** Approving a source repair accepts a new immutable extraction, then dirties its existing event. */
+// oxlint-disable-next-line complexity -- review fences, exact Decisions and money read-back share one atomic approval.
 export async function commitSourceOrderReconciliation(
-  tx: DrizzleTransaction,
-  fix: ReconciliationFix,
+  tx: import("~/server/db").DrizzleTransaction,
+  fix: Extract<
+    import("@cubby/schemas/purchase-import").ProposedImportFix,
+    { kind: "reconcile_source_order" }
+  >,
   actor: ActorContext,
-  ownerId: typeof ledgerParty.$inferSelect.id,
+  ownerId: import("@cubby/schemas/identifiers").LedgerPartyId,
   intent: "financial" | "product_binding" = "financial",
 ) {
-  const { state, current } = await loadReviewedReconciliation(
+  const { databaseForTransaction } = await import("~/server/db/helpers");
+  const { importWriterInput } = await import("@cubby/schemas/purchase-import");
+  const { appendOrderEvidence, orderEventKey } =
+    await import("~/server/domains/purchase-import/repo/order-evidence");
+  const { settleOrderEvidence } =
+    await import("~/server/domains/purchase-import/repo/settle-order-evidence");
+  const { decide } = await import("~/server/kernel/api");
+  if (!fix.review)
+    throw createAppError(
+      "PURCHASE_IMPORT_REVIEW_STALE",
+      "Review the source-order reconciliation before applying it.",
+    );
+  const state = await loadSourceReconciliationState(tx, fix, ownerId);
+  if (
+    (await sourceReconciliationStateFingerprint(
+      state,
+      fix,
+      fix.review.resolution,
+    )) !== fix.reviewedFingerprint
+  )
+    throw createAppError(
+      "PURCHASE_IMPORT_REVIEW_STALE",
+      "Reconciliation state changed after review; prepare it again.",
+    );
+  const current = await reviewResolution(
     tx,
+    state,
     fix,
-    ownerId,
+    fix.review.resolution,
     intent,
   );
+  if (
+    (await reconciliationFingerprint(current)) !==
+    (await reconciliationFingerprint(fix.review))
+  )
+    throw createAppError(
+      "PURCHASE_IMPORT_REVIEW_STALE",
+      "Reconciliation state changed after review; prepare it again.",
+    );
+  const {
+    planSourceOrderReconciliation,
+    planReconciliationLine,
+    planReconciliationRemovals,
+  } = await import("~/server/domains/purchase-import/repo/reconciliation-plan");
+  const { lineProductResolver } =
+    await import("~/server/domains/purchase-import/repo/writer");
+  const { nullableWholeCentToMinor, moneyToMinor } =
+    await import("@cubby/shared");
+  const { recordKey, decision } = await import("~/server/db/kernel-schema");
+  const { expense } = await import("~/server/db/schema");
+  const { isNull, inArray, desc } = await import("drizzle-orm");
+  const { recordIdentity, recordSubject } = await import("~/server/kernel/api");
+  const { jsonSnapshot } = await import("~/server/lib/canonical-json");
+  const prior = state.observation;
+  const target = state.target;
+  const database = databaseForTransaction(tx);
+  const [owner] = await tx
+    .select()
+    .from(recordKey)
+    .where(
+      and(
+        eq(recordKey.entity, "purchase"),
+        eq(recordKey.entityId, target.id),
+        eq(recordKey.scopeKind, "purchaseEvent"),
+        isNull(recordKey.mergedAt),
+        isNull(recordKey.rejectedAt),
+      ),
+    )
+    .for("update");
+  if (!owner)
+    throw new Error("The accepted Purchase has no live reconciliation owner");
+  const scope = { kind: "purchaseEvent", key: owner.scopeKey };
   const plan = planSourceOrderReconciliation(
     state,
     fix,
     current.resolution,
     intent,
   );
-  const applied = newReconciliationExpenseContext();
-  const products = await prepareReconciliationProducts(
+  const newIdentity = (
+    distinctFrom: import("./writer-decisions").LineIdentityDecision["distinctFrom"],
+  ): import("./writer-decisions").LineIdentityDecision => ({
+    productId: null,
+    promote: true,
+    variantDoubt: false,
+    unresolvedReason: null,
+    probability: 1,
+    lineKind: "principal",
+    kitKind: "single",
+    reversalKind: null,
+    distinctFrom,
+  });
+  const products = lineProductResolver(
     tx,
-    state,
-    plan.lines,
-    applied,
+    target.vendorId,
+    plan.lines.flatMap(({ binding, line }) =>
+      binding.newProduct ? [{ line, decision: newIdentity([]) }] : [],
+    ),
+    { actor },
   );
+  const resolvedProducts = new Map<
+    number,
+    import("@cubby/schemas/identifiers").ProductId | null
+  >();
+  for (const { binding, line } of plan.lines) {
+    const distinctFrom = [];
+    for (const distinct of binding.newProduct?.distinctFrom ?? [])
+      distinctFrom.push({
+        ...distinct,
+        productId: await resolveOrThrow(tx, "product", distinct.productId),
+      });
+    const id = binding.newProduct
+      ? await products.resolve(line, newIdentity(distinctFrom))
+      : binding.productId
+        ? await resolveOrThrow(tx, "product", binding.productId)
+        : null;
+    resolvedProducts.set(binding.lineIndex, id);
+  }
+  await products.flush();
+  const accepted = await appendOrderEvidence(database, [
+    {
+      orderKey: fix.orderKey,
+      emailId: prior.emailId,
+      input: importWriterInput.parse({
+        runId: prior.runId,
+        ledgerPartyId: ownerId,
+        vendorId: target.vendorId,
+        vendorAccountId: target.vendorAccountId,
+        source: fix.source,
+        extraction: fix.proposedExtraction,
+        primaryDocumentImageId: prior.primaryDocumentImageId,
+        screenshotImageId: prior.screenshotImageId,
+        productResolutions: [...resolvedProducts].flatMap(
+          ([lineIndex, productId]) =>
+            productId ? [{ kind: "existing", lineIndex, productId }] : [],
+        ),
+      }),
+    },
+  ]);
+  const head = accepted[0];
+  if (!head) throw new Error("The accepted repair is missing");
+  const key = orderEventKey(head);
+  const priorChoices = await tx
+    .selectDistinctOn([decision.field])
+    .from(decision)
+    .where(
+      and(
+        eq(decision.channel, decisionChannel.enum.assignment),
+        inArray(decision.subject, [
+          `purchaseEvent:${key}`,
+          `purchaseEvent:${orderEventKey(prior)}`,
+          `purchaseEvent:${scope.key}`,
+        ]),
+      ),
+    )
+    .orderBy(decision.field, desc(decision.at), desc(decision.id));
+  const unresolvedItems: {
+    expenseId: string;
+    lineIndex: number;
+    title: string;
+    reason: string;
+  }[] = [];
+  const decisions: import("~/server/kernel/api").DecisionInput[] = [
+    {
+      channel: "assignment",
+      kind: "set",
+      subject: key,
+      field: "purchaseId",
+      value: target.id,
+      scopes: [scope],
+    },
+  ];
+  // The review independently checked these unchanged bank allocations and
+  // their payment facts. Preserve that settlement even when the cost changes.
+  for (const allocation of state.allocations)
+    decisions.push({
+      channel: "identity",
+      kind: "same",
+      subject: key,
+      field: recordSubject("financialTransaction", allocation.transactionId),
+      scopes: [scope],
+    });
+  const assign = (subject: string, field: string, value: unknown) =>
+    decisions.push({
+      channel: "assignment",
+      kind: value === null ? "none" : "set",
+      subject,
+      field,
+      value: jsonSnapshot.parse(value),
+      scopes: [scope],
+    });
+  const reject = (entity: string, id: string) =>
+    decisions.push({
+      channel: "rejection",
+      kind: "reject",
+      subject: recordSubject(entity, id),
+      scopes: [scope],
+    });
+  const lineExpenses = new Map<number, string>();
+  const reused = new Set<typeof expense.$inferSelect.id>();
+  const valuesFor = (
+    fields: NonNullable<ReturnType<typeof planReconciliationLine>["fields"]>,
+  ) => {
+    if (!("cost" in fields)) return fields;
+    const cost = fields.cost;
+    if (cost !== null && typeof cost !== "number")
+      throw new Error("The reviewed Expense cost is invalid");
+    return {
+      ...fields,
+      cost: nullableWholeCentToMinor(cost)?.toString() ?? null,
+    };
+  };
   for (const entry of plan.lines) {
-    const productId = await products.resolve(entry);
-    const linePlan = planReconciliationLine(
+    const action = planReconciliationLine(
       state,
       plan,
       entry,
-      productId,
-      applied.reused,
+      resolvedProducts.get(entry.binding.lineIndex) ?? null,
+      reused,
       current,
     );
-    const result = await applyReconciliationLine(tx, linePlan, applied);
-    if (result.row) await validateExpenseInheritance(tx, result.row);
-    if (result.findingId)
-      await retainUnresolvedProductFinding(
-        tx,
-        state,
-        ownerId,
-        result.findingId,
-        entry.line.title,
+    const binding = head.productBindings.find(
+      (row) => row.lineIndex === entry.binding.lineIndex,
+    );
+    const stableLine = binding?.stableLineId ?? String(entry.binding.lineIndex);
+    const existing =
+      action.kind === "attach" || action.reuse ? entry.existing : undefined;
+    if (existing) reused.add(existing.id);
+    const naturalKey = `line:${stableLine}`;
+    const expenseId =
+      existing?.id ?? recordIdentity(scope, "Expense", naturalKey);
+    lineExpenses.set(entry.binding.lineIndex, expenseId);
+    const previousLine = prior.productBindings.find(
+      (row) => row.lineIndex === entry.binding.lineIndex,
+    );
+    const originalChoice =
+      priorChoices.find((row) => row.field === `line:${stableLine}`) ??
+      priorChoices.find(
+        (row) =>
+          row.field ===
+          `line:${previousLine?.stableLineId ?? entry.binding.lineIndex}`,
+      );
+    const originalValue = originalChoice?.value;
+    if (
+      action.finding &&
+      originalValue &&
+      typeof originalValue === "object" &&
+      !Array.isArray(originalValue) &&
+      originalValue.kind === "unresolved"
+    )
+      unresolvedItems.push({
+        expenseId,
+        lineIndex: entry.binding.lineIndex,
+        title: entry.line.title,
+        reason:
+          typeof originalValue.reason === "string"
+            ? originalValue.reason
+            : "The exact Product identity needs review.",
+      });
+    assign(
+      `purchaseEvent:${key}`,
+      `line-record:${stableLine}`,
+      existing?.id ?? null,
+    );
+    const productId = resolvedProducts.get(entry.binding.lineIndex) ?? null;
+    assign(
+      `purchaseEvent:${key}`,
+      `line:${stableLine}`,
+      productId ? { kind: "existing", productId } : { kind: "expense_only" },
+    );
+    if (action.fields) {
+      const fields = valuesFor(action.fields);
+      if (existing)
+        for (const [field, value] of Object.entries(fields))
+          assign(recordSubject("expense", existing.id), field, value);
+      else
+        assign(`purchaseEvent:${scope.key}`, `record:Expense:${naturalKey}`, {
+          table: "Expense",
+          naturalKey,
+          values: fields,
+        });
+    }
+    if (action.kind === "replace") {
+      for (const priorShare of state.attributions.filter(
+        (row) => row.expenseId === existing?.id,
+      ))
+        reject("ExpenseAttribution", priorShare.id);
+      for (const allocation of action.allocations) {
+        const shareKey = `review:${head.id}:${entry.binding.lineIndex}:${allocation.role}:${allocation.ledgerPartyId ?? "unattributed"}`;
+        assign(
+          `purchaseEvent:${scope.key}`,
+          `record:ExpenseAttribution:${shareKey}`,
+          {
+            table: "ExpenseAttribution",
+            naturalKey: shareKey,
+            values: { expenseId, ...allocation },
+          },
+        );
+      }
+    }
+  }
+  for (const id of planReconciliationRemovals(plan, reused))
+    reject("expense", id);
+  if (plan.header.statedTotal)
+    assign(
+      recordSubject("purchase", target.id),
+      "statedTotal",
+      plan.header.statedTotal.value?.toString() ?? null,
+    );
+  if (plan.header.orderId !== null)
+    assign(
+      recordSubject("purchase", target.id),
+      "orderId",
+      plan.header.orderId,
+    );
+  await decide(database, actor, decisions);
+  const independentOwners = reused.size
+    ? await tx
+        .select({ kind: recordKey.scopeKind, key: recordKey.scopeKey })
+        .from(recordKey)
+        .where(
+          and(
+            eq(recordKey.entity, "expense"),
+            inArray(recordKey.entityId, [...reused]),
+            isNull(recordKey.mergedAt),
+            isNull(recordKey.rejectedAt),
+          ),
+        )
+    : [];
+  const originalScopes = [
+    ...new Map(
+      independentOwners
+        .filter((owner) => owner.kind !== scope.kind || owner.key !== scope.key)
+        .map((owner) => [`${owner.kind}:${owner.key}`, owner] as const),
+    ).values(),
+  ];
+  if (originalScopes.length) {
+    const { reconcileNow } = await import("~/server/kernel/api");
+    const originalOutcomes = await reconcileNow(database, originalScopes);
+    const originalFailure = originalOutcomes.find(
+      (outcome) => outcome.status === "failed" || outcome.status === "conflict",
+    );
+    if (originalFailure)
+      throw new Error(
+        originalFailure.error ??
+          "The reviewed item's owning event did not reconcile",
       );
   }
-  await products.flush();
-  const removed = planReconciliationRemovals(plan, applied.reused);
-  await applyReconciliationRemovals(tx, removed);
-  if (removed.length)
-    await cascadeRemoval(tx, {
-      entity: "expense",
-      ids: removed,
-      audit: { into: applied.audit },
+  const outcomes = await settleOrderEvidence(database, [head]);
+  const failed = outcomes.find(
+    (row) => row.status === "failed" || row.status === "conflict",
+  );
+  if (failed)
+    throw new Error(
+      failed.error ?? "The reviewed source correction did not reconcile",
+    );
+  const checkedIds = [
+    ...new Set([
+      ...state.expenses.map((row) => row.id),
+      ...lineExpenses.values(),
+    ]),
+  ];
+  const after = await tx
+    .select({ cost: expense.cost })
+    .from(expense)
+    .where(
+      and(
+        inArray(
+          expense.id,
+          checkedIds.map((id) => parseEntityId("expense", id)),
+        ),
+        notDeleted(expense),
+      ),
+    );
+  const afterTotal = after.some((row) => row.cost === null)
+    ? null
+    : after.reduce((sum, row) => sum + (row.cost ?? 0n), 0n);
+  if (afterTotal !== nullableWholeCentToMinor(current.spend.after))
+    throw new Error(
+      "The reviewed source correction did not preserve its exact spending result",
+    );
+  const { acceptedOrders } =
+    await import("~/server/domains/purchase-import/repo/accepted-order-read");
+  const [bound] = await tx
+    .select({ purchaseId: acceptedOrders.purchaseId })
+    .from(acceptedOrders)
+    .where(eq(acceptedOrders.id, head.id));
+  if (bound?.purchaseId !== target.id)
+    throw new Error(
+      "The reviewed source correction did not retain its Purchase identity",
+    );
+  if (plan.resolution.kind === "replace_lines") {
+    const actual = await loadExpenseAllocations(tx, {
+      expenseIds: [...lineExpenses.values()].map((id) =>
+        parseEntityId("expense", id),
+      ),
+      includeFuture: true,
     });
-  await loadReconciliationExpenseValidation(
+    const expectedCents = new Map<string, bigint>();
+    for (const share of current.attributions) {
+      const expenseId = lineExpenses.get(share.lineIndex);
+      if (!expenseId)
+        throw new Error("The reviewed attribution line is missing");
+      const partyId = share.partyId
+        ? state.parties.find((row) => row.shortcode === share.partyId)?.id
+        : null;
+      if (share.partyId && !partyId)
+        throw new Error("The reviewed attribution party is missing");
+      const key = `${expenseId}:${share.role}:${partyId ?? "unattributed"}`;
+      expectedCents.set(
+        key,
+        (expectedCents.get(key) ?? 0n) + moneyToMinor(share.amount),
+      );
+    }
+    const actualCents = new Map(
+      actual.map((row) => [
+        `${row.expenseId}:${row.role}:${row.ledgerPartyId ?? "unattributed"}`,
+        row.cents,
+      ]),
+    );
+    if (
+      [...new Set([...expectedCents.keys(), ...actualCents.keys()])].some(
+        (key) =>
+          (expectedCents.get(key) ?? 0n) !== (actualCents.get(key) ?? 0n),
+      )
+    )
+      throw new Error(
+        "The source correction did not preserve its reviewed beneficiary and funder cents",
+      );
+  }
+  const { financialTransactionAllocation } = await import("~/server/db/schema");
+  const { allocationDollars } =
+    await import("~/server/domains/financial-transaction/repo/allocation-money");
+  const afterAllocations = await tx
+    .select()
+    .from(financialTransactionAllocation)
+    .where(
+      and(
+        eq(financialTransactionAllocation.purchaseId, target.id),
+        notDeleted(financialTransactionAllocation),
+      ),
+    )
+    .orderBy(financialTransactionAllocation.id);
+  if (
+    (await reconciliationFingerprint(
+      afterAllocations.map(allocationDollars),
+    )) !== (await reconciliationFingerprint(state.allocations))
+  )
+    throw new Error(
+      "The reviewed source correction changed an accepted bank allocation",
+    );
+  await (
+    await import("~/server/domains/purchase-import/repo/reconciliation-observations")
+  ).recordReviewedSourceMetadata(
     tx,
-    state.target.id,
-    current.spend.after,
-  );
-  await applyReconciliationHeader(tx, plan, applied);
-  const outputFingerprint = await planReconciliationOutputFingerprint(
     state,
     fix,
-  );
-  const firstObservation = await loadFirstReconciliationObservation(
-    tx,
-    state,
-    fix,
-  );
-  const observationPlan = planReconciliationObservation(
-    state,
-    fix,
-    applied.resolvedBindings,
-  );
-  const acceptedObservation = await recordSourceOrderObservation(
-    tx,
-    observationPlan.identity,
-    observationPlan.input,
-    observationPlan.bindings,
-  );
-  const association = await applyReconciliationAssociation(
-    tx,
-    state,
-    fix,
-    firstObservation,
-    acceptedObservation,
-    outputFingerprint,
-  );
-  const bindingPlan = await planReconciliationBindings(
-    state,
     plan,
-    firstObservation,
-    association.id,
-    applied.lineExpenses,
-  );
-  const finalPlan = planReconciliationFinal(
-    state,
+    head,
+    lineExpenses,
+    actor,
     current,
-    plan,
-    acceptedObservation,
-    fix,
-    ownerId,
   );
-  await applyReconciliationSource(tx, plan, association, bindingPlan);
-  if (finalPlan.shipment)
-    await recordImportedShipmentEvidence(
-      databaseForTransaction(tx),
-      finalPlan.shipment,
-      actor,
-    );
-  applied.audit.push(finalPlan.audit);
-  await logAuditEntries(tx, actor, applied.audit);
-  for (const code of finalPlan.bookingCodes)
-    await refreshAutomaticBookingFingerprint(
-      databaseForTransaction(tx),
-      parseShortcodeFor("financialTransaction", code),
-    );
+  if (!plan.productOnly) {
+    if (!target.vendorId)
+      throw new Error("The accepted source Vendor is missing");
+    const { recordRetainedImportAcceptance } =
+      await import("~/server/domains/purchase-import/repo/source-claim-family");
+    await recordRetainedImportAcceptance(tx, {
+      ledgerPartyId: ownerId,
+      kind: fix.source.kind,
+      externalKey: fix.source.externalKey,
+      checksum: head.checksum,
+      orderKey: fix.orderKey,
+      vendorId: target.vendorId,
+      purchaseId: target.id,
+      observationId: head.id,
+      runId: prior.runId,
+    });
+    const { publishRunFinding } =
+      await import("~/server/domains/run/repo/run-finding");
+    for (const item of unresolvedItems)
+      await publishRunFinding(tx, {
+        runId: prior.runId,
+        ledgerPartyId: ownerId,
+        entityKind: "purchase",
+        entityId: target.id,
+        kind: "product_unresolved",
+        summary: `Product resolution is required for “${item.title}”: ${item.reason}`,
+        proposedFix: null,
+        evidenceFingerprint: await reconciliationFingerprint({
+          observationId: head.id,
+          expenseId: item.expenseId,
+          lineIndex: item.lineIndex,
+          reason: item.reason,
+        }),
+      });
+  }
+  return outcomes;
 }

@@ -21,6 +21,7 @@ import {
   manualEntry,
   evidenceBinding,
   drift,
+  recordKey,
 } from "~/server/db/kernel-schema";
 import { registerOwnedColumns } from "~/server/db/owned-columns";
 import {
@@ -64,6 +65,7 @@ import {
   definePass,
   evidenceRow,
   recordSubject,
+  recordIdentity,
   type Kernel,
 } from "./api";
 import { applyComputed, runClaimedScopes } from "./apply";
@@ -106,6 +108,7 @@ import {
   fixtureExpense,
   fixtureAllocation,
   fixtureReceipt,
+  fixtureReadSnapshot,
   PURCHASE_SCOPE,
   PURCHASE_TABLE,
   receiptEvidence,
@@ -277,9 +280,9 @@ describe("evidence-facts kernel", () => {
 
   it("reserves public codes during reconcile and retries a collision without leaking an identity", async () => {
     expect(await columnOwner(financialTransaction, "amount")).toBe("bankEvent");
-    expect(
-      await columnOwner(financialTransaction, "ledgerTransferId"),
-    ).toBeNull();
+    expect(await columnOwner(financialTransaction, "ledgerTransferId")).toBe(
+      "transferPair",
+    );
     const target = writes(vendor, [], {
       entity: "vendor",
       createOnly: ["name"],
@@ -787,11 +790,26 @@ describe("evidence-facts kernel", () => {
       reads: [source.table(vendor, ["name", "deletedAt"])],
       writes: [],
       async load(reads, keys) {
-        await reads.rows(vendor, keys);
+        await reads.select(vendor, [], sql`true`);
         return new Map(keys.map((key) => [key, null]));
       },
       reconcile(_input, c) {
-        c.gap.decision("a reviewed identity");
+        expect(c.reference("vendor", seller.shortcode)).toBe(seller.id);
+        expect(c.reference("vendor", seller.id, { format: "shortcode" })).toBe(
+          seller.shortcode,
+        );
+        c.gap.decision("a reviewed identity", {
+          actions: [
+            {
+              channel: "assignment",
+              kind: "set",
+              subject: recordSubject("vendor", seller.id),
+              field: "name",
+              value: "Synthetic reviewed identity",
+              label: "Use reviewed name",
+            },
+          ],
+        });
         return c.done();
       },
     });
@@ -841,6 +859,19 @@ describe("evidence-facts kernel", () => {
         firstGap: "a reviewed identity",
       }),
     ]);
+    const pairScope = { kind: consumer.scope, key: "synthetic-payment-pair" };
+    await kernel.reconcileNow(ctx.db, [pairScope]);
+    const withPair = await kernel.machinery(ctx.db, ctx.actor, {
+      entity: "vendor",
+      id: seller.id,
+    });
+    expect(withPair.scopes.some((scope) => scope.key === pairScope.key)).toBe(
+      true,
+    );
+    expect(
+      (await kernel.listRows(ctx.db, capability, [seller.id])).get(seller.id),
+    ).toMatchObject({ stage: "needs_you" });
+    expect((await kernel.needsYou(ctx.db)).items).toHaveLength(1);
   });
 
   it("coalesces declared Catalog creation across scopes and keeps each record's audit provenance", async () => {
@@ -964,10 +995,17 @@ describe("evidence-facts kernel", () => {
       "applied",
     );
     const audit = await repositoryQueries(ctx.db)
-      .select({ provenance: auditLog.provenance })
+      .select({ provenance: auditLog.provenance, changes: auditLog.changes })
       .from(auditLog)
       .where(eq(auditLog.entityId, original.id));
-    expect(audit).toHaveLength(2);
+    expect(audit).toHaveLength(1);
+    expect(audit[0]?.changes).toEqual({
+      name: {
+        from: "Synthetic original vendor",
+        to: "Synthetic revised vendor",
+      },
+      aliases: { from: [], to: ["Synthetic vendor alias"] },
+    });
     expect(
       audit.every(
         (entry) =>
@@ -975,6 +1013,96 @@ describe("evidence-facts kernel", () => {
           entry.provenance.scope.key === scope.key,
       ),
     ).toBe(true);
+  });
+
+  it("keeps an unwritten identity reservation local to its scope", async () => {
+    const target = writes(vendor, [], {
+      entity: "vendor",
+      createOnly: ["name"],
+    });
+    const scope = "fixture.localReservation";
+    const reservation = defineReconciler({
+      scope,
+      lane: "money",
+      version: 1,
+      reads: [],
+      writes: [target],
+      async load(_reads, keys) {
+        return new Map(keys.map((key) => [key, key]));
+      },
+      reconcile(key, c) {
+        const id = recordIdentity(
+          { kind: scope, key: "0-reserve" },
+          "Vendor",
+          "unwritten",
+        );
+        if (key === "0-reserve") c.identity(target, "unwritten");
+        expect(c.reference("vendor", id)).toBe(key === "0-reserve" ? id : null);
+        return c.done();
+      },
+    });
+    const kernel = createKernel([
+      defineModule({ name: "reservations", reconcilers: [reservation] }),
+    ]);
+    const before = await repositoryQueries(ctx.db)
+      .select()
+      .from(entityIdentity);
+    const outcomes = await kernel.reconcileNow(
+      ctx.db,
+      ["0-reserve", "1-read"].map((key) => ({ kind: scope, key })),
+    );
+    expect(outcomes.map((outcome) => outcome.status)).toEqual([
+      "applied",
+      "applied",
+    ]);
+    expect(
+      await repositoryQueries(ctx.db).select().from(entityIdentity),
+    ).toEqual(before);
+  });
+
+  it("fences and applies snapshot patches through their entity primary key", async () => {
+    const id = crypto.randomUUID();
+    expect(() =>
+      writes(fixtureReadSnapshot, ["summary"], {
+        projection: true,
+        entity: "purchase",
+      }),
+    ).toThrow("Projection targets cannot own entity creation");
+    const target = writes(fixtureReadSnapshot, ["summary", "detail"], {
+      projection: true,
+    });
+    const projection = defineReconciler({
+      scope: "fixture.snapshot",
+      lane: "catalog",
+      version: 1,
+      reads: [],
+      writes: [target],
+      async load(_reads, keys) {
+        return new Map(keys.map((key) => [key, key]));
+      },
+      reconcile(key, c) {
+        c.patch(target, key, { summary: "Synthetic snapshot" });
+        c.patch(target, key, { detail: "Synthetic detail" });
+        return c.done();
+      },
+    });
+    const kernel = createKernel([
+      defineModule({ name: "snapshot", reconcilers: [projection] }),
+    ]);
+    const scopes = [{ kind: projection.scope, key: id }];
+    expect((await kernel.reconcileNow(ctx.db, scopes))[0]?.status).toBe(
+      "applied",
+    );
+    expect(
+      (await repositoryQueries(ctx.db).select().from(fixtureReadSnapshot))[0],
+    ).toEqual({
+      entityId: id,
+      summary: "Synthetic snapshot",
+      detail: "Synthetic detail",
+    });
+    expect((await kernel.reconcileNow(ctx.db, scopes))[0]?.status).toBe(
+      "applied",
+    );
   });
 
   it("resolves ledger-party evidence owners once per batch and hides unresolved owners", async () => {
@@ -3235,6 +3363,51 @@ describe("evidence-facts kernel", () => {
     ).rejects.toThrow("not a reconciler-owned foreign key");
   });
 
+  it("merges identities across scopes during apply and honors an explicit member survivor", async () => {
+    let selected: { a: string; b: string; keepId: string } | null = null;
+    const { kernel, fixture } = kernelWith({
+      linked: true,
+      merge: (key) => (key === "ORD-SURVIVOR-OLD" ? selected : null),
+    });
+    await kernel.append(ctx.db, [charge("ORD-SURVIVOR-OLD", 100)]);
+    await settle(kernel);
+    await kernel.append(ctx.db, [charge("ORD-SURVIVOR-NEW", 200)]);
+    await settle(kernel);
+    const stored = await purchases(ctx.db);
+    const older = stored.find((row) => row.orderRef === "ORD-SURVIVOR-OLD")!,
+      newer = stored.find((row) => row.orderRef === "ORD-SURVIVOR-NEW")!;
+    selected = { a: older.id, b: newer.id, keepId: newer.id };
+    const result = await kernel.reconcileNow(ctx.db, [
+      { kind: PURCHASE_SCOPE, key: "ORD-SURVIVOR-OLD" },
+    ]);
+    expect(result.filter((row) => row.error)).toEqual([]);
+    selected = null;
+    expect(
+      (await purchases(ctx.db))
+        .filter((row) => !row.deletedAt)
+        .map((row) => row.id),
+    ).toEqual([newer!.id]);
+    await expect(
+      kernel.merge(ctx.db, {
+        target: fixture.purchaseWrites,
+        a: older!.id,
+        b: newer!.id,
+        basis: "proof",
+        keepId: newer!.id,
+      }),
+    ).rejects.toThrow("Only a member identity decision");
+    const states = await repositoryQueries(ctx.db).execute<{
+      stage: string;
+      mergedIntoKey: string | null;
+    }>(
+      sql`SELECT stage,"mergedIntoKey" FROM "ScopeState" WHERE "scopeKind"=${PURCHASE_SCOPE} AND "scopeKey"='ORD-SURVIVOR-OLD'`,
+    );
+    expect(states.rows[0]).toMatchObject({
+      stage: "ended",
+      mergedIntoKey: "ORD-SURVIVOR-NEW",
+    });
+  });
+
   it("hands a merged record to the survivor's scope and ends the absorbed scope", async () => {
     const { kernel, fixture } = kernelWith();
     await kernel.append(ctx.db, [charge("ORD-M1", 100)]);
@@ -3287,6 +3460,65 @@ describe("evidence-facts kernel", () => {
       eventKey: string;
     }>(sql`SELECT DISTINCT "eventKey" FROM "EvidenceBinding"`);
     expect(bindings.rows).toEqual([{ eventKey: "ORD-M1" }]);
+  });
+
+  it("keeps member-authored creations out of automatic merges", async () => {
+    const { kernel, fixture } = kernelWith({ authored: true });
+    await kernel.append(ctx.db, [charge("ORD-AUTHORED-1", 100)]);
+    await settle(kernel);
+    await kernel.append(ctx.db, [charge("ORD-AUTHORED-2", 100)]);
+    await settle(kernel);
+    const rows = await purchases(ctx.db);
+    expect(rows).toHaveLength(2);
+    expect(
+      await kernel.merge(ctx.db, {
+        target: fixture.purchaseWrites,
+        a: rows[0]!.id,
+        b: rows[1]!.id,
+        basis: "proof",
+      }),
+    ).toEqual({ merged: false, reason: "not-minted" });
+    expect(
+      (await purchases(ctx.db)).filter((row) => !row.deletedAt),
+    ).toHaveLength(2);
+  });
+
+  it("transfers linked records with a merged scope and retires children in foreign-key order", async () => {
+    const { kernel, fixture } = kernelWith({ linked: true });
+    await kernel.append(ctx.db, [charge("ORD-LINK-M1", 100)]);
+    await settle(kernel);
+    await kernel.append(ctx.db, [charge("ORD-LINK-M2", 100)]);
+    await settle(kernel);
+    const rows = await purchases(ctx.db);
+    const verdict = await kernel.merge(ctx.db, {
+      target: fixture.purchaseWrites,
+      a: rows[0]!.id,
+      b: rows[1]!.id,
+      basis: "proof",
+    });
+    expect(verdict.merged).toBe(true);
+    await settle(kernel);
+    const live = (await purchases(ctx.db)).filter((row) => !row.deletedAt);
+    const expenses = await repositoryQueries(ctx.db)
+      .select()
+      .from(fixtureExpense);
+    const allocations = await repositoryQueries(ctx.db)
+      .select()
+      .from(fixtureAllocation);
+    expect(live).toHaveLength(1);
+    expect(expenses).toHaveLength(1);
+    expect(allocations).toHaveLength(1);
+    expect(expenses[0]?.purchaseId).toBe(live[0]?.id);
+    expect(allocations[0]?.expenseId).toBe(expenses[0]?.id);
+    const owned = await repositoryQueries(ctx.db)
+      .select()
+      .from(recordKey)
+      .where(eq(recordKey.scopeKind, PURCHASE_SCOPE));
+    expect(
+      owned
+        .filter((row) => row.entity !== PURCHASE_TABLE)
+        .every((row) => row.scopeKey === live[0]?.orderRef),
+    ).toBe(true);
   });
 
   it("keeps a veto in force after a later assignment is released", async () => {

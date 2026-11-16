@@ -99,6 +99,11 @@ export async function readNeedsYou(
       FROM members m JOIN jsonb_to_recordset(${JSON.stringify(consumers)}::jsonb) consumer(entity text, kind text) ON consumer.kind = m."scopeKind"
       JOIN "Entity" e ON e.kind = consumer.entity AND e.id::text = m."scopeKey"
       WHERE ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL
+      UNION
+      SELECT m."scopeKind",m."scopeKey",e.kind,e.shortcode,m.stage,m.gap->>${"input"},m.gap->'actions',m.gap->>'since'
+      FROM members m CROSS JOIN LATERAL jsonb_array_elements(coalesce(m.gap->'actions','[]'::jsonb)) action
+      JOIN "Entity" e ON (action->>'subject'=e.kind || ':' || e.id::text OR action->>${"field"}=e.kind || ':' || e.id::text)
+      WHERE ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL
     ), unique_scopes AS (
       SELECT DISTINCT ON ("scopeKind", "scopeKey") * FROM records
       ORDER BY "scopeKind", "scopeKey", (entity = 'sourceOccurrence'), entity, shortcode

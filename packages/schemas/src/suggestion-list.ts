@@ -165,7 +165,7 @@ export const recommendationSuggestionRow = z.object({
   family: z.literal("recommendation"),
   evidence: z.union([connectionProposal, declaredSuggestionEvidence]),
 });
-export const transferPairSuggestionRow = z.object({
+const transferPairSuggestionRow = z.object({
   ...rowBase,
   family: z.literal("transfer_pair"),
   evidence: transferPairJudgment,

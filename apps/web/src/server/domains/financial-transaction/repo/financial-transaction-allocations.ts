@@ -233,21 +233,7 @@ export async function assertPurchasesLive(
     );
 }
 
-/**
- * Diff the set rather than delete-and-reinsert: a blanket rewrite would reset
- * `createdAt` on slices that did not change and make the audit diff unreadable.
- */
-export async function writeAllocationSet(
-  tx: DrizzleTransaction,
-  transactionId: FinancialTransactionId,
-  next: readonly AllocationInput[],
-  before: AllocationSnapshot,
-  actor: ActorContext,
-): Promise<void> {
-  await writeAllocationSets(tx, [{ transactionId, next }], before, actor);
-}
-
-/** `writeAllocationSet` for several transactions; new slices share one insert. */
+/** Diff allocation slices in a batch, retaining unchanged identities and timestamps. */
 export async function writeAllocationSets(
   tx: DrizzleTransaction,
   sets: readonly {

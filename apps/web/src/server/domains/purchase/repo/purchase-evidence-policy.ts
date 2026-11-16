@@ -1,11 +1,19 @@
+import { entitySchema } from "@cubby/schemas/entity";
+import {
+  expenseEconomicRoleSchema,
+  costTypeSchema,
+} from "@cubby/schemas/expense-fields";
 import {
   expenseLineBasisSchema,
   expenseLineKindSchema,
 } from "@cubby/schemas/expense-line-kind";
+import { fieldResolutionSchema } from "@cubby/schemas/field-resolution";
 import type { FieldResolutions } from "@cubby/schemas/field-resolution";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
+import { financialTransactionKind } from "@cubby/schemas/financial-transaction-fields";
 import { financialTransactionStatus } from "@cubby/schemas/financial-transaction-fields";
 import { primaryPurchaseDocumentKinds } from "@cubby/schemas/purchase";
+import { financialTransactionCoverage } from "@cubby/schemas/purchase-evidence-policy";
 import {
   itemizationExpectation,
   productExpectation,
@@ -16,21 +24,21 @@ import type {
   PurchaseEvidenceCoverage,
 } from "@cubby/schemas/purchase-evidence-policy";
 import { vendorOrderEvidence } from "@cubby/schemas/vendor-import-fields";
-import { eq, sql, type SQL } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
-import {
-  expense,
-  importSourceOrder,
-  importSourceProduct,
-} from "~/server/db/generated/entity-table-definitions.gen";
+import { expense } from "~/server/db/generated/entity-table-definitions.gen";
 import { notDeleted, actualExpenseSql } from "~/server/db/helpers/predicates";
 import { columnArrayParam } from "~/server/db/helpers/query";
 import { related } from "~/server/db/helpers/related";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
+import {
+  acceptedOrderPurchasesSql,
+  acceptedOrderLinesSql,
+} from "~/server/domains/purchase-import/repo/accepted-order-read";
 import {
   foreignReceiptExpenseSql,
   foreignReceiptSourceSql,
@@ -71,7 +79,7 @@ const purchaseEvidenceFallbackSql = (alias: string): SQL => sql`COALESCE(
   (SELECT ${vendorItemizationPolicySql("ep_vendor")} FROM "Vendor" ep_vendor
    WHERE ep_vendor.id = ${column(alias, "vendorId")} AND ${notDeleted("ep_vendor")}),
   ${categoryPolicy(column(alias, "spendingCategoryId"), "itemizationExpectation")},
-  'unknown'
+  ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.unknown)}
 )`;
 
 export const purchaseItemizationExpectationSql = (
@@ -84,7 +92,7 @@ export const purchaseItemizationExpectationSql = (
 )`;
 
 const categoryEvidenceSourceSql = (alias: string): SQL => sql`(
-  SELECT jsonb_build_object('entityKind','spendingCategory','entityId',ep_source_category.shortcode,'name',ep_source_category.name)
+  SELECT jsonb_build_object('entityKind',${sqlEnumConstant(entitySchema, entitySchema.enum.spendingCategory)},'entityId',ep_source_category.shortcode,${"name"}::text,ep_source_category.name)
   FROM "SpendingCategory" ep_source_category
   WHERE ep_source_category.id = ${column(alias, "spendingCategoryId")}
     AND ${notDeleted("ep_source_category")} AND ep_source_category."itemizationExpectation" IS NOT NULL
@@ -99,9 +107,9 @@ const evidenceFieldResolutionsSql = (values: {
   allocated?: SQL;
 }): SQL<FieldResolutions> => sql<FieldResolutions>`(
   SELECT jsonb_build_object('itemizationExpectation',jsonb_build_object(
-    'mode',CASE WHEN policy.allocated THEN 'allocated' WHEN policy.stored IS NOT NULL THEN 'explicit' ELSE 'inherit' END,
+    'mode',CASE WHEN policy.allocated THEN ${sqlEnumConstant(fieldResolutionSchema.shape.mode, fieldResolutionSchema.shape.mode.enum.allocated)} WHEN policy.stored IS NOT NULL THEN ${sqlEnumConstant(fieldResolutionSchema.shape.mode, fieldResolutionSchema.shape.mode.enum.explicit)} ELSE ${sqlEnumConstant(fieldResolutionSchema.shape.mode, fieldResolutionSchema.shape.mode.enum.inherit)} END,
     'storedValue',policy.stored,'value',policy.value,'fallbackValue',policy.fallback,
-    'source',policy.source,'sourceEntity',policy."sourceEntity",
+    ${"source"}::text,policy.source,'sourceEntity',policy."sourceEntity",
     'matchesFallback',policy.value IS NOT DISTINCT FROM policy.fallback,'canReset',policy.stored IS NOT NULL
   )) FROM (SELECT ${values.stored} AS stored,${values.value} AS value,${values.fallback} AS fallback,
     ${values.source} AS source,${values.sourceEntity} AS "sourceEntity",${values.allocated ?? sql`false`} AS allocated) policy
@@ -131,7 +139,7 @@ export const vendorEvidenceFieldResolutionsSql = (
 export const purchaseEvidenceFieldResolutionsSql = (
   alias: string,
 ): SQL<FieldResolutions> => {
-  const vendorSource = sql`(SELECT jsonb_build_object('entityKind','vendor','entityId',ep_source_vendor.shortcode,'name',ep_source_vendor.name)
+  const vendorSource = sql`(SELECT jsonb_build_object('entityKind',${sqlEnumConstant(entitySchema, entitySchema.enum.vendor)},'entityId',ep_source_vendor.shortcode,${"name"}::text,ep_source_vendor.name)
     FROM "Vendor" ep_source_vendor WHERE ep_source_vendor.id = ${column(alias, "vendorId")}
       AND ${notDeleted("ep_source_vendor")} AND ${vendorItemizationPolicySql("ep_source_vendor")} IS NOT NULL)`;
   const inheritedSource = sql`COALESCE(${vendorSource},${categoryEvidenceSourceSql(alias)})`;
@@ -160,8 +168,8 @@ export const purchaseHasPrimaryDocumentSql = (
 const purchaseHasAllocationSql = (alias: string): SQL => sql`EXISTS (
   SELECT 1 FROM "Expense" ep_allocation_line
   WHERE ep_allocation_line."purchaseId" = ${column(alias, "id")} AND ${notDeleted("ep_allocation_line")}
-    AND ${sql.raw(actualExpenseSql("ep_allocation_line"))} AND ep_allocation_line."economicRole" = 'vendor'
-    AND ep_allocation_line."lineBasis" = 'allocation'
+    AND ${sql.raw(actualExpenseSql("ep_allocation_line"))} AND ep_allocation_line."economicRole" = ${sqlEnumConstant(expenseEconomicRoleSchema, expenseEconomicRoleSchema.enum.vendor)}
+    AND ep_allocation_line."lineBasis" = ${sqlEnumConstant(expenseLineBasisSchema, expenseLineBasisSchema.enum.allocation)}
 )`;
 
 /** The order's own item lines, before Product identity: at least one live,
@@ -173,8 +181,8 @@ const purchaseHasAllocationSql = (alias: string): SQL => sql`EXISTS (
 const purchaseHasItemLinesSql = (alias: string): SQL => sql`(
   EXISTS (SELECT 1 FROM "Expense" ep_line
     WHERE ep_line."purchaseId" = ${column(alias, "id")} AND ${notDeleted("ep_line")}
-      AND ${sql.raw(actualExpenseSql("ep_line"))} AND ep_line."economicRole" = 'vendor'
-      AND ep_line."lineKind" = 'principal' AND ep_line."lineBasis" = 'item_line')
+      AND ${sql.raw(actualExpenseSql("ep_line"))} AND ep_line."economicRole" = ${sqlEnumConstant(expenseEconomicRoleSchema, expenseEconomicRoleSchema.enum.vendor)}
+      AND ep_line."lineKind" = ${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.principal)} AND ep_line."lineBasis" = ${sqlEnumConstant(expenseLineBasisSchema, expenseLineBasisSchema.enum.item_line)})
   AND NOT ${purchaseHasAllocationSql(alias)}
 )`;
 
@@ -190,28 +198,15 @@ const purchaseHasLinkedGoodsSql = (alias: string): SQL => sql`(
 )`;
 
 const purchaseHasForeignItemsSql = (purchaseId: SQL): SQL<boolean> => {
-  const completeSource = related(importSourceOrder, (order) =>
-    eq(order.purchaseId, purchaseId),
-  )
-    .where((order) => {
-      const principalCount = sql`jsonb_array_length(jsonb_path_query_array(${order.originalOrder}, ${'$.extraction.candidate.lines[*] ? (@.lineKind == "principal")'}::jsonpath))`;
-      const matchedCount = related(
-        importSourceProduct,
-        (binding) => sql`${binding.sourceOrderId} = ${order.id}
-      AND (${order.originalOrder} #> '{extraction,candidate,lines}') -> ${binding.lineIndex} ->> ${"lineKind"} = ${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.principal)}`,
-      )
-        .join(
-          expense,
-          (
-            item,
-            binding,
-          ) => sql`${item.id} = ${binding.expenseId} AND ${item.purchaseId} = ${purchaseId}
-      AND ${item.future} = false AND ${item.lineKind} = ${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.principal)} AND ${item.lineBasis} = ${sqlEnumConstant(expenseLineBasisSchema, expenseLineBasisSchema.enum.item_line)}`,
-        )
-        .countDistinct((item) => item.id);
-      return sql`${foreignReceiptSourceSql(order.originalOrder)} AND ${principalCount} > 0 AND ${matchedCount} = ${principalCount}`;
-    })
-    .exists();
+  const completeSource = sql`EXISTS(SELECT 1 FROM ${acceptedOrderPurchasesSql} accepted
+    WHERE accepted."boundPurchaseId"::uuid=${purchaseId}
+    AND ${foreignReceiptSourceSql(sql`jsonb_build_object('extraction',accepted.extraction)`)}
+    AND jsonb_array_length(jsonb_path_query_array(accepted.extraction,'$.candidate.lines[*] ? (@.lineKind == "principal")')) > 0
+    AND (SELECT count(DISTINCT item.id) FROM ${acceptedOrderLinesSql} binding
+      JOIN "Expense" item ON item.id=binding."expenseId" AND ${notDeleted("item")}
+        AND item."purchaseId"=${purchaseId} AND NOT item.future AND item."lineKind"=${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.principal)} AND item."lineBasis"=${sqlEnumConstant(expenseLineBasisSchema, expenseLineBasisSchema.enum.item_line)}
+      WHERE binding."sourceOrderId"=accepted.id AND (accepted.extraction#>'{candidate,lines}')->binding."lineIndex"->>${"lineKind"}=${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.principal)})
+    =jsonb_array_length(jsonb_path_query_array(accepted.extraction,'$.candidate.lines[*] ? (@.lineKind == "principal")')))`;
   const unmatched = related(
     expense,
     (item) => sql`${item.purchaseId} = ${purchaseId}
@@ -263,12 +258,12 @@ export const purchaseHasItemizationSql = (alias: string): SQL => {
 // Services are labor and carry no Product by design, whatever their category;
 // a service line that does link one (a software subscription) keeps it.
 const expenseProductExpectationSql = (alias: string): SQL => sql`(CASE
-  WHEN ${column(alias, "economicRole")} <> 'vendor'
-    OR ${column(alias, "lineKind")} <> 'principal'
-    OR ${column(alias, "lineBasis")} <> 'item_line' THEN 'not_expected'
-  WHEN ${column(alias, "productId")} IS NOT NULL THEN 'required'
-  WHEN ${column(alias, "costType")} = 'services' THEN 'not_expected'
-  ELSE COALESCE(${categoryPolicy(effectiveExpenseSpendingCategorySql(alias), "productExpectation")}, 'unknown') END)`;
+  WHEN ${column(alias, "economicRole")} <> ${sqlEnumConstant(expenseEconomicRoleSchema, expenseEconomicRoleSchema.enum.vendor)}
+    OR ${column(alias, "lineKind")} <> ${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.principal)}
+    OR ${column(alias, "lineBasis")} <> ${sqlEnumConstant(expenseLineBasisSchema, expenseLineBasisSchema.enum.item_line)} THEN ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.not_expected)}
+  WHEN ${column(alias, "productId")} IS NOT NULL THEN ${sqlEnumConstant(itemizationExpectation, itemizationExpectation.enum.required)}
+  WHEN ${column(alias, "costType")} = ${sqlEnumConstant(costTypeSchema, costTypeSchema.enum.services)} THEN ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.not_expected)}
+  ELSE COALESCE(${categoryPolicy(effectiveExpenseSpendingCategorySql(alias), "productExpectation")}, ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.unknown)}) END)`;
 
 export const expenseProductExpectedSql = (alias: string): SQL =>
   // Unknown classification cannot hide an unresolved principal item. Keep
@@ -281,11 +276,11 @@ const unlinkedRequiredLineSql = (alias: string): SQL =>
     AND ${expenseProductExpectedSql(alias)})`;
 
 const purchaseBookingSql = (alias: string): SQL => sql`(SELECT CASE
-  WHEN count(*) = 0 THEN 'missing'
-  WHEN count(*) FILTER (WHERE ep_book."costMinor" IS NULL AND NOT ${unpricedForeignExpenseSql({ id: column("ep_book", "id"), purchaseId: column("ep_book", "purchaseId"), lineKind: column("ep_book", "lineKind"), cost: column("ep_book", "costMinor") })}) > 0 THEN 'partial'
+  WHEN count(*) = 0 THEN ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.missing)}
+  WHEN count(*) FILTER (WHERE ep_book."costMinor" IS NULL AND NOT ${unpricedForeignExpenseSql({ id: column("ep_book", "id"), purchaseId: column("ep_book", "purchaseId"), lineKind: column("ep_book", "lineKind"), cost: column("ep_book", "costMinor") })}) > 0 THEN ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.partial)}
   WHEN count(*) FILTER (WHERE ep_book."costMinor" IS NULL) > 0
     AND count(*) FILTER (WHERE ep_book."lineBasis" = ${sqlEnumConstant(expenseLineBasisSchema, expenseLineBasisSchema.enum.allocation)} AND ep_book."costMinor" IS NOT NULL) = 0 THEN ${sqlEnumConstant(purchaseEvidenceCoverage.shape.booking, purchaseEvidenceCoverage.shape.booking.enum.partial)}
-  ELSE 'recorded' END
+  ELSE ${sqlEnumConstant(financialTransactionCoverage.shape.booking, financialTransactionCoverage.shape.booking.enum.recorded)} END
   FROM "Expense" ep_book WHERE ep_book."purchaseId" = ${column(alias, "id")}
     AND ${notDeleted("ep_book")} AND ${sql.raw(actualExpenseSql("ep_book"))}
 )`;
@@ -293,7 +288,7 @@ const purchaseBookingSql = (alias: string): SQL => sql`(SELECT CASE
 /** No policy requires a document: an attached receipt or invoice is useful
  * evidence when present and never a gap when absent. */
 const documentPresence = (present: SQL): SQL =>
-  sql`(CASE WHEN ${present} THEN 'present' ELSE 'not_expected' END)`;
+  sql`(CASE WHEN ${present} THEN ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.present)} ELSE ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.not_expected)} END)`;
 
 /** A retained receipt or invoice is itemizable whatever the policy says: a
  * member's receipt photo enters the Research queue this way. Every itemization
@@ -301,26 +296,26 @@ const documentPresence = (present: SQL): SQL =>
 export const effectivePurchaseItemizationExpectationSql = (
   alias: string,
   transactionOverride?: SQL,
-): SQL => sql`(CASE WHEN ${purchaseHasPrimaryDocumentSql(alias)} THEN 'required'
+): SQL => sql`(CASE WHEN ${purchaseHasPrimaryDocumentSql(alias)} THEN ${sqlEnumConstant(itemizationExpectation, itemizationExpectation.enum.required)}
   ELSE ${purchaseItemizationExpectationSql(alias, transactionOverride)} END)`;
 
 const evidencePresence = (present: SQL, expectation: SQL): SQL => sql`(CASE
-  WHEN ${present} THEN 'present'
-  WHEN ${expectation} = 'required' THEN 'missing'
-  WHEN ${expectation} = 'not_expected' THEN 'not_expected'
-  ELSE 'unknown' END)`;
+  WHEN ${present} THEN ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.present)}
+  WHEN ${expectation} = ${sqlEnumConstant(itemizationExpectation, itemizationExpectation.enum.required)} THEN ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.missing)}
+  WHEN ${expectation} = ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.not_expected)} THEN ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.not_expected)}
+  ELSE ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.unknown)} END)`;
 
 // Each line's expectation is evaluated once in an `OFFSET 0` fence: Postgres
 // has no common-subexpression elimination, so repeating it per FILTER planned
 // its category-resolution CTE four times, and this axis is itself repeated by
 // every data-quality score, status, and hydration that reads it.
 const purchaseProductsSql = (alias: string): SQL => sql`(SELECT CASE
-  WHEN count(*) FILTER (WHERE ep_goods_policy.expectation = 'required' AND ep_goods."productId" IS NULL) > 0
-    THEN CASE WHEN count(*) FILTER (WHERE ep_goods_policy.expectation = 'required' AND ep_goods."productId" IS NOT NULL) > 0
-      THEN 'partial' ELSE 'missing' END
-  WHEN count(*) FILTER (WHERE ep_goods_policy.expectation = 'unknown') > 0 THEN 'unknown'
-  WHEN count(*) FILTER (WHERE ep_goods_policy.expectation = 'required') > 0 THEN 'present'
-  ELSE 'not_expected' END
+  WHEN count(*) FILTER (WHERE ep_goods_policy.expectation = ${sqlEnumConstant(itemizationExpectation, itemizationExpectation.enum.required)} AND ep_goods."productId" IS NULL) > 0
+    THEN CASE WHEN count(*) FILTER (WHERE ep_goods_policy.expectation = ${sqlEnumConstant(itemizationExpectation, itemizationExpectation.enum.required)} AND ep_goods."productId" IS NOT NULL) > 0
+      THEN ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.partial)} ELSE ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.missing)} END
+  WHEN count(*) FILTER (WHERE ep_goods_policy.expectation = ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.unknown)}) > 0 THEN ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.unknown)}
+  WHEN count(*) FILTER (WHERE ep_goods_policy.expectation = ${sqlEnumConstant(itemizationExpectation, itemizationExpectation.enum.required)}) > 0 THEN ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.present)}
+  ELSE ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.not_expected)} END
   FROM "Expense" ep_goods
   CROSS JOIN LATERAL (SELECT ${expenseProductExpectationSql("ep_goods")} AS expectation OFFSET 0) ep_goods_policy
   WHERE ep_goods."purchaseId" = ${column(alias, "id")}
@@ -338,7 +333,7 @@ export const purchaseCoverageSql = (
   return sql<PurchaseEvidenceCoverage>`jsonb_build_object(
     'expectation', ${expectation},
     'booking', ${purchaseBookingSql(alias)},
-    'document', ${documentPresence(purchaseHasPrimaryDocumentSql(alias))},
+    ${"document"}::text, ${documentPresence(purchaseHasPrimaryDocumentSql(alias))},
     'itemization', ${evidencePresence(purchaseHasItemizationSql(alias), effectivePurchaseItemizationExpectationSql(alias, transactionOverride))},
     'products', ${purchaseProductsSql(alias)}
   )`;
@@ -350,8 +345,8 @@ export const financialTransactionRequiresBookingSql = (
 ): SQL => sql`(
   ${column(alias, "status")} IN (${sqlEnumConstant(financialTransactionStatus, financialTransactionStatus.enum.observed)}, ${sqlEnumConstant(financialTransactionStatus, financialTransactionStatus.enum.pending)}, ${sqlEnumConstant(financialTransactionStatus, financialTransactionStatus.enum.posted)})
   AND ${column(alias, "ledgerTransferId")} IS NULL
-  AND (${column(alias, "kind")} IN ('purchase', 'refund', 'adjustment', 'fee', 'interest')
-    OR (${column(alias, "kind")} = 'income' AND EXISTS (
+  AND (${column(alias, "kind")} IN (${sqlEnumConstant(financialTransactionKind, financialTransactionKind.enum.purchase)}, ${sqlEnumConstant(financialTransactionKind, financialTransactionKind.enum.refund)}, ${sqlEnumConstant(financialTransactionKind, financialTransactionKind.enum.adjustment)}, ${sqlEnumConstant(financialTransactionKind, financialTransactionKind.enum.fee)}, ${sqlEnumConstant(financialTransactionKind, financialTransactionKind.enum.interest)})
+    OR (${column(alias, "kind")} = ${sqlEnumConstant(financialTransactionKind, financialTransactionKind.enum.income)} AND EXISTS (
       SELECT 1 FROM "FinancialTransactionAllocation" ep_income
       WHERE ep_income."transactionId" = ${column(alias, "id")} AND ${notDeleted("ep_income")})))
 )`;
@@ -359,7 +354,7 @@ export const financialTransactionRequiresBookingSql = (
 // Reviewed reimbursement ownership, not the sign or provider's income label,
 // establishes that a credit is household evidence rather than vendor evidence.
 const financialTransactionIsReimbursementSql = (alias: string): SQL => sql`(
-  SELECT count(*) > 0 AND bool_and(ep_reimbursement."economicRole" = 'reimbursement')
+  SELECT count(*) > 0 AND bool_and(ep_reimbursement."economicRole" = ${sqlEnumConstant(expenseEconomicRoleSchema, expenseEconomicRoleSchema.enum.reimbursement)})
   FROM "Expense" ep_reimbursement
   WHERE ep_reimbursement."bookingTransactionCode" = ${column(alias, "shortcode")}
     AND ${notDeleted("ep_reimbursement")}
@@ -372,9 +367,9 @@ export const linkedPurchaseItemizationExpectationSql = (
   purchaseOverride !== undefined
     ? sql`(SELECT ${purchaseItemizationExpectationSql("ep_linked")} FROM "Purchase" ep_linked WHERE ep_linked.id = ${purchaseOverride} AND ${notDeleted("ep_linked")})`
     : sql`(SELECT CASE
-    WHEN bool_or(ep_linked_policy.expectation = 'required') THEN 'required'
-    WHEN bool_or(ep_linked_policy.expectation = 'unknown') THEN 'unknown'
-    WHEN count(*) > 0 THEN 'not_expected' ELSE NULL END
+    WHEN bool_or(ep_linked_policy.expectation = ${sqlEnumConstant(itemizationExpectation, itemizationExpectation.enum.required)}) THEN ${sqlEnumConstant(itemizationExpectation, itemizationExpectation.enum.required)}
+    WHEN bool_or(ep_linked_policy.expectation = ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.unknown)}) THEN ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.unknown)}
+    WHEN count(*) > 0 THEN ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.not_expected)} ELSE NULL END
    FROM "FinancialTransactionAllocation" ep_allocation
    JOIN "Purchase" ep_linked ON ep_linked.id = ep_allocation."purchaseId" AND ${notDeleted("ep_linked")}
    CROSS JOIN LATERAL (SELECT ${purchaseItemizationExpectationSql("ep_linked")} AS expectation OFFSET 0) ep_linked_policy
@@ -384,13 +379,13 @@ const financialTransactionPolicyExpectationSql = (
   alias: string,
   purchaseOverride?: SQL,
 ): SQL =>
-  sql`COALESCE(${linkedPurchaseItemizationExpectationSql(alias, purchaseOverride)},${categoryPolicy(column(alias, "spendingCategoryId"), "itemizationExpectation")},'unknown')`;
+  sql`COALESCE(${linkedPurchaseItemizationExpectationSql(alias, purchaseOverride)},${categoryPolicy(column(alias, "spendingCategoryId"), "itemizationExpectation")},${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.unknown)})`;
 
 const financialTransactionEvidenceFallbackSql = (
   alias: string,
   purchaseOverride?: SQL,
 ): SQL => sql`CASE
-  WHEN ${financialTransactionIsReimbursementSql(alias)} THEN 'not_expected'
+  WHEN ${financialTransactionIsReimbursementSql(alias)} THEN ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.not_expected)}
   ELSE ${financialTransactionPolicyExpectationSql(alias, purchaseOverride)} END`;
 
 // Not `COALESCE(override, fallback)`: the fallback would re-test reimbursement
@@ -400,7 +395,7 @@ export const financialTransactionItemizationExpectationSql = (
   alias: string,
   purchaseOverride?: SQL,
 ): SQL => sql`CASE
-  WHEN ${financialTransactionIsReimbursementSql(alias)} THEN 'not_expected'
+  WHEN ${financialTransactionIsReimbursementSql(alias)} THEN ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.not_expected)}
   ELSE COALESCE(${column(alias, "itemizationExpectation")},${financialTransactionPolicyExpectationSql(alias, purchaseOverride)}) END`;
 
 /** Aggregate policy names a source only for exactly one live linked Purchase.
@@ -410,9 +405,9 @@ export const linkedPurchaseItemizationSourceSql = (
   purchaseOverride?: SQL,
 ): SQL =>
   purchaseOverride !== undefined
-    ? sql`(SELECT jsonb_build_object('entityKind','purchase','entityId',ep_source_purchase.shortcode,'name',ep_source_purchase."displayLabel") FROM "Purchase" ep_source_purchase WHERE ep_source_purchase.id = ${purchaseOverride} AND ${notDeleted("ep_source_purchase")})`
+    ? sql`(SELECT jsonb_build_object('entityKind',${sqlEnumConstant(entitySchema, entitySchema.enum.purchase)},'entityId',ep_source_purchase.shortcode,${"name"}::text,ep_source_purchase."displayLabel") FROM "Purchase" ep_source_purchase WHERE ep_source_purchase.id = ${purchaseOverride} AND ${notDeleted("ep_source_purchase")})`
     : sql`(SELECT CASE WHEN count(*) = 1 THEN
-    jsonb_build_object('entityKind','purchase','entityId',min(ep_source_purchase.shortcode),'name',min(ep_source_purchase."displayLabel")) ELSE NULL END
+    jsonb_build_object('entityKind',${sqlEnumConstant(entitySchema, entitySchema.enum.purchase)},'entityId',min(ep_source_purchase.shortcode),${"name"}::text,min(ep_source_purchase."displayLabel")) ELSE NULL END
     FROM "FinancialTransactionAllocation" ep_source_allocation
     JOIN "Purchase" ep_source_purchase ON ep_source_purchase.id = ep_source_allocation."purchaseId" AND ${notDeleted("ep_source_purchase")}
     WHERE ep_source_allocation."transactionId" = ${column(alias, "id")} AND ${notDeleted("ep_source_allocation")})`;
@@ -444,13 +439,13 @@ export const financialTransactionEvidenceFieldResolutionsSql = (
 };
 
 export const financialTransactionBookingSql = (alias: string): SQL => sql`(CASE
-  WHEN ${column(alias, "kind")} = 'other' AND ${column(alias, "status")} <> 'void' THEN 'unclassified'
-  WHEN NOT ${financialTransactionRequiresBookingSql(alias)} THEN 'not_applicable'
+  WHEN ${column(alias, "kind")} = ${sqlEnumConstant(financialTransactionKind, financialTransactionKind.enum.other)} AND ${column(alias, "status")} <> ${sqlEnumConstant(financialTransactionStatus, financialTransactionStatus.enum.void)} THEN ${sqlEnumConstant(financialTransactionCoverage.shape.booking, financialTransactionCoverage.shape.booking.enum.unclassified)}
+  WHEN NOT ${financialTransactionRequiresBookingSql(alias)} THEN ${sqlEnumConstant(financialTransactionCoverage.shape.booking, financialTransactionCoverage.shape.booking.enum.not_applicable)}
   ELSE (SELECT CASE
-    WHEN count(*) = 0 THEN 'missing'
-    WHEN bool_and(${purchaseBookingSql("ep_booked")} = 'missing') THEN 'missing'
-    WHEN bool_and(${purchaseBookingSql("ep_booked")} = 'recorded') THEN 'recorded'
-    ELSE 'partial' END
+    WHEN count(*) = 0 THEN ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.missing)}
+    WHEN bool_and(${purchaseBookingSql("ep_booked")} = ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.missing)}) THEN ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.missing)}
+    WHEN bool_and(${purchaseBookingSql("ep_booked")} = ${sqlEnumConstant(financialTransactionCoverage.shape.booking, financialTransactionCoverage.shape.booking.enum.recorded)}) THEN ${sqlEnumConstant(financialTransactionCoverage.shape.booking, financialTransactionCoverage.shape.booking.enum.recorded)}
+    ELSE ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.partial)} END
     FROM "FinancialTransactionAllocation" ep_alloc
     JOIN "Purchase" ep_booked ON ep_booked.id = ep_alloc."purchaseId" AND ${notDeleted("ep_booked")}
     WHERE ep_alloc."transactionId" = ${column(alias, "id")} AND ${notDeleted("ep_alloc")})
@@ -478,18 +473,18 @@ export const financialTransactionCoverageAxisSql = (
     axis === "itemization"
       ? sql`CASE WHEN ${financialTransactionRequiresBookingSql(alias)}
         THEN ${evidencePresence(sql`false`, financialTransactionItemizationExpectationSql(alias))}
-        ELSE 'not_expected' END`
-      : sql`'not_expected'`;
+        ELSE ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.not_expected)} END`
+      : sql`${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.not_expected)}`;
   return sql`(
   SELECT CASE
-    WHEN ${financialTransactionIsReimbursementSql(alias)} THEN 'not_expected'
+    WHEN ${financialTransactionIsReimbursementSql(alias)} THEN ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.not_expected)}
     WHEN count(*) = 0 THEN ${unallocated}
-    WHEN bool_or(ep_axis.value = 'partial') THEN 'partial'
-    WHEN bool_or(ep_axis.value = 'missing') AND bool_or(ep_axis.value = 'present') THEN 'partial'
-    WHEN bool_or(ep_axis.value = 'missing') THEN 'missing'
-    WHEN bool_or(ep_axis.value = 'unknown') THEN 'unknown'
-    WHEN bool_or(ep_axis.value = 'present') THEN 'present'
-    ELSE 'not_expected' END
+    WHEN bool_or(ep_axis.value = ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.partial)}) THEN ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.partial)}
+    WHEN bool_or(ep_axis.value = ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.missing)}) AND bool_or(ep_axis.value = ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.present)}) THEN ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.partial)}
+    WHEN bool_or(ep_axis.value = ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.missing)}) THEN ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.missing)}
+    WHEN bool_or(ep_axis.value = ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.unknown)}) THEN ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.unknown)}
+    WHEN bool_or(ep_axis.value = ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.present)}) THEN ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.present)}
+    ELSE ${sqlEnumConstant(financialTransactionCoverage.shape.products, financialTransactionCoverage.shape.products.enum.not_expected)} END
   FROM (
     SELECT ${purchaseAxis} AS value
     FROM "FinancialTransactionAllocation" ep_axis_allocation
@@ -506,7 +501,7 @@ export const financialTransactionCoverageSql = (
 ): SQL<FinancialTransactionCoverage> => sql<FinancialTransactionCoverage>`jsonb_build_object(
   'expectation', ${financialTransactionItemizationExpectationSql(alias)},
   'booking', ${financialTransactionBookingSql(alias)},
-  'document', ${financialTransactionCoverageAxisSql(alias, "document")},
+  ${"document"}::text, ${financialTransactionCoverageAxisSql(alias, "document")},
   'itemization', ${financialTransactionCoverageAxisSql(alias, "itemization")},
   'products', ${financialTransactionCoverageAxisSql(alias, "products")}
 )`;

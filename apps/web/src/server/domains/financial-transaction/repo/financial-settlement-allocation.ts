@@ -6,26 +6,18 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { minorToDollarsSql } from "~/server/db/computed/money";
-import {
-  databaseForTransaction,
-  notDeleted,
-  withHouseholdWrite,
-} from "~/server/db/helpers";
+import { withTransaction, notDeleted } from "~/server/db/helpers";
 import {
   financialTransaction,
   financialTransactionAllocation,
   purchase,
 } from "~/server/db/schema";
-import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { transactionSettlementConflicts } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 import { createAppError } from "~/server/errors/app-error";
 import { setDataException } from "~/server/generic/data-quality/repo/exceptions";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-import {
-  lockUpdatePurchases,
-  updateFinancialTransaction,
-} from "./financial-transaction";
+import { updateFinancialTransaction } from "./financial-transaction";
 
 /** Conflicts on purchases this proposal newly names, before the write. */
 async function conflictsToAcknowledge(
@@ -79,82 +71,83 @@ export async function applyFinancialSettlementAllocation(
   input: FinancialSettlementAllocationInput,
   actor: ActorContext,
 ) {
-  return withHouseholdWrite(db, async (tx) => {
-    const txDb = databaseForTransaction(tx);
-    const id = await resolveOrThrow(
-      txDb,
-      "financialTransaction",
-      input.transactionId,
-    );
-    await lockFinancialTransactionSources(tx, [input.transactionId]);
-    await lockUpdatePurchases(tx, [
-      { id, data: { allocations: input.allocations } },
-    ]);
-    await tx
-      .select({ id: financialTransaction.id })
-      .from(financialTransaction)
-      .where(
-        and(eq(financialTransaction.id, id), notDeleted(financialTransaction)),
-      )
-      .for("update");
-    const current = await tx
-      .select({
-        purchaseId: purchase.shortcode,
-        amount: minorToDollarsSql(
-          financialTransactionAllocation.amountMinor,
-          "numeric",
-        ).mapWith(Number),
-        confirmsMerchant: financialTransactionAllocation.confirmsMerchant,
-      })
-      .from(financialTransactionAllocation)
-      .innerJoin(
-        purchase,
-        eq(purchase.id, financialTransactionAllocation.purchaseId),
-      )
-      .where(
-        and(
-          eq(financialTransactionAllocation.transactionId, id),
-          notDeleted(financialTransactionAllocation),
-        ),
+  const { householdWrite } = await import("~/server/kernel/api");
+  return householdWrite(db, async (txDb) =>
+    withTransaction(txDb, async (tx) => {
+      const id = await resolveOrThrow(
+        txDb,
+        "financialTransaction",
+        input.transactionId,
       );
-    if (
-      canonicalAllocations(current) !==
-      canonicalAllocations(input.priorAllocations)
-    )
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "Settlement allocations changed after this proposal. Review the current graph before saving; your draft has not been applied.",
-      );
-    const note = input.acknowledgeConflicts?.note;
-    const acknowledged = note
-      ? await conflictsToAcknowledge(tx, id, input.allocations, current)
-      : [];
-    await updateFinancialTransaction(
-      txDb,
-      input.transactionId,
-      { allocations: input.allocations },
-      actor,
-      { acknowledgeSettlementConflicts: note !== undefined },
-    );
-    if (note)
-      for (const { purchaseCode, kind } of acknowledged)
-        await setDataException(
-          txDb,
-          {
-            entityId: purchaseCode,
-            check:
-              kind === "party"
-                ? "settlement_party_conflict"
-                : "settlement_tender_conflict",
-            reason:
-              kind === "party" ? "confirmed_shared_use" : "confirmed_tender",
-            note,
-          },
-          actor,
+
+      await tx
+        .select({ id: financialTransaction.id })
+        .from(financialTransaction)
+        .where(
+          and(
+            eq(financialTransaction.id, id),
+            notDeleted(financialTransaction),
+          ),
         );
-    return {
-      transactionId: input.transactionId,
-      allocations: input.allocations,
-    };
-  });
+      const current = await tx
+        .select({
+          purchaseId: purchase.shortcode,
+          amount: minorToDollarsSql(
+            financialTransactionAllocation.amountMinor,
+            "numeric",
+          ).mapWith(Number),
+          confirmsMerchant: financialTransactionAllocation.confirmsMerchant,
+        })
+        .from(financialTransactionAllocation)
+        .innerJoin(
+          purchase,
+          eq(purchase.id, financialTransactionAllocation.purchaseId),
+        )
+        .where(
+          and(
+            eq(financialTransactionAllocation.transactionId, id),
+            notDeleted(financialTransactionAllocation),
+          ),
+        );
+      if (
+        canonicalAllocations(current) !==
+        canonicalAllocations(input.priorAllocations)
+      )
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "Settlement allocations changed after this proposal. Review the current graph before saving; your draft has not been applied.",
+        );
+      const note = input.acknowledgeConflicts?.note;
+      const acknowledged = note
+        ? await conflictsToAcknowledge(tx, id, input.allocations, current)
+        : [];
+      await updateFinancialTransaction(
+        txDb,
+        input.transactionId,
+        { allocations: input.allocations },
+        actor,
+        { acknowledgeSettlementConflicts: note !== undefined },
+      );
+      if (note)
+        for (const { purchaseCode, kind } of acknowledged)
+          await setDataException(
+            txDb,
+            {
+              entityId: purchaseCode,
+              check:
+                kind === "party"
+                  ? "settlement_party_conflict"
+                  : "settlement_tender_conflict",
+              reason:
+                kind === "party" ? "confirmed_shared_use" : "confirmed_tender",
+              note,
+            },
+            actor,
+          );
+      return {
+        transactionId: input.transactionId,
+        allocations: input.allocations,
+      };
+    }),
+  );
 }

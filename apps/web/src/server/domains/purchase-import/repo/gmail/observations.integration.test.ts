@@ -21,7 +21,7 @@ import {
   runOperation,
 } from "~/server/db/schema";
 import { orderMailEvent } from "~/server/db/schema";
-import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-decision";
+import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-write";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { productionMailTriage } from "~/server/domains/purchase-import/service/gmail/triage-model";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";

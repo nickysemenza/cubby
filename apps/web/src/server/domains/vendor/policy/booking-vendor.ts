@@ -82,18 +82,3 @@ export function bookingVendorSelection(
   }
   return { kind: "ready" as const, rows };
 }
-/** Reads: re-resolved raw/clean names after creation, every newly minted Vendor shortcode and the selected shortcode per booking. */
-export function createdVendorConflict(
-  rechecked: readonly (readonly ResolutionRead[])[],
-  minted: ReadonlySet<string>,
-  codes: readonly string[],
-) {
-  return rechecked.some((results, index) =>
-    results.some((result) =>
-      [result.row, ...result.candidates].some(
-        (row) =>
-          row && minted.has(row.shortcode) && row.shortcode !== codes[index],
-      ),
-    ),
-  );
-}

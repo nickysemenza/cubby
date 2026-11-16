@@ -41,8 +41,6 @@ import {
   financialTransactionAllocation,
   importPreparedOrder,
   importSourceClaim,
-  importSourceOrder,
-  importSourceProduct,
   inventoryEntry,
   email as emailTable,
   orderMail,
@@ -59,6 +57,7 @@ import {
   shipment,
   shipmentObservation,
 } from "~/server/db/schema";
+import { readEmailPurchaseEvidence } from "~/server/domains/email/repo/email-purchase-links";
 import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { seedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
 import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
@@ -69,7 +68,7 @@ import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { refreshSearchDocuments } from "~/server/generic/search/repo/search-document";
-import { enterHouseholdGate } from "~/server/kernel/api";
+import { enterHouseholdGate } from "~/server/kernel/gate";
 import { activeEmailPurchaseDecision as orderMailCandidateDecision } from "~/server/testing/email-link.fixtures";
 import {
   createProductFixture,
@@ -588,6 +587,58 @@ describe("caller-driven purchase import", () => {
       .leftJoin(expense, eq(expense.purchaseId, purchase.id))
       .where(eq(purchase.vendorId, parseEntityId("vendor", vendor.id)));
     expect(booked).toEqual([{ purchase: existing.shortcode, cost: 18.5 }]);
+    // Different originals without printed order ids must not become one order,
+    // while new request handles for the same original must preserve identity.
+    const importReceipt = async (original: string, request: string) =>
+      memberImport(ctx.db, ctx.actor, {
+        key: request,
+        orders: [
+          {
+            stableOrderId: request,
+            vendorId: vendor.shortcode,
+            source: {
+              kind: "vendor_export",
+              externalKey: `synthetic:orderless:${original}`,
+              checksum: "f".repeat(64),
+            },
+            extraction: {
+              status: "ready",
+              candidate: {
+                orderId: null,
+                orderedAt: "2026-09-20",
+                merchant: "Synthetic seed shop",
+                currency: "USD",
+                printedGrandTotal: 10,
+                lines: [
+                  {
+                    title: "Synthetic service",
+                    amount: 10,
+                    lineKind: "principal",
+                  },
+                ],
+                payments: [],
+              },
+            },
+            resolutions: [{ kind: "expense_only" }],
+          },
+        ],
+      });
+    const firstReceipt = await importReceipt("first", "first-receipt");
+    const secondReceipt = await importReceipt("second", "second-receipt");
+    expect(secondReceipt.committed.items[0]?.purchaseId).toBeTruthy();
+    expect(secondReceipt.committed.items[0]?.purchaseId).not.toBe(
+      firstReceipt.committed.items[0]?.purchaseId,
+    );
+    const replay = await importReceipt("first", "same-receipt-new-handles");
+    expect(replay.committed.items[0]?.purchaseId).toBe(
+      firstReceipt.committed.items[0]?.purchaseId,
+    );
+    expect(
+      await getDb(ctx.db)
+        .select({ id: purchase.id })
+        .from(purchase)
+        .where(eq(purchase.vendorId, vendor.id)),
+    ).toHaveLength(3);
   });
 
   it("refuses a changed Email and disposes of an unrelated one", async () => {
@@ -1071,7 +1122,17 @@ describe("caller-driven purchase import writes", () => {
           }) => row,
         ),
       );
-      const bindings = await database.select().from(importSourceProduct);
+      const { acceptedOrderLinesSql } =
+        await import("~/server/domains/purchase-import/repo/accepted-order-read");
+      const bound = await database.execute<{
+        lineIndex: number;
+        productId: string;
+      }>(sql`
+        SELECT accepted."lineIndex", accepted."productId" FROM ${acceptedOrderLinesSql} accepted
+        INNER JOIN ${sourceOrderObservation} observation ON observation.id = accepted."sourceOrderId"
+        WHERE observation."sourceExternalKey" = ${source("itemized-product-choice", "b").externalKey}
+          AND accepted."productId" IS NOT NULL`);
+      const bindings = bound.rows;
       expect(bindings).toHaveLength(needsReview ? 0 : 2);
       expect(bindings.map((row) => row.lineIndex).sort()).toEqual(
         needsReview ? [] : [0, 1],
@@ -1525,15 +1586,26 @@ describe("caller-driven purchase import writes", () => {
     const decisions = await getDb(ctx.db)
       .select()
       .from(orderMailCandidateDecision);
-    // The import links its own original; the other Email's exact order event
-    // links automatically when the Purchase is created, as a rule decision.
-    expect(decisions).toHaveLength(2);
+    expect(decisions).toHaveLength(1);
+    // The exact-order relationship is derived; it must be visible through the
+    // shared Email read without importing the other original's attachments.
+    const [otherEmail] = await getDb(ctx.db)
+      .select({ id: emailTable.id })
+      .from(emailTable)
+      .where(eq(emailTable.orderMailId, otherMail.id));
+    if (!otherEmail) throw new Error("Synthetic Email missing");
     expect(
-      decisions.find((decision) => decision.eventId === otherEvent.id),
-    ).toMatchObject({ authority: "automatic", proposedBy: "heuristic" });
-    expect(await getDb(ctx.db).select().from(importSourceOrder)).toHaveLength(
-      1,
-    );
+      await readEmailPurchaseEvidence(ctx.db, [otherEmail.id], null),
+    ).toEqual([
+      expect.objectContaining({
+        eventId: otherEvent.id,
+        kind: "linked",
+        proposedBy: "heuristic",
+      }),
+    ]);
+    expect(
+      await getDb(ctx.db).select().from(sourceOrderObservation),
+    ).toHaveLength(1);
   });
 
   it.each(["cancel", "expire"] as const)(
@@ -1833,16 +1905,16 @@ describe("caller-driven purchase import writes", () => {
       .from(emailTable)
       .where(eq(emailTable.messageId, mail.messageId));
     expect(message?.status).toBe("completed");
-    // The import-source identity keeps the attachment's own checksum under
+    // The immutable capture keeps the attachment's own checksum under
     // the stored key form Email source identity matches.
     expect(
       await getDb(ctx.db)
         .select({
-          kind: importSourceClaim.kind,
-          externalKey: importSourceClaim.externalKey,
-          checksum: importSourceClaim.checksum,
+          kind: sourceOrderObservation.sourceKind,
+          externalKey: sourceOrderObservation.sourceExternalKey,
+          checksum: sourceOrderObservation.checksum,
         })
-        .from(importSourceClaim),
+        .from(sourceOrderObservation),
     ).toEqual([
       {
         kind: "mail_attachment",
@@ -2073,8 +2145,15 @@ describe("shared purchase-import prepare and commit", () => {
       ],
     });
     const first = await commitPurchaseImport(ctx.db, commitInput, ctx.actor);
+    const auditBeforeReplay = await getDb(ctx.db)
+      .select()
+      .from(auditLog)
+      .orderBy(auditLog.id);
     const replay = await commitPurchaseImport(ctx.db, commitInput, ctx.actor);
     expect(replay).toEqual(first);
+    expect(
+      await getDb(ctx.db).select().from(auditLog).orderBy(auditLog.id),
+    ).toEqual(auditBeforeReplay);
 
     const writtenPurchases = await getDb(ctx.db)
       .select({ id: purchase.id })
@@ -2082,10 +2161,12 @@ describe("shared purchase-import prepare and commit", () => {
       .where(eq(purchase.orderId, "111-2222222-3333333"));
     expect(writtenPurchases).toHaveLength(1);
     const writtenExpenses = await getDb(ctx.db)
-      .select({ productId: expense.productId })
+      .select({ id: expense.id, productId: expense.productId })
       .from(expense)
       .where(eq(expense.purchaseId, writtenPurchases[0]!.id));
-    expect(writtenExpenses).toEqual([{ productId: existingProduct.entityId }]);
+    expect(writtenExpenses.map((row) => row.productId)).toEqual([
+      existingProduct.entityId,
+    ]);
     const allocations = await getDb(ctx.db)
       .select({ transactionId: financialTransactionAllocation.transactionId })
       .from(financialTransactionAllocation)
@@ -2094,35 +2175,66 @@ describe("shared purchase-import prepare and commit", () => {
       );
     expect(allocations).toEqual([{ transactionId: postedCharge.id }]);
 
-    // The import's writes are recorded once, under the Run, in the shared
-    // audit trail; a replay of the same commit adds nothing.
-    const runAudit = await getDb(ctx.db)
+    // Derived money cites the retained Run capture and the member's Product
+    // Decision. Exact commit replay preserves the entire audit trail above.
+    const [captured] = await getDb(ctx.db)
+      .select({ id: sourceOrderObservation.id })
+      .from(sourceOrderObservation)
+      .where(eq(sourceOrderObservation.runId, run.id));
+    if (!captured) throw new Error("The import capture is missing");
+    const { decision } = await import("~/server/db/kernel-schema");
+    const choices = await getDb(ctx.db)
+      .select()
+      .from(decision)
+      .where(eq(decision.actorId, ctx.actor.userId));
+    const productChoice = choices.find(
+      (row) =>
+        row.field?.startsWith("line:") &&
+        row.value &&
+        typeof row.value === "object" &&
+        !Array.isArray(row.value) &&
+        row.value.kind === "existing" &&
+        row.value.productId === existingProduct.entityId,
+    );
+    expect(productChoice).toBeDefined();
+    if (!productChoice) return;
+    const moneyAudit = await getDb(ctx.db)
       .select({
         entityKind: auditLog.entityKind,
         entityId: auditLog.entityId,
         action: auditLog.action,
-        userId: auditLog.userId,
+        provenance: auditLog.provenance,
       })
       .from(auditLog)
       .where(
-        and(
-          eq(auditLog.runId, run.id),
-          inArray(auditLog.entityKind, ["purchase", "expense"]),
-        ),
+        inArray(auditLog.entityId, [
+          writtenPurchases[0]!.id,
+          ...writtenExpenses.map((row) => row.id),
+        ]),
       );
-    expect(runAudit).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          entityKind: "purchase",
-          entityId: writtenPurchases[0]!.id,
-          userId: ctx.actor.userId,
-        }),
-        expect.objectContaining({ entityKind: "expense", action: "create" }),
-      ]),
-    );
     expect(
-      runAudit.filter((row) => row.entityKind === "purchase"),
+      moneyAudit.filter(
+        (row) => row.entityKind === "purchase" && row.action === "create",
+      ),
     ).toHaveLength(1);
+    const expenseAudit = moneyAudit.filter(
+      (row) => row.entityKind === "expense" && row.action === "create",
+    );
+    expect(expenseAudit).toHaveLength(1);
+    expect(expenseAudit[0]?.provenance).toMatchObject({
+      scope: { kind: "purchaseEvent" },
+      inputs: expect.arrayContaining([
+        {
+          kind: "evidence",
+          fact: { kind: "orderObservation", id: captured.id },
+        },
+        {
+          kind: "decision",
+          id: productChoice.id,
+          subject: productChoice.subject,
+        },
+      ]),
+    });
   });
 
   it("matches a photo-recorded barcode exactly when the order line SKU is that UPC", async () => {

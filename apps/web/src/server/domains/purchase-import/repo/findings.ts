@@ -80,7 +80,7 @@ import {
   redistributeReplacementAttributions,
 } from "./aggregate-replacement";
 import { commitSourceOrderReconciliation } from "./reconciliation";
-import { lockFindingSettlement } from "./reconciliation-state";
+import { lockPartySettlement } from "./settlement-lock";
 import { existingExpenses, lineProductResolver } from "./writer";
 import { receiptProductQuantity } from "./writer-plan";
 
@@ -392,7 +392,7 @@ async function applyAggregateReplacement(
       line,
       decision: reviewedLineIdentities[lineIndex]!,
     })),
-    {},
+    { actor },
   );
   for (const [lineIndex, line] of fix.lines.entries()) {
     const identity = fix.reviewedLineIdentities[lineIndex]!;
@@ -468,6 +468,30 @@ async function applyAggregateReplacement(
     { displayLabel: targetPurchase.displayLabel ?? aggregate.name },
     and(eq(purchase.id, purchaseId), isNull(purchase.deletedAt)),
     actor,
+  );
+}
+
+async function lockFindingSettlement(
+  tx: DrizzleTransaction,
+  id: string,
+  actor: ActorContext,
+) {
+  const [owner] = await tx
+    .select({ ledgerPartyId: runFindingColumns.ledgerPartyId })
+    .from(runFinding)
+    .innerJoin(
+      ledgerParty,
+      and(
+        eq(ledgerParty.id, runFindingColumns.ledgerPartyId),
+        eq(ledgerParty.userId, actor.userId),
+        notDeleted(ledgerParty),
+      ),
+    )
+    .where(eq(runFindingColumns.id, id));
+  if (!owner) throw new Error("Import finding not found for this member.");
+  await lockPartySettlement(
+    tx,
+    parseEntityId("ledgerParty", owner.ledgerPartyId),
   );
 }
 

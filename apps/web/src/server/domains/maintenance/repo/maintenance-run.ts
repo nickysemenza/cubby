@@ -1,11 +1,12 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { RunId } from "@cubby/schemas/identifiers";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { enterHouseholdGate } from "~/server/kernel/gate";
 import { householdWrite } from "~/server/kernel/gate";
 
 /** The statuses `Run_one_active_maintenance` allows only one pass to hold. */
@@ -91,9 +92,7 @@ export async function admitMaintenancePass(
   // The gate before the admission lock: ensuring the Run takes it.
   return householdWrite(db, async (tx) => {
     if (clientKey) {
-      await getDb(tx).execute(
-        sql`SELECT pg_advisory_xact_lock(hashtextextended(${clientKey}, 0))`,
-      );
+      await enterHouseholdGate(tx);
       const [already] = await getDb(tx)
         .select({ id: run.id, status: run.status })
         .from(run)

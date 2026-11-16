@@ -78,6 +78,12 @@ export const fixtureAllocation = fixture.table("FixtureAllocation", {
   amountMinor: integer("amountMinor").notNull(),
 });
 
+export const fixtureReadSnapshot = fixture.table("FixtureReadSnapshot", {
+  entityId: uuid("entityId").primaryKey(),
+  summary: text("summary"),
+  detail: text("detail"),
+});
+
 /** Create the fixture schema once per database and empty it for each test. */
 export async function resetFixtureTables(db: Database): Promise<void> {
   // One statement per call: the query tracer reads one result per statement.
@@ -110,6 +116,8 @@ export async function resetFixtureTables(db: Database): Promise<void> {
       "updatedAt" timestamp NOT NULL DEFAULT now())`,
     `CREATE TABLE IF NOT EXISTS kernel_fixture."FixtureExpense" (id uuid PRIMARY KEY, "purchaseId" uuid NOT NULL REFERENCES kernel_fixture."FixturePurchase"(id), "amountMinor" integer NOT NULL)`,
     `CREATE TABLE IF NOT EXISTS kernel_fixture."FixtureAllocation" (id uuid PRIMARY KEY, "purchaseId" uuid NOT NULL REFERENCES kernel_fixture."FixturePurchase"(id), "expenseId" uuid NOT NULL REFERENCES kernel_fixture."FixtureExpense"(id), "amountMinor" integer NOT NULL)`,
+    `CREATE TABLE IF NOT EXISTS kernel_fixture."FixtureReadSnapshot" ("entityId" uuid PRIMARY KEY, summary text, detail text)`,
+    `DELETE FROM kernel_fixture."FixtureReadSnapshot"`,
     `DELETE FROM kernel_fixture."FixtureAllocation"`,
     `DELETE FROM kernel_fixture."FixtureExpense"`,
     `DELETE FROM kernel_fixture."FixturePurchase"`,
@@ -144,8 +152,11 @@ export const receiptEvidence = defineEvidence({
 export type FixtureHooks = {
   /** Repeated requests exercise the published-change guard on own-scope follow-ups. */
   emitSelf?: boolean;
+  merge?: (key: string) => { a: string; b: string; keepId?: string } | null;
   predicateReceipts?: boolean;
   linked?: boolean;
+  authored?: boolean;
+  patchMerchant?: boolean;
   linkedDecision?: boolean;
   onRemove?: () => Promise<void>;
   disagreement?: () => string | null;
@@ -166,6 +177,15 @@ const newestFirst = <T extends { createdAt: Date }>(rows: readonly T[]) =>
   [...rows].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
 /** The fixture module, with test hooks. */
+const receiptMerchant = (merchant: string | null, version: number) => {
+  if (!merchant) return null;
+  return version >= 3
+    ? merchant.toLowerCase()
+    : version >= 2
+      ? merchant.toUpperCase()
+      : merchant;
+};
+
 export function fixtureModule(hooks: FixtureHooks = {}) {
   const version = hooks.purchaseVersion ?? 1;
   const categorize = defineAsk({
@@ -222,7 +242,15 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
           }
         : {}),
       // The absorbed purchase is retired; the kernel settles who owns the survivor.
-      merge: async (tx, { loserIds }) => {
+      merge: async (tx, { keepId, loserIds }) => {
+        await repositoryQueries(tx)
+          .update(fixtureExpense)
+          .set({ purchaseId: keepId })
+          .where(inArray(fixtureExpense.purchaseId, [...loserIds]));
+        await repositoryQueries(tx)
+          .update(fixtureAllocation)
+          .set({ purchaseId: keepId })
+          .where(inArray(fixtureAllocation.purchaseId, [...loserIds]));
         await repositoryQueries(tx)
           .update(fixturePurchase)
           .set({ deletedAt: new Date() })
@@ -306,6 +334,15 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
     },
     reconcile(input, c) {
       if (hooks.emitSelf) c.emit({ kind: PURCHASE_SCOPE, key: input.orderRef });
+      const merge = hooks.merge?.(input.orderRef);
+      if (merge) {
+        for (const target of [purchaseWrites, expenseWrites, allocationWrites])
+          for (const key of c.existing(target)) c.retire(target, key, "keep");
+        c.merge(purchaseWrites, merge.a, merge.b, "decision", {
+          keepId: merge.keepId,
+        });
+        return c.done();
+      }
       for (const own of input.charges)
         c.bind({ kind: chargeEvidence.kind, id: own.id }, input.orderRef);
       const charge = newestFirst([...input.charges, ...input.bound])[0];
@@ -327,22 +364,28 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
         ? assigned.kind === "set"
           ? String(assigned.value)
           : null
-        : observed && version >= 3
-          ? observed.toLowerCase()
-          : observed && version >= 2
-            ? observed.toUpperCase()
-            : observed;
+        : receiptMerchant(observed, version);
       const purchaseId = c.record(
         purchaseWrites,
         "event",
         {
           orderRef: input.orderRef,
           amountMinor: charge?.amountMinor ?? receipt!.amountMinor,
-          merchant,
+          ...(hooks.patchMerchant && id ? {} : { merchant }),
           receiptId: receipt?.id ?? null,
         },
-        { provenance: assigned ? { merchant: assigned.id } : {} },
+        {
+          provenance: assigned ? { merchant: assigned.id } : {},
+          authored: hooks.authored,
+        },
       );
+      if (hooks.patchMerchant && id)
+        c.patch(
+          purchaseWrites,
+          id,
+          { merchant },
+          { provenance: assigned ? { merchant: assigned.id } : {} },
+        );
       const linked = id
         ? c.decision("assignment", recordSubject(PURCHASE_TABLE, id), "linked")
         : null;
@@ -394,6 +437,10 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
           },
         );
       }
+      if (hooks.linked || hooks.linkedDecision)
+        for (const target of [expenseWrites, allocationWrites])
+          for (const key of c.existing(target))
+            if (key.startsWith("merged:")) c.retire(target, key, "remove");
       if (!receipt)
         c.gap.evidence("the order receipt", sourceActor("Synthetic mailbox"));
       const desired = c.done();
