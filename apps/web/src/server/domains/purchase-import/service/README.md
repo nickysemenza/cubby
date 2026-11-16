@@ -712,6 +712,8 @@ intermediate results into model context. The model receives aggregate success
 and failure counts plus at most eight failure diagnostics. The Run inspector
 projects tool results with execution details as `{output, details}`; those
 details are absent from the model's tool-result text.
+Invalid native execution details render their validation diagnostic without
+failing the transcript read.
 
 The harness runs QuickJS on the coordinator's thread with 16 MiB of VM memory
 and 10,000 interrupt polls per execution. Scripts have a maximum 30-second
@@ -724,7 +726,9 @@ configuration is an evaluation capability, not a production rollout.
 Compare identical synthetic corpus, models, effort and repeats with
 `MAIL_REPLAY_READ_CODE` unset and set to `1`. `MAIL_REPLAY_SCRIPTED=1` exercises
 both orchestration paths without inference; its identical two-read workload
-proves plumbing, not token savings or extraction quality. Live comparison uses
+proves plumbing, not token savings or extraction quality.
+The scripted code variant also raises a script error and verifies an ordinary
+read before continuing the import. Live comparison uses
 the existing pricing snapshot and shared spending ledger below. Keep all
 Run-scoped token/cache counts, charged and standard cost, unpriced calls,
 settlement latency, actual models, failures, escalations and outcome differences.
@@ -792,7 +796,7 @@ or deliberate conservative carry before another launch.
 
 The report covers all Run-scoped AI usage, including extraction and audit, plus
 the case's exact physical receipts whose feature omitted Run attribution, with
-raw token/cache counts, duration and unknown prices. Known cost subtotals are
+raw token/cache counts, duration, per-tool call/error counts and unknown prices. Known cost subtotals are
 not complete costs when calls are unpriced. Version 2 synthetic replays fail on
 disposition, total, line-cost or supported-link disagreements; free-form line
 names and unresolved wording remain review differences. Capture baselines with
