@@ -700,15 +700,15 @@ already carry their schemas, and deferred reads remain discoverable on demand.
 Wrappers restrict the prompt
 catalog, script discovery and dispatch to `entity_read` and
 `purchase_import_read`, still narrowed by the Mail manifest and checked by
-the delegated MCP handler. Full schemas are discovered inside the sandbox
-with `describeTool`. Read calls return structured JSON objects directly. The
+the delegated MCP handler. Exact input signatures are discovered inside the
+sandbox with `describeTool`. Read calls return structured JSON objects directly. The
 MCP runner validates domain outputs; Pi's programmatic channel declares the
 shared object transport contract rather than copying the entity output unions.
 Structured reads are limited to 256 KiB and fail without partial JSON when
 larger; request selected fields, compact records or smaller pages. The limit
 applies to both script and ordinary calls when Code Mode is installed. This channel
-is installed only for Mail Runs with Code Mode enabled. Photo and ordinary
-Mail Runs retain their text results.
+is installed only for Mail Runs with Code Mode enabled. Photo and Mail Runs
+with Code Mode disabled retain their text results.
 Mail's ordinary `entity_read` is deferred through Pi's
 `tool_search`, so its schema is loaded only when requested. Each durable claim
 unloads deferred tools; the next Email's context folds the system deltas so
