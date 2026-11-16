@@ -289,13 +289,15 @@ export default {
         .looseObject({ instructions: z.string().optional() })
         .parse(JSON.parse(new TextDecoder().decode(body)));
       const orchestration =
-        env.READ_FANOUT_MODE === "code"
-          ? "Use exactly one codemode call to run these queries with Promise.all via tools.mcp__cubby__entity_read, and text({fanoutMatches: results}) where results contains one {name,matches} object per query. Each nested tool returns JSON text; parse it. The query inputs above are complete; schema discovery is unnecessary."
-          : env.READ_FANOUT_MODE === "bulk"
-            ? "Use one ordinary mcp__cubby__entity_read resolve call with all eight names in its names array."
-            : "Use eight separate ordinary mcp__cubby__entity_read calls, one name per call.";
+        env.READ_FANOUT_MODE === "code-bulk"
+          ? "Use one codemode call containing one tools.mcp__cubby__entity_read resolve query with all eight names. Parse its JSON text and text({fanoutMatches: names.map(name => ({name})), matches}) with the query result in matches. The query inputs above are complete; schema discovery is unnecessary."
+          : env.READ_FANOUT_MODE === "code"
+            ? "Use exactly one codemode call to run these queries with Promise.all via tools.mcp__cubby__entity_read, and text({fanoutMatches: results}) where results contains one {name,matches} object per query. Each nested tool returns JSON text; parse it. The query inputs above are complete; schema discovery is unnecessary."
+            : env.READ_FANOUT_MODE === "bulk"
+              ? "Use one ordinary mcp__cubby__entity_read resolve call with all eight names in its names array."
+              : "Use eight separate ordinary mcp__cubby__entity_read calls, one name per call.";
       const lookupInstructions =
-        env.READ_FANOUT_MODE === "bulk"
+        env.READ_FANOUT_MODE === "bulk" || env.READ_FANOUT_MODE === "code-bulk"
           ? 'Batch all names into one {action:"resolve",entity:"product",names:[...names]} query.'
           : 'Each query must use {action:"resolve",entity:"product",names:[name]}. Do not combine names into a batched query: this controlled benchmark compares orchestration of independent reads.';
       body = new TextEncoder().encode(

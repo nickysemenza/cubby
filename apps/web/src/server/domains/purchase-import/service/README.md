@@ -734,8 +734,10 @@ are empty; this measures orchestration overhead rather than representative
 catalog matching quality. Production prompts and gateway peers receive no
 benchmark instructions. Bulk resolution can already avoid these artificial
 single-name round trips; this benchmark alone cannot justify adoption.
-`MAIL_REPLAY_BULK_READS=1` selects one ordinary resolution with all eight names
-for the same workload and verifies every requested name in the transcript.
+`MAIL_REPLAY_BULK_READS=1` selects one resolution with all eight names for the
+same workload, directly in ordinary mode and inside one script in Code Mode.
+The transcript verifies every requested name and one successful nested read
+for the code variant.
 Compare Code Mode against this bulk baseline before attributing a benefit to
 scripting.
 

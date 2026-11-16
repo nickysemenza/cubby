@@ -98,7 +98,7 @@ const replayCases = z
   .max(100);
 const scripted = process.env.MAIL_REPLAY_SCRIPTED === "1";
 const readCode = process.env.MAIL_REPLAY_READ_CODE === "1";
-const bulkReads = !readCode && process.env.MAIL_REPLAY_BULK_READS === "1";
+const bulkReads = process.env.MAIL_REPLAY_BULK_READS === "1";
 // Identical read workload in both scripted variants; only model orchestration changes.
 const scriptedReads: ScriptStep[] = readCode
   ? [
@@ -683,7 +683,9 @@ describe("isolated Mail coordinator replay", () => {
                       ...(sample.readFanout && {
                         READ_FANOUT_NAMES: JSON.stringify(sample.readFanout),
                         READ_FANOUT_MODE: readCode
-                          ? "code"
+                          ? bulkReads
+                            ? "code-bulk"
+                            : "code"
                           : bulkReads
                             ? "bulk"
                             : "ordinary",
@@ -819,7 +821,8 @@ describe("isolated Mail coordinator replay", () => {
                         observed.includes(name),
                       ) &&
                       (!readCode ||
-                        successfulNestedReads === sample.readFanout.length);
+                        successfulNestedReads ===
+                          (bulkReads ? 1 : sample.readFanout.length));
                     fanoutDiagnostics.push(
                       `read fanout: ${JSON.stringify({ verified: fanoutVerified, directNames, returnedNames, successfulNestedReads })}`,
                     );
