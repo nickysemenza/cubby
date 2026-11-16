@@ -758,6 +758,24 @@ describe("isolated Mail coordinator replay", () => {
                   const calls = toolParts.filter(
                     (part) => part.toolName === "codemode",
                   );
+                  const toolUsage = Object.fromEntries(
+                    [...new Set(toolParts.map((part) => part.toolName))].map(
+                      (name) => {
+                        const selected = toolParts.filter(
+                          (part) => part.toolName === name,
+                        );
+                        return [
+                          name,
+                          {
+                            calls: selected.length,
+                            errors: selected.filter(
+                              (part) => part.state === "output-error",
+                            ).length,
+                          },
+                        ];
+                      },
+                    ),
+                  );
                   const fanoutDiagnostics: string[] = [];
                   if (sample.readFanout) {
                     const returnedNames: string[] = [];
@@ -870,6 +888,7 @@ describe("isolated Mail coordinator replay", () => {
                   return [
                     ...logs,
                     ...fanoutDiagnostics,
+                    `tool usage: ${JSON.stringify(toolUsage)}`,
                     `peer usage: ${await peer.text()}`,
                     `code usage: ${JSON.stringify({ calls: calls.length, errors: calls.filter((part) => part.state === "output-error").length, failures: calls.filter((part) => part.state === "output-error").map((part) => part.errorText?.slice(0, DIAGNOSTIC_CHARS)) })}`,
                   ];
