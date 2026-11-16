@@ -174,6 +174,14 @@ describe("composed Work queue engine", () => {
       }),
     );
     expect(unrelated.candidates).not.toHaveBeenCalled();
+    await read([recordSource, unrelated], {
+      entity: "product",
+      entityPresence: "has",
+    });
+    expect(unrelated.candidates).toHaveBeenCalledOnce();
+    vi.mocked(unrelated.candidates).mockClear();
+    await read([recordSource, unrelated], { entityPresence: "none" });
+    expect(unrelated.candidates).not.toHaveBeenCalled();
   });
 
   it("filters overlapping reasons, counts views and reason actions before offset paging", async () => {

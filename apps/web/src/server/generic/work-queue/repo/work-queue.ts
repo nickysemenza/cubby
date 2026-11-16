@@ -108,12 +108,15 @@ const admits = (
     include: string | string[] | undefined,
     exclude: string | string[] | undefined,
     value: string | null,
+    presence?: WorkQueueInput["entityPresence"],
   ) => {
     if (value === null) return true;
     const included = oneOrManyValues(include);
     const excluded = oneOrManyValues(exclude);
     return (
-      (!included || included.includes(value)) &&
+      ((included === undefined && presence === undefined) ||
+        (included?.includes(value) ?? false) ||
+        presence === "has") &&
       !(excluded ?? []).includes(value)
     );
   };
@@ -127,7 +130,12 @@ const admits = (
       input.executorExclude,
       source.executor === "dynamic" ? null : source.executor,
     ) &&
-    pick(input.entity, input.entityExclude, source.entity) &&
+    pick(
+      input.entity,
+      input.entityExclude,
+      source.entity,
+      input.entityPresence,
+    ) &&
     scopeAdmitsReasons(scope, source.reasons)
   );
 };
