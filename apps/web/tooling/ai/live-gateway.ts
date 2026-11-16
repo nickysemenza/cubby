@@ -290,7 +290,7 @@ export default {
         .parse(JSON.parse(new TextDecoder().decode(body)));
       const orchestration =
         env.READ_FANOUT_MODE === "code-bulk"
-          ? "Use one codemode call containing one tools.mcp__cubby__entity_read resolve query with all eight names. Parse its JSON text and text({fanoutMatches: names.map(name => ({name})), matches}) with the query result in matches. The query inputs above are complete; schema discovery is unnecessary."
+          ? "Use one codemode call containing one tools.mcp__cubby__entity_read resolve query with all eight names. Parse its JSON text and text({fanoutMatches: matches.results.map(row => ({name: row.name, exact: row.exact, candidates: row.candidates.map(candidate => ({id: candidate.id, name: candidate.name}))}))}). Do not print full candidate records. The query inputs above are complete; schema discovery is unnecessary."
           : env.READ_FANOUT_MODE === "code"
             ? "Use exactly one codemode call to run these queries with Promise.all via tools.mcp__cubby__entity_read, and text({fanoutMatches: results}) where results contains one {name,matches} object per query. Each nested tool returns JSON text; parse it. The query inputs above are complete; schema discovery is unnecessary."
             : env.READ_FANOUT_MODE === "bulk"
@@ -303,7 +303,7 @@ export default {
       body = new TextEncoder().encode(
         JSON.stringify({
           ...parsed,
-          instructions: `${parsed.instructions ?? ""}\nSynthetic catalog lookup benchmark: after claiming the Email and before writing its outcome, resolve these names: ${JSON.stringify(names)}. ${lookupInstructions} ${orchestration} Do this workload once per Email, not once per turn. An empty catalog result is valid. Then complete the ordinary Mail import workflow using the Email's evidence.`,
+          instructions: `${parsed.instructions ?? ""}\nSynthetic catalog lookup benchmark: after claiming the Email and before writing its outcome, resolve these names: ${JSON.stringify(names)}. ${lookupInstructions} ${orchestration} Do this workload once per Email, not once per turn. Never repeat it after writing an import or settling the source; stop when the claim returns no work. An empty catalog result is valid. Then complete the ordinary Mail import workflow using the Email's evidence.`,
         }),
       ).buffer;
     }
