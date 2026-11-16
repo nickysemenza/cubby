@@ -4,6 +4,7 @@ import type {
   PurchaseId,
 } from "@cubby/schemas/identifiers";
 import type { PurchaseFilters } from "@cubby/schemas/purchase";
+import { importWriterInput } from "@cubby/schemas/purchase-import";
 import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
@@ -19,7 +20,6 @@ import {
   auditLog,
   financialTransaction,
   importSourceClaim,
-  importSourceOrder,
   ledgerParty,
   orderMailAttachment,
   orderMailEvent,
@@ -35,9 +35,15 @@ import {
   updateLedgerParty,
   mergeLedgerParties,
 } from "~/server/domains/ledger-party/repo/ledger-party";
+import {
+  appendOrderEvidence,
+  orderEventKey,
+} from "~/server/domains/purchase-import/repo/order-evidence";
+import { settleOrderEvidence } from "~/server/domains/purchase-import/repo/settle-order-evidence";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import { startImportRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
+import { decide } from "~/server/kernel/api";
 import { createMcpServer } from "~/server/mcp/server";
 import {
   callMcpTool,
@@ -632,15 +638,54 @@ describe("purchaser filter", () => {
         return row.id;
       };
       const root = await claim(externalKey);
-      await getDb(ctx.db)
-        .insert(importSourceOrder)
-        .values({
-          sourceClaimId: await claim(`${externalKey}:historical-alias`, root),
+      const observations = await appendOrderEvidence(ctx.db, [
+        {
+          emailId: original.emailId,
+          retainedSubject: {
+            sourceClaimId: await claim(`${externalKey}:historical-alias`, root),
+            purchaseId: created.entityId,
+          },
           orderKey: orderId,
-          purchaseId: created.entityId,
-          checksum,
-          outputFingerprint: `synthetic-${orderId}`,
-        });
+          input: importWriterInput.parse({
+            ledgerPartyId: morganId,
+            vendorId,
+            vendorAccountId: null,
+            runId: run.id,
+            source: {
+              kind: attachmentId ? "mail_attachment" : "mail_message",
+              externalKey,
+              checksum,
+            },
+            extraction: {
+              status: "ready",
+              candidate: {
+                orderId,
+                orderedAt: "2026-06-01",
+                merchant: "Synthetic receipt merchant",
+                currency: "USD",
+                printedGrandTotal: null,
+                lines: [],
+                payments: [],
+              },
+            },
+            primaryDocumentImageId: null,
+            screenshotImageId: null,
+          }),
+        },
+      ]);
+      await decide(
+        ctx.db,
+        ctx.actor,
+        observations.map((observation) => ({
+          channel: "assignment",
+          kind: "set",
+          subject: orderEventKey(observation),
+          field: "purchaseId",
+          value: created.entityId,
+          scopes: [{ kind: "purchaseEvent", key: orderEventKey(observation) }],
+        })),
+      );
+      await settleOrderEvidence(ctx.db, observations);
       return created;
     };
     const byMessage = await accepted("SYN-MESSAGE");

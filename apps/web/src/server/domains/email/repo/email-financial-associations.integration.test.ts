@@ -7,8 +7,8 @@ import { describe, expect, it } from "vitest";
 
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
+import { decision } from "~/server/db/kernel-schema";
 import {
-  emailFinancialAssociation,
   financialAccount,
   financialTransaction,
   orderMail,
@@ -18,6 +18,7 @@ import {
   readEmailAssociations,
 } from "~/server/domains/email/repo/email";
 import { readEmailFinancialAssociations } from "~/server/domains/email/repo/email-financial-associations";
+import { decideEmailFinancialAssociation } from "~/server/domains/email/repo/email-financial-decisions";
 import { emailReviewReport } from "~/server/domains/email/repo/report-email";
 import { updateBankTransactionsWhere } from "~/server/domains/financial-transaction/repo/bank.fixtures";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
@@ -80,19 +81,20 @@ describe("reviewed Email financial evidence", () => {
         postedDate: "2026-09-03",
       },
     );
-    const reviewedAt = new Date("2026-09-04T18:00:00Z");
-    await getDb(ctx.db)
-      .insert(emailFinancialAssociation)
-      .values({
-        emailId: parseEntityId("email", email.id),
-        evidenceChecksum: original.rawChecksum,
-        transactionId: transaction.id,
-        reviewedAccountId: reviewed.id,
-        sourceAccountLabel: "Synthetic card ending 1234",
-        reviewReason: "Matched refund and reviewed the statement account",
-        decidedByUserId: ctx.actor.userId,
-        createdAt: reviewedAt,
-      });
+    await decideEmailFinancialAssociation(ctx.db, ctx.actor, {
+      emailId,
+      evidenceChecksum: original.rawChecksum,
+      transactionId: transaction.id,
+      reviewedAccountId: reviewed.id,
+      sourceAccountLabel: "Synthetic card ending 1234",
+      reviewReason: "Matched refund and reviewed the statement account",
+    });
+    const [recorded] = await getDb(ctx.db)
+      .select({ at: decision.at })
+      .from(decision)
+      .where(eq(decision.subject, `email:${emailId}`));
+    if (!recorded) throw new Error("Synthetic financial decision missing");
+    const reviewedAt = recorded.at;
     const expected = {
       transactionId: transaction.shortcode,
       reviewedAccountId: reviewed.shortcode,
