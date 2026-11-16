@@ -49,7 +49,7 @@ type Receipt = {
   cacheReadTokens: number | null;
   cacheWriteTokens: number | null;
 };
-async function guardedPeer() {
+async function guardedPeer(options: { paid?: boolean; held?: number } = {}) {
   const directory = await mkdtemp(join(tmpdir(), "synthetic-replay-"));
   const ledger = join(directory, "ledger.json");
   const catalog = join(directory, "catalog.json");
@@ -87,13 +87,29 @@ async function guardedPeer() {
     JSON.stringify({
       limitUsd: 1,
       accountedUsd: 0,
-      outstandingUsd: 0,
-      stopped: false,
+      outstandingUsd: options.held ?? 0,
+      stopped: Boolean(options.held),
+      ...(options.held && { stopReason: "missing_receipts" }),
+      reservations: options.held
+        ? [
+            {
+              id: "synthetic-held",
+              model: "gpt-6-luna",
+              maxCostUsd: options.held,
+              refused: true,
+            },
+          ]
+        : [],
     }),
   );
   vi.stubEnv("MAIL_REPLAY_BUDGET_FILE", ledger);
   vi.stubEnv("MAIL_REPLAY_PRICING_FILE", catalog);
-  const book = await liveReplayBudget({ receiptWaitMs: 20 });
+  if (options.paid) vi.stubEnv("MAIL_REPLAY_ALLOW_PAID", "1");
+  if (options.held) vi.stubEnv("MAIL_REPLAY_CARRY_RESERVATIONS", "1");
+  const book = await liveReplayBudget({
+    receiptWaitMs: 20,
+    finalReceiptWaitMs: 20,
+  });
   books.push({ book, directory });
   let rows: Receipt[] = [];
   let afterRead: (() => void) | undefined;
@@ -116,10 +132,16 @@ async function guardedPeer() {
     liveGateway.fetch(
       new Request("https://model.test/openai/responses", {
         method: "POST",
-        headers: {
-          "cf-aig-byok-alias": "subscriber-credit",
-          "cf-aig-no-wholesale": "true",
-        },
+        headers: options.paid
+          ? {
+              "x-cubby-inference-funding": "paid",
+              "cf-aig-byok-alias": "subscriber-credit",
+              "cf-aig-no-wholesale": "true",
+            }
+          : {
+              "cf-aig-byok-alias": "subscriber-credit",
+              "cf-aig-no-wholesale": "true",
+            },
         body: JSON.stringify({ model: "gpt-6-luna" }),
       }),
       gatewayEnv,
@@ -212,6 +234,82 @@ it("never transmits paid frontier calls under the replay guard", async () => {
   );
   expect(response.status).toBe(403);
   expect(upstream).not.toHaveBeenCalled();
+});
+
+// An explicit paid comparison must not reclaim unknown earlier calls or
+// reserve more than the same allowance when both peers race for capacity.
+it("admits authorized paid calls while retaining earlier full-window reservations", async () => {
+  const peer = await guardedPeer({ paid: true, held: 0.2 });
+  const credit = await liveGateway.fetch(
+    new Request("https://model.test/openai/responses", {
+      method: "POST",
+      headers: {
+        "cf-aig-byok-alias": "subscriber-credit",
+        "cf-aig-no-wholesale": "true",
+      },
+      body: JSON.stringify({ model: "gpt-6-luna" }),
+    }),
+    peer.gatewayEnv,
+  );
+  expect(credit.status).toBe(429);
+  const anthropicPaid = await liveGateway.fetch(
+    new Request("https://model.test/anthropic/v1/messages", {
+      method: "POST",
+      headers: { "x-cubby-inference-funding": "paid" },
+      body: JSON.stringify({ model: "claude-sonnet-5-5" }),
+    }),
+    peer.gatewayEnv,
+  );
+  expect(anthropicPaid.status).toBe(403);
+  expect(upstream).not.toHaveBeenCalled();
+  const responses = await Promise.all([peer.send(), peer.send()]);
+  expect(responses.map((response) => response.status).sort()).toEqual([
+    200, 429,
+  ]);
+  const first = responses.find((response) => response.status === 200);
+  if (!first) throw new Error("Authorized paid call was not admitted");
+  const forwarded = upstream.mock.calls.find(([url]) =>
+    String(url).startsWith(GATEWAY_BASE_URL),
+  );
+  const headers = new Headers(forwarded?.[1]?.headers);
+  expect(headers.get("cf-aig-byok-alias")).toBeNull();
+  expect(headers.get("cf-aig-no-wholesale")).toBeNull();
+  peer.record(first);
+  await peer.book.finish();
+  expect(await peer.ledger()).toMatchObject({
+    limitUsd: 1,
+    accountedUsd: 0.01,
+    outstandingUsd: 0.2,
+    stopped: false,
+    reservations: [{ id: "synthetic-held", maxCostUsd: 0.2 }],
+  });
+  peer.nextCase();
+  const second = await peer.send();
+  peer.record(second);
+  await peer.book.finish();
+  expect(await peer.ledger()).toMatchObject({
+    accountedUsd: 0.02,
+    outstandingUsd: 0.2,
+  });
+  const owned = books.pop();
+  if (!owned) throw new Error("Missing synthetic replay book");
+  try {
+    await owned.book.close();
+    vi.stubEnv("MAIL_REPLAY_CARRY_RESERVATIONS", "");
+    await expect(liveReplayBudget()).rejects.toThrow("Reconcile");
+    const path = join(owned.directory, "ledger.json");
+    const held = JSON.parse(await readFile(path, "utf8"));
+    await writeFile(
+      path,
+      JSON.stringify({ ...held, stopped: true, stopReason: "other" }),
+    );
+    vi.stubEnv("MAIL_REPLAY_CARRY_RESERVATIONS", "1");
+    await expect(liveReplayBudget()).rejects.toThrow(
+      "accounting failure requires reconciliation",
+    );
+  } finally {
+    await rm(owned.directory, { recursive: true, force: true });
+  }
 });
 
 it("releases a fully read credit refusal only after its exact failed no-usage receipt", async () => {

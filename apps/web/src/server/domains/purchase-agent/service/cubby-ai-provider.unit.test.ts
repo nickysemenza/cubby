@@ -528,6 +528,16 @@ describe("withSequentialToolCalls", () => {
       tools,
       parallel_tool_calls: false,
     });
+    const additional = [{ type: "additional_tools", tools }];
+    expect(withSequentialToolCalls("openai", { input: additional })).toEqual({
+      input: additional,
+      parallel_tool_calls: false,
+    });
+    const discovered = [{ type: "tool_search_output", tools }];
+    expect(withSequentialToolCalls("openai", { input: discovered })).toEqual({
+      input: discovered,
+      parallel_tool_calls: false,
+    });
     expect(
       withSequentialToolCalls("anthropic", {
         tools,

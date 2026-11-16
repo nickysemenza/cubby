@@ -1,7 +1,9 @@
+import { agentConversationSchema } from "@cubby/schemas/agent-conversation";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   importRunAgentManifest,
   EXTRACT_ORDER_TOOL,
+  importRunAgentIdentity,
 } from "@cubby/schemas/import-run-agent";
 import { mailAttributionHeaders } from "@cubby/schemas/mailbox-research";
 import { purchaseAgentEvent } from "@cubby/schemas/purchase-import";
@@ -12,19 +14,32 @@ import {
 } from "@cubby/shared/ai/gateway-metadata";
 import { supportedChatModelSchema } from "@cubby/shared/ai/models";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, inArray, or } from "drizzle-orm";
 import { liveReplayBudget } from "tooling/ai/live-replay-budget";
 import { localSecret } from "tooling/local-secret";
-import { call, from, mcp } from "tooling/purchase-agent-script";
+import {
+  call,
+  from,
+  mcp,
+  mcpRead,
+  type ScriptStep,
+} from "tooling/purchase-agent-script";
 import { withTestDb } from "tooling/test-setup";
 import { withWorkerdRuntime } from "tooling/workerd-runtime";
 import { afterAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { insertFieldsFixture } from "~/server/ai/fields/fields.fixtures";
 import { user } from "~/server/db/auth.schema";
-import { getDb } from "~/server/db/helpers";
+import { getDb, notDeleted } from "~/server/db/helpers";
 import { kernelPass } from "~/server/db/kernel-schema";
-import { aiUsage, runOperation, run as runTable } from "~/server/db/schema";
+import {
+  aiUsage,
+  expense,
+  product as productTable,
+  runOperation,
+  run as runTable,
+} from "~/server/db/schema";
 import { storedMailOutcome } from "~/server/domains/purchase-import/repo/mail-outcome/outcome";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 
@@ -82,11 +97,51 @@ const replayCases = z
         .object({ name: z.string().min(1), address: z.email() })
         .optional(),
       baseline: mailImportOutcome,
+      /** Trusted synthetic benchmark configuration, never derived from Email prose. */
+      readFanout: z.array(z.string().min(1)).length(8).optional(),
+      /** Existing catalog identities whose reuse is verified after settlement. */
+      catalogProducts: z.array(z.string().min(1)).min(1).max(50).optional(),
     }),
   )
   .min(1)
   .max(100);
 const scripted = process.env.MAIL_REPLAY_SCRIPTED === "1";
+const readCode = process.env.MAIL_REPLAY_READ_CODE === "1";
+const bulkReads = process.env.MAIL_REPLAY_BULK_READS === "1";
+// Shared two-read workload; Code Mode also verifies ordinary recovery after an error.
+const scriptedReads: ScriptStep[] = readCode
+  ? [
+      call("load-code", "tool_search", { query: "codemode", limit: 1 }),
+      call("read-code-failure", "codemode", {
+        code: 'throw new Error("Synthetic script failure")',
+      }),
+      { check: "read-code-failure", includes: "Synthetic script failure" },
+      call("load-reads", "tool_search", { query: "entity_read", limit: 1 }),
+      mcpRead("read-code-recovery", "entity_read", {
+        action: "resolve",
+        entity: "product",
+        names: ["Synthetic ceramic mug"],
+      }),
+      call("read-code", "codemode", {
+        code: `if (typeof fetch !== "undefined" || typeof process !== "undefined" || typeof require !== "undefined" || "mcp__cubby__purchase_import" in tools || "claim_next_import_work" in tools || typeof models !== "undefined") throw new Error("Unexpected sandbox authority"); const matches = await Promise.all(["Synthetic ceramic mug", "Synthetic tea towel"].map(async name => JSON.parse(await tools.mcp__cubby__entity_read({action:"resolve",entity:"product",names:[name]})))); text({kind:"read-code-success",successfulReads:matches.length,matches});`,
+      }),
+      { check: "read-code", includes: "readCalls" },
+      { check: "read-code", includes: "read-code-success" },
+      { check: "read-code", includes: '"successfulReads":2' },
+    ]
+  : [
+      call("load-reads", "tool_search", { query: "entity_read", limit: 1 }),
+      mcpRead("read-mug", "entity_read", {
+        action: "resolve",
+        entity: "product",
+        names: ["Synthetic ceramic mug"],
+      }),
+      mcpRead("read-towel", "entity_read", {
+        action: "resolve",
+        entity: "product",
+        names: ["Synthetic tea towel"],
+      }),
+    ];
 const evaluationBudget = scripted ? null : await liveReplayBudget();
 const inputUrl = process.env.MAIL_REPLAY_INPUT_URL;
 if (process.env.CI && inputUrl)
@@ -212,9 +267,11 @@ describe("isolated Mail coordinator replay", () => {
       JSON.stringify({
         kind: "mail-import-replay",
         reportVersion: 2,
-        costScope: "all_run_features",
+        costScope: "run_features_and_case_receipts",
         synthetic: !inputUrl,
         scripted,
+        readMode: readCode ? "code" : "ordinary",
+        bulkReads,
         primary,
         escalation,
         cases: reports.length,
@@ -229,6 +286,7 @@ describe("isolated Mail coordinator replay", () => {
         measurements: reports.map((report) => ({
           case: report.case,
           seconds: report.seconds ?? null,
+          diagnostics: report.diagnostics,
           usage: report.usage ?? null,
           // A known subtotal is not a complete cost when usage is unpriced.
           unpricedCalls:
@@ -268,11 +326,29 @@ describe("isolated Mail coordinator replay", () => {
         const settleBy = caseStartedAt + CASE_BUDGET_MS - REPORT_RESERVE_MS;
         let admittedAt = caseStartedAt;
         let diagnose = async (): Promise<string[]> => [];
+        let fanoutVerified = false;
+        let catalogVerified = false;
+        const catalogProductIds: Array<typeof productTable.$inferSelect.id> =
+          [];
+        let initialProductCount = 0;
         const queueCapture = captureBackgroundQueue();
         try {
           const { party } = await memberImportWorld(ctx.db, ctx.actor, {
             memberName: sample.owner?.name,
           });
+          for (const name of sample.catalogProducts ?? []) {
+            const product = await insertFieldsFixture(ctx.db, "product", {
+              name,
+            });
+            catalogProductIds.push(product.id);
+          }
+          if (catalogProductIds.length) {
+            const [row] = await getDb(ctx.db)
+              .select({ count: count() })
+              .from(productTable)
+              .where(notDeleted(productTable));
+            initialProductCount = row!.count;
+          }
           // Owner evidence is the member's sign-in address (the Gmail profile
           // is unreachable), so it carries the original recipient's address.
           if (sample.owner)
@@ -315,7 +391,13 @@ describe("isolated Mail coordinator replay", () => {
             .from(kernelPass)
             .where(eq(kernelPass.runId, started!.runId));
           const event = dispatch
-            ? purchaseAgentEvent.parse(dispatch.cursor)
+            ? z
+                .object({
+                  events: z
+                    .tuple([purchaseAgentEvent])
+                    .rest(purchaseAgentEvent),
+                })
+                .parse(dispatch.cursor).events[0]
             : null;
           if (!started || !event)
             throw new Error(
@@ -373,7 +455,15 @@ describe("isolated Mail coordinator replay", () => {
                     durationMs: aiUsage.durationMs,
                   })
                   .from(aiUsage)
-                  .where(eq(aiUsage.runId, runId))
+                  .where(
+                    or(
+                      eq(aiUsage.runId, runId),
+                      inArray(
+                        aiUsage.gatewayLogId,
+                        evaluationBudget?.receiptIds() ?? [],
+                      ),
+                    ),
+                  )
                   .orderBy(aiUsage.createdAt);
                 const [failed] = await getDb(ctx.db)
                   .select({
@@ -382,6 +472,35 @@ describe("isolated Mail coordinator replay", () => {
                   })
                   .from(runTable)
                   .where(eq(runTable.id, runId));
+                const catalogDiagnostics: string[] = [];
+                if (catalogProductIds.length) {
+                  const lines = await getDb(ctx.db)
+                    .select({ productId: expense.productId })
+                    .from(expense)
+                    .where(
+                      and(
+                        notDeleted(expense),
+                        eq(expense.lineKind, "principal"),
+                      ),
+                    );
+                  const [products] = await getDb(ctx.db)
+                    .select({ count: count() })
+                    .from(productTable)
+                    .where(notDeleted(productTable));
+                  const existingLinks = catalogProductIds.filter(
+                    (id) =>
+                      lines.filter((line) => line.productId === id).length ===
+                      1,
+                  ).length;
+                  const newProducts = products!.count - initialProductCount;
+                  catalogVerified =
+                    lines.length === catalogProductIds.length &&
+                    existingLinks === catalogProductIds.length &&
+                    newProducts === 0;
+                  catalogDiagnostics.push(
+                    `catalog reuse: ${JSON.stringify({ verified: catalogVerified, expectedProducts: catalogProductIds.length, principalLines: lines.length, existingLinks, newProducts })}`,
+                  );
+                }
                 return {
                   status,
                   failure:
@@ -407,7 +526,12 @@ describe("isolated Mail coordinator replay", () => {
                         DIAGNOSTIC_CHARS,
                       ),
                     ),
-                  diagnostics: await diagnose(),
+                  diagnostics: [
+                    ...(await diagnose().catch((error: unknown) => [
+                      `Replay diagnostics unavailable: ${String(error).slice(0, DIAGNOSTIC_CHARS)}`,
+                    ])),
+                    ...catalogDiagnostics,
+                  ],
                   usage: usage.map((row) => ({
                     feature: row.feature,
                     model: row.model,
@@ -451,6 +575,7 @@ describe("isolated Mail coordinator replay", () => {
                   sample.subject === syntheticAttemptLimit.subject
                     ? [
                         call("claim", "claim_next_import_work"),
+                        ...scriptedReads,
                         call("invalid-extract-1", EXTRACT_ORDER_TOOL),
                         call("invalid-extract-2", EXTRACT_ORDER_TOOL),
                         call("invalid-extract-3", EXTRACT_ORDER_TOOL),
@@ -459,6 +584,7 @@ describe("isolated Mail coordinator replay", () => {
                     : sample.baseline.kind === "imported"
                       ? [
                           call("claim", "claim_next_import_work"),
+                          ...scriptedReads,
                           call("extract", EXTRACT_ORDER_TOOL, {
                             mail: {
                               mailboxId,
@@ -519,6 +645,7 @@ describe("isolated Mail coordinator replay", () => {
                         ]
                       : [
                           call("claim", "claim_next_import_work"),
+                          ...scriptedReads,
                           mcp("resolve", "purchase_import", started.runId, {
                             action: "mail_resolve",
                             mailboxId,
@@ -533,7 +660,7 @@ describe("isolated Mail coordinator replay", () => {
                         ],
               },
               "purchase-agent",
-              { coordinatorModels: { primary } },
+              { coordinatorModels: { primary }, readCode },
             );
             diagnose = async () => {
               const attempts = await getDb(ctx.db)
@@ -568,6 +695,11 @@ describe("isolated Mail coordinator replay", () => {
               observedOutcome = await observe(async () => {
                 await scenario.wake();
                 await waitForSettlement();
+                const violations = await scenario.violations();
+                if (violations.length)
+                  throw new Error(
+                    `Scripted replay violations: ${JSON.stringify(violations)}`,
+                  );
               });
             } finally {
               await scenario.close();
@@ -588,7 +720,7 @@ describe("isolated Mail coordinator replay", () => {
             };
             if (!evaluationBudget)
               throw new Error("Live replay requires guarded admission");
-            const allowances = evaluationBudget.begin(async () =>
+            const allowances = evaluationBudget.begin(async (receiptIds) =>
               getDb(ctx.db)
                 .select({
                   gatewayLogId: aiUsage.gatewayLogId,
@@ -601,7 +733,12 @@ describe("isolated Mail coordinator replay", () => {
                   cacheWriteTokens: aiUsage.cacheWriteTokens,
                 })
                 .from(aiUsage)
-                .where(eq(aiUsage.runId, runId)),
+                .where(
+                  or(
+                    eq(aiUsage.runId, runId),
+                    inArray(aiUsage.gatewayLogId, receiptIds),
+                  ),
+                ),
             );
             await withWorkerdRuntime(
               {
@@ -610,7 +747,20 @@ describe("isolated Mail coordinator replay", () => {
                 models: {
                   agent: {
                     ...peer,
-                    vars: { ...peer.vars, ...allowances.agent },
+                    vars: {
+                      ...peer.vars,
+                      ...allowances.agent,
+                      ...(sample.readFanout && {
+                        READ_FANOUT_NAMES: JSON.stringify(sample.readFanout),
+                        READ_FANOUT_MODE: readCode
+                          ? bulkReads
+                            ? "code-bulk"
+                            : "code"
+                          : bulkReads
+                            ? "bulk"
+                            : "ordinary",
+                      }),
+                    },
                   },
                   gateway: {
                     ...peer,
@@ -618,6 +768,7 @@ describe("isolated Mail coordinator replay", () => {
                   },
                 },
                 coordinatorModels: { primary, escalation },
+                readCode,
               },
               async ({ harness }) => {
                 // The coordinator runs in the web Worker's Durable Object; its
@@ -638,10 +789,170 @@ describe("isolated Mail coordinator replay", () => {
                   const peer = await harness
                     .getWorker("cubby-test-model")
                     .fetch("https://model.test/usage");
-                  return [...logs, `peer usage: ${await peer.text()}`];
+                  const transcript = await harness
+                    .getWorker("cubby-job-wake-producer")
+                    .fetch("https://queue.test/coordinator-transcript", {
+                      method: "POST",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({
+                        agentId: importRunAgentIdentity(runId, "mail_import"),
+                      }),
+                    });
+                  if (!transcript.ok)
+                    throw new Error(
+                      `Replay transcript refused (${transcript.status})`,
+                    );
+                  const conversation = agentConversationSchema.parse(
+                    await transcript.json(),
+                  );
+                  const toolParts = [
+                    ...new Map(
+                      conversation.messages
+                        .flatMap((message) => message.parts)
+                        .filter((part) => part.type === "tool")
+                        .map((part) => [part.toolCallId, part]),
+                    ).values(),
+                  ];
+                  const calls = toolParts.filter(
+                    (part) => part.toolName === "codemode",
+                  );
+                  const toolUsage = Object.fromEntries(
+                    [...new Set(toolParts.map((part) => part.toolName))].map(
+                      (name) => {
+                        const selected = toolParts.filter(
+                          (part) => part.toolName === name,
+                        );
+                        return [
+                          name,
+                          {
+                            calls: selected.length,
+                            errors: selected.filter(
+                              (part) => part.state === "output-error",
+                            ).length,
+                          },
+                        ];
+                      },
+                    ),
+                  );
+                  const fanoutDiagnostics: string[] = [];
+                  if (sample.readFanout) {
+                    const returnedNames: string[] = [];
+                    const nestedNames: string[] = [];
+                    let successfulNestedReads = 0;
+                    const inspect = (value: unknown): void => {
+                      if (typeof value === "string") {
+                        try {
+                          inspect(JSON.parse(value));
+                        } catch {
+                          /* SILENT: ordinary prose is not a structured result. */
+                          if (value.includes("\n"))
+                            value.split("\n").forEach(inspect);
+                        }
+                      } else if (Array.isArray(value)) value.forEach(inspect);
+                      else if (value && typeof value === "object") {
+                        const matches = z
+                          .object({
+                            fanoutMatches: z.array(
+                              z.object({ name: z.string() }),
+                            ),
+                          })
+                          .safeParse(value);
+                        if (matches.success)
+                          returnedNames.push(
+                            ...matches.data.fanoutMatches.map(
+                              (row) => row.name,
+                            ),
+                          );
+                        const summary = z
+                          .object({
+                            calls: z.array(
+                              z.object({
+                                name: z.string(),
+                                status: z.string(),
+                                args: z.string(),
+                              }),
+                            ),
+                          })
+                          .safeParse(value);
+                        if (summary.success) {
+                          const successful = summary.data.calls.filter(
+                            (row) =>
+                              row.name === "mcp__cubby__entity_read" &&
+                              row.status === "ok",
+                          );
+                          successfulNestedReads += successful.length;
+                          for (const call of successful) {
+                            let args: unknown;
+                            try {
+                              args = JSON.parse(call.args);
+                            } catch {
+                              // SILENT: truncated native previews cannot verify a requested name.
+                              continue;
+                            }
+                            const query = z
+                              .object({
+                                action: z.literal("resolve"),
+                                entity: z.literal("product"),
+                                names: z.array(z.string()),
+                              })
+                              .safeParse(args);
+                            if (query.success)
+                              nestedNames.push(...query.data.names);
+                          }
+                        }
+                        Object.values(value).forEach(inspect);
+                      }
+                    };
+                    calls.forEach((part) => {
+                      if (part.type === "tool") inspect(part.output);
+                    });
+                    const directNames = toolParts.flatMap((part) => {
+                      if (
+                        part.type !== "tool" ||
+                        part.toolName !== "mcp__cubby__entity_read" ||
+                        part.state !== "output-available"
+                      )
+                        return [];
+                      const query = z
+                        .object({
+                          action: z.literal("resolve"),
+                          entity: z.literal("product"),
+                          names: bulkReads
+                            ? z.array(z.string()).length(8)
+                            : z.array(z.string()).length(1),
+                        })
+                        .safeParse(part.input);
+                      return query.success ? query.data.names : [];
+                    });
+                    const observed = readCode ? returnedNames : directNames;
+                    fanoutVerified =
+                      sample.readFanout.every((name) =>
+                        observed.includes(name),
+                      ) &&
+                      (!readCode ||
+                        (successfulNestedReads ===
+                          (bulkReads ? 1 : sample.readFanout.length) &&
+                          sample.readFanout.every((name) =>
+                            nestedNames.includes(name),
+                          )));
+                    fanoutDiagnostics.push(
+                      `read fanout: ${JSON.stringify({ verified: fanoutVerified, directNames, returnedNames, nestedNames, successfulNestedReads })}`,
+                    );
+                    if (!fanoutVerified)
+                      fanoutDiagnostics.push(
+                        `read fanout tool evidence: ${JSON.stringify(calls).slice(0, 16000)}`,
+                      );
+                  }
+                  return [
+                    ...logs,
+                    ...fanoutDiagnostics,
+                    `tool usage: ${JSON.stringify(toolUsage)}`,
+                    `peer usage: ${await peer.text()}`,
+                    `code usage: ${JSON.stringify({ calls: calls.length, errors: calls.filter((part) => part.state === "output-error").length, failures: calls.filter((part) => part.state === "output-error").map((part) => part.errorText?.slice(0, DIAGNOSTIC_CHARS)) })}`,
+                  ];
                 };
-                try {
-                  observedOutcome = await observe(async () => {
+                observedOutcome = await observe(async () => {
+                  try {
                     const response = await harness
                       .getWorker("cubby-job-wake-producer")
                       .fetch("https://queue.test/wake", {
@@ -654,21 +965,32 @@ describe("isolated Mail coordinator replay", () => {
                         `Replay dispatch refused (${response.status})`,
                       );
                     await waitForSettlement();
-                  });
-                } finally {
-                  await evaluationBudget.finish();
-                }
+                  } finally {
+                    // Flush exact physical receipts before the report reads
+                    // usage, while this case's database still exists.
+                    await evaluationBudget.finish();
+                  }
+                });
               },
             );
           }
           expect(observedOutcome).not.toBeNull();
+          expect(
+            !sample.catalogProducts || catalogVerified,
+            "Catalog-backed imports must reuse existing Products without duplicates",
+          ).toBe(true);
+          expect(
+            !sample.readFanout || fanoutVerified,
+            "The live model must complete the configured independent read workload",
+          ).toBe(true);
           // Private cases retain report-only grading. Synthetic facts must
           // agree; free-form gap wording is not a different disposition.
-          const requiredDisagreements = inputUrl
-            ? []
-            : mailReplayDisagreement(sample.baseline, observedOutcome).filter(
-                (field) => field !== "reason" && field !== "lines",
-              );
+          const requiredDisagreements =
+            inputUrl && !sample.readFanout
+              ? []
+              : mailReplayDisagreement(sample.baseline, observedOutcome).filter(
+                  (field) => field !== "reason" && field !== "lines",
+                );
           expect(requiredDisagreements).toEqual([]);
         } catch (error) {
           if (!reports.some((report) => report.case === index + 1))

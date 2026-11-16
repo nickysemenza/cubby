@@ -536,7 +536,8 @@ cache. Bindings, the OAuth client and deploy constraints are in
   resumption regenerates funding-paused dispatches. Manual pauses stay stopped.
 - Every model call goes through AI Gateway `cubby` on the Worker's `AI`
   binding, by the shared pi-ai providers (`@cubby/shared/ai/pi-providers`). The
-  gateway shim disables parallel tool calls: pi ends a run on a terminating
+  gateway shim disables parallel tool calls for top-level declarations and
+  Responses transcript tool batches: pi ends a run on a terminating
   tool only when it is the round's sole call. A paid- or credit-admission
   refusal (household AI budget, Run no longer executable) reaches the
   coordinator as an HTTP 403 carrying its reason, not a network error.
@@ -646,8 +647,8 @@ in-process boundary enforced by construction:
   `process`, `globalThis`, `self` and `require` globals, under any spelling. A
   new agent capability is a new Run service, never an import.
 
-The model never runs code: its only authority is the tool set, and every tool
-is a Run service or an MCP call checked as above. The boundary keeps Cubby's
+Production models act through the tool set, and every tool is a Run service
+or an MCP call checked as above. The boundary keeps Cubby's
 own agent code on that path. It is not a sandbox: the agent shares the Worker's
 isolate, so its dependencies (the Agents SDK, pi) run with the same runtime
 authority as any Worker code, including `process.env` populated by
@@ -685,6 +686,84 @@ until a session itemizes it.
 
 ## Mail replay evaluation
 
+`MAIL_REPLAY_READ_CODE=1` selects the read-only Code Mode experiment in the
+isolated replay harness. The default uses ordinary tools. Production follows
+the Mail manifest's `readCode` policy; a model peer uses the explicit replay
+override instead. The manifest keeps Code Mode disabled until its cost and
+outcome comparison qualifies.
+Photo inventory and external MCP retain their ordinary tools.
+
+The experiment uses Pi's `createCodemodeExtension` and its durable nested-tool
+replay. Code Mode itself is deferred through `tool_search`; its prompt section
+is absent until the tool is loaded. Its prompt catalog inlines no declarations: visible ordinary tools
+already carry their schemas, and deferred reads remain discoverable on demand.
+Wrappers restrict the prompt
+catalog, script discovery and dispatch to `entity_read` and
+`purchase_import_read`, still narrowed by the Mail manifest and checked by
+the delegated MCP handler. Full schemas are discovered inside the sandbox
+with `describeTool`. Mail's ordinary `entity_read` is deferred through Pi's
+`tool_search`, so its schema is loaded only when requested. Each durable claim
+unloads deferred tools; the next Email's context folds the system deltas so
+previously loaded schemas and the Code prompt section are absent. This ordinary read path is also the fallback after a
+script error. Writers stay immediately available. Ordinary
+`purchase_import_read` stays available for attachment originals, whose media
+Pi's schema-less Code Mode mapping cannot forward. Claims,
+writes, escalation, settlement, model generation and generic host services
+are unavailable to scripts. Ordinary writers retain their host-owned nested
+calls. Pi's conversation store is cleared before each script invocation,
+including recovery, so `store`/`load` cannot carry evidence between Emails.
+The transcript includes each script's nested read names, outcomes and
+durations through Pi's execution details, without copying those records or
+intermediate results into model context. The model receives aggregate success
+and failure counts plus at most eight failure diagnostics. The Run inspector
+projects tool results with execution details as `{output, details}`; those
+details are absent from the model's tool-result text.
+Invalid native execution details render their validation diagnostic without
+failing the transcript read.
+
+The harness runs QuickJS on the coordinator's thread with 16 MiB of VM memory
+and 10,000 interrupt polls per execution. Scripts have a maximum 30-second
+deadline, 32 nested reads per execution attempt, 32,000 source characters and
+2,000 selected-output tokens plus the compact read-count and failure summary.
+QuickJS exposes no network, modules, process or Worker bindings. Computation
+blocks the coordinator until a tool await or the interrupt limit; this inline
+configuration uses the same compiled Worker module in replay and production.
+
+Compare identical synthetic corpus, models, effort and repeats with
+`MAIL_REPLAY_READ_CODE` unset and set to `1`. `MAIL_REPLAY_SCRIPTED=1` exercises
+both orchestration paths without inference; its identical two-read workload
+proves plumbing, not token savings or extraction quality.
+The scripted code variant also raises a script error and verifies an ordinary
+read before continuing the import. Live comparison uses
+the existing pricing snapshot and shared spending ledger below. Keep all
+Run-scoped token/cache counts, charged and standard cost, unpriced calls,
+settlement latency, actual models, failures, escalations and outcome differences.
+Adopt only with lower cost per correctly settled source and no increase in
+incorrect outcomes or member interventions; fewer turns alone is insufficient.
+
+`mail-import-read-fanout.json` is a controlled synthetic orchestration workload.
+Its trusted `readFanout` configuration asks the live agent peer to perform eight
+independent single-name Product resolutions before importing the order. The
+ordinary mode uses direct calls; Code Mode must use one script with eight
+successful nested reads and return the named results. Transcript checks reject
+a run that skips either workload. The catalog is empty, so the expected matches
+are empty; this measures orchestration overhead rather than representative
+catalog matching quality. Production prompts and gateway peers receive no
+benchmark instructions. Bulk resolution can already avoid these artificial
+single-name round trips; this benchmark alone cannot justify adoption.
+`MAIL_REPLAY_BULK_READS=1` selects one resolution with all eight names for the
+same workload, directly in ordinary mode and inside one script in Code Mode.
+The transcript verifies every requested name and one successful nested read
+for the code variant.
+Compare Code Mode against this bulk baseline before attributing a benefit to
+scripting.
+
+`mail-import-catalog-comparison.json` adds existing Products to the same order.
+The replay verifies that each principal line reuses its expected catalog
+identity and that no additional Product is created. This exercises filtering
+real candidate projections rather than empty lookup results. Benchmark scripts
+return names, exact-match status and candidate identity only.
+
 `eval:mail-replay:stdin` replays the synthetic originals in
 `apps/web/tooling/ai/mail-import-comparison.json` through the current writers;
 live replay requires explicit spending authority. Live `eval:mail-replay`
@@ -692,15 +771,19 @@ requires `MAIL_REPLAY_PRICING_FILE` (an official models.dev `?type=all`
 snapshot) and `MAIL_REPLAY_BUDGET_FILE`. The exclusive JSON ledger records
 `limitUsd`, `accountedUsd`, `outstandingUsd`, `stopped`, and outstanding
 physical `reservations` (ID, model, maximum cost and refusal proof). The ledger
-spans fresh databases, peer isolates and launcher invocations; a stale lock or
-outstanding reservation requires reconciliation before another launch.
+spans fresh databases, peer isolates and launcher invocations. A stale lock
+requires investigation; outstanding reservations require exact reconciliation
+or deliberate conservative carry before another launch.
 
 - One loopback admission server serializes full catalog-window reservations
   for both peers before every physical call. It reconciles exact stored
   receipts between requests, so sequential calls can reuse unused capacity
   without partitioning the allowance between coordinator and other features.
-- Frontier requests require the subscriber-credit alias and no-wholesale flag;
-  paid forwarding is disabled.
+- Frontier requests use the subscriber-credit alias and no-wholesale flag by
+  default. An explicitly authorized `MAIL_REPLAY_ALLOW_PAID=1` comparison admits
+  OpenAI's actual paid stage under the same physical-call ledger. Credit and
+  subscription attempts refuse locally first, preserving truthful paid usage
+  attribution; Anthropic stays credit-only.
 - Uncertain calls keep their reservations and stop further evaluation. Only
   exact reconciliation of successful physical requests with priced stored usage
   releases unused capacity. A fully read credit refusal also requires its exact
@@ -708,14 +791,24 @@ outstanding reservation requires reconciliation before another launch.
   funding fallback can wait up to five seconds for that queued receipt; expiry
   stops the evaluation and keeps the reservation. Unknown failures stay
   reserved with their physical IDs.
+- After inspecting an interrupted attempt, `MAIL_REPLAY_CARRY_RESERVATIONS=1`
+  can resume with older unknown calls held at their complete maximum cost.
+  Their identities remain in the same ledger and their allowance is never
+  reclaimed. New calls must fit beside those holds; new uncertain calls stop
+  admission as usual. Stopped ledgers record their reason: only unknown,
+  missing-receipt or failed-without-usage outcomes permit carry. Unpriced
+  successful calls, unreserved usage and exceeded bounds require exact
+  reconciliation. Default startup refuses outstanding reservations.
 - The replay checks a stopped allowance while observing the Run, and
   finalization closes physical admission before reading the last receipts,
-  allowing the same bounded wait for final queued usage. Outstanding cost is
+  allowing at least sixty seconds for in-flight background calls to record final
+  usage. Outstanding cost is
   derived from retained reservations, so subtraction residue cannot block the
   next case.
 
-The report covers all Run-scoped AI usage, including extraction and audit, with
-raw token/cache counts, duration and unknown prices. Known cost subtotals are
+The report covers all Run-scoped AI usage, including extraction and audit, plus
+the case's exact physical receipts whose feature omitted Run attribution, with
+raw token/cache counts, duration, per-tool call/error counts and unknown prices. Known cost subtotals are
 not complete costs when calls are unpriced. Version 2 synthetic replays fail on
 disposition, total, line-cost or supported-link disagreements; free-form line
 names and unresolved wording remain review differences. Capture baselines with

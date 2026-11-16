@@ -332,6 +332,11 @@ export function cubbyMcpExtension(
     tools: tools.map((tool) =>
       defineTool({
         name: `${CUBBY_MCP_TOOL_PREFIX}${tool.name}`,
+        // Mail rarely needs catalog lookups. Keep ordinary reads discoverable
+        // as a fallback, without resending their schema on every initial turn.
+        ...(runId && tool.name === "entity_read"
+          ? { deferred: true as const }
+          : {}),
         description: tool.description,
         // MCP tool input schemas are always JSON-Schema objects.
         parameters: tool.inputSchema,

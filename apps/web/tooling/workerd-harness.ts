@@ -134,6 +134,8 @@ export type WorkerdModelWorker = {
 };
 
 export interface WorkerdHarnessOptions {
+  /** Compare read-only Code Mode with ordinary tools in isolated Mail replays. */
+  readCode?: boolean;
   profile: WorkerdProfile;
   databaseUrl: string;
   /** Omitted: storage is unreachable (port 9 refuses connections). */
@@ -341,6 +343,7 @@ export async function workerdHarnessOptions(
           AI_GATEWAY_API_KEY: "",
           // A scripted Run settles in a test's time, not production's 10s poll.
           CUBBY_TEST_SETTLEMENT_POLL_MS: "25",
+          ...(options.readCode && { CUBBY_PURCHASE_AGENT_READ_CODE: "1" }),
           // Release identity is a deploy-time Worker value, never bundle content.
           ...sourceReleaseVars(readSourceIdentity(repoRoot)),
           ...(options.models?.agent?.fixedModel && {

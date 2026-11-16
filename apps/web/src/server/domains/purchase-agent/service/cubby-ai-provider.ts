@@ -49,12 +49,21 @@ type AgentTransport = Extract<AiUsageTransport, "gateway" | "chatgpt">;
  */
 /** A Messages `tool_choice` object; its other fields pass through. */
 const anthropicToolChoice = z.looseObject({ type: z.string() });
+const responseToolBatch = z.object({
+  type: z.enum(["additional_tools", "tool_search_output"]),
+  tools: z.array(z.unknown()).min(1),
+});
 
 export function withSequentialToolCalls(
   route: ChatGatewayProvider,
   body: GatewayQuery,
 ): GatewayQuery {
-  if (!Array.isArray(body.tools) || body.tools.length === 0) return body;
+  const topLevelTools = Array.isArray(body.tools) && body.tools.length > 0;
+  const transcriptTools =
+    route === "openai" &&
+    Array.isArray(body.input) &&
+    body.input.some((item) => responseToolBatch.safeParse(item).success);
+  if (!topLevelTools && !transcriptTools) return body;
   if (route === "anthropic") {
     const choice = anthropicToolChoice.safeParse(body.tool_choice).data ?? {
       type: "auto",
