@@ -70,6 +70,7 @@ import {
 } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { append, evidenceRow } from "~/server/kernel/api";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 
 import { deferClassificationRefresh } from "./admitted-source";
 import {
@@ -339,6 +340,7 @@ export async function saveEmail(
     orderMailId: input.orderMailId,
   };
   await withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     const { row, created } = await (
       await import("~/server/domains/purchase-import/repo/order-evidence")
     ).appendEmailIdentity(databaseForTransaction(tx), {
@@ -405,6 +407,7 @@ export async function markEmailRemoved(
   },
 ) {
   await withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     const { row } = await (
       await import("~/server/domains/purchase-import/repo/order-evidence")
     ).appendEmailIdentity(databaseForTransaction(tx), {
@@ -445,6 +448,7 @@ export async function saveMailboxMetadata(
     messageId: input.mail.messageId,
   };
   await withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     const { row, created } = await (
       await import("~/server/domains/purchase-import/repo/order-evidence")
     ).appendEmailIdentity(databaseForTransaction(tx), {
@@ -785,6 +789,7 @@ export const upsertOrderMail = async (
     }),
   };
   return withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     const [email] = await tx
       .select()
       .from(emailTable)

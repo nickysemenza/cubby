@@ -101,7 +101,7 @@ describe("Gmail Email-owned metadata", () => {
         subject: null,
         receivedAt: null,
         threadId: null,
-        linkState: null,
+        linkState: "none",
       },
     ]);
     await drainStoredDerived(ctx.db);
