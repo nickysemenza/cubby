@@ -45,6 +45,9 @@ type RouteUsage = {
   failedStatuses: number[];
   /** Requests per wire model named in a JSON body. */
   models: Record<string, number>;
+  /** Public schema metadata only; never prompts, arguments or source content. */
+  firstToolNames?: string[];
+  firstToolSchemaChars?: number;
 };
 let usage: Record<string, RouteUsage> = {};
 const decisionBody = z.object({ questions: z.record(z.string(), z.unknown()) });
@@ -315,12 +318,27 @@ export default {
       env.GATEWAY_ENVIRONMENT,
       PROXY_CALL,
     );
-    const entry = (usage[route] ??= {
+    const entry: RouteUsage = (usage[route] ??= {
       requests: 0,
       failed: 0,
       failedStatuses: [],
       models: {},
     });
+    if (body && url.pathname === "/openai/responses" && entry.requests === 0) {
+      try {
+        const envelope = z
+          .object({
+            tools: z.array(z.looseObject({ name: z.string() })).optional(),
+          })
+          .parse(JSON.parse(new TextDecoder().decode(body)));
+        entry.firstToolNames = (envelope.tools ?? []).map((tool) => tool.name);
+        entry.firstToolSchemaChars = JSON.stringify(
+          envelope.tools ?? [],
+        ).length;
+      } catch {
+        // SILENT: optional catalog telemetry must not change provider forwarding.
+      }
+    }
     entry.requests += 1;
     const countedModel =
       route === "workers-ai"
