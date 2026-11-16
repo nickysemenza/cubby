@@ -691,8 +691,9 @@ only beside a model peer; production configuration has no enabling variable.
 Photo inventory and external MCP retain their ordinary tools.
 
 The experiment uses Pi's `createCodemodeExtension` and its durable nested-tool
-replay. Its prompt catalog has an 800-token inline declaration budget; tools
-outside that budget remain discoverable on demand. Wrappers restrict the prompt
+replay. Its prompt catalog inlines no declarations: visible ordinary tools
+already carry their schemas, and deferred reads remain discoverable on demand.
+Wrappers restrict the prompt
 catalog, script discovery and dispatch to `entity_read` and
 `purchase_import_read`, still narrowed by the Mail manifest and checked by
 the delegated MCP handler. Full schemas are discovered inside the sandbox
