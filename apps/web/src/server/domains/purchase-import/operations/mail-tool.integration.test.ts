@@ -985,12 +985,20 @@ describe("public mail tool", () => {
       messageId: "synthetic-deleted-import",
       checksum: await sha256Hex("Synthetic deleted import"),
     });
-    const importOrder = async (key: string) => {
+    const { createProductFixture, makeProductInput } =
+      await import("~/server/testing/repo.fixtures");
+    const item = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic retained widget" }),
+      ctx.actor,
+    );
+    const importResult = async (key: string) => {
       const { committed } = await memberImport(ctx.db, ctx.actor, {
         key,
         orders: [
           {
             stableOrderId: key,
+            resolutions: [{ kind: "existing", productId: item.id }],
             vendorId: vendor.shortcode,
             source: mailSource(mail),
             extraction: {
@@ -1015,17 +1023,70 @@ describe("public mail tool", () => {
           },
         ],
       });
-      const code = committed.items[0]?.purchaseId;
+      return committed.items[0];
+    };
+    const importOrder = async (key: string) => {
+      const code = (await importResult(key))?.purchaseId;
       if (!code) throw new Error("Synthetic import created no Purchase");
       return code;
     };
     const readInput = { mailboxId, messageId: mail.messageId };
     const deleted = await importOrder("deleted-import-first");
+    const readSpending = () =>
+      getDb(ctx.db)
+        .select({
+          id: expense.id,
+          cost: expense.cost,
+          productId: expense.productId,
+          productQuantity: expense.productQuantity,
+        })
+        .from(expense);
+    const { updatePurchaseEventWhere } =
+      await import("~/server/domains/financial-transaction/repo/purchase-event-mutations");
+    const originalSpending = await readSpending();
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { cost: 1300n },
+      eq(expense.id, originalSpending[0]!.id),
+      ctx.actor,
+    );
+    const spending = await readSpending();
     const [beforeRemoval] = await getDb(ctx.db)
       .select()
       .from(sourceOrderObservation);
     if (!beforeRemoval) throw new Error("Synthetic accepted capture missing");
-    await deletePurchases(ctx.db, [deleted], ctx.actor);
+    const [predecessor] = await getDb(ctx.db)
+      .select({ id: purchase.id })
+      .from(purchase)
+      .where(eq(purchase.shortcode, deleted));
+    if (!predecessor) throw new Error("Synthetic predecessor missing");
+    const { householdWrite, reconcileNow } =
+      await import("~/server/kernel/api");
+    const { orderEventKey } =
+      await import("~/server/domains/purchase-import/policy/payment-keys");
+    const { removePurchases } =
+      await import("~/server/domains/purchase/repo/purchase");
+    // Persisted predecessor deletions ran the policy without recording rejection.
+    await householdWrite(ctx.db, (database) =>
+      removePurchases(database, [predecessor.id], ctx.actor),
+    );
+
+    await reconcileNow(ctx.db, [
+      { kind: "purchaseEvent", key: orderEventKey(beforeRemoval) },
+    ]);
+    expect(
+      await getDb(ctx.db)
+        .select({ deletedAt: purchase.deletedAt })
+        .from(purchase)
+        .where(eq(purchase.id, predecessor.id)),
+    ).toEqual([{ deletedAt: expect.any(Date) }]);
+    expect(
+      await getDb(ctx.db)
+        .select({ purchaseId: expense.purchaseId })
+        .from(expense),
+    ).toEqual(spending.map(() => ({ purchaseId: null })));
+    expect(await readSpending()).toEqual(spending);
 
     const [retained, ...extra] = await getDb(ctx.db)
       .select()
@@ -1049,6 +1110,16 @@ describe("public mail tool", () => {
     // The identical extraction imports again beside the deleted history.
     const replacement = await importOrder("deleted-import-second");
     expect(replacement).not.toBe(deleted);
+    const { recordKey } = await import("~/server/db/kernel-schema");
+    expect(
+      await getDb(ctx.db)
+        .select({ rejectedAt: recordKey.rejectedAt })
+        .from(recordKey)
+        .where(eq(recordKey.entityId, predecessor.id)),
+    ).toEqual([{ rejectedAt: expect.any(Date) }]);
+    expect(await readSpending()).toEqual(spending);
+    expect(await importOrder("deleted-import-replay")).toBe(replacement);
+    expect(await readSpending()).toEqual(spending);
     const read = await readMail(ctx.db, readInput, ctx.actor);
     expect([...read.purchaseIds].sort()).toEqual([deleted, replacement].sort());
     expect(read.purchaseAssociations).toEqual(
@@ -1071,6 +1142,49 @@ describe("public mail tool", () => {
       ]),
     );
     expect(read.acceptedSourceOrders).toHaveLength(2);
+    expect(await getDb(ctx.db).select().from(sourceOrderObservation)).toEqual([
+      beforeRemoval,
+    ]);
+    await deletePurchases(ctx.db, [replacement], ctx.actor);
+    const scope = { kind: "purchaseEvent", key: orderEventKey(beforeRemoval) };
+    const background = await reconcileNow(ctx.db, [scope]);
+    expect(
+      background
+        .flatMap((row) => row.gaps)
+        .some((gap) => gap.kind === "decision"),
+    ).toBe(false);
+    const again = await importOrder("deleted-import-third");
+    expect([deleted, replacement]).not.toContain(again);
+    expect(await readSpending()).toEqual(spending);
+    expect(
+      (await readMail(ctx.db, readInput, ctx.actor)).acceptedSourceOrders,
+    ).toHaveLength(3);
+    await deletePurchases(ctx.db, [again], ctx.actor);
+    const other = await createPurchaseEventRecord(
+      ctx.db,
+      "purchase",
+      { vendorId: vendor.id },
+      ctx.actor,
+    );
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { purchaseId: other.id },
+      eq(expense.id, spending[0]!.id),
+      ctx.actor,
+    );
+    const moved = await getDb(ctx.db).select().from(expense);
+    expect((await importResult("deleted-import-ambiguous"))?.outcome).toBe(
+      "conflict",
+    );
+    expect(await getDb(ctx.db).select().from(expense)).toEqual(moved);
+    const { scopeState } = await import("~/server/db/kernel-schema");
+    expect(
+      await getDb(ctx.db)
+        .select({ stage: scopeState.stage, error: scopeState.error })
+        .from(scopeState)
+        .where(eq(scopeState.scopeKey, scope.key)),
+    ).toEqual([{ stage: "needs_you", error: null }]);
   });
 
   describe("search", () => {

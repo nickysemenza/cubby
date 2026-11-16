@@ -5,6 +5,7 @@ import { mailEvent } from "@cubby/schemas/mailbox-research";
 import { sql } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { sourceOrderObservation } from "~/server/db/retained-tables";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { decisionProjectionColumns } from "~/server/domains/email/repo/decision-projection";
@@ -12,7 +13,7 @@ import { decisionProjectionColumns } from "~/server/domains/email/repo/decision-
 /** Accepted observations point at the reconciler's canonical Purchase identity. */
 export const acceptedOrderPurchasesSql = sql`(
   SELECT observation.*, owner."entityId" AS "acceptedPurchaseId",
-    CASE WHEN owner."rejectedAt" IS NULL THEN owner."entityId" END AS "boundPurchaseId"
+    CASE WHEN owner."rejectedAt" IS NULL THEN live_owner.id END AS "boundPurchaseId"
   FROM "SourceOrderObservation" observation
   LEFT JOIN LATERAL (
     SELECT * FROM "EvidenceBinding" binding WHERE binding."factKind"='orderObservation'
@@ -22,6 +23,7 @@ export const acceptedOrderPurchasesSql = sql`(
   LEFT JOIN "RecordKey" owner ON owner.entity=${sqlEnumConstant(entitySchema, entitySchema.enum.purchase)} AND owner."scopeKind"='purchaseEvent'
     AND owner."scopeKey"=CASE WHEN binding.basis=${sqlEnumConstant(bindingBasis, bindingBasis.enum.baseline)} AND binding."scopeKind"='purchaseEvent'
       THEN binding."scopeKey" ELSE binding."eventKey" END AND owner."mergedAt" IS NULL
+  LEFT JOIN "Purchase" live_owner ON live_owner.id=owner."entityId" AND ${notDeleted("live_owner")}
 )`;
 
 /** Immutable accepted line identity joined to its current record without repointing the evidence. */

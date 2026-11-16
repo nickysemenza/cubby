@@ -576,7 +576,7 @@ and MCP resolve through the same function.
 
 A delete is a `reject` decision. It runs the entity's existing transactional
 delete policy and search cleanup, and marks the `RecordKey` rejected so the
-record is not created again when its evidence returns. Public repository deletion records this rejection even when its policy has already soft-deleted the row. Derivation retirement runs the policy without adding a member rejection. Repeating the rejection
+record is not created again when its evidence returns. Public repository deletion records this rejection even when its policy has already soft-deleted the row. Derivation retirement runs the policy without adding a member rejection. An explicit import can create a replacement Purchase through a record Decision while retaining the rejected identity. Automatic reuse requires the same previously accepted immutable capture and a unique surviving source-owned Expense for every line. It preserves Expense identities and cents and changes only their Purchase assignment; moved, missing, independently owned or ambiguous items remain for review. Background replay does not request this replacement. Repeating the rejection
 retains its first timestamp and resolves the same owner and delete policy. Rejecting one row of
 evidence removes its record only when no other evidence, merge or allocation
 holds the record. A record with decisions

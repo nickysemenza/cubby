@@ -232,7 +232,37 @@ export function reconcileOrderPurchase(
     c.gap.evidence("readable order details", "agent");
     return keep(c);
   }
-  const purchaseKey = c.existing(purchaseRecords)[0] ?? "purchase";
+  const requestedKeys = [
+    ...new Set(
+      seeds
+        .filter((seed) => seed.target === purchaseRecords && seed.decision)
+        .map((seed) => seed.naturalKey),
+    ),
+  ];
+  if (requestedKeys.length > 1) {
+    c.gap.decision("which Purchase identity this source should use");
+    return keep(c);
+  }
+  const purchaseKey =
+    requestedKeys[0] ?? c.existing(purchaseRecords)[0] ?? "purchase";
+  if (
+    c.recordId(purchaseRecords, purchaseKey) &&
+    !c.existing(purchaseRecords).includes(purchaseKey)
+  ) {
+    const request = c
+      .assignments(`purchaseEvent:${input.key}`)
+      .get("reimport")?.value;
+    if (
+      request &&
+      typeof request === "object" &&
+      !Array.isArray(request) &&
+      request.priorPurchaseId === c.recordId(purchaseRecords, purchaseKey)
+    )
+      c.gap.decision(
+        "the surviving spending to reuse when importing this deleted Purchase again",
+      );
+    return keep(c);
+  }
   const purchaseIdentity = c.identity(purchaseRecords, purchaseKey);
   const existingPurchase = input.purchases.find(
     (row) => row.id === purchaseIdentity.id && !row.deletedAt,
@@ -448,6 +478,11 @@ export function reconcileOrderPurchase(
         (row) =>
           !row.deletedAt &&
           !row.purchaseId &&
+          !(
+            scopeChoices.get(
+              `line-record:${line.binding?.stableLineId ?? line.lineIndex}`,
+            )?.value === row.id && ownKeyFor(c, expenseRecords, row.id)
+          ) &&
           row.productId === productId &&
           row.date === accepted.date &&
           row.cost !== null &&

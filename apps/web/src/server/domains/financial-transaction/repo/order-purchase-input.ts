@@ -216,6 +216,7 @@ export async function loadOrderPurchaseInput(
     legacyPayments,
     unlinkedExpenses,
     sourceMail,
+    ownedExpenses,
   ] = await Promise.all([
     reads.rows(purchase, purchaseIds),
     reads.lookup(expense, purchaseExpenses, purchaseIds),
@@ -246,12 +247,21 @@ export async function loadOrderPurchaseInput(
           : [],
       ),
     ),
+    reads.rows(
+      expense,
+      owners
+        .filter(
+          (row) => row.entity === "expense" && !row.rejectedAt && !row.mergedAt,
+        )
+        .map((row) => row.entityId),
+    ),
   ]);
   const allPurchases = unique([...input.purchases, ...purchases.values()]);
   const allExpenses = unique([
     ...input.expenses,
     ...expenses,
     ...unlinkedExpenses,
+    ...ownedExpenses.values(),
   ]);
   const allAllocations = unique([...input.allocations, ...allocations]);
   const [transactions, attributions] = await Promise.all([

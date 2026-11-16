@@ -1517,7 +1517,20 @@ export async function commitPurchaseImport(
               observations.map((row) => row.id),
             ),
           );
-        const decisions: Array<Parameters<typeof decide>[2][number]> = [];
+        const {
+          prepareDeletedPurchaseReimport,
+          verifyDeletedPurchaseReimport,
+        } =
+          await import("~/server/domains/purchase-import/repo/deleted-purchase-reimport");
+        const reimports = await prepareDeletedPurchaseReimport(
+          database,
+          observations.filter(
+            (row) => !boundBefore.some((bound) => bound.id === row.id),
+          ),
+        );
+        const decisions: Array<Parameters<typeof decide>[2][number]> = [
+          ...reimports.decisions,
+        ];
         const projectId = input.defaultProjectId
           ? await resolveOrThrow(database, "project", input.defaultProjectId)
           : undefined;
@@ -1694,6 +1707,7 @@ export async function commitPurchaseImport(
           acceptedReplayObservations.add(row.id);
         await decide(database, actor, decisions);
         const outcomes = await settleOrderEvidence(database, observations);
+        await verifyDeletedPurchaseReimport(database, reimports.proofs);
         if (input.defaultTrade === undefined) {
           const createdExpenses = await getDb(database)
             .select({ id: expense.id })
