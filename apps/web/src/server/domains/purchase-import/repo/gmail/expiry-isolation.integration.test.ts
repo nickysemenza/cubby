@@ -12,6 +12,7 @@ import {
   orderMail,
   orderMailAttachment,
 } from "~/server/db/schema";
+import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 
 import { syntheticRetainedMail } from "../../service/gmail/retained-mail.fixtures";
 import type { OrderMailAttachmentStorage } from "./attachment-storage";
@@ -39,14 +40,15 @@ describe("member-search expiry failure isolation", () => {
           bodyHtml: null,
         },
       });
-      await getDb(ctx.db)
-        .update(emailTable)
-        .set({
+      await updateEmailStateWhere(
+        ctx.db,
+        {
           classification: "uncertain",
           searchOrigin: "member_search",
           searchExpiresAt: new Date("2001-01-01T00:00:00Z"),
-        })
-        .where(eq(emailTable.orderMailId, source.id));
+        },
+        eq(emailTable.orderMailId, source.id),
+      );
       const key = `order-mail-attachment/synthetic-expired-${suffix}`;
       objects.set(key, Uint8Array.from([1, 2, 3]));
       const [attachment] = await getDb(ctx.db)

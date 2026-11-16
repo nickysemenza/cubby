@@ -11,7 +11,7 @@ import { decisionProjectionColumns } from "~/server/domains/email/repo/decision-
 
 /** Accepted observations point at the reconciler's canonical Purchase identity. */
 export const acceptedOrderPurchasesSql = sql`(
-  SELECT observation.*, coalesce(owner."entityId", observation."purchaseId") AS "boundPurchaseId"
+  SELECT observation.*, owner."entityId" AS "boundPurchaseId"
   FROM "SourceOrderObservation" observation
   LEFT JOIN LATERAL (
     SELECT * FROM "EvidenceBinding" binding WHERE binding."factKind"='orderObservation'

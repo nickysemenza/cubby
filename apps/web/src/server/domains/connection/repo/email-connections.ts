@@ -126,6 +126,7 @@ export async function captureEmailConnectionBasis(
   candidate: ConnectionCandidate,
   lock = false,
 ) {
+  if (lock) await enterHouseholdGate(db);
   const purchaseId = await resolveOrThrow(
     db,
     "purchase",
@@ -210,7 +211,6 @@ export async function captureEmailConnectionBasis(
     )
     .sort((a, b) => (a.eventId ?? "").localeCompare(b.eventId ?? ""))[0];
   if (!chosen?.eventId) return { source, target, dependencies: null };
-  if (lock) await enterHouseholdGate(db);
   const eventQuery = getDb(db)
     .select({
       id: orderMailEvent.id,

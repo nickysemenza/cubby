@@ -12,7 +12,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import { getDb } from "~/server/db/helpers";
 import { connectionCandidateEvidence } from "~/server/db/retained-tables";
 import {
   lookupEntityLabels,
@@ -236,7 +236,7 @@ export async function decideConnection(
     operationId: string;
   },
 ) {
-  return withTransactionDatabase(db, async (tx) => {
+  return householdWrite(db, async (tx) => {
     const [row] = await getDb(tx)
       .select()
       .from(connectionCandidateEvidence)

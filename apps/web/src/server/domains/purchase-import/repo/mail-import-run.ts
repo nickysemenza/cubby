@@ -71,12 +71,16 @@ import {
   runOperation,
 } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
+import { emailReviewsSql } from "~/server/domains/email/repo/email-decision-sql";
 import { emailPurchaseEvidenceSql } from "~/server/domains/email/repo/email-purchase-links";
 import {
   readRetainedMail,
   type RetainedMail,
 } from "~/server/domains/mail/repo/retained-mail";
-import { acceptedOrders } from "~/server/domains/purchase-import/repo/accepted-order-read";
+import {
+  acceptedOrders,
+  acceptedOrderPurchasesSql,
+} from "~/server/domains/purchase-import/repo/accepted-order-read";
 import {
   findControlledMailImport,
   CONTROLLED_MAIL_SOURCE_STATUSES,
@@ -456,7 +460,7 @@ const untouchedAutomaticUnresolved = (
       })`
     : sql`true`
 } AND NOT EXISTS (
-  SELECT 1 FROM "EmailReview" reviewed
+  SELECT 1 FROM ${emailReviewsSql} reviewed
   WHERE reviewed.family = ${suggestionFamily.enum.mail_import_outcome}
     AND reviewed."emailId" = ${emailTable.id} AND reviewed.authority = ${feedbackAuthority.enum.member}
 ) AND NOT ${emailHasProtectingIntentSql(sql`${emailTable.id}`, sql`${emailTable.orderMailId}`)}`;
@@ -1109,8 +1113,8 @@ const awaitedOrderKeySql = normalizedOrderIdSql(
  * was imported or linked. Null while it has not.
  */
 const waitedSourceSettledSql = sql`SELECT max(at) AS at FROM (
-  SELECT greatest(x.created, (SELECT max(accepted."createdAt") FROM ${acceptedOrders} accepted
-      WHERE accepted."purchaseId" = x.id)) AS at
+  SELECT greatest(x.created, (SELECT max(accepted."createdAt") FROM ${acceptedOrderPurchasesSql} accepted
+      WHERE accepted."boundPurchaseId" = x.id)) AS at
   FROM unnest(keyed.ids, keyed.created, keyed.vendor_ids, keyed.parties) AS x(id, created, vendor_id, party)
   WHERE newest.result #>> '{mailOutcome,judgment,waitingOn,kind}' = ${"order"}
     AND (newest.result #>> '{mailOutcome,judgment,waitingOn,vendorId}' IS NULL

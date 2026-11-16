@@ -103,7 +103,15 @@ export const emailPurchaseEvidenceSql = (
     AND event."supersededAt" IS NULL
     AND ${accountOwnerScope === "respect" ? sql`(account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")` : sql`true`}
   UNION ALL
-  SELECT p."id", event."id", ${KIND.suggested}::text, false, ${PROPOSER.heuristic}::text
+  ${emailSuggestedEvidenceSql(accountOwnerScope, purchaseIds)}
+`;
+
+/** Undecided order matches share one source policy with the stored Email projection. */
+export const emailSuggestedEvidenceSql = (
+  accountOwnerScope: "respect" | "ignore" = "respect",
+  purchaseIds?: SQL,
+): SQL => sql`
+  SELECT p."id" AS "purchaseId", event."id" AS "eventId", ${KIND.suggested}::text AS "kind", false AS "changed", ${PROPOSER.heuristic}::text AS "proposedBy"
   FROM "OrderMailEvent" event
   INNER JOIN "OrderMail" original ON original."id" = event."orderMailId"
   -- Exact-order and amount/date candidates are disjoint; each gets its own lookup.

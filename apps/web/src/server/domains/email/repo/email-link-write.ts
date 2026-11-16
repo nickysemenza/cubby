@@ -72,6 +72,7 @@ export async function publishEmailLinkDecision(
     const previous = current.find((row) => row.purchaseId === input.purchaseId);
     if (
       previous &&
+      previous.eventId === input.eventId &&
       previous.decision === input.decision &&
       previous.evidenceChecksum === input.evidenceChecksum &&
       previous.authority === authority &&
@@ -80,7 +81,10 @@ export async function publishEmailLinkDecision(
     )
       return previous;
     const member = current.find(
-      (row) => row.authority === "member" && row.decision === "linked",
+      (row) =>
+        row.authority === "member" &&
+        row.decision === "linked" &&
+        row.eventId === input.eventId,
     );
     if (authority === "automatic" && member) return member;
     const root = recordSubject("email", subject.emailId);

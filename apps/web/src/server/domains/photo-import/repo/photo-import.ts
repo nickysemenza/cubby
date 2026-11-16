@@ -35,7 +35,7 @@ import {
   nextImageSortOrder,
   notDeleted,
   withTransaction,
-  withTransactionDatabase,
+  withHouseholdWriteDatabase,
 } from "~/server/db/helpers";
 import {
   aiAnalysis,
@@ -390,7 +390,7 @@ export async function withPhotoImportTransaction<T>(
   db: Database,
   operation: (transactionDb: Database) => Promise<T>,
 ): Promise<T> {
-  return withTransactionDatabase(db, operation);
+  return withHouseholdWriteDatabase(db, operation);
 }
 
 export interface PhotoImportRelationTraversal {

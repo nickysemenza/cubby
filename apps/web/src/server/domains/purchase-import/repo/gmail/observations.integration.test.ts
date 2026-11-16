@@ -1,7 +1,8 @@
-/** Predictions remain immutable after member labels; accepted content survives
- * contradictory predictions, and retrieval failures never invent classifications. */
 import { emailClassificationPublicationEvidence } from "@cubby/schemas/email-observations";
 import { parseEntityId } from "@cubby/schemas/identifiers";
+/** Predictions remain immutable after member labels; accepted content survives
+ * contradictory predictions, and retrieval failures never invent classifications. */
+import { importExtractionOutcome } from "@cubby/schemas/purchase-import";
 import { eq } from "drizzle-orm";
 import {
   listEmailReviewsByKind,
@@ -13,20 +14,24 @@ import { describe, expect, it } from "vitest";
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
+import { evidenceBinding, recordKey } from "~/server/db/schema";
 import {
   emailClassificationObservation,
   emailRetrievalFailure,
   email as emailTable,
-  importSourceClaim,
   runOperation,
 } from "~/server/db/schema";
 import { orderMailEvent } from "~/server/db/schema";
+import { emailLinkDecisionsRead } from "~/server/domains/email/repo/email-decision-sql";
 import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-write";
+import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
+import { orderEvidence } from "~/server/domains/purchase-import/repo/order-evidence";
 import { productionMailTriage } from "~/server/domains/purchase-import/service/gmail/triage-model";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { listAutomaticDecisions } from "~/server/generic/suggestions/repo/automatic-decisions";
 import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
+import { append, evidenceRow } from "~/server/kernel/api";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
 
 import { ingestGmailMessages } from "../../service/gmail/ingest";
@@ -87,10 +92,6 @@ describe("immutable Email observations", () => {
       })
       .returning();
     if (!event) throw new Error("Synthetic retained event missing");
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({ deletedAt: new Date() })
-      .where(eq(emailTable.id, mail.id));
     const prediction = await publishEmailLinkDecision(
       ctx.db,
       {
@@ -103,7 +104,15 @@ describe("immutable Email observations", () => {
       },
       "automatic",
     );
-    expect(prediction.emailId).toBeNull();
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ deletedAt: new Date() })
+      .where(eq(emailTable.id, mail.id));
+    const [detached] = await getDb(ctx.db)
+      .select()
+      .from(emailLinkDecisionsRead)
+      .where(eq(emailLinkDecisionsRead.id, prediction.id));
+    expect(detached?.emailId).toBeNull();
     await getDb(ctx.db)
       .update(emailTable)
       .set({ deletedAt: null })
@@ -520,17 +529,62 @@ describe("immutable Email observations", () => {
         ledgerPartyIds: [fixture.party.id],
       });
       if (!original) throw new Error("Synthetic original missing");
-      await getDb(ctx.db)
-        .update(importSourceClaim)
-        .set({
-          externalKey: `gmail:${original.mailboxId}:${original.messageId}`,
+      const [message] = await getDb(ctx.db)
+        .select()
+        .from(emailTable)
+        .where(eq(emailTable.orderMailId, original.id));
+      if (!message) throw new Error("Synthetic accepted Email missing");
+      const [acceptedFact] = await append(ctx.db, [
+        evidenceRow(orderEvidence, {
+          ledgerPartyId: fixture.party.id,
+          vendorId: fixture.order.vendorId!,
+          emailId: message.id,
+          sourceClaimId: fixture.association.sourceClaimId,
+          sourceKind: "mail_message",
+          sourceExternalKey: `gmail:${original.mailboxId}:${original.messageId}`,
+          runId: fixture.parent.id,
+          orderKey: "synthetic:accepted-gmail",
+          purchaseId: fixture.order.id,
           checksum: original.rawChecksum,
-        })
-        .where(eq(importSourceClaim.id, fixture.association.sourceClaimId));
-      await getDb(ctx.db)
-        .update(emailTable)
-        .set({ classificationVersion: "synthetic-prior-version" })
-        .where(eq(emailTable.messageId, "accepted-message"));
+          contentFingerprint: "synthetic:accepted-gmail",
+          productBindings: [],
+          extraction: importExtractionOutcome.parse({
+            status: "ready",
+            candidate: {
+              orderId: fixture.order.orderId,
+              orderedAt: "2026-09-01",
+              payments: [],
+              merchant: "Synthetic accepted source",
+              currency: "USD",
+              lines: [],
+              printedGrandTotal: 24,
+            },
+          }),
+        }),
+      ]);
+      if (!acceptedFact) throw new Error("Synthetic accepted source missing");
+      const [owner] = await getDb(ctx.db)
+        .select()
+        .from(recordKey)
+        .where(eq(recordKey.entityId, fixture.order.id));
+      if (!owner) throw new Error("Synthetic Purchase owner missing");
+      await getDb(ctx.db).insert(evidenceBinding).values({
+        factKind: acceptedFact.kind,
+        factId: acceptedFact.id,
+        basis: "baseline",
+        eventKey: owner.scopeKey,
+        scopeKind: owner.scopeKind,
+        scopeKey: owner.scopeKey,
+      });
+      await updateEmailStateWhere(
+        ctx.db,
+        {
+          classification: "related",
+          classificationStage: "decision",
+          classificationVersion: "synthetic-prior-version",
+        },
+        eq(emailTable.id, message.id),
+      );
       const runId = withRun
         ? await ensureRun(ctx.db, ctx.actor, {
             purpose: "mail_discovery",

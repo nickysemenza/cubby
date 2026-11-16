@@ -19,6 +19,7 @@ import {
   importSourceOrder,
   emailClassificationObservation,
 } from "~/server/db/schema";
+import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
@@ -402,13 +403,14 @@ describe("Gmail acquisition retention and replay", () => {
         triage: async () => "related" as const,
       };
       await ingestGmailMessages(ctx.db, provider(), input);
-      await getDb(ctx.db)
-        .update(emailTable)
-        .set({
+      await updateEmailStateWhere(
+        ctx.db,
+        {
           classificationVersion: "legacy-source-identity-unresolved/v1",
           status: "unsettled",
-        })
-        .where(eq(emailTable.messageId, input.messageIds[0]!));
+        },
+        eq(emailTable.messageId, input.messageIds[0]!),
+      );
       const [disposition] = await getDb(ctx.db).select().from(emailTable);
       const originals = await getDb(ctx.db).select().from(orderMail);
       const attachments = await getDb(ctx.db)

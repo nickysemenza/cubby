@@ -35,6 +35,7 @@ import {
   vendorAccount,
   purchase,
 } from "~/server/db/schema";
+import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { recordEmailClassificationObservation } from "~/server/domains/purchase-import/repo/gmail/observations";
@@ -1340,14 +1341,15 @@ describe("mail research admission", () => {
       mailboxId: "synthetic-mailbox",
       enabled: true,
     });
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({
+    await updateEmailStateWhere(
+      ctx.db,
+      {
         status: "unsettled",
         classificationVersion:
           sourceIdentity.HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
-      })
-      .where(eq(emailTable.orderMailId, mail.id));
+      },
+      eq(emailTable.orderMailId, mail.id),
+    );
     for (let index = 0; index < 50; index += 1) {
       await retainedMailFixture(ctx.db, {
         ledgerPartyId: party.id,
@@ -2402,13 +2404,14 @@ describe("mail research admission", () => {
 
   it("refuses a historical ownership block before admitting or dispatching mail", async () => {
     const { party, mail } = await source();
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({
+    await updateEmailStateWhere(
+      ctx.db,
+      {
         status: "unsettled",
         classificationVersion: "legacy-source-identity-unresolved/v1",
-      })
-      .where(eq(emailTable.orderMailId, mail.id));
+      },
+      eq(emailTable.orderMailId, mail.id),
+    );
     const before = await getDb(ctx.db).select().from(emailTable);
     const retainedBefore = await getDb(ctx.db).select().from(orderMail);
     await expect(

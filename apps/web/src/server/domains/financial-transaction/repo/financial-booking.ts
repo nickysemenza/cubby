@@ -16,7 +16,7 @@ import {
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
-import { groupBy, uniq } from "es-toolkit";
+import { groupBy, uniq, isEqual } from "es-toolkit";
 
 import type { Database } from "~/server/db";
 import { minorToDollarsSql } from "~/server/db/computed/money";
@@ -982,6 +982,99 @@ async function loadFinancialBookingLineages(
 }
 
 /** A reviewed booking records choices; the event owner applies the money plan. */
+async function replayBooking(
+  db: Database,
+  review: FinancialBookingPreview,
+  row: Awaited<ReturnType<typeof transactionsForBooking>>[number],
+) {
+  if (!row.bookingDecisionFingerprint) return null;
+  if (
+    row.bookingDecisionFingerprint !==
+      (await digestValue(financialBookingPreview.parse(review))) ||
+    row.amount !== review.amount
+  )
+    return constraintViolation(
+      "This transaction already has a different reviewed booking. Review its existing Expenses.",
+    );
+  const account = await getDb(db).query.financialAccount.findFirst({
+    where: {
+      RAW: (account, { eq }) =>
+        relationalSql(account, eq(account.id, row.accountId)),
+    },
+    with: { ledgerParty: true },
+  });
+  const date = row.transactionDate ?? row.postedDate;
+  const purchaserProof =
+    account && !financialAccountPurchaser(account, undefined)
+      ? (
+          await loadAccountPurchaserProofs(db, [
+            { accountId: account.id, date },
+          ])
+        ).get(accountPurchaserKey(account.id, date))
+      : undefined;
+  // Unknown remains unknown across access/owner changes; compare its proof too.
+  if (
+    review.purchaserSnapshot !==
+    (await digestValue({ account, purchaserProof }))
+  )
+    return constraintViolation(
+      "The approved account or purchaser evidence changed.",
+    );
+  const allocations = await getDb(db)
+    .query.financialTransactionAllocation.findMany({
+      where: {
+        RAW: (allocation, { eq }) =>
+          relationalSql(
+            allocation,
+            and(eq(allocation.transactionId, row.id), notDeleted(allocation)),
+          ),
+      },
+    })
+    .then((rows) => rows.map(allocationDollars));
+  const allocation = allocations[0];
+  if (
+    allocations.length !== 1 ||
+    !allocation ||
+    cents(allocation.amount) !== cents(row.amount)
+  )
+    return constraintViolation("The approved booking allocation changed.");
+  const graph = await bookingGraph(db, allocation.purchaseId);
+  if (review.action === "link_existing") {
+    const capacity = await bookingAction(db, review, row, graph);
+    if (capacity.action !== "link_existing")
+      return constraintViolation(
+        "Existing itemized spending no longer covers the approved settlement.",
+      );
+  }
+  if (!review.purchaseId && review.vendorId) {
+    const vendorId = await resolveOrThrow(db, "vendor", review.vendorId);
+    if (graph.target?.vendorId !== vendorId)
+      return constraintViolation("The approved vendor changed.");
+  }
+  if (review.purchaseId && graph.target?.shortcode !== review.purchaseId)
+    return constraintViolation("The approved Purchase changed.");
+  const lineage = graph.lines.filter(
+    (line) => line.bookingTransactionCode === review.transactionId,
+  );
+  if (
+    review.action === "create_aggregate" &&
+    (!lineage.length ||
+      lineage.some(
+        (line) =>
+          line.cost === null || line.economicRole !== review.economicRole,
+      ) ||
+      lineage.reduce((sum, line) => sum + cents(line.cost ?? 0), 0) !==
+        cents(row.amount))
+  )
+    return constraintViolation("The approved booking lineage changed.");
+  return {
+    purchaseId: parseShortcodeFor("purchase", graph.target!.shortcode),
+    expenseId: lineage[0]
+      ? parseShortcodeFor("expense", lineage[0].shortcode)
+      : null,
+    replayed: true,
+  };
+}
 export async function commitFinancialBooking(
   db: Database,
   review: FinancialBookingPreview,
@@ -1008,16 +1101,29 @@ export async function commitFinancialBooking(
       )
       .orderBy(sql`${decision.at} DESC`)
       .limit(1);
-    const replayed = JSON.stringify(held?.value) === JSON.stringify(review);
+    const replayed = isEqual(held?.value, review);
+    if (replayed) {
+      const [row] = await transactionsForBooking(database, [review]);
+      const result = await replayBooking(database, review, row!);
+      if (!result)
+        return constraintViolation("The approved booking receipt is missing.");
+      return result;
+    }
     if (!replayed) {
-      const fresh = await previewFinancialBooking(database, review);
+      const fresh = await previewFinancialBooking(database, {
+        ...review,
+        spendingCategoryId: review.categoryOverride,
+      });
       if (fresh.snapshot !== review.snapshot)
         return constraintViolation(
           "Booking changed after review; preview it again",
         );
       const { jsonSnapshot } = await import("~/server/lib/canonical-json");
       const choices = Object.entries({
-        ...financialBookingInput.parse(review),
+        ...financialBookingInput.parse({
+          ...review,
+          spendingCategoryId: review.categoryOverride,
+        }),
         book: true,
         bookingReview: review,
       })
@@ -1048,7 +1154,11 @@ export async function commitFinancialBooking(
       )
       .leftJoin(
         expense,
-        and(eq(expense.purchaseId, purchase.id), notDeleted(expense)),
+        and(
+          eq(expense.purchaseId, purchase.id),
+          eq(expense.bookingTransactionCode, review.transactionId),
+          notDeleted(expense),
+        ),
       )
       .where(
         and(
@@ -1063,6 +1173,17 @@ export async function commitFinancialBooking(
           .flatMap((row) => row.error ?? row.gaps.map((gap) => gap.input))
           .join("; ") || "Booking is waiting for evidence",
       );
+    await getDb(database)
+      .update(financialTransaction)
+      .set({
+        bookingDecisionFingerprint: await digestValue(
+          financialBookingPreview.parse(review),
+        ),
+        bookingExpenseFingerprint: await digestValue(
+          await loadFinancialBookingLineage(database, review.transactionId),
+        ),
+      })
+      .where(eq(financialTransaction.id, id));
     return {
       purchaseId: parseShortcodeFor("purchase", slices[0].purchaseId),
       expenseId: slices[0].expenseId

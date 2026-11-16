@@ -7,6 +7,7 @@ import { recordKey } from "~/server/db/kernel-schema";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import {
   ledgerTransfer,
+  financialAccount,
   financialTransaction,
   financialTransactionAllocation,
   expense,
@@ -18,6 +19,10 @@ async function admitTransferLegs(
   db: Database,
   ids: readonly string[],
   actor: ActorContext,
+  transfer: Pick<
+    typeof ledgerTransfer.$inferSelect,
+    "fromPartyId" | "toPartyId" | "amount"
+  >,
 ) {
   if (!ids.length) return;
   const q = repositoryQueries(db);
@@ -34,6 +39,51 @@ async function admitTransferLegs(
     throw createAppError(
       "CONSTRAINT_VIOLATION",
       "Transfer evidence must name live bank events.",
+    );
+  const accounts = await q
+    .select()
+    .from(financialAccount)
+    .where(
+      inArray(
+        financialAccount.id,
+        rows.map((row) => row.accountId),
+      ),
+    );
+  if (
+    rows.some(
+      (row) =>
+        !["observed", "pending", "posted"].includes(row.status) ||
+        (row.amount < 0n ? -row.amount : row.amount) !== transfer.amount,
+    )
+  )
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Transfer evidence must have observed, pending, or posted status and match the transfer amount.",
+    );
+  if (
+    rows.some((row) => {
+      const account = accounts.find((value) => value.id === row.accountId);
+      return (
+        !account ||
+        account.deletedAt ||
+        account.ledgerPartyId !==
+          (row.amount > 0n ? transfer.fromPartyId : transfer.toPartyId)
+      );
+    })
+  )
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Each evidence transaction account must map to its transfer endpoint party.",
+    );
+  if (rows.length === 2 && rows[0]!.amount > 0n === rows[1]!.amount > 0n)
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Two-sided transfer evidence requires one positive and one negative transaction.",
+    );
+  if (rows.length === 2 && rows[0]!.accountId === rows[1]!.accountId)
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Two-sided transfer evidence must use distinct financial accounts.",
     );
   const [slices, lines] = await Promise.all([
     q
@@ -64,7 +114,7 @@ async function admitTransferLegs(
   if (slices.length || lines.length)
     throw createAppError(
       "CONSTRAINT_VIOLATION",
-      "Recorded spending must be reviewed before its bank event can evidence a transfer.",
+      "Transfer evidence must be unallocated and have no live booked Expenses. Review recorded spending before using it as transfer evidence.",
     );
   const changed = rows.filter(
     (row) =>
@@ -100,7 +150,7 @@ export async function createTransferEvent(
   const { manualTransactionEvidence } =
     await import("~/server/domains/financial-transaction/repo/manual-evidence");
   return householdWrite(db, async (database) => {
-    await admitTransferLegs(database, transactionIds, actor);
+    await admitTransferLegs(database, transactionIds, actor, values);
     const id = crypto.randomUUID();
     const key = `manual:${id}`;
     await append(database, [
@@ -164,7 +214,21 @@ export async function updateTransferEvent(
         "CONSTRAINT_VIOLATION",
         "Transfer has no reconciliation scope.",
       );
-    if (transactions) await admitTransferLegs(database, transactions, actor);
+    if (transactions) {
+      const [current] = await repositoryQueries(database)
+        .select()
+        .from(ledgerTransfer)
+        .where(eq(ledgerTransfer.id, parseEntityId("ledgerTransfer", id)));
+      if (!current)
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "Transfer is no longer live.",
+        );
+      await admitTransferLegs(database, transactions, actor, {
+        ...current,
+        ...values,
+      });
+    }
     const scopes = [{ kind: owner.scopeKind, key: owner.scopeKey }];
     await decide(database, actor, [
       ...Object.entries(values)

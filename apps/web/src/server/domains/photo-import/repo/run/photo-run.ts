@@ -75,7 +75,6 @@ import {
   loadRunScopeByShortcode,
 } from "~/server/domains/run/repo/run-control";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { enterHouseholdGate } from "~/server/kernel/gate";
 
 export type StartPhotoInventoryRunInput = {
   /** The household member the photos belong to; defaults to the creator's own party. */
@@ -433,7 +432,6 @@ export async function finalizePhotoRun(
       // Review and the grouping agent read a whole Run at once and stop at
       // the limit, so a photo past it would upload but never be imported.
       // The lock serializes concurrent chunks of the same Run for the count.
-      await enterHouseholdGate(transactionDb);
       const targeted = new Set(
         (
           await getDb(transactionDb)

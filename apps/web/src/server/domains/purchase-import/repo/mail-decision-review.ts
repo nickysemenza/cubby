@@ -25,7 +25,10 @@ import {
   runFinding,
   runOperation,
 } from "~/server/db/schema";
-import { emailLinkDecisionsRead } from "~/server/domains/email/repo/email-decision-sql";
+import {
+  emailLinkDecisionHistoryRead,
+  emailLinkDecisionsRead,
+} from "~/server/domains/email/repo/email-decision-sql";
 import { emailReviewsRead } from "~/server/domains/email/repo/email-decision-sql";
 import { emailLinkSubject } from "~/server/domains/email/repo/email-link-decision";
 import {
@@ -91,8 +94,8 @@ export async function resolveMailDecisionHandle(
   const client = getDb(db);
   const [decision] = await client
     .select()
-    .from(emailLinkDecisionsRead)
-    .where(eq(emailLinkDecisionsRead.id, id))
+    .from(emailLinkDecisionHistoryRead)
+    .where(eq(emailLinkDecisionHistoryRead.id, id))
     .limit(1);
   if (decision)
     return {

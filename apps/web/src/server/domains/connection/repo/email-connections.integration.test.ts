@@ -1,5 +1,6 @@
 import type { ConnectionCandidate } from "@cubby/schemas/entity-connections";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { importExtractionOutcome } from "@cubby/schemas/purchase-import";
 import { moneyToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -8,17 +9,13 @@ import { describe, expect, it } from "vitest";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
+import { evidenceBinding, recordKey } from "~/server/db/schema";
 import { purchase as purchaseTable, vendorAccount } from "~/server/db/schema";
-import {
-  email,
-  importSourceClaim,
-  importSourceOrder,
-  orderMail,
-  orderMailEvent,
-} from "~/server/db/schema";
+import { email, orderMail, orderMailEvent } from "~/server/db/schema";
 import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { withEmailEvidenceWrite } from "~/server/domains/purchase-import/repo/email-evidence-write-scope";
 import { decideEmailPurchase } from "~/server/domains/purchase-import/repo/email-purchase-decision";
+import { orderEvidence } from "~/server/domains/purchase-import/repo/order-evidence";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
@@ -27,14 +24,40 @@ import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 // misses retained events; subject similarity invents identity; a changed checksum
 // or superseded event applies; foreign members/agents bypass purchase_import.mail_resolve;
 // a failed outer transaction leaks a link and a retry applies twice.
+import { append, evidenceRow } from "~/server/kernel/api";
 import { activeEmailPurchaseDecision } from "~/server/testing/email-link.fixtures";
 
-import { retrieveEmailConnectionCandidates as retrieveConnectionCandidates } from "./email-connections";
+import { retrieveEmailConnectionCandidates as readConnectionCandidates } from "./email-connections";
 import {
   prepareEntityConnectionEvidence,
   publishPreparedEntityConnections,
-  readEntityConnections,
+  readEntityConnections as readPublishedConnections,
 } from "./entity-connections";
+
+// Fixture events are inserted directly; drain their owner before reading the
+// snapshot, as the background consumer does after a real source publication.
+async function settleEmailFixtures(db: Database) {
+  const { reconcileNow } = await import("~/server/kernel/api");
+  const rows = await getDb(db).select({ id: email.id }).from(email);
+  await reconcileNow(
+    db,
+    rows.map((row) => ({ kind: "emailState", key: row.id })),
+  );
+}
+async function retrieveConnectionCandidates(
+  db: Database,
+  source: Parameters<typeof readConnectionCandidates>[1],
+) {
+  await settleEmailFixtures(db);
+  return readConnectionCandidates(db, source);
+}
+async function readEntityConnections(
+  db: Database,
+  source: Parameters<typeof readPublishedConnections>[1],
+) {
+  await settleEmailFixtures(db);
+  return readPublishedConnections(db, source);
+}
 
 /** Capture and publish one candidate, as the production discovery path does. */
 const publishEntityConnection = async (
@@ -81,7 +104,8 @@ describe("fresh retained Email connection recommendations", () => {
       .values({
         orderMailId: original.id,
         event: "placed",
-        orderId: purchase.orderId,
+        orderId: null,
+        amount: 24,
         sourceKey: "synthetic-connection-event",
       })
       .returning();
@@ -98,7 +122,7 @@ describe("fresh retained Email connection recommendations", () => {
       entityKind: "purchase" as const,
       entityId: purchase.shortcode,
     };
-    return { original, event, message, source, target, purchase };
+    return { original, event, message, source, target, purchase, vendor };
   }
 
   it("retrieves both endpoints, publishes pending only, and keeps UUID dependencies private", async () => {
@@ -156,7 +180,7 @@ describe("fresh retained Email connection recommendations", () => {
     expect(await readEntityConnections(ctx.db, f.source)).toEqual([]);
     await getDb(ctx.db)
       .update(orderMailEvent)
-      .set({ orderId: f.purchase.orderId })
+      .set({ orderId: f.event.orderId })
       .where(eq(orderMailEvent.id, f.event.id));
     expect(await readEntityConnections(ctx.db, f.source)).toHaveLength(1);
     await getDb(ctx.db)
@@ -205,7 +229,8 @@ describe("fresh retained Email connection recommendations", () => {
     await getDb(ctx.db).insert(orderMailEvent).values({
       orderMailId: original.id,
       event: "placed",
-      orderId: f.purchase.orderId,
+      orderId: null,
+      amount: 24,
       sourceKey: "synthetic-second-event",
     });
     const [second] = await getDb(ctx.db)
@@ -476,24 +501,46 @@ describe("fresh retained Email connection recommendations", () => {
         status: "running",
       }),
     };
-    const [claim] = await getDb(ctx.db)
-      .insert(importSourceClaim)
-      .values({
+    const [acceptedFact] = await append(ctx.db, [
+      evidenceRow(orderEvidence, {
         ledgerPartyId: f.message.ledgerPartyId,
-        kind: "mail_message",
-        externalKey: `${f.message.provider}:${f.message.mailboxId}:${f.message.messageId}`,
+        vendorId: f.vendor.id,
+        emailId: f.message.id,
+        sourceKind: "mail_message",
+        sourceExternalKey: `${f.message.provider}:${f.message.mailboxId}:${f.message.messageId}`,
+        runId: run.id,
+        orderKey: "synthetic-accepted-connection",
+        purchaseId: f.purchase.id,
         checksum: f.message.checksum,
-        firstRunId: run.id,
-        lastRunId: run.id,
-      })
-      .returning();
-    if (!claim) throw new Error("Missing synthetic accepted claim");
-    await getDb(ctx.db).insert(importSourceOrder).values({
-      sourceClaimId: claim.id,
-      orderKey: "synthetic-accepted-connection",
-      purchaseId: f.purchase.id,
-      checksum: f.message.checksum,
-      outputFingerprint: "synthetic-accepted-output",
+        extraction: importExtractionOutcome.parse({
+          status: "ready",
+          candidate: {
+            orderId: f.purchase.orderId,
+            orderedAt: "2026-10-01",
+            merchant: "Synthetic connection merchant",
+            currency: "USD",
+            printedGrandTotal: 24,
+            lines: [],
+            payments: [],
+          },
+        }),
+        productBindings: [],
+        contentFingerprint: "synthetic-accepted-output",
+      }),
+    ]);
+    if (!acceptedFact) throw new Error("Synthetic accepted source missing");
+    const [owner] = await getDb(ctx.db)
+      .select()
+      .from(recordKey)
+      .where(eq(recordKey.entityId, f.purchase.id));
+    if (!owner) throw new Error("Synthetic Purchase owner missing");
+    await getDb(ctx.db).insert(evidenceBinding).values({
+      factKind: acceptedFact.kind,
+      factId: acceptedFact.id,
+      basis: "baseline",
+      eventKey: owner.scopeKey,
+      scopeKind: owner.scopeKind,
+      scopeKey: owner.scopeKey,
     });
     expect(await retrieveConnectionCandidates(ctx.db, f.source)).toEqual([]);
     expect(await readEntityConnections(ctx.db, f.target)).toEqual([]);

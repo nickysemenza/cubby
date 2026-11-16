@@ -13,14 +13,14 @@ import type { RunId } from "@cubby/schemas/identifiers";
 import type { EmailId } from "@cubby/schemas/identifiers";
 import { parseEntityId, runEntityId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { databaseForTransaction, getDb } from "~/server/db/helpers";
-import { withTransaction } from "~/server/db/helpers";
+import { databaseForTransaction } from "~/server/db/helpers";
+import { withHouseholdWrite } from "~/server/db/helpers";
 import {
   emailClassificationObservation,
   emailCandidateObservation,
@@ -137,7 +137,7 @@ export async function recordEmailClassificationObservation(
     publication ?? {},
   );
   const capture = suppliedEvidence.originalCapture;
-  return withTransaction(db, async (tx) => {
+  return withHouseholdWrite(db, async (tx) => {
     const [initial] = await tx
       .select()
       .from(emailTable)
@@ -211,7 +211,11 @@ export async function recordEmailClassificationObservation(
     const id = recordIdentity(
       { kind: "emailState", key: email.id },
       "EmailClassificationObservation",
-      JSON.stringify({ ...parsed, publication: suppliedEvidence }),
+      JSON.stringify({
+        previousId: previous?.id ?? null,
+        ...parsed,
+        publication: suppliedEvidence,
+      }),
     );
     await append(databaseForTransaction(tx), [
       evidenceRow(emailPredictionEvidence, {
@@ -295,10 +299,32 @@ export async function recordEmailClassificationApplication(
   db: Database,
   predictionId: string,
 ) {
-  await getDb(db)
-    .update(emailClassificationObservation)
-    .set({ application: "applied" })
-    .where(eq(emailClassificationObservation.id, predictionId));
+  return withHouseholdWrite(db, async (tx) => {
+    const rows = await tx
+      .update(emailClassificationObservation)
+      .set({ application: "applied" })
+      .where(
+        and(
+          eq(emailClassificationObservation.id, predictionId),
+          ne(emailClassificationObservation.application, "applied"),
+        ),
+      )
+      .returning({ emailId: emailClassificationObservation.emailId });
+    if (!rows.length) return;
+    const { emitWrites, reconcileNow } = await import("~/server/kernel/api");
+    const scopes = rows.map((row) => ({
+      kind: "emailState",
+      key: row.emailId,
+    }));
+    const database = databaseForTransaction(tx);
+    await emitWrites(database, {
+      table: emailClassificationObservation,
+      ids: [predictionId],
+      columns: ["application"],
+      discovers: scopes,
+    });
+    await reconcileNow(database, scopes);
+  });
 }
 
 /** Missing originals retain raw provider diagnostics without inventing a prediction. */
@@ -313,7 +339,7 @@ export async function recordEmailRetrievalFailure(
     error: string;
   },
 ) {
-  await withTransaction(db, async (tx) => {
+  await withHouseholdWrite(db, async (tx) => {
     const { row } = await findOrCreateWithShortcode(tx, "email", {
       where: and(
         eq(
@@ -362,7 +388,7 @@ export async function recordEmailCandidateObservation(
         "Email candidate index does not name its exact evidence candidate",
       );
   }
-  return withTransaction(db, async (tx) => {
+  return withHouseholdWrite(db, async (tx) => {
     const [email] = await tx
       .select()
       .from(emailTable)

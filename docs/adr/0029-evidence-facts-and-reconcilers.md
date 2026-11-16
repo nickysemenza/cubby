@@ -701,7 +701,11 @@ At cutover every scope gets `ScopeState` at version 0 and its stored records
 enter as inputs: `EvidenceBinding` rows with basis `baseline`, and for each
 reconciled value a `set` decision when a person holds it or a legacy Answer
 when Cubby does. The derivation treats a baseline binding as fixed, below a
-member decision and above automatic matching. A value Cubby held stands
+member decision and above automatic matching. Accepted order identity requires
+an effective binding to its Purchase owner; a captured Purchase pointer alone
+is not acceptance. An accepted identity without a captured extraction retains
+its source key, owner and checksum with explicitly unreadable evidence, without
+reconstructing prices or lines from mutable records. A value Cubby held stands
 without an ask while its basis and value are unchanged and no person has
 since ruled that value out on another record of the entity, so a
 correction's recheck asks again. The first sweep then proposes
@@ -889,6 +893,19 @@ still owns that original's evidence.
 Original source correspondences retain record
 identities and later member overrides; matching against current mutable values
 alone cannot undo a member's rename or cost decision.
+
+Email classification observations retain each change in source or request proof;
+consecutive identical publications replay. An observation alone grants no routing
+authority: its application marker publishes the effective classification, while
+member Decisions retain precedence. Routing status and retained-content updates do
+not append another classifier result. Contradictions against accepted sources stay
+independent observations and preserve the accepted original.
+
+Email link history retains superseded receipts and their original producer and
+review metadata. Current links follow canonical Purchase identities and preserve
+each event pointer, including several events that refer to the same Purchase.
+Automatic exact-order links use the shared eligibility policy; amount/date matches
+remain suggestions.
 
 Email evidence reads, link filters and link state consume the same typed
 relationship result after it exists. A pending computation keeps its live

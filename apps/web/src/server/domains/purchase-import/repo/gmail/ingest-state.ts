@@ -1,8 +1,4 @@
 import type { EmailId } from "@cubby/schemas/identifiers";
-import {
-  MAILBOX_RESEARCH_VERSION,
-  type MailboxClassificationDecision,
-} from "@cubby/schemas/mailbox-research";
 import { and, eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -13,7 +9,6 @@ import {
   orderMail,
 } from "~/server/db/schema";
 import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-sql";
-import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import { hasRetainedEmailImportContent } from "~/server/domains/purchase-import/repo/email-content";
 import { recordChange } from "~/server/generic/changes/repo/change";
 
@@ -44,27 +39,6 @@ export async function hasRetainedOrderMailContent(
     orderMailId,
     original?.content ?? null,
   );
-}
-
-/** A rerun that agrees with the stored verdict refreshes only its stage and reason. */
-export async function confirmEmailClassification(
-  db: Database,
-  emailId: EmailId,
-  decision: Pick<MailboxClassificationDecision, "stage" | "reason">,
-) {
-  await withTransaction(db, async (tx) => {
-    await updateEmailStateWhere(
-      tx,
-      {
-        classificationStage: decision.stage,
-        classificationReason: decision.reason,
-        classificationVersion: MAILBOX_RESEARCH_VERSION,
-        updatedAt: new Date(),
-      },
-      eq(emailTable.id, emailId),
-    );
-    await recordChange(tx, { kind: "source", categories: ["email"] });
-  });
 }
 
 /** A republished original is retained again. */

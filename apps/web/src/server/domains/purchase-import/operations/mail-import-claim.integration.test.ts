@@ -43,6 +43,7 @@ import {
   purchase,
   vendor,
 } from "~/server/db/schema";
+import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import {
@@ -275,10 +276,11 @@ describe("Mail import claim", () => {
       fedex,
     );
     const first = await admit(party, [unmatched, inexact]);
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({ classification: "related", classificationStage: "decision" })
-      .where(eq(emailTable.runId, first.owner.id));
+    await updateEmailStateWhere(
+      ctx.db,
+      { classification: "related", classificationStage: "decision" },
+      eq(emailTable.runId, first.owner.id),
+    );
 
     expect(await claimMailImportWork(ctx.db, first.owner.id)).toMatchObject({
       kind: "email",
@@ -305,10 +307,11 @@ describe("Mail import claim", () => {
       fedex,
     );
     const second = await admit(party, [later]);
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({ classification: "related", classificationStage: "decision" })
-      .where(eq(emailTable.runId, second.owner.id));
+    await updateEmailStateWhere(
+      ctx.db,
+      { classification: "related", classificationStage: "decision" },
+      eq(emailTable.runId, second.owner.id),
+    );
 
     expect(await claimMailImportWork(ctx.db, second.owner.id)).toEqual({
       kind: "none",
@@ -382,10 +385,11 @@ describe("Mail import claim", () => {
       "Order #SYN-5001 is on its way via UPS. Tracking number: 1Z999AA10123456791",
     );
     const { owner } = await admit(party, [notice]);
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({ classification: "related", classificationStage: "decision" })
-      .where(eq(emailTable.runId, owner.id));
+    await updateEmailStateWhere(
+      ctx.db,
+      { classification: "related", classificationStage: "decision" },
+      eq(emailTable.runId, owner.id),
+    );
 
     expect(await claimMailImportWork(ctx.db, owner.id)).toEqual({
       kind: "none",
@@ -707,14 +711,15 @@ describe("Mail import claim", () => {
       "Seasonal planting tips from the synthetic garden club.",
       "Garden Club <club@garden-club.example.test>",
     );
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({
+    await updateEmailStateWhere(
+      ctx.db,
+      {
         classification: "unrelated",
         classificationStage: "decision",
         classificationReason: "Synthetic newsletter",
-      })
-      .where(eq(emailTable.orderMailId, newsletter.id));
+      },
+      eq(emailTable.orderMailId, newsletter.id),
+    );
     const refund = await retain(
       "coordinator-refund",
       "Your refund for order SYN-2001",

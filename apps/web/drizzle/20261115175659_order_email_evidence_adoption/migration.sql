@@ -1,5 +1,12 @@
 -- Adopt retained evidence and member intent without rewriting any money row.
--- The migration runner locks the complete catalog before these reads.
+LOCK TABLE "ImportSourceClaim", "ImportSourceOrder", "ImportSourceProduct",
+ "SourceOrderObservation", "Purchase", "Expense", "FinancialTransaction",
+ "FinancialTransactionAllocation", "ExpenseAttribution", "LedgerTransfer",
+ "RecordKey", "EvidenceBinding", "Decision", "FactKey", "ScopeDirty",
+ "Email", "OrderMailAttachment", "PurchasePaymentEvidence", "EmailPurchaseDecision",
+ "EmailReview", "EmailFinancialAssociation", "EmailClassificationObservation",
+ "LedgerParty", "ManualEntry" IN ACCESS EXCLUSIVE MODE;
+--> statement-breakpoint
 CREATE TEMP TABLE order_email_money_before ON COMMIT DROP AS
 SELECT 'Expense'::text source, to_jsonb(r) row FROM "Expense" r
 UNION ALL SELECT 'FinancialTransaction',to_jsonb(r) FROM "FinancialTransaction" r
@@ -11,6 +18,26 @@ UNION ALL SELECT 'LedgerTransfer',to_jsonb(r) FROM "LedgerTransfer" r;
 CREATE TEMP TABLE order_email_sources_before ON COMMIT DROP AS
 SELECT id, to_jsonb(o)-ARRAY['ledgerPartyId','emailId','sourceKind','sourceExternalKey'] row
 FROM "SourceOrderObservation" o;
+--> statement-breakpoint
+-- An accepted identity can predate captured extraction. Preserve that absence
+-- explicitly instead of deriving a source snapshot from mutable money rows.
+CREATE TEMP TABLE order_email_accepted ON COMMIT DROP AS
+SELECT accepted.id, coalesce(accepted."acceptedObservationId",
+ overlay(overlay(md5('order-email-accepted:'||accepted.id) placing '8' from 13 for 1) placing '8' from 17 for 1)::uuid) AS "observationId"
+FROM "ImportSourceOrder" accepted;
+--> statement-breakpoint
+INSERT INTO "SourceOrderObservation" (id,"sourceClaimId","orderKey","purchaseId","vendorId",
+ checksum,extraction,"productBindings","contentFingerprint","createdAt","ledgerPartyId","sourceKind","sourceExternalKey")
+SELECT mapped."observationId",accepted."sourceClaimId",accepted."orderKey",accepted."purchaseId",
+ split_part(accepted."orderKey",'/',1)::uuid,accepted.checksum,
+ coalesce(accepted."originalOrder"->'extraction',jsonb_build_object('status','unreadable',
+ 'detail','Retained accepted order identity has no captured extraction')),
+ coalesce((SELECT jsonb_agg(jsonb_build_object('lineIndex',p."lineIndex",'productId',p."productId",'legacyExpenseId',p."expenseId") ORDER BY p."lineIndex")
+ FROM "ImportSourceProduct" p WHERE p."sourceOrderId"=accepted.id),'[]'::jsonb),
+ 'retained-accepted:'||accepted.id,accepted."createdAt",claim."ledgerPartyId",claim.kind,claim."externalKey"
+FROM "ImportSourceOrder" accepted JOIN order_email_accepted mapped ON mapped.id=accepted.id
+JOIN "ImportSourceClaim" claim ON claim.id=accepted."sourceClaimId"
+WHERE accepted."acceptedObservationId" IS NULL;
 --> statement-breakpoint
 UPDATE "SourceOrderObservation" o SET
  "ledgerPartyId"=coalesce(o."ledgerPartyId",c."ledgerPartyId"),
@@ -49,7 +76,7 @@ ON CONFLICT DO NOTHING;
 --> statement-breakpoint
 INSERT INTO "EvidenceBinding" ("factKind","factId",basis,"eventKey","scopeKind","scopeKey")
 SELECT 'orderObservation',o.id::text,'baseline',owner."scopeKey",'purchaseEvent',owner."scopeKey"
-FROM order_email_orders o JOIN LATERAL (
+FROM order_email_orders o JOIN order_email_accepted accepted ON accepted."observationId"=o.id JOIN LATERAL (
  SELECT k."scopeKey" FROM "RecordKey" k WHERE k.entity='purchase' AND k."entityId"=o."purchaseId"
   AND k."scopeKind"='purchaseEvent' AND k."mergedAt" IS NULL
  ORDER BY k."rejectedAt" NULLS FIRST,k."scopeKey" LIMIT 1
@@ -62,7 +89,8 @@ SELECT overlay(overlay(md5('order-email-line:'||p.id) placing '8' from 13 for 1)
  'line-record:'||p."lineIndex",'line-record:'||p."lineIndex",'set',to_jsonb(p."expenseId"::text),
  'system','cubby-system',accepted."createdAt"
 FROM "ImportSourceProduct" p JOIN "ImportSourceOrder" accepted ON accepted.id=p."sourceOrderId"
-JOIN order_email_orders o ON o.id=accepted."acceptedObservationId"
+JOIN order_email_accepted mapped ON mapped.id=accepted.id
+JOIN order_email_orders o ON o.id=mapped."observationId"
 JOIN "EvidenceBinding" b ON b."factKind"='orderObservation' AND b."factId"=o.id::text
  AND b.basis='baseline'
 WHERE p."expenseId" IS NOT NULL ON CONFLICT DO NOTHING;
@@ -185,8 +213,12 @@ DO $$ DECLARE changed bigint; BEGIN
     UNION ALL SELECT 'ExpenseAttribution',to_jsonb(r) FROM "ExpenseAttribution" r UNION ALL SELECT 'LedgerTransfer',to_jsonb(r) FROM "LedgerTransfer" r)
     EXCEPT SELECT source,row FROM order_email_money_before)
  ) delta;
+ IF EXISTS (SELECT 1 FROM order_email_accepted accepted LEFT JOIN "SourceOrderObservation" o
+  ON o.id=accepted."observationId" WHERE o.id IS NULL) THEN
+  RAISE EXCEPTION 'Order evidence adoption lost an accepted source identity';
+ END IF;
  IF changed<>0 THEN RAISE EXCEPTION 'Order evidence adoption changed % money rows',changed; END IF;
- IF EXISTS (SELECT 1 FROM order_email_sources_before before FULL JOIN "SourceOrderObservation" after USING (id)
+ IF EXISTS (SELECT 1 FROM order_email_sources_before before LEFT JOIN "SourceOrderObservation" after USING (id)
   WHERE before.row IS DISTINCT FROM to_jsonb(after)-ARRAY['ledgerPartyId','emailId','sourceKind','sourceExternalKey']) THEN
   RAISE EXCEPTION 'Order evidence adoption changed retained source content';
  END IF;

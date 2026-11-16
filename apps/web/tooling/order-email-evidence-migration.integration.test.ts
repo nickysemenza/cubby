@@ -68,6 +68,30 @@ it("adopts retained orders, Email decisions and transfers without changing money
        VALUES ($1,$2,$3,'linked','synthetic-detached-checksum','synthetic-cutover','member',$4,NULL)`,
       [cutoverId(1010), cutoverId(1011), cutoverId(4), cutoverId(16)],
     );
+    await client.query(
+      `INSERT INTO "ImportSourceOrder" (id,"sourceClaimId","orderKey","purchaseId",checksum,"outputFingerprint")
+       VALUES ($1,$2,$3,$4,$5,'synthetic-missing-extraction')`,
+      [
+        cutoverId(1020),
+        cutoverId(1000),
+        `${cutoverId(1)}/receipt/whole`,
+        cutoverId(4),
+        "b".repeat(64),
+      ],
+    );
+    await client.query(
+      `INSERT INTO "SourceOrderObservation" (id,"sourceClaimId","orderKey","purchaseId","vendorId",checksum,extraction,"productBindings","contentFingerprint")
+       VALUES ($1,$2,$7,$3,$4,$5,$6::jsonb,'[]','synthetic-missing-extraction')`,
+      [
+        cutoverId(1021),
+        cutoverId(1000),
+        cutoverId(4),
+        cutoverId(1),
+        "b".repeat(64),
+        JSON.stringify(extraction),
+        `${cutoverId(1)}/receipt/whole`,
+      ],
+    );
     const money = async () =>
       (
         await client.query(`
@@ -83,6 +107,33 @@ it("adopts retained orders, Email decisions and transfers without changing money
       through: "20261115175659_order_email_evidence_adoption",
     });
     expect(await money()).toEqual(before);
+    expect(
+      (
+        await client.query(
+          `SELECT o.extraction,b.basis FROM "SourceOrderObservation" o
+       JOIN "EvidenceBinding" b ON b."factKind"='orderObservation' AND b."factId"=o.id::text
+       WHERE o."orderKey"=$1`,
+          [`${cutoverId(1)}/receipt/whole`],
+        )
+      ).rows,
+    ).toEqual([
+      {
+        extraction: {
+          status: "unreadable",
+          detail: "Retained accepted order identity has no captured extraction",
+        },
+        basis: "baseline",
+      },
+    ]);
+    expect(
+      (
+        await client.query(
+          `SELECT count(*)::int n FROM "EvidenceBinding" WHERE "factKind"='orderObservation' AND "factId"=$1`,
+          [cutoverId(1021)],
+        )
+      ).rows[0].n,
+    ).toBe(0);
+
     expect(
       (
         await client.query(
@@ -112,8 +163,11 @@ it("adopts retained orders, Email decisions and transfers without changing money
     expect(
       (
         await client.query(
-          `SELECT count(*)::int n FROM "FactKey" WHERE "factKind"='orderObservation' AND key IN ($1,'payment:amount:USD:6000')`,
-          [`order:${cutoverId(10)}:${cutoverId(1)}/order/SYNTHETIC-ADOPT`],
+          `SELECT count(*)::int n FROM "FactKey" WHERE "factKind"='orderObservation' AND "factId"=$2 AND key IN ($1,'payment:amount:USD:6000')`,
+          [
+            `order:${cutoverId(10)}:${cutoverId(1)}/order/SYNTHETIC-ADOPT`,
+            cutoverId(1002),
+          ],
         )
       ).rows[0].n,
     ).toBe(2);

@@ -20,6 +20,7 @@ import {
   orderMailEvent,
   run,
 } from "~/server/db/schema";
+import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 
@@ -289,15 +290,16 @@ describe("explicit member-search cache expiry", () => {
         payload: {},
       })
       .returning();
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({
+    await updateEmailStateWhere(
+      ctx.db,
+      {
         searchExpiresAt: new Date("2026-10-09T12:00:00Z"),
         updatedAt: now,
         status: "unsettled",
         classificationReason: "Synthetic unresolved disposition",
-      })
-      .where(eq(emailTable.messageId, "expired-search"));
+      },
+      eq(emailTable.messageId, "expired-search"),
+    );
     // An expiry timestamp alone never makes discovery a member-search cache.
     await getDb(ctx.db)
       .update(emailTable)

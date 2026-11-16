@@ -331,11 +331,10 @@ export async function saveEmail(
   // Gmail message identity names one immutable observation. Re-fetch differences
   // do not replace its checksum; retained originals and classification observations
   // carry their own exact-content checksums.
+  // The publication's observation owns classification. Routing updates only
+  // status and retained-content identity; it must not append a second verdict
+  // without the original call's source and request proof.
   const fields = {
-    classification: input.classification,
-    classificationStage: input.classificationStage ?? null,
-    classificationReason: input.classificationReason ?? null,
-    classificationVersion: MAILBOX_RESEARCH_VERSION,
     status: input.status,
     orderMailId: input.orderMailId,
   };
@@ -360,10 +359,10 @@ export async function saveEmail(
     // an edit: its import outcome still holds, and its holder still owns it.
     const unchanged =
       row.checksum === input.checksum &&
-      row.classification === fields.classification &&
-      row.classificationStage === fields.classificationStage &&
-      row.classificationReason === fields.classificationReason &&
-      row.classificationVersion === fields.classificationVersion &&
+      row.classification === input.classification &&
+      row.classificationStage === (input.classificationStage ?? null) &&
+      row.classificationReason === (input.classificationReason ?? null) &&
+      row.classificationVersion === MAILBOX_RESEARCH_VERSION &&
       (fields.orderMailId === undefined ||
         row.orderMailId === fields.orderMailId);
     const keepsSettlement =

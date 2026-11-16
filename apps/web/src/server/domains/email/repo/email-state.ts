@@ -40,6 +40,8 @@ import { emailLinkDecisionsRead } from "~/server/domains/email/repo/email-decisi
 import {
   foldScopedEmailPurchaseFacts,
   strongestLinkState,
+  emailSuggestedEvidenceSql,
+  readExactOrderLinkCandidates,
 } from "~/server/domains/email/repo/email-purchase-links";
 import {
   emailEvidence,
@@ -117,6 +119,12 @@ type Input = {
   owners: (typeof recordKey.$inferSelect)[];
   bindings: Binding[];
   links: (typeof emailPurchaseDecision.$inferSelect)[];
+  suggestions: {
+    emailId: string;
+    purchaseId: string;
+    eventId: string;
+    automatic: boolean;
+  }[];
   snapshot: typeof emailReadSnapshot.$inferSelect | undefined;
   at: Date;
   operations: (typeof runOperation.$inferSelect)[];
@@ -235,6 +243,7 @@ export const emailState = defineReconciler<Input>({
     source.bindings,
     source.table(decision, ["subject", "slot", "field", "kind", "value", "at"]),
     source.table(entityIdentity, ["kind", "deletedAt", "mergedIntoId"]),
+    source.table(ledgerParty, ["kind", "userId", "deletedAt"]),
     source.table(email, [
       "checksum",
       "ledgerPartyId",
@@ -247,6 +256,8 @@ export const emailState = defineReconciler<Input>({
       "stage",
       "reason",
       "classificationVersion",
+      "application",
+      "conflict",
       "checksum",
       "createdAt",
     ]),
@@ -257,11 +268,18 @@ export const emailState = defineReconciler<Input>({
       "extraction",
       "purchaseId",
     ]),
-    source.table(orderMailEvent, ["orderMailId", "orderId", "supersededAt"]),
+    source.table(orderMailEvent, [
+      "orderMailId",
+      "orderId",
+      "amount",
+      "supersededAt",
+    ]),
     source.table(purchase, [
       "vendorId",
       "orderId",
       "vendorAccountId",
+      "statedTotal",
+      "date",
       "deletedAt",
     ]),
     source.table(vendorAccount, ["ledgerPartyId", "deletedAt"]),
@@ -345,6 +363,56 @@ export const emailState = defineReconciler<Input>({
         row.purchaseId ? [row.purchaseId] : [],
       ),
     ];
+    const linkChoices = await reads.selectEach(
+      decision,
+      new Map(
+        keys.map((key) => [key, [decisionKey(recordSubject("email", key))]]),
+      ),
+      sql`${decision.subject}=ANY(${textArrayParam(keys.map((key) => recordSubject("email", key)))}) AND ${decision.field} LIKE 'link:%'`,
+    );
+    await Promise.all(
+      keys.map((key) =>
+        reads.for(key).rows(
+          entityIdentity,
+          linkChoices
+            .filter((row) => row.subject === recordSubject("email", key))
+            .map((row) => row.field!.slice(5)),
+        ),
+      ),
+    );
+    const suggestions = await reads.prepare(
+      [
+        purchase,
+        orderMailEvent,
+        orderMail,
+        vendorAccount,
+        entityIdentity,
+        ledgerParty,
+      ],
+      async (database) => {
+        const result = await repositoryQueries(database).execute<{
+          emailId: string;
+          purchaseId: string;
+          eventId: string;
+        }>(sql`
+        SELECT "Email".id AS "emailId", matched."purchaseId", matched."eventId"
+        FROM "Email" CROSS JOIN LATERAL (${emailSuggestedEvidenceSql()}) matched
+        WHERE "Email".id::text=ANY(${textArrayParam(keys)})`);
+        const exact = await readExactOrderLinkCandidates(database, {
+          emailIds: keys,
+        });
+        return result.rows.map((row) => ({
+          ...row,
+          automatic: exact.some(
+            (match) =>
+              match.emailId === row.emailId &&
+              match.purchaseId === row.purchaseId &&
+              match.eventId === row.eventId,
+          ),
+        }));
+      },
+    );
+    ids.push(...suggestions.map((row) => row.purchaseId));
     const purchases = await reads.select(
       purchase,
       [],
@@ -366,23 +434,6 @@ export const emailState = defineReconciler<Input>({
         )
       ).values(),
     ];
-    const linkChoices = await reads.selectEach(
-      decision,
-      new Map(
-        keys.map((key) => [key, [decisionKey(recordSubject("email", key))]]),
-      ),
-      sql`${decision.subject}=ANY(${textArrayParam(keys.map((key) => recordSubject("email", key)))}) AND ${decision.field} LIKE 'link:%'`,
-    );
-    await Promise.all(
-      keys.map((key) =>
-        reads.for(key).rows(
-          entityIdentity,
-          linkChoices
-            .filter((row) => row.subject === recordSubject("email", key))
-            .map((row) => row.field!.slice(5)),
-        ),
-      ),
-    );
     // Email rows, Purchase roster, subject decisions and redirect rows were
     // fenced before this shared projection. It adds no untracked authority.
     const links = await reads.prepare([], (database) =>
@@ -408,6 +459,7 @@ export const emailState = defineReconciler<Input>({
           owners,
           bindings,
           links: links.filter((link) => link.emailId === key),
+          suggestions: suggestions.filter((row) => row.emailId === key),
           snapshot: snapshots.find((row) => row.entityId === key),
           at,
           operations,
@@ -424,7 +476,7 @@ export const emailState = defineReconciler<Input>({
     const prediction = input.predictions
       .filter(
         (value) =>
-          value.checksum === row.checksum && value.application !== "unverified",
+          value.checksum === row.checksum && value.application === "applied",
       )
       .sort(
         (a, b) =>
@@ -506,7 +558,7 @@ export const emailState = defineReconciler<Input>({
                 ? binding.scope.key
                 : binding.eventKey),
         );
-      const id = owner?.entityId ?? observation.purchaseId;
+      const id = owner?.entityId;
       if (id) add(id, "accepted", null, observation.checksum);
     }
     const linkedPurchase = choices.get("purchaseId");
@@ -520,7 +572,20 @@ export const emailState = defineReconciler<Input>({
         .map((link) => link.purchaseId),
     );
     for (const link of input.links.filter((link) => link.active))
-      add(link.purchaseId, link.decision, null, link.evidenceChecksum);
+      add(link.purchaseId, link.decision, link.eventId, link.evidenceChecksum);
+    for (const suggestion of input.suggestions)
+      if (
+        !dismissed.has(suggestion.purchaseId) &&
+        c.decision("rejection", `emailEvent:${suggestion.eventId}`)?.kind !==
+          "reject"
+      )
+        add(
+          suggestion.purchaseId,
+          suggestion.automatic ? "linked" : "suggested",
+          suggestion.eventId,
+          row.checksum,
+          "heuristic",
+        );
     for (const event of input.events.filter(
       (value) => value.orderMailId === row.orderMailId && !value.supersededAt,
     )) {
@@ -540,33 +605,6 @@ export const emailState = defineReconciler<Input>({
       }
       if (c.decision("rejection", `emailEvent:${event.id}`)?.kind === "reject")
         continue;
-      const matches = input.purchases.filter(
-        (value) =>
-          !value.deletedAt &&
-          value.orderId &&
-          value.orderId === event.orderId &&
-          !dismissed.has(value.id) &&
-          (!linkedId || linkedId === value.id),
-      );
-      for (const target of matches)
-        add(
-          target.id,
-          matches.length === 1 ? "linked" : "suggested",
-          event.id,
-          row.checksum,
-          "heuristic",
-        );
-      if (matches.length > 1)
-        c.gap.decision("which Purchase this Email describes", {
-          actions: matches.map((target) => ({
-            channel: "assignment",
-            kind: "set",
-            subject: `emailEvent:${event.id}`,
-            field: "purchaseId",
-            value: target.id,
-            label: target.shortcode,
-          })),
-        });
     }
     const gates = new Map(
       input.purchases.flatMap((value) =>

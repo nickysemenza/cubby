@@ -21,7 +21,6 @@ import {
   databaseForTransaction,
   notDeleted,
   withHouseholdWrite,
-  withTransaction,
 } from "~/server/db/helpers";
 import { outer, related } from "~/server/db/helpers/related";
 import {
@@ -46,6 +45,10 @@ import {
 } from "~/server/entity-kernel/repo/repository";
 import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
+import {
+  computeChanges,
+  logAuditEntries,
+} from "~/server/generic/audit-log/repo/audit-log";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import {
   resolveAllOrThrow,
@@ -252,7 +255,7 @@ export const createLedgerTransfer = defineMutationWriter({
     actor: ActorContext,
   ) => {
     const { createTransferEvent } = await import("./transfer-mutations");
-    const id = await withTransaction(db, async (tx) => {
+    const id = await withHouseholdWrite(db, async (tx) => {
       const parties = await resolvePartyIds(tx, data);
       const evidence = await resolveAllOrThrow(
         tx,
@@ -376,6 +379,22 @@ export const updateLedgerTransfer = defineMutationWriter({
           { ledgerTransferId: id, targetAmount: amount ?? before.amount },
           sourceClaims ?? [],
         );
+      const after = await crud.getByIDOrNull(tx, id);
+      if (after) {
+        const changes = computeChanges(before, after, [
+          "sourceClaims",
+          "evidenceTransactionIds",
+        ]);
+        if (changes)
+          await logAuditEntries(tx, actor, [
+            {
+              entityKind: "ledgerTransfer",
+              entityId: id,
+              action: "update",
+              changes,
+            },
+          ]);
+      }
     });
     return readOutput({ entityId: id });
   },

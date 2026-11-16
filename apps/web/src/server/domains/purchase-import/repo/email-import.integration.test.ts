@@ -12,6 +12,7 @@ import { describe, expect, it, vi } from "vitest";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { email as emailTable, ledgerParty } from "~/server/db/schema";
+import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 
 import { syntheticRetainedMail } from "../service/gmail/retained-mail.fixtures";
 import { startEmailImport } from "./email-actions";
@@ -42,10 +43,11 @@ describe("selected Email import", () => {
         snippet: null,
       },
     });
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({ classification: "related" })
-      .where(eq(emailTable.orderMailId, mail.id));
+    await updateEmailStateWhere(
+      ctx.db,
+      { classification: "related" },
+      eq(emailTable.orderMailId, mail.id),
+    );
     const [row] = await getDb(ctx.db)
       .select({ shortcode: emailTable.shortcode })
       .from(emailTable)

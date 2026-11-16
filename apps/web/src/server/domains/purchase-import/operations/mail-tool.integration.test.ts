@@ -35,7 +35,6 @@ import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import {
   emailClassificationObservation,
-  emailReview,
   importSourceClaim,
   importSourceOrder,
   mailboxCursor,
@@ -54,6 +53,8 @@ import {
   expense,
   inventoryEntry,
 } from "~/server/db/schema";
+import { emailReviewsRead as emailReview } from "~/server/domains/email/repo/email-decision-sql";
+import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import { seedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
 import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
@@ -259,17 +260,18 @@ describe("public mail tool", () => {
       messageId: "disposed-newsletter",
       checksum: "e".repeat(64),
     });
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({
+    await updateEmailStateWhere(
+      ctx.db,
+      {
         classification: "unrelated",
         classificationStage: "decision",
         classificationReason: "Newsletter",
         status: "completed",
         orderMailId: null,
         contentClearedAt: new Date(),
-      })
-      .where(eq(emailTable.messageId, mail.messageId));
+      },
+      eq(emailTable.messageId, mail.messageId),
+    );
     const input = {
       mailboxId,
       messageId: mail.messageId,
@@ -363,11 +365,7 @@ describe("public mail tool", () => {
     expect(await history()).toEqual(beforeReplay);
     await getDb(ctx.db)
       .update(emailTable)
-      .set({
-        classification: "related",
-        classificationStage: "decision",
-        orderMailId: mail.id,
-      })
+      .set({ orderMailId: mail.id })
       .where(eq(emailTable.id, resolved!.id));
     await expect(
       settleMail(ctx.db, {
@@ -1462,10 +1460,11 @@ describe("public mail tool", () => {
         checksum: await sha256Hex("synthetic-first-earlier-capture"),
         bodyText: "Synthetic earlier capture",
       });
-      await getDb(ctx.db)
-        .update(emailTable)
-        .set({ classificationStage: "decision", status: "completed" })
-        .where(eq(emailTable.messageId, "synthetic-first"));
+      await updateEmailStateWhere(
+        ctx.db,
+        { classificationStage: "decision", status: "completed" },
+        eq(emailTable.messageId, "synthetic-first"),
+      );
       await insertWithShortcode(ctx.db, "email", {
         ledgerPartyId: f.party.id,
         mailboxId,
@@ -1485,16 +1484,17 @@ describe("public mail tool", () => {
         checksum: await sha256Hex("synthetic-cleared-earlier-capture"),
         content: { snippet: null, bodyText: null, bodyHtml: null },
       });
-      await getDb(ctx.db)
-        .update(emailTable)
-        .set({
+      await updateEmailStateWhere(
+        ctx.db,
+        {
           classification: "uncertain",
           classificationStage: "rule",
           searchOrigin: "member_search",
           searchExpiresAt: new Date("2026-01-01T00:00:00Z"),
           contentClearedAt: new Date("2026-01-01T00:00:00Z"),
-        })
-        .where(eq(emailTable.messageId, "synthetic-cleared"));
+        },
+        eq(emailTable.messageId, "synthetic-cleared"),
+      );
       f.list.mockResolvedValueOnce({
         messages: [
           { id: "synthetic-first" },
@@ -2026,15 +2026,19 @@ describe("public mail tool", () => {
 
     it("preserves the previous prediction before a member settlement appends a resolution", async () => {
       const f = await fixture();
-      await getDb(ctx.db)
-        .update(emailTable)
-        .set({
+      await updateEmailStateWhere(
+        ctx.db,
+        {
           classification: "related",
           classificationStage: null,
           classificationReason: null,
           classificationVersion: "synthetic-previous-version",
-        })
-        .where(eq(emailTable.orderMailId, f.source.id));
+        },
+        eq(emailTable.orderMailId, f.source.id),
+      );
+      const before = await getDb(ctx.db)
+        .select()
+        .from(emailClassificationObservation);
       await settleMail(ctx.db, {
         mail: f.source,
         importRunId: null,
@@ -2045,8 +2049,15 @@ describe("public mail tool", () => {
       const rows = await getDb(ctx.db)
         .select()
         .from(emailClassificationObservation);
-      expect(rows).toHaveLength(2);
-      expect(rows.find((row) => row.stage === null)).toMatchObject({
+      expect(rows).toHaveLength(before.length + 1);
+      expect(rows).toEqual(expect.arrayContaining(before));
+      expect(
+        rows.find(
+          (row) =>
+            row.stage === null &&
+            row.classificationVersion === "synthetic-previous-version",
+        ),
+      ).toMatchObject({
         checksum: f.source.rawChecksum,
         classification: "related",
         reason: null,
@@ -2179,13 +2190,14 @@ describe("public mail tool", () => {
                 checksum: "b".repeat(64),
               });
         if (source)
-          await getDb(ctx.db)
-            .update(emailTable)
-            .set({
+          await updateEmailStateWhere(
+            ctx.db,
+            {
               classification: mode === "unrelated" ? "unrelated" : "related",
               contentClearedAt: mode === "cleared" ? new Date() : null,
-            })
-            .where(eq(emailTable.orderMailId, source.id));
+            },
+            eq(emailTable.orderMailId, source.id),
+          );
         else
           await insertWithShortcode(ctx.db, "email", {
             ledgerPartyId: party.id,

@@ -81,7 +81,11 @@ import { learnAcceptedSender } from "~/server/domains/purchase-import/repo/sende
 import { recordShipmentEvidence } from "~/server/domains/shipment/repo/evidence";
 import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { householdWrite, HouseholdWriteBusyError } from "~/server/kernel/gate";
+import {
+  householdWrite,
+  HouseholdWriteBusyError,
+  enterHouseholdGate,
+} from "~/server/kernel/gate";
 
 import { loadMailAttachmentOriginal } from "../repo/gmail/attachment-original";
 import {
@@ -727,6 +731,7 @@ export async function settleMail(
       "A delegated Email settlement requires its retained source.",
     );
   return withTransaction(db, async (tx) => {
+    await enterHouseholdGate(tx);
     const identity = and(
       eq(emailTable.ledgerPartyId, input.mail.ledgerPartyId),
       eq(emailTable.mailboxId, input.mail.mailboxId),

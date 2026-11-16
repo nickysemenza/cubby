@@ -2,7 +2,7 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import type { Page } from "@playwright/test";
 import * as schema from "~/server/db/schema";
 import { getDb } from "~/server/db/helpers";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getFixtureDb, ensureMemberParty } from "./core";
 
 /**

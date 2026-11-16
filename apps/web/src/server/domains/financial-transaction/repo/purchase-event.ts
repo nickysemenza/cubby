@@ -32,6 +32,7 @@ import {
 } from "~/server/db/schema";
 import { financialAccountPurchaser } from "~/server/domains/financial-account/policy/purchaser";
 import { allocationSetViolation } from "~/server/domains/financial-transaction/policy/allocation-set";
+import { bookingAction } from "~/server/domains/financial-transaction/policy/booking-action";
 import { statementBookingRows } from "~/server/domains/financial-transaction/policy/booking-rows";
 import {
   availableSpendingMinor,
@@ -1128,7 +1129,13 @@ export function createPurchaseEvent({
       );
       if (
         !transaction ||
-        !["purchase", "fee", "refund"].includes(transaction.kind) ||
+        (!["purchase", "fee", "refund"].includes(transaction.kind) &&
+          !(
+            transaction.kind === "income" &&
+            c.decision("assignment", subject, "economicRole")?.value ===
+              "reimbursement" &&
+            c.decision("assignment", subject, "book")?.value === true
+          )) ||
         ["void", "expected"].includes(transaction.status) ||
         transaction.ledgerTransferId
       ) {
@@ -1688,32 +1695,47 @@ export function createPurchaseEvent({
       const targetLines = (targetGraph?.lines ?? []).filter(
         (line) => !line.future && line.economicRole === "vendor",
       );
-      const remaining = targetLines.length
+      const available = targetLines.length
         ? availableSpendingMinor(
             targetGraph,
             transaction.amount,
             transaction.id,
           )
         : 0n;
-      const directional = targetLines.some(
-        (line) =>
-          line.costMinor !== null &&
-          (transaction.amount < 0n
-            ? line.costMinor < 0n && line.lineKind === "principal"
-            : line.costMinor >= 0n || line.lineKind !== "principal"),
-      );
-      if (
-        remaining === null ||
-        (directional &&
-          (transaction.amount < 0n
-            ? remaining > transaction.amount
-            : remaining < transaction.amount))
-      ) {
+      if (available === null) {
         c.gap.decision(
-          remaining === null
-            ? "the chosen Purchase has an unpriced or unclassified line or an uncertain payment, so its remaining capacity for this charge is unknown"
-            : "the chosen Purchase's remaining capacity cannot cover this charge",
+          "the chosen Purchase has an unpriced or unclassified line or an uncertain payment, so its remaining capacity for this charge is unknown",
         );
+        retained(c);
+        return c.done();
+      }
+      const reimbursementCodes = new Set(
+        targetGraph?.lines
+          .filter((line) => line.economicRole === "reimbursement")
+          .map((line) => line.bookingTransactionCode),
+      );
+      const capacity = bookingAction({
+        economicRole:
+          value("economicRole") === "reimbursement"
+            ? "reimbursement"
+            : "vendor",
+        transactionAmountMinor: transaction.amount,
+        expenses: (targetGraph?.lines ?? []).map((line) => ({
+          ...line,
+          carriedElsewhere: false,
+        })),
+        previouslySettledMinor: (targetGraph?.settlements ?? [])
+          .filter(
+            (entry) =>
+              entry.transactionId !== transaction.id &&
+              entry.kind !== "income" &&
+              !reimbursementCodes.has(entry.transactionCode) &&
+              entry.amountMinor < 0n === transaction.amount < 0n,
+          )
+          .reduce((sum, entry) => sum + entry.amountMinor, 0n),
+      });
+      if (capacity.kind === "refused") {
+        c.gap.decision(capacity.reason);
         retained(c);
         return c.done();
       }
@@ -1751,10 +1773,14 @@ export function createPurchaseEvent({
             )
           : null,
         vendorId: parseShortcodeFor("vendor", vendorRow.shortcode),
-        categoryOverride: category
-          ? parseShortcodeFor("spendingCategory", category.shortcode)
-          : null,
-        economicRole: "vendor",
+        categoryOverride:
+          typeof value("spendingCategoryId") === "string" && category
+            ? parseShortcodeFor("spendingCategory", category.shortcode)
+            : null,
+        economicRole:
+          value("economicRole") === "reimbursement"
+            ? "reimbursement"
+            : "vendor",
         costType: financialSpendingCostType(
           transaction.kind,
           value("costType") === "services"
@@ -1765,8 +1791,8 @@ export function createPurchaseEvent({
         ),
         trade: "other",
         beneficiaries: undefined,
-        confirmsMerchant: value("confirmsMerchant") === true,
-        remainingBookedMinor: directional ? remaining : 0n,
+        confirmsMerchant: value("confirmsMerchant") !== false,
+        remainingBookedMinor: capacity.remainingBookedMinor,
       });
       const purchaseKey = ownKey(c, purchaseRecords, "purchase");
       const purchaseId =
@@ -1867,7 +1893,10 @@ export function createPurchaseEvent({
             name: rows.expense.name,
             cost: rows.expense.costMinor,
             date: rows.expense.date,
-            spendingCategoryId: category?.id ?? null,
+            spendingCategoryId:
+              typeof value("spendingCategoryId") === "string"
+                ? (category?.id ?? null)
+                : null,
             economicRole: rows.expense.economicRole,
             costType: rows.expense.costType,
             trade: rows.expense.trade,

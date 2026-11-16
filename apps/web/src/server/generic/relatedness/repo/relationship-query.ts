@@ -6,6 +6,7 @@ import { QueryBuilder } from "drizzle-orm/pg-core";
 import { sourceTransactionSettlements } from "~/server/db/computed/source-transaction-settlement-sql";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { purchase as purchaseTable } from "~/server/db/retained-tables";
+import { emailFinancialAssociationsSql } from "~/server/domains/email/repo/email-decision-sql";
 import {
   purchaseAssociatedEmailsSql,
   emailPurchaseAssociationsSql,
@@ -71,9 +72,9 @@ export function relationshipQueryCondition(
         WHERE observation.id = ${s("id")} AND observation.${sql.identifier(field)} = ${t("id")})`;
     }
     case "reviewedEmailTransactions":
-      return sql`EXISTS (SELECT 1 FROM "EmailFinancialAssociation" evidence WHERE evidence."emailId" = ${s("id")} AND evidence."transactionId" = ${t("id")})`;
+      return sql`EXISTS (SELECT 1 FROM ${emailFinancialAssociationsSql} evidence WHERE evidence."emailId" = ${s("id")} AND evidence."transactionId" = ${t("id")})`;
     case "reviewedEmailAccounts":
-      return sql`EXISTS (SELECT 1 FROM "EmailFinancialAssociation" evidence WHERE evidence."emailId" = ${s("id")} AND evidence."reviewedAccountId" = ${t("id")})`;
+      return sql`EXISTS (SELECT 1 FROM ${emailFinancialAssociationsSql} evidence WHERE evidence."emailId" = ${s("id")} AND evidence."reviewedAccountId" = ${t("id")})`;
     default:
       const unhandled: never = query;
       throw new Error(
