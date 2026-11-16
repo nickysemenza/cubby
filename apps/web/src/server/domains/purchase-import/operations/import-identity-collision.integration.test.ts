@@ -3,7 +3,7 @@ import { commitPurchaseImportInput } from "@cubby/schemas/purchase-import";
 import type { ExtractedOrderCandidate } from "@cubby/schemas/purchase-import";
 import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
@@ -21,6 +21,7 @@ import { listProductMatchRows } from "~/server/domains/product/repo/match/produc
 import { syncProductExternalIds } from "~/server/domains/product/repo/update-helpers";
 import { acceptedOrders } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
+import * as identifierParents from "~/server/generic/entity-links/repo/entity-external-ids";
 import {
   createProductFixture,
   createProductIdentityFixture,
@@ -296,15 +297,23 @@ describe("purchase import identifier collisions", () => {
 
   it("serializes a concurrent canonical identifier insertion", async () => {
     const f = await reuseScope();
+    const firstOrder = await f.order("first", "SYNTHETIC-REUSE", f.copper);
+    const firstLine = firstOrder.extraction.candidate?.lines[0];
+    if (!firstLine)
+      throw new Error("Synthetic identifier-bearing line missing");
+    firstLine.productUrl = "https://www.amazon.com/dp/B0SYNTHXL1";
     await memberImport(ctx.db, ctx.actor, {
       key: "first-original",
-      orders: [await f.order("first", "SYNTHETIC-REUSE", f.copper)],
+      orders: [firstOrder],
       defaultTrade: "other",
     });
+    const secondOrder = await f.order("second", "SYNTHETIC-REUSE", f.copper);
+    const line = secondOrder.extraction.candidate?.lines[0];
+    if (!line) throw new Error("Synthetic identifier-bearing line missing");
+    line.productUrl = "https://www.amazon.com/dp/B0SYNTHXL1";
     const second = await prepareMemberImport(ctx.db, ctx.actor, {
       key: "second-original",
-      orders: [await f.order("second", "SYNTHETIC-REUSE", f.copper)],
-      // A real header correction makes apply wait on the held Purchase row.
+      orders: [secondOrder],
       defaultTrade: "plumbing",
     });
     const [existing] = await getDb(ctx.db).select().from(purchase);
@@ -315,61 +324,64 @@ describe("purchase import identifier collisions", () => {
     let imported: ReturnType<typeof second.commit> | undefined;
     let changed: Promise<void> | undefined;
     let changeSettled = false;
-    try {
-      await withTransaction(ctx.db, async (tx) => {
-        await tx
-          .select({ id: purchase.id })
-          .from(purchase)
-          .where(eq(purchase.id, existing.id))
-          .for("update");
-        imported = second.commit();
-        imported.catch(() => undefined);
-        await expect
-          .poll(
-            () =>
-              waiting(sql`SELECT count(*)::int AS count FROM pg_stat_activity
-                WHERE datname = current_database() AND wait_event_type = 'Lock'
-                  AND query LIKE '%"Purchase"%'`),
-            { timeout: 5_000, interval: 20 },
-          )
-          .toBe(1);
-        changed = withTransaction(ctx.db, (mutation) =>
-          syncProductExternalIds(mutation, f.copper.entityId, [
-            {
-              source: "amazon",
-              kind: "asin",
-              externalId: "B0SYNTHXL1",
-              url: null,
-              isPrimary: true,
-            },
-            {
-              source: "amazon",
-              kind: "asin",
-              externalId: "B0SYNTHNEW",
-              url: null,
-              isPrimary: false,
-            },
-          ]),
-        ).finally(() => {
-          changeSettled = true;
-        });
-        changed.catch(() => undefined);
-        // The identifier write either commits first or waits on the import's
-        // Product lock; it must never wait on this Purchase lock.
-        await expect
-          .poll(
-            async () =>
-              changeSettled ||
-              (await waiting(sql`SELECT count(*)::int AS count FROM pg_stat_activity
-                WHERE datname = current_database() AND wait_event_type = 'Lock'
-                  AND query LIKE '%"Product"%'`)) > 0,
-            { timeout: 5_000, interval: 20 },
-          )
-          .toBe(true);
+    let importOwnsIdentity = false;
+    const releaseImport = Promise.withResolvers<void>();
+    const lockParents = identifierParents.lockExternalIdentifierParents;
+    const lock = vi
+      .spyOn(identifierParents, "lockExternalIdentifierParents")
+      .mockImplementation(async (...args) => {
+        await lockParents(...args);
+        if (!importOwnsIdentity) {
+          importOwnsIdentity = true;
+          await releaseImport.promise;
+        }
       });
+    try {
+      imported = second.commit();
+      imported.catch(() => undefined);
+      // Pause after the actual identity lock, independent of incidental header writes.
+      await expect
+        .poll(() => importOwnsIdentity, { timeout: 5_000, interval: 20 })
+        .toBe(true);
+      changed = withTransaction(ctx.db, (mutation) =>
+        syncProductExternalIds(mutation, f.copper.entityId, [
+          {
+            source: "amazon",
+            kind: "asin",
+            externalId: "B0SYNTHXL1",
+            url: null,
+            isPrimary: true,
+          },
+          {
+            source: "amazon",
+            kind: "asin",
+            externalId: "B0SYNTHNEW",
+            url: null,
+            isPrimary: false,
+          },
+        ]),
+      ).finally(() => {
+        changeSettled = true;
+      });
+      changed.catch(() => undefined);
+      await expect
+        .poll(
+          () =>
+            waiting(sql`SELECT count(*)::int AS count FROM pg_stat_activity
+          WHERE datname = current_database() AND wait_event_type = 'Lock'
+            AND query LIKE '%"Product"%'`),
+          { timeout: 5_000, interval: 20 },
+        )
+        .toBe(1);
+      expect(changeSettled).toBe(false);
     } finally {
-      if (imported) await imported;
-      if (changed) await changed;
+      releaseImport.resolve();
+      try {
+        if (imported) await imported;
+        if (changed) await changed;
+      } finally {
+        lock.mockRestore();
+      }
     }
     expect(
       await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),

@@ -14,7 +14,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import type { PurchaseId, RunId } from "@cubby/schemas/identifiers";
-import { preparePurchaseImportInput } from "@cubby/schemas/purchase-import";
+import {
+  importWriterInput,
+  preparePurchaseImportInput,
+} from "@cubby/schemas/purchase-import";
 import { runTargetOutcomeReceipt } from "@cubby/schemas/run-fields";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -34,8 +37,6 @@ import {
   emailClassificationObservation,
   email as emailTable,
   expense,
-  importSourceClaim,
-  importSourceOrder,
   orderMail,
   orderMailEvent,
   runOperation,
@@ -52,8 +53,14 @@ import {
 } from "~/server/domains/purchase-agent/service/cubby-mcp";
 import { storedMailOutcome } from "~/server/domains/purchase-import/repo/mail-outcome/outcome";
 import { readMailProductCandidates } from "~/server/domains/purchase-import/repo/mail-rule-evidence";
+import {
+  appendOrderEvidence,
+  orderEventKey,
+} from "~/server/domains/purchase-import/repo/order-evidence";
+import { settleOrderEvidence } from "~/server/domains/purchase-import/repo/settle-order-evidence";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { updateShipmentWhere } from "~/server/domains/shipment/repo/shipment-mutations";
+import { decide } from "~/server/kernel/api";
 import { describeToolError } from "~/server/mcp/tools/tool-error";
 import { activeEmailPurchaseDecision } from "~/server/testing/email-link.fixtures";
 import {
@@ -141,26 +148,49 @@ describe("Mail import claim", () => {
         actorLedgerPartyName: party.name,
         actorLedgerPartyKind: "member",
       });
-      const [claim] = await getDb(ctx.db)
-        .insert(importSourceClaim)
-        .values({
-          ledgerPartyId: party.id,
-          kind: "vendor_export",
-          externalKey: orderKey,
-          checksum: orderKey,
-          firstRunId: imported.id,
-          lastRunId: imported.id,
-        })
-        .returning({ id: importSourceClaim.id });
-      if (!claim) throw new Error("Expected a source claim fixture");
-      await getDb(ctx.db).insert(importSourceOrder).values({
-        id: claim.id,
-        sourceClaimId: claim.id,
-        purchaseId,
-        orderKey,
-        checksum: orderKey,
-        outputFingerprint: orderKey,
-      });
+      const observations = await appendOrderEvidence(ctx.db, [
+        {
+          orderKey,
+          input: importWriterInput.parse({
+            ledgerPartyId: party.id,
+            vendorId: seller.id,
+            vendorAccountId: account.id,
+            runId: imported.id,
+            source: {
+              kind: "vendor_export",
+              externalKey: orderKey,
+              checksum: await sha256Hex(orderKey),
+            },
+            extraction: {
+              status: "ready",
+              candidate: {
+                orderId: null,
+                orderedAt: null,
+                merchant: seller.name,
+                currency: "USD",
+                printedGrandTotal: null,
+                lines: [],
+                payments: [],
+              },
+            },
+            primaryDocumentImageId: null,
+            screenshotImageId: null,
+          }),
+        },
+      ]);
+      await decide(
+        ctx.db,
+        ctx.actor,
+        observations.map((observation) => ({
+          channel: "assignment",
+          kind: "set",
+          subject: orderEventKey(observation),
+          field: "purchaseId",
+          value: purchaseId,
+          scopes: [{ kind: "purchaseEvent", key: orderEventKey(observation) }],
+        })),
+      );
+      await settleOrderEvidence(ctx.db, observations);
     };
     return { party, seller, order, retain, itemize };
   }
