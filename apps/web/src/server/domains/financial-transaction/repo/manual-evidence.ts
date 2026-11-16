@@ -9,6 +9,12 @@ export const manualTransactionEvidence = defineEvidence({
     ...(row.payload &&
     typeof row.payload === "object" &&
     !Array.isArray(row.payload) &&
+    typeof row.payload.transferPair === "string"
+      ? [`transferPair:${row.payload.transferPair}`]
+      : []),
+    ...(row.payload &&
+    typeof row.payload === "object" &&
+    !Array.isArray(row.payload) &&
     typeof row.payload.purchaseEvent === "string"
       ? [`purchaseEvent:${row.payload.purchaseEvent}`]
       : []),
@@ -17,8 +23,13 @@ export const manualTransactionEvidence = defineEvidence({
     row.payload &&
     typeof row.payload === "object" &&
     !Array.isArray(row.payload) &&
-    typeof row.payload.purchaseEvent === "string"
-      ? [{ kind: "purchaseEvent", key: row.payload.purchaseEvent }]
-      : [{ kind: "bankEvent", key: `manual:${row.id}` }],
+    typeof row.payload.transferPair === "string"
+      ? [{ kind: "transferPair", key: row.payload.transferPair }]
+      : row.payload &&
+          typeof row.payload === "object" &&
+          !Array.isArray(row.payload) &&
+          typeof row.payload.purchaseEvent === "string"
+        ? [{ kind: "purchaseEvent", key: row.payload.purchaseEvent }]
+        : [{ kind: "bankEvent", key: `manual:${row.id}` }],
   owner: (row) => row.userId,
 });

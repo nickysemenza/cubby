@@ -28,7 +28,7 @@ const POSTING_LAG_DAYS = 14;
  * The days a settlement row's charge may fall on: its charge date, else the
  * posting date and the lag before it. A dated membership must cover them all.
  */
-export const paymentDateWindowSql = (payment: SQL) => ({
+const paymentDateWindowSql = (payment: SQL) => ({
   from: sql`coalesce(${payment}."transactionDate", ${payment}."postedDate" - ${sql.raw(String(POSTING_LAG_DAYS))})`,
   to: sql`coalesce(${payment}."transactionDate", ${payment}."postedDate")`,
 });

@@ -3,6 +3,7 @@ import { and, isNull, type SQL, sql } from "drizzle-orm";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { product } from "~/server/db/schema";
+import { originalProductReferencesSql } from "~/server/domains/product/repo/original-product-references";
 import type { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 
 import {
@@ -27,7 +28,7 @@ const noLiveProductLink = (
 // nested QueryBuilder wrappers opaque (including their outer Product refs).
 const PRODUCT_RETAINING_NOT_EXISTS = {
   "ImportSourceProduct.productId": (t) => sql`NOT EXISTS (
-    SELECT 1 FROM "ImportSourceProduct" dq_orphan_original
+    SELECT 1 FROM ${originalProductReferencesSql} dq_orphan_original
     WHERE dq_orphan_original."productId" = ${t.id}
   )`,
   "Planting.sourceProductId": (t) => sql`NOT EXISTS (

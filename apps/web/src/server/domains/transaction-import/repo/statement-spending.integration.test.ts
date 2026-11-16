@@ -6,7 +6,7 @@ import {
   statementMerchantSupportInput,
 } from "@cubby/schemas/statement-answers";
 import { statementDecisionInput } from "@cubby/schemas/statement-decision";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
@@ -984,6 +984,12 @@ describe("statement spending review and re-import", () => {
       ...(await getDb(ctx.db).select().from(financialTransaction)).map(
         (row) => ({ kind: "purchaseEvent", key: row.id }),
       ),
+      ...(
+        await getDb(ctx.db)
+          .select()
+          .from(scopeDirty)
+          .where(inArray(scopeDirty.scopeKind, ["bankEvent", "purchaseEvent"]))
+      ).map((row) => ({ kind: row.scopeKind, key: row.scopeKey })),
     ];
     const state = async () => ({
       ledger: await ledgerRows(),
@@ -1125,8 +1131,8 @@ describe("statement spending review and re-import", () => {
           ctx.actor,
         );
       const outcome = await reconcileNow(ctx.db, [scope]);
-      expect(outcome[0]?.gaps.map((gap) => gap.input)).toEqual([
-        expect.stringContaining("the chosen Purchase"),
+      expect(outcome[0]?.gaps).toEqual([
+        expect.objectContaining({ kind: "decision" }),
       ]);
       expect(await liveMoney()).toMatchObject({ allocated: 0n });
     }
@@ -1510,13 +1516,13 @@ describe("statement spending review and re-import", () => {
       allocated: 0n,
     });
     expect(await resolveForRead(ctx.db, booked!.shortcode)).toBeNull();
-    // The removal's delete policy is the scope's own output and leaves no work.
+    await expectFixedPoint();
+    // The complete money derivation leaves no work, including payment indexes.
     expect(
       (await getDb(ctx.db).select().from(scopeDirty)).filter(
         (row) => row.scopeKind === "purchaseEvent",
       ),
     ).toEqual([]);
-    await expectFixedPoint();
   });
   it("holds a revised amount against a statement Purchase a member added lines to", async () => {
     const setup = await fixture("added-line", "member", 40);
@@ -1719,137 +1725,144 @@ describe("statement spending review and re-import", () => {
         kind text NOT NULL, key text NOT NULL, raises int NOT NULL DEFAULT 1,
         PRIMARY KEY (kind, key)
       )`);
-      await getDb(ctx.db)
-        .execute(sql`CREATE FUNCTION synthetic_kernel_wake() RETURNS trigger LANGUAGE plpgsql AS $$
+      try {
+        await getDb(ctx.db)
+          .execute(sql`CREATE FUNCTION synthetic_kernel_wake() RETURNS trigger LANGUAGE plpgsql AS $$
       BEGIN
         INSERT INTO "SyntheticKernelWake" (kind, key) VALUES (NEW."scopeKind", NEW."scopeKey")
         ON CONFLICT (kind, key) DO UPDATE SET raises = "SyntheticKernelWake".raises + 1;
         RETURN NEW;
       END $$`);
-      await getDb(ctx.db)
-        .execute(sql`CREATE TRIGGER synthetic_kernel_wake AFTER INSERT OR UPDATE OF seq ON "ScopeDirty"
+        await getDb(ctx.db)
+          .execute(sql`CREATE TRIGGER synthetic_kernel_wake AFTER INSERT OR UPDATE OF seq ON "ScopeDirty"
       FOR EACH ROW EXECUTE FUNCTION synthetic_kernel_wake()`);
-      const measured = await withDatabaseOperationMetrics(async (metrics) => {
-        // The page's upload and the member's review count toward its budget.
-        await withDatabaseOperationPhase("upload", () =>
-          recordSourceTransactionRecords(
-            ctx.db,
-            recordSourceTransactionRecordsInput.parse({
-              import: {
-                source: "monarch",
-                label: "Synthetic kernel budget",
-                fingerprint: `kernel-budget-${count}`,
-                observedAt: "2026-05-05T00:00:00Z",
-              },
-              rows: merchants.map((merchant, index) => ({
-                providerTransactionId: `synthetic-kernel-budget-${index}`,
-                providerAccountId: "synthetic-budget-account",
-                accountDescriptor: "Synthetic budget card",
-                statementDate: "2026-05-04",
-                providerAmount: -10,
-                providerStatus: "posted",
-                merchant,
-                rawDescription: merchant,
-                sourceCategory: "Groceries",
-                rowPosition: index + 1,
-              })),
-            }),
-            ctx.actor,
-          ),
-        );
-        const occurrences = await getDb(ctx.db).select().from(sourceOccurrence);
-        await withDatabaseOperationPhase("review", () =>
-          decide(
-            ctx.db,
-            ctx.actor,
-            occurrences.flatMap((row) => [
-              {
-                channel: "assignment",
-                kind: "set",
-                subject: `bank:${row.id}`,
-                field: "accountId",
-                value: account.output.id,
-                scopes: [{ kind: "bankEvent", key: row.id }],
-              },
-              {
-                channel: "assignment",
-                kind: "set",
-                subject: `bank:${row.id}`,
-                field: "kind",
-                value: "purchase",
-                scopes: [{ kind: "bankEvent", key: row.id }],
-              },
-            ]),
-          ),
-        );
-        await expectStatementBudget(
-          () =>
-            withDatabaseOperationPhase("fence", () =>
-              Promise.all([
-                kernel.run(ctx.db, { budgetMs: 20_000 }),
-                householdWrite(ctx.db, async (tx) => {
-                  await getDb(tx)
-                    .update(financialAccount)
-                    .set({ notes: "Synthetic concurrent member edit" })
-                    .where(eq(financialAccount.shortcode, account.output.id));
-                }),
+        const measured = await withDatabaseOperationMetrics(async (metrics) => {
+          // The page's upload and the member's review count toward its budget.
+          await withDatabaseOperationPhase("upload", () =>
+            recordSourceTransactionRecords(
+              ctx.db,
+              recordSourceTransactionRecordsInput.parse({
+                import: {
+                  source: "monarch",
+                  label: "Synthetic kernel budget",
+                  fingerprint: `kernel-budget-${count}`,
+                  observedAt: "2026-05-05T00:00:00Z",
+                },
+                rows: merchants.map((merchant, index) => ({
+                  providerTransactionId: `synthetic-kernel-budget-${index}`,
+                  providerAccountId: "synthetic-budget-account",
+                  accountDescriptor: "Synthetic budget card",
+                  statementDate: "2026-05-04",
+                  providerAmount: -10,
+                  providerStatus: "posted",
+                  merchant,
+                  rawDescription: merchant,
+                  sourceCategory: "Groceries",
+                  rowPosition: index + 1,
+                })),
+              }),
+              ctx.actor,
+            ),
+          );
+          const occurrences = await getDb(ctx.db)
+            .select()
+            .from(sourceOccurrence);
+          await withDatabaseOperationPhase("review", () =>
+            decide(
+              ctx.db,
+              ctx.actor,
+              occurrences.flatMap((row) => [
+                {
+                  channel: "assignment",
+                  kind: "set",
+                  subject: `bank:${row.id}`,
+                  field: "accountId",
+                  value: account.output.id,
+                  scopes: [{ kind: "bankEvent", key: row.id }],
+                },
+                {
+                  channel: "assignment",
+                  kind: "set",
+                  subject: `bank:${row.id}`,
+                  field: "kind",
+                  value: "purchase",
+                  scopes: [{ kind: "bankEvent", key: row.id }],
+                },
               ]),
             ),
-          { statements: 150, parameters: 128 },
+          );
+          await expectStatementBudget(
+            () =>
+              withDatabaseOperationPhase("fence", () =>
+                Promise.all([
+                  kernel.run(ctx.db, { budgetMs: 20_000 }),
+                  householdWrite(ctx.db, async (tx) => {
+                    await getDb(tx)
+                      .update(financialAccount)
+                      .set({ notes: "Synthetic concurrent member edit" })
+                      .where(eq(financialAccount.shortcode, account.output.id));
+                  }),
+                ]),
+              ),
+            { statements: 150, parameters: 128 },
+          );
+          expect(
+            Object.values(metrics.queryCountByPhase).reduce(
+              (sum, value) => sum + value,
+              0,
+            ),
+          ).toBe(metrics.queryCount);
+          expect(
+            metrics.queryCount,
+            "complete statement settlement journey",
+          ).toBeLessThanOrEqual(150);
+          expect(metrics.queryCountByPhase.load).toBeLessThanOrEqual(48);
+          expect(metrics.queryCountByPhase.audit).toBeLessThanOrEqual(2);
+          return {
+            charges: count,
+            statements: metrics.queryCount,
+            parameters: metrics.queryMaxParameterCount,
+            phases: metrics.queryCountByPhase,
+          };
+        });
+        console.log("statement-kernel-budget", JSON.stringify(measured));
+        const settledFanout = await getDb(ctx.db).execute<{
+          kind: string;
+          n: number;
+          historical: number;
+          raises: number;
+        }>(
+          sql`SELECT kind, count(*)::int n, sum(raises)::int raises, count(*) FILTER (WHERE key=ANY(${textArrayParam(seededScopes.map((scope) => scope.key))}))::int historical FROM "SyntheticKernelWake" GROUP BY kind`,
         );
         expect(
-          Object.values(metrics.queryCountByPhase).reduce(
-            (sum, value) => sum + value,
-            0,
-          ),
-        ).toBe(metrics.queryCount);
+          settledFanout.rows.reduce((sum, row) => sum + row.historical, 0),
+        ).toBe(0);
+        console.log(
+          "statement-kernel-settled-fanout",
+          JSON.stringify({
+            charges: count,
+            householdPurchases: seededScopes.length,
+            woken: settledFanout.rows,
+          }),
+        );
         expect(
-          metrics.queryCount,
-          "complete statement settlement journey",
-        ).toBeLessThanOrEqual(150);
-        expect(metrics.queryCountByPhase.load).toBeLessThanOrEqual(48);
-        expect(metrics.queryCountByPhase.audit).toBeLessThanOrEqual(2);
-        return {
-          charges: count,
-          statements: metrics.queryCount,
-          parameters: metrics.queryMaxParameterCount,
-          phases: metrics.queryCountByPhase,
-        };
-      });
-      console.log("statement-kernel-budget", JSON.stringify(measured));
-      const settledFanout = await getDb(ctx.db).execute<{
-        kind: string;
-        n: number;
-        historical: number;
-        raises: number;
-      }>(
-        sql`SELECT kind, count(*)::int n, sum(raises)::int raises, count(*) FILTER (WHERE key=ANY(${textArrayParam(seededScopes.map((scope) => scope.key))}))::int historical FROM "SyntheticKernelWake" GROUP BY kind`,
-      );
-      expect(
-        settledFanout.rows.reduce((sum, row) => sum + row.historical, 0),
-      ).toBe(0);
-      console.log(
-        "statement-kernel-settled-fanout",
-        JSON.stringify({
-          charges: count,
-          householdPurchases: seededScopes.length,
-          woken: settledFanout.rows,
-        }),
-      );
-      expect(
-        settledFanout.rows.find((row) => row.kind === "purchaseEvent"),
-      ).toMatchObject({ n: count, raises: count, historical: 0 });
-      expect(
-        await getDb(ctx.db)
-          .select({ name: vendorTable.name })
-          .from(vendorTable)
-          .where(eq(vendorTable.name, created)),
-      ).toEqual([{ name: created }]);
-      await getDb(ctx.db).execute(
-        sql`DROP TRIGGER synthetic_kernel_wake ON "ScopeDirty"`,
-      );
-      await getDb(ctx.db).execute(sql`DROP FUNCTION synthetic_kernel_wake()`);
-      await getDb(ctx.db).execute(sql`DROP TABLE "SyntheticKernelWake"`);
+          settledFanout.rows.find((row) => row.kind === "purchaseEvent"),
+        ).toMatchObject({ n: count, raises: count, historical: 0 });
+        expect(
+          await getDb(ctx.db)
+            .select({ name: vendorTable.name })
+            .from(vendorTable)
+            .where(eq(vendorTable.name, created)),
+        ).toEqual([{ name: created }]);
+      } finally {
+        await getDb(ctx.db).execute(
+          sql`DROP TRIGGER IF EXISTS synthetic_kernel_wake ON "ScopeDirty"`,
+        );
+        await getDb(ctx.db).execute(
+          sql`DROP FUNCTION IF EXISTS synthetic_kernel_wake()`,
+        );
+        await getDb(ctx.db).execute(sql`DROP TABLE "SyntheticKernelWake"`);
+      }
       const totals = await getDb(ctx.db).execute<{
         purchases: number;
         expenses: number;

@@ -50,31 +50,3 @@ export function completePaymentMatches(
   }
   return allocations;
 }
-
-/** Reads: Purchase vendorId/statedTotalMinor/date, its first source-claim owner, normalized retained payment set and all eligible charges (including the prospective charge). */
-export function groupMemberNamesCharge(input: {
-  purchaseVendorId: string | null;
-  vendorId: string;
-  statedTotalMinor: bigint | null;
-  ownerId: string | null;
-  ledgerPartyId: string;
-  chargeId: string;
-  amountMinor: bigint;
-  payments: readonly PaymentMatchRead[] | "conflicting_sources";
-  charges: readonly ChargeMatchRead[];
-}) {
-  if (
-    input.purchaseVendorId !== input.vendorId ||
-    input.statedTotalMinor === null ||
-    input.statedTotalMinor <= 0n ||
-    input.ownerId !== input.ledgerPartyId ||
-    input.payments === "conflicting_sources" ||
-    input.payments.length !== 1 ||
-    input.payments[0]?.amountMinor !== input.amountMinor
-  )
-    return false;
-  return (
-    completePaymentMatches(input.payments, input.charges)?.[0]
-      ?.transactionId === input.chargeId
-  );
-}

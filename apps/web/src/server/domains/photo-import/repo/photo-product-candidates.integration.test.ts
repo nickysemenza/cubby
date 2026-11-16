@@ -1,6 +1,6 @@
 import { parseShortcodeFor, userId } from "@cubby/schemas/identifiers";
 import { nullableWholeCentToMinor } from "@cubby/shared";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -8,15 +8,16 @@ import type { DecisionPort } from "~/server/ai/decision-model";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { decideProductVariantComparisons } from "~/server/ai/semantic-decisions";
 import { getDb } from "~/server/db/helpers";
+import { evidenceBinding } from "~/server/db/kernel-schema";
 import {
   entityExternalId,
   image,
-  importSourceOrder,
   sourceOrderObservation,
   user,
 } from "~/server/db/schema";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { memberImport } from "~/server/domains/purchase-import/operations/order-import.fixtures";
+import { acceptedOrders } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import { mergePurchases } from "~/server/domains/purchase/repo/purchase";
 import {
   findOrCreateVendor,
@@ -318,9 +319,12 @@ describe("photo product candidates", () => {
         },
       ],
     });
-    const association = await getDb(ctx.db).query.importSourceOrder.findFirst();
+    const [association] = await getDb(ctx.db)
+      .select()
+      .from(acceptedOrders)
+      .limit(1);
     const line = await getDb(ctx.db).query.expense.findFirst();
-    if (!association?.acceptedObservationId || !line)
+    if (!association || !line)
       throw new Error("Known accepted fixture missing");
     const input = { name: item.name, brandName: "Synthetic Outfit" };
     const [known] = await findPhotoProductCandidates(ctx.db, input, ctx.actor);
@@ -347,9 +351,13 @@ describe("photo product candidates", () => {
       ),
     ).toBe(true);
     await getDb(ctx.db)
-      .update(importSourceOrder)
-      .set({ acceptedObservationId: null, originalOrder: null })
-      .where(eq(importSourceOrder.id, association.id));
+      .delete(evidenceBinding)
+      .where(
+        and(
+          eq(evidenceBinding.factKind, "orderObservation"),
+          eq(evidenceBinding.factId, association.id),
+        ),
+      );
     const [unknown] = await findPhotoProductCandidates(
       ctx.db,
       input,
@@ -412,15 +420,18 @@ describe("photo product candidates", () => {
         },
       ],
     });
-    const association = await getDb(ctx.db).query.importSourceOrder.findFirst();
+    const [association] = await getDb(ctx.db)
+      .select()
+      .from(acceptedOrders)
+      .limit(1);
     const originalPurchase = await getDb(ctx.db).query.purchase.findFirst();
     const line = await getDb(ctx.db).query.expense.findFirst();
-    if (!association?.acceptedObservationId || !originalPurchase || !line)
+    if (!association || !originalPurchase || !line)
       throw new Error("Synthetic accepted merge fixture missing");
     const [originalEvidence] = await getDb(ctx.db)
       .select()
       .from(sourceOrderObservation)
-      .where(eq(sourceOrderObservation.id, association.acceptedObservationId));
+      .where(eq(sourceOrderObservation.id, association.id));
     const keeper = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: originalVendor.id,
     });
@@ -458,17 +469,19 @@ describe("photo product candidates", () => {
     const [unchanged] = await getDb(ctx.db)
       .select()
       .from(sourceOrderObservation)
-      .where(eq(sourceOrderObservation.id, association.acceptedObservationId));
+      .where(eq(sourceOrderObservation.id, association.id));
     expect(unchanged).toEqual(originalEvidence);
     expect(unchanged).toMatchObject({
-      purchaseId: originalPurchase.id,
+      purchaseId: null,
       vendorId: originalVendor.id,
     });
-    const unknown = await getDb(ctx.db).query.importSourceOrder.findFirst();
-    expect(unknown).toMatchObject({
+    const [current] = await getDb(ctx.db)
+      .select()
+      .from(acceptedOrders)
+      .limit(1);
+    expect(current).toMatchObject({
       id: association.id,
       purchaseId: keeper.id,
-      acceptedObservationId: association.acceptedObservationId,
     });
   });
 

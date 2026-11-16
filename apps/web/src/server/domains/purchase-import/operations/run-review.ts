@@ -44,7 +44,7 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import {
-  auditLog,
+  purchase,
   ledgerParty,
   photoGroupProposal,
   run as runTable,
@@ -65,7 +65,10 @@ import {
 import { failOperationsForRun } from "~/server/domains/run/repo/run-operation";
 import { recordChange } from "~/server/generic/changes/repo/change";
 
-import { loadPurchaseAuditBatch } from "../repo/audit-batch";
+import {
+  loadPurchaseAuditBatch,
+  purchaseImportJudgmentSql,
+} from "../repo/audit-batch";
 import { resolveRunFinding } from "../repo/findings";
 import {
   completeSettledMailRun,
@@ -504,13 +507,15 @@ export async function auditImportBatch(
   const writablePurchases = new Set(
     (
       await getDb(db)
-        .selectDistinct({ id: auditLog.entityId })
-        .from(auditLog)
+        .select({ id: purchase.id })
+        .from(purchase)
         .where(
           and(
-            eq(auditLog.runId, runId),
-            eq(auditLog.entityKind, "purchase"),
-            inArray(auditLog.entityId, purchaseIds),
+            inArray(
+              purchase.id,
+              purchaseIds.map((id) => parseEntityId("purchase", id)),
+            ),
+            purchaseImportJudgmentSql(sql`SELECT ${runId}::uuid`),
           ),
         )
     ).map((row) => row.id),

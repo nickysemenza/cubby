@@ -2,7 +2,7 @@
  * attachment upload becomes completed; legacy checksums skip new routing; mailbox
  * identities collide; provider/auth failures become negative classifications;
  * persisted classification-only retries escalate uncertainty to Luna or lose headers. */
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { seedEmailLinkDecision } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
@@ -19,6 +19,7 @@ import {
   importSourceOrder,
   emailClassificationObservation,
 } from "~/server/db/schema";
+import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
@@ -336,6 +337,7 @@ describe("Gmail acquisition retention and replay", () => {
       .update(importSourceOrder)
       .set({ checksum: original.rawChecksum })
       .where(eq(importSourceOrder.id, f.association.id));
+    await f.retainSource(original.id);
     const [alias] = await getDb(ctx.db)
       .select()
       .from(importSourceClaim)
@@ -365,18 +367,36 @@ describe("Gmail acquisition retention and replay", () => {
         input,
       ),
     ).rejects.toThrow("Email candidate original source changed");
-    const [refreshed] = await getDb(ctx.db).select().from(orderMail);
-    expect(refreshed?.rawChecksum).not.toBe(original.rawChecksum);
+    const [retained] = await getDb(ctx.db)
+      .select()
+      .from(orderMail)
+      .where(eq(orderMail.id, original.id));
+    expect(retained?.rawChecksum).toBe(original.rawChecksum);
+    expect(retained?.content).toEqual(original.content);
     const [observed] = await getDb(ctx.db)
       .select()
       .from(emailTable)
-      .where(eq(emailTable.orderMailId, original.id));
+      .where(
+        and(
+          eq(emailTable.ledgerPartyId, f.party.id),
+          eq(emailTable.mailboxId, original.mailboxId),
+          eq(emailTable.messageId, original.messageId),
+        ),
+      );
     expect(observed?.checksum).toBe(original.rawChecksum);
+    expect(observed?.orderMailId).not.toBe(original.id);
+    if (!observed?.orderMailId)
+      throw new Error("Synthetic refreshed original missing");
+    const [refreshed] = await getDb(ctx.db)
+      .select()
+      .from(orderMail)
+      .where(eq(orderMail.id, observed.orderMailId));
+    expect(refreshed?.rawChecksum).not.toBe(original.rawChecksum);
     const [currentRoot] = await getDb(ctx.db)
       .select()
       .from(importSourceClaim)
       .where(eq(importSourceClaim.id, root.id));
-    expect(currentRoot?.checksum).toBe(refreshed?.rawChecksum);
+    expect(currentRoot).toEqual(root);
     expect(
       await getDb(ctx.db)
         .select()
@@ -402,13 +422,14 @@ describe("Gmail acquisition retention and replay", () => {
         triage: async () => "related" as const,
       };
       await ingestGmailMessages(ctx.db, provider(), input);
-      await getDb(ctx.db)
-        .update(emailTable)
-        .set({
+      await updateEmailStateWhere(
+        ctx.db,
+        {
           classificationVersion: "legacy-source-identity-unresolved/v1",
           status: "unsettled",
-        })
-        .where(eq(emailTable.messageId, input.messageIds[0]!));
+        },
+        eq(emailTable.messageId, input.messageIds[0]!),
+      );
       const [disposition] = await getDb(ctx.db).select().from(emailTable);
       const originals = await getDb(ctx.db).select().from(orderMail);
       const attachments = await getDb(ctx.db)
@@ -702,6 +723,7 @@ describe("Gmail acquisition retention and replay", () => {
         checksum: attachment.checksum,
       })
       .where(eq(importSourceClaim.id, fixture.association.sourceClaimId));
+    await fixture.retainSource(mail.id);
     const deleted: string[] = [];
     const outcome = await ingestGmailMessages(ctx.db, provider(), {
       ledgerPartyId: party.id,

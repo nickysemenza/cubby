@@ -2045,6 +2045,32 @@ export const foldChargeInto = async (
   actor: ActorContext,
   options: { notes?: string | null } = {},
 ): Promise<void> => {
+  const { merge } = await import("~/server/kernel/api");
+  const { purchaseRecords } =
+    await import("~/server/domains/financial-transaction/repo/purchase-event-records");
+  const result = await merge(databaseForTransaction(tx), {
+    target: {
+      ...purchaseRecords,
+      merge: async () =>
+        foldChargeContents(tx, deadId, survivorId, actor, options),
+    },
+    a: deadId,
+    b: survivorId,
+    keepId: survivorId,
+    basis: "decision",
+    actor,
+  });
+  if (!result.merged)
+    throw new Error("Purchase fold requires two live records");
+};
+
+export const foldChargeContents = async (
+  tx: DrizzleTransaction,
+  deadId: PurchaseId,
+  survivorId: PurchaseId,
+  actor: ActorContext,
+  options: { notes?: string | null } = {},
+): Promise<void> => {
   await enterWriteTransaction(tx, { lane: "money", mode: "member" });
   // Implicit folds from Expense corrections must read notes after concurrent edits commit.
   await lockAndValidateForDelete(
@@ -2353,11 +2379,17 @@ export const deletePurchases = (
 ) =>
   withTransaction(db, async (tx) => {
     await enterWriteTransaction(tx, { lane: "money", mode: "member" });
-    return removePurchases(
+    const ids = await resolveAllOrThrow(tx, "purchase", shortcodes);
+    const result = await removePurchases(tx, ids, actor);
+    const { rejectPurchaseEventWhere } =
+      await import("~/server/domains/financial-transaction/repo/purchase-event-mutations");
+    await rejectPurchaseEventWhere(
       tx,
-      await resolveAllOrThrow(tx, "purchase", shortcodes),
+      "purchase",
+      inArray(purchase.id, ids),
       actor,
     );
+    return result;
   });
 
 /** The Purchase delete policy by id; the kernel's removal of a Purchase runs it too. */

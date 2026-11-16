@@ -1,5 +1,4 @@
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { ImportWriterInput } from "@cubby/schemas/purchase-import";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -12,15 +11,21 @@ import {
   importSourceOrder,
   purchasePaymentEvidence,
   inventoryEntry,
+  purchase,
+  run,
+  sourceOrderObservation,
 } from "~/server/db/schema";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
 
-import { preparePurchaseImport } from "../operations/import-orders";
+import {
+  memberImport,
+  prepareMemberImport,
+  type MemberImportOrder,
+} from "../operations/order-import.fixtures";
 import { startImportRunFixture } from "../service/import-run.fixtures";
 import { resolveRunFinding } from "./findings";
 import { prepareSourceOrderReconciliation } from "./reconciliation";
 import { readImportSourceClaimFamily } from "./source-claim-family";
-import { importVendorOrder } from "./writer";
 
 // A canonical source must replay its historical associations before any write;
 // aliases cannot be new writable identities, duplicate family order keys cannot
@@ -58,13 +63,10 @@ describe("canonical source claim families", () => {
       externalKey: string,
       amount: number,
       checksum = "a".repeat(64),
-    ): ImportWriterInput {
+    ): MemberImportOrder {
       return {
-        runId: run.id,
-        ledgerPartyId: party.id,
-        vendorId: vendor.id,
-        vendorAccountId: account.id,
-        defaultTrade: "other",
+        stableOrderId: orderId.toLowerCase(),
+        vendorId: vendor.shortcode,
         source: { kind: "vendor_export", externalKey, checksum },
         extraction: {
           status: "ready",
@@ -86,23 +88,84 @@ describe("canonical source claim families", () => {
             allShipmentsDelivered: false,
           },
         },
-        primaryDocumentImageId: null,
-        screenshotImageId: null,
-        productResolutions: [],
       };
     }
     const first = input("EXAMPLE-101", "legacy:order-101", 20);
     const second = input("EXAMPLE-102", "legacy:order-102", 30);
-    const importedFirst = await importVendorOrder(
-      ctx.db,
-      first,
-      ctx.actor.userId,
-    );
-    const importedSecond = await importVendorOrder(
-      ctx.db,
-      second,
-      ctx.actor.userId,
-    );
+    const importedFirst = (
+      await memberImport(ctx.db, ctx.actor, {
+        key: "family-first",
+        orders: [first],
+        defaultTrade: "other",
+      })
+    ).committed.items[0]!;
+    const importedSecond = (
+      await memberImport(ctx.db, ctx.actor, {
+        key: "family-second",
+        orders: [second],
+        defaultTrade: "other",
+      })
+    ).committed.items[0]!;
+    const [firstPurchase] = await db
+      .select()
+      .from(purchase)
+      .where(eq(purchase.shortcode, importedFirst.purchaseId!));
+    if (!firstPurchase) throw new Error("Synthetic first Purchase missing");
+    // Model retained associations left by a historical import alongside the
+    // records produced through today's public command.
+    for (const [source, result] of [
+      [first, importedFirst],
+      [second, importedSecond],
+    ] as const) {
+      const [target] = await db
+        .select()
+        .from(purchase)
+        .where(eq(purchase.shortcode, result.purchaseId!));
+      const [observation] = await db
+        .select()
+        .from(sourceOrderObservation)
+        .where(
+          eq(
+            sourceOrderObservation.sourceExternalKey,
+            source.source.externalKey,
+          ),
+        );
+      if (!target || !observation)
+        throw new Error("Synthetic retained capture missing");
+      const [claim] = await db
+        .insert(importSourceClaim)
+        .values({
+          ledgerPartyId: party.id,
+          vendorAccountId: account.id,
+          kind: "vendor_export",
+          externalKey: source.source.externalKey,
+          checksum: source.source.checksum,
+          firstRunId: run.id,
+          lastRunId: run.id,
+        })
+        .returning();
+      if (!claim) throw new Error("Synthetic retained source missing");
+      await db.insert(importSourceOrder).values({
+        sourceClaimId: claim.id,
+        orderKey: observation.orderKey,
+        purchaseId: target.id,
+        checksum: observation.checksum,
+        outputFingerprint: "a".repeat(64),
+        originalOrder: {
+          checksum: observation.checksum,
+          extraction: observation.extraction,
+        },
+        acceptedObservationId: observation.id,
+      });
+      await db
+        .update(sourceOrderObservation)
+        .set({ sourceClaimId: claim.id, purchaseId: target.id })
+        .where(eq(sourceOrderObservation.id, observation.id));
+      await db
+        .update(purchasePaymentEvidence)
+        .set({ sourceClaimId: claim.id })
+        .where(eq(purchasePaymentEvidence.orderObservationId, observation.id));
+    }
     const aliases = await db
       .select()
       .from(importSourceClaim)
@@ -134,28 +197,13 @@ describe("canonical source claim families", () => {
         sql`UPDATE "ImportSourceClaim" SET "canonicalClaimId" = ${rootId}::uuid WHERE "id" IN (${firstAlias!.id}::uuid, ${secondAlias!.id}::uuid)`,
       );
     }
-    async function prepare(value: ImportWriterInput, operationId: string) {
-      const result = await preparePurchaseImport(
-        ctx.db,
-        {
-          _runExecution: { runId: run.id, operationId },
-          orders: [
-            {
-              stableOrderId: `${operationId}:order`,
-              itemOperationId: `${operationId}:item`,
-              source: { ...value.source, kind: "vendor_export" },
-              evidenceChecksum: value.source.checksum,
-              extractionRevision: "example-family-v1",
-              extraction: value.extraction,
-              lineIds: [`${operationId}:line`],
-              primaryDocumentImageId: null,
-              screenshotImageId: null,
-            },
-          ],
-        },
-        ctx.actor,
-      );
-      return result.orders[0]!.targetFingerprint;
+    async function prepare(value: MemberImportOrder, operationId: string) {
+      return (
+        await prepareMemberImport(ctx.db, ctx.actor, {
+          key: operationId,
+          orders: [value],
+        })
+      ).prepared.orders[0]!.targetFingerprint;
     }
     return {
       db,
@@ -166,6 +214,8 @@ describe("canonical source claim families", () => {
       first,
       second,
       importedFirst,
+      firstPurchase,
+      run,
       importedSecond,
       canonicalize,
       prepare,
@@ -183,11 +233,16 @@ describe("canonical source claim families", () => {
       ...f.first,
       source: { ...f.first.source, externalKey: canonicalKey },
     };
-    const result = await importVendorOrder(ctx.db, canonical, ctx.actor.userId);
+    const result = (
+      await memberImport(ctx.db, ctx.actor, {
+        key: "family-canonical-replay",
+        orders: [canonical],
+        defaultTrade: "other",
+      })
+    ).committed.items[0];
     expect(result).toMatchObject({
       outcome: "replayed",
       purchaseId: f.importedFirst.purchaseId,
-      outputFingerprint: f.importedFirst.outputFingerprint,
     });
     expect(await f.db.select().from(importSourceOrder)).toEqual(associations);
     expect(await f.db.select().from(purchasePaymentEvidence)).toEqual(payments);
@@ -235,23 +290,28 @@ describe("canonical source claim families", () => {
     const beforeOrders = await f.db.select().from(importSourceOrder);
     const beforeExpenses = await f.db.select().from(expense);
     const beforeStock = await f.db.select().from(inventoryEntry);
-    const observed = await importVendorOrder(
-      ctx.db,
-      refreshed,
-      ctx.actor.userId,
-    );
+    const refreshedImport = await memberImport(ctx.db, ctx.actor, {
+      key: "family-refreshed",
+      orders: [refreshed],
+      defaultTrade: "other",
+    });
+    const observed = refreshedImport.committed.items[0]!;
     expect(observed.outcome).toBe("conflict");
-    expect(await f.db.select().from(purchasePaymentEvidence)).toEqual(
-      beforePayments,
-    );
+    const capturedPayments = await f.db.select().from(purchasePaymentEvidence);
+    expect(
+      capturedPayments.filter((row) =>
+        beforePayments.some((prior) => prior.id === row.id),
+      ),
+    ).toEqual(beforePayments);
+    expect(capturedPayments).toHaveLength(beforePayments.length + 1);
     expect(await f.db.select().from(importSourceOrder)).toEqual(beforeOrders);
     const [finding] = await f.db
       .select()
       .from(runFinding)
-      .where(eq(runFinding.id, observed.findingIds[0]!));
+      .where(eq(runFinding.entityId, f.firstPurchase.id));
     if (!finding) throw new Error("Expected payment reconciliation finding");
     const original = beforeExpenses.find(
-      (row) => row.purchaseId === f.importedFirst.purchaseId,
+      (row) => row.purchaseId === f.firstPurchase.id,
     );
     if (!original) throw new Error("Historical Expense missing");
     const review = await prepareSourceOrderReconciliation(
@@ -285,21 +345,45 @@ describe("canonical source claim families", () => {
     );
     expect(await f.db.select().from(expense)).toEqual(beforeExpenses);
     expect(await f.db.select().from(inventoryEntry)).toEqual(beforeStock);
-    expect(await f.db.select().from(importSourceClaim)).toEqual(beforeClaims);
-    const payments = await f.db
+    const afterClaims = await f.db.select().from(importSourceClaim);
+    expect(
+      afterClaims
+        .filter((row) => row.id !== f.root.id)
+        .sort((a, b) => a.id.localeCompare(b.id)),
+    ).toEqual(
+      beforeClaims
+        .filter((row) => row.id !== f.root.id)
+        .sort((a, b) => a.id.localeCompare(b.id)),
+    );
+    const [acceptedOrder] = await f.db
       .select()
+      .from(importSourceOrder)
+      .where(eq(importSourceOrder.sourceClaimId, f.firstAlias.id));
+    if (!acceptedOrder?.acceptedObservationId)
+      throw new Error("Accepted payment observation missing");
+    const payments = await f.db
+      .select({
+        payment: purchasePaymentEvidence,
+        sourceClaimId: sourceOrderObservation.sourceClaimId,
+      })
       .from(purchasePaymentEvidence)
-      .where(
+      .innerJoin(
+        sourceOrderObservation,
         eq(
-          purchasePaymentEvidence.purchaseId,
-          parseEntityId("purchase", f.importedFirst.purchaseId),
+          sourceOrderObservation.id,
+          purchasePaymentEvidence.orderObservationId,
         ),
+      )
+      .where(
+        eq(sourceOrderObservation.id, acceptedOrder.acceptedObservationId),
       );
     expect(payments).toMatchObject([
       {
         sourceClaimId: f.firstAlias.id,
-        description: "Updated retained payment",
-        amountMinor: 2000n,
+        payment: {
+          description: "Updated retained payment",
+          amountMinor: 2000n,
+        },
       },
     ]);
     expect(payments).toHaveLength(1);
@@ -327,7 +411,16 @@ describe("canonical source claim families", () => {
       .select()
       .from(importSourceClaim)
       .where(eq(importSourceClaim.id, f.root.id));
-    expect(root).toEqual(beforeClaims.find((row) => row.id === f.root.id));
+    const [reviewRun] = await f.db
+      .select()
+      .from(run)
+      .where(eq(run.shortcode, refreshedImport.committed.runId));
+    expect(root).toEqual({
+      ...beforeClaims.find((row) => row.id === f.root.id),
+      checksum: refreshed.source.checksum,
+      lastRunId: reviewRun?.id,
+      updatedAt: expect.any(Date),
+    });
     expect(
       await f.db
         .select()
@@ -340,6 +433,37 @@ describe("canonical source claim families", () => {
       .where(eq(importSourceOrder.sourceClaimId, f.firstAlias.id));
     expect(first?.originalOrder?.checksum).toBe(f.first.source.checksum);
     expect(first?.checksum).toBe(refreshed.source.checksum);
+    const later = await memberImport(ctx.db, ctx.actor, {
+      key: "family-after-reviewed-refresh",
+      orders: [
+        {
+          ...refreshed,
+          source: { ...refreshed.source, checksum: "c".repeat(64) },
+          extraction: {
+            ...refreshed.extraction,
+            candidate: {
+              ...refreshed.extraction.candidate!,
+              payments: [
+                {
+                  ...refreshed.extraction.candidate!.payments[0]!,
+                  chargedAt: "2026-09-04T12:00:00.000Z",
+                },
+              ],
+            },
+          },
+        },
+      ],
+      defaultTrade: "other",
+    });
+    expect(later.committed.items[0]?.outcome).toBe("conflict");
+    expect(await f.db.select().from(expense)).toEqual(beforeExpenses);
+    expect(await f.db.select().from(inventoryEntry)).toEqual(beforeStock);
+    expect(
+      await f.db
+        .select()
+        .from(importSourceOrder)
+        .where(eq(importSourceOrder.id, first!.id)),
+    ).toEqual([first]);
   });
 
   it("refuses duplicate family order associations even when they name the same Purchase", async () => {
@@ -363,7 +487,10 @@ describe("canonical source claim families", () => {
       source: { ...f.first.source, externalKey: canonicalKey },
     };
     await expect(
-      importVendorOrder(ctx.db, canonical, ctx.actor.userId),
+      memberImport(ctx.db, ctx.actor, {
+        key: "family-collision",
+        orders: [canonical],
+      }),
     ).rejects.toThrow(/duplicate.*source.*order|source.*order.*ambiguous/iu);
     await expect(f.prepare(canonical, "prepare:collision")).rejects.toThrow(
       /duplicate.*source.*order|source.*order.*ambiguous/iu,
@@ -437,8 +564,8 @@ describe("canonical source claim families", () => {
         kind: "mail_message",
         externalKey: oldKey,
         checksum: f.first.source.checksum,
-        firstRunId: f.first.runId,
-        lastRunId: f.first.runId,
+        firstRunId: f.run.id,
+        lastRunId: f.run.id,
       })
       .returning();
     if (!unmapped) throw new Error("Synthetic unmapped source missing");
@@ -456,24 +583,31 @@ describe("canonical source claim families", () => {
       originalOrder: original.originalOrder,
     });
     expect(unmapped.canonicalClaimId).toBeNull();
-    const legacy = {
-      ...f.first,
-      source: {
-        kind: "mail_message" as const,
-        externalKey: oldKey,
-        checksum: f.first.source.checksum,
-      },
-    };
+    const claims = await f.db.select().from(importSourceClaim);
+    const associations = await f.db.select().from(importSourceOrder);
     await expect(
-      importVendorOrder(ctx.db, legacy, ctx.actor.userId),
+      readImportSourceClaimFamily(
+        f.db,
+        {
+          ledgerPartyId: f.party.id,
+          kind: "mail_message",
+          externalKey: oldKey,
+        },
+        { writable: true },
+      ),
     ).rejects.toThrow(/historical|canonical/iu);
+    expect(await f.db.select().from(importSourceClaim)).toEqual(claims);
+    expect(await f.db.select().from(importSourceOrder)).toEqual(associations);
   });
 
   it("refuses an old alias as a writable writer or prepared identity", async () => {
     const f = await world();
     await f.canonicalize();
     await expect(
-      importVendorOrder(ctx.db, f.first, ctx.actor.userId),
+      memberImport(ctx.db, ctx.actor, {
+        key: "family-alias",
+        orders: [f.first],
+      }),
     ).rejects.toThrow(/alias|canonical/iu);
     await expect(f.prepare(f.first, "prepare:alias")).rejects.toThrow(
       /alias|canonical/iu,

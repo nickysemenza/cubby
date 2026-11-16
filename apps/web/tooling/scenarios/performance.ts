@@ -4,7 +4,7 @@ import { createBankTransactions } from "~/server/domains/financial-transaction/r
 import { createPurchaseEventRecords } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { moneyToMinor, minorToMoney } from "@cubby/shared";
 import { randomUUID, createHash } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { generateShortcode, type ShortcodeType } from "@cubby/shared";
 import {
@@ -24,6 +24,7 @@ import {
 } from "~/server/db/helpers";
 import {
   ledgerParty,
+  recordKey,
   orderMail,
   product,
   inventoryEntry,
@@ -50,6 +51,10 @@ import {
   shipmentSourceCapture,
   shipmentSourcePackage,
 } from "~/server/db/schema";
+import { emailEvidence } from "~/server/domains/purchase-import/repo/order-evidence";
+import { emailPredictionEvidence } from "~/server/domains/email/repo/email-state";
+import { shipmentPackageEvidence } from "~/server/domains/shipment/repo/shipment-event";
+import { jsonSnapshot } from "~/server/lib/canonical-json";
 import { entityAttachment } from "~/server/db/retained-tables";
 import { writeOutcomeReceipts } from "~/server/domains/purchase-import/service/run-outcome.fixtures";
 import {
@@ -702,16 +707,16 @@ export async function seedPerformanceCorpus(
       endedAt: new Date("2026-01-16T12:01:00Z"),
     });
   }
-  // Money identities come from the owning reconciler. Rewrite the synthetic
+  // Reconciled identities come from the owning writer. Rewrite the synthetic
   // graph after each creation phase so all retained references use those ids.
-  const remapMoney = (
+  const remapRecords = (
     before: readonly { id?: string; shortcode?: string }[],
     after: readonly { id: string; shortcode: string }[],
   ) => {
     const replacements = new Map<string, string>();
     for (const [index, row] of before.entries()) {
       const saved = after[index];
-      if (!saved) throw new Error("Synthetic money batch lost a record");
+      if (!saved) throw new Error("Synthetic reconciled batch lost a record");
       if (row.id) replacements.set(row.id, saved.id);
       if (row.shortcode) replacements.set(row.shortcode, saved.shortcode);
     }
@@ -749,7 +754,7 @@ export async function seedPerformanceCorpus(
     await tx.execute(sql`
       INSERT INTO "Entity" ("id", "kind", "shortcode")
       SELECT "id"::uuid, "kind", "shortcode"
-      FROM jsonb_to_recordset(${JSON.stringify(identities.filter((row) => !["purchase", "expense", "financialTransaction"].includes(row.kind)))}::jsonb)
+      FROM jsonb_to_recordset(${JSON.stringify(identities.filter((row) => !["purchase", "expense", "financialTransaction", "shipment", "email"].includes(row.kind)))}::jsonb)
         AS identities("id" text, "kind" text, "shortcode" text)
     `);
     await tx.insert(vendor).values(suppliers);
@@ -766,7 +771,8 @@ export async function seedPerformanceCorpus(
     const { splitFieldsValues } =
       await import("~/server/ai/fields/repo/field-decisions");
     const { fieldsPlanOf } = await import("~/server/ai/fields/repo/plan");
-    const { decide, reconcileNow } = await import("~/server/kernel/api");
+    const { append, evidenceRow, recordIdentity, decide, reconcileNow } =
+      await import("~/server/kernel/api");
     const preparedProducts = products.map((row) => ({
       row,
       fields: splitFieldsValues(fieldsPlanOf("product"), row),
@@ -809,9 +815,63 @@ export async function seedPerformanceCorpus(
         rows,
         context.actorContext,
       );
-      remapMoney(rows, saved);
+      remapRecords(rows, saved);
     });
-    await batches(parcels, (rows) => tx.insert(shipment).values(rows));
+    await batches(parcels, async (rows) => {
+      const headers = rows.map((row) => {
+        if (!row.id) throw new Error("Synthetic parcel identity missing");
+        return { key: `synthetic-volume:${row.id}`, row };
+      });
+      await append(
+        databaseForTransaction(tx),
+        headers.map(({ key, row }) =>
+          evidenceRow(shipmentPackageEvidence, {
+            id: recordIdentity(
+              { kind: "shipment", key },
+              "ShipmentPackageObservation",
+              key,
+            ),
+            scopeKey: key,
+            sourceKey: "manual",
+            packageKey: key,
+            actorUserId: userId,
+            values: jsonSnapshot.parse({
+              name: row.name,
+              purchaseId: row.purchaseId,
+              trackingNumber: row.trackingNumber,
+              purpose: row.purpose,
+            }),
+            manual: true,
+          }),
+        ),
+      );
+      const outcomes = await reconcileNow(
+        databaseForTransaction(tx),
+        headers.map(({ key }) => ({ kind: "shipment", key })),
+      );
+      const failed = outcomes.find((outcome) => outcome.status === "failed");
+      if (failed) throw failed.cause ?? new Error(failed.error);
+      const published = await tx
+        .select({ row: shipment, key: recordKey.scopeKey })
+        .from(recordKey)
+        .innerJoin(shipment, eq(shipment.id, recordKey.entityId))
+        .where(
+          and(
+            eq(recordKey.entity, "shipment"),
+            eq(recordKey.scopeKind, "shipment"),
+            inArray(
+              recordKey.scopeKey,
+              headers.map(({ key }) => key),
+            ),
+          ),
+        );
+      const saved = headers.map(({ key }) => {
+        const found = published.find((entry) => entry.key === key);
+        if (!found) throw new Error("Synthetic parcel was not published");
+        return found.row;
+      });
+      remapRecords(rows, saved);
+    });
     await tx.insert(shipmentSourceCapture).values(trackingCapture);
     await batches(packages, (rows) =>
       tx.insert(shipmentSourcePackage).values(rows),
@@ -830,14 +890,45 @@ export async function seedPerformanceCorpus(
         rows,
         context.actorContext,
       );
-      remapMoney(rows, saved);
+      remapRecords(rows, saved);
     });
     await batches(images, (rows) => tx.insert(image).values(rows));
     await batches(attachments, (rows) =>
       tx.insert(entityAttachment).values(rows),
     );
     await batches(mails, (rows) => tx.insert(orderMail).values(rows));
-    await batches(emails, (rows) => tx.insert(email).values(rows));
+    await batches(emails, async (rows) => {
+      await append(
+        databaseForTransaction(tx),
+        rows.map((row) => {
+          const {
+            classification: _classification,
+            classificationStage: _stage,
+            classificationReason: _reason,
+            classificationVersion: _version,
+            ...source
+          } = row;
+          return evidenceRow(emailEvidence, source);
+        }),
+      );
+      await append(
+        databaseForTransaction(tx),
+        rows.map((row) => {
+          if (!row.id) throw new Error("Synthetic Email identity missing");
+          if (!row.classification)
+            throw new Error("Synthetic Email classification missing");
+          return evidenceRow(emailPredictionEvidence, {
+            emailId: row.id,
+            checksum: row.checksum,
+            classification: row.classification,
+            stage: row.classificationStage ?? null,
+            reason: row.classificationReason ?? null,
+            classificationVersion: row.classificationVersion ?? null,
+            application: "applied",
+          });
+        }),
+      );
+    });
     await batches(transactions, async (rows) => {
       const inputs = rows.map((row) => {
         const account = tenders.find((account) => account.id === row.accountId);
@@ -858,7 +949,7 @@ export async function seedPerformanceCorpus(
         );
         return { data, accountId: row.accountId };
       });
-      remapMoney(
+      remapRecords(
         rows,
         await createBankTransactions(
           databaseForTransaction(tx),
@@ -884,6 +975,12 @@ export async function seedPerformanceCorpus(
     );
     await batches(audits, (rows) =>
       logAuditEntries(tx, context.actorContext, rows),
+    );
+    await batches(emails, (rows) =>
+      reconcileNow(
+        databaseForTransaction(tx),
+        rows.map((row) => ({ kind: "emailState", key: row.id! })),
+      ),
     );
     // Immediate reads must see the new volume, rather than waiting for autoanalyze.
     await tx.execute(

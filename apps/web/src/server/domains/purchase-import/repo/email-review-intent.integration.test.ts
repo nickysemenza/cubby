@@ -8,7 +8,7 @@ import { z } from "zod";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { emailReview, ledgerParty } from "~/server/db/schema";
-import { appendEmailReview } from "~/server/domains/email/repo/email-review-store";
+import { appendEmailReview } from "~/server/domains/email/repo/email-review-write";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 

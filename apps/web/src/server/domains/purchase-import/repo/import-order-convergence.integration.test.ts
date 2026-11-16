@@ -49,6 +49,7 @@ import {
   proposePhotoGroups,
 } from "~/server/domains/photo-import/repo/run/proposals";
 import { stagePhotoImport } from "~/server/domains/photo-import/service/photo-import-stage.service";
+import { acceptedOrders } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import { loadRunDetail } from "~/server/domains/run/repo/run-detail";
 import {
   sourceObservationColumns,
@@ -209,12 +210,14 @@ async function createConvergenceHarness(ctx: TestDbContext) {
       allocations: await database
         .select()
         .from(schema.financialTransactionAllocation),
-      orders: await database.select().from(schema.importSourceOrder),
       bindings: await database.select().from(schema.importSourceProduct),
       attachments: await database.select().from(schema.entityAttachment),
       stock: await database.select().from(schema.inventoryEntry),
     });
     const before = bookedPurchaseCode ? await admittedState() : null;
+    const beforeEvidence = await database
+      .select()
+      .from(schema.sourceOrderObservation);
     const committed = await importBrowserOrder(db, {
       runId: run.id,
       actor,
@@ -230,6 +233,11 @@ async function createConvergenceHarness(ctx: TestDbContext) {
       // A later itemization is observed until its money and identity are reviewed.
       expect(committed.items[0]?.outcome).toBe("conflict");
       expect(await admittedState()).toEqual(before);
+      const observedEvidence = await database
+        .select()
+        .from(schema.sourceOrderObservation);
+      expect(observedEvidence).toEqual(expect.arrayContaining(beforeEvidence));
+      expect(observedEvidence).toHaveLength(beforeEvidence.length + 1);
       const detail = await loadRunDetail(db, run.publicId);
       const findings = detail.findings.filter(
         (finding) =>
@@ -531,8 +539,8 @@ async function createConvergenceHarness(ctx: TestDbContext) {
     if (!purchase) throw new Error("Imported settlement evidence missing");
     const [accepted] = await database
       .select()
-      .from(schema.importSourceOrder)
-      .where(eq(schema.importSourceOrder.purchaseId, purchase.id));
+      .from(acceptedOrders)
+      .where(eq(acceptedOrders.purchaseId, purchase.id));
     const [line] = await database
       .select()
       .from(schema.expense)

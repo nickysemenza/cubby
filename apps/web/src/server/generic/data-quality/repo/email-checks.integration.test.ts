@@ -16,6 +16,7 @@ import {
   run as runTable,
 } from "~/server/db/schema";
 import { emailScaffold } from "~/server/domains/email/repo/email";
+import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import { resolveMail } from "~/server/domains/purchase-import/operations/mail-tool";
 import {
   saveEmail,
@@ -243,6 +244,15 @@ describe("Email data quality", () => {
       .from(email)
       .where(eq(email.messageId, identity.messageId));
     if (!message) throw new Error("Synthetic Email missing");
+    expect(message.classification).toBeNull();
+    await updateEmailStateWhere(
+      ctx.db,
+      {
+        classification: input.classification,
+        classificationStage: input.classificationStage,
+      },
+      eq(email.id, message.id),
+    );
     const emailId = parseEntityId("email", message.id);
     const published = async () =>
       (await loadDataQualities(ctx.db, "email", [emailId], "stored")).get(

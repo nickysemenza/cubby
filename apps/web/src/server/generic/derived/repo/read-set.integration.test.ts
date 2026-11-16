@@ -5,7 +5,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { HOUSEHOLD_PROJECT_SHORTCODE } from "@cubby/schemas/project-fields";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { seedPerformanceCorpus } from "tooling/scenarios/performance";
@@ -21,6 +21,7 @@ import { storedSourceSql } from "~/server/db/derived-source-sql";
 import { getDb } from "~/server/db/helpers";
 import {
   entityAttachment,
+  scopeState,
   image,
   ledgerParty,
   product,
@@ -39,6 +40,7 @@ import {
 import { readSnapshotState as readDerivedRebuildStatus } from "~/server/generic/derived/repo/snapshot-state";
 import { runSnapshotPage } from "~/server/generic/derived/snapshot.fixtures";
 import { prepareProductConversionCoverage } from "~/server/generic/problems/service/problems.service";
+import { reconcileNow } from "~/server/kernel/api";
 import {
   createProductFixture,
   makeProductInput,
@@ -211,7 +213,25 @@ describe("deterministic cache rebuild", () => {
   it("rebuilds every declared cache family idempotently from retained inputs", async () => {
     await seedCorpus();
     const adapters = Object.fromEntries(computes);
+    const ownerDurationsMs: number[] = [];
     const drain = async () => {
+      const ownedKinds = [
+        ...new Set(
+          entityStoredDerivedDeclarations().flatMap((entry) =>
+            entry.reconciler ? [entry.reconciler] : [],
+          ),
+        ),
+      ];
+      const owned = await getDb(ctx.db)
+        .select({ kind: scopeState.scopeKind, key: scopeState.scopeKey })
+        .from(scopeState)
+        .where(inArray(scopeState.scopeKind, ownedKinds));
+      const started = Date.now();
+      const outcomes = await reconcileNow(ctx.db, owned);
+      ownerDurationsMs.push(Date.now() - started);
+      expect(outcomes.filter((outcome) => outcome.status === "failed")).toEqual(
+        [],
+      );
       for (let page = 0; page < 1_000; page++) {
         if (!(await runSnapshotPage(ctx.db, adapters, { force: page === 0 })))
           return;
@@ -335,6 +355,7 @@ describe("deterministic cache rebuild", () => {
       JSON.stringify({
         measurement: "synthetic deterministic full rebuild",
         durationsMs: status.durationsMs,
+        ownerDurationsMs,
         targetMs: 900_000,
       }) + "\n",
     );

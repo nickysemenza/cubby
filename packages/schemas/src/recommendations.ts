@@ -61,10 +61,6 @@ export const productMatchSide = z.object({
 });
 export type ProductMatchSide = z.infer<typeof productMatchSide>;
 
-/** Shown wherever a pending pair lacks exact-identifier admission. */
-export const PRODUCT_PAIR_NOT_ACTIONABLE =
-  "Not actionable: no exact identifier binds both records; investigate before merging";
-
 const productMatchCandidate = z.object({
   review: suggestionReviewReference.optional(),
   suggestionId: suggestionChildHandle,

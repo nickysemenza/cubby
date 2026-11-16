@@ -79,6 +79,9 @@ describe("full read-only Email preview", () => {
         .select()
         .from(email)
         .where(eq(email.id, saved.id));
+      const observations = await getDb(ctx.db)
+        .select()
+        .from(emailClassificationObservation);
       vi.spyOn(runners, "productionMailTriage").mockImplementation(
         (_db, _run, onCall) => async () => {
           onCall?.({
@@ -164,7 +167,7 @@ describe("full read-only Email preview", () => {
       ).toEqual(before);
       expect(
         await getDb(ctx.db).select().from(emailClassificationObservation),
-      ).toEqual([]);
+      ).toEqual(observations);
       expect(await getDb(ctx.db).select().from(orderMail)).toEqual([]);
       expect(
         await getDb(ctx.db)

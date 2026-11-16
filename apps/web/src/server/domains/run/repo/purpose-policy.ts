@@ -136,13 +136,3 @@ export async function readRunPurpose(db: Database, runId: string) {
   if (!run) throw new Error("Import run was not found");
   return runPurpose.parse(run.purpose);
 }
-
-export async function assertRunCapabilityById(
-  db: Database,
-  runId: string,
-  capability: RunCapability,
-) {
-  const purpose = await readRunPurpose(db, runId);
-  assertRunCapability(purpose, capability);
-  return purpose;
-}

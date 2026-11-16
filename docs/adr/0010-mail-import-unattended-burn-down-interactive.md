@@ -126,7 +126,8 @@ The bundled ordinary tool owns stable preparation/commit identities and returns
 the next durable claim after known publication. New retained source bytes or
 accepted evidence of the exact own-account order may reopen an untouched
 automatic gap through discovery, preserving earlier rosters, outcomes and member
-intent. Unchanged source/evidence fingerprints never schedule another attempt.
+intent. Evidence must postdate the unresolved outcome on the same UTC timeline.
+Unchanged source/evidence fingerprints never schedule another attempt.
 
 ## Model amendment
 

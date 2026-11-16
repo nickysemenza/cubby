@@ -1,4 +1,5 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { eq, sql } from "drizzle-orm";
 import {
   seedEmailClassificationFeedback,
@@ -10,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import {
+  email,
   emailClassificationObservation,
   importSourceClaim,
   importSourceOrder,
@@ -17,10 +19,12 @@ import {
   orderMailAttachment,
   orderMailEvent,
 } from "~/server/db/schema";
+import { retainAcceptedSourceFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeEntity } from "~/server/entity-kernel";
 import { buildKernelContext } from "~/server/entity-kernel/reference-universe.fixtures";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
+import { reconcileNow } from "~/server/kernel/api";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 
 // Persisted-read failures: contentless messages disappear; absent historical
@@ -44,7 +48,7 @@ describe("Email generic persisted reads", () => {
       .insert(orderMail)
       .values({
         ledgerPartyId: party.id,
-        rawChecksum: `checksum:${messageId}`,
+        rawChecksum: await sha256Hex(`synthetic:${messageId}`),
       })
       .returning();
     if (!content) throw new Error("Synthetic original did not persist");
@@ -155,6 +159,16 @@ describe("Email generic persisted reads", () => {
       status: "excluded",
     });
     await drainStoredDerived(ctx.db);
+    const outcomes = await reconcileNow(
+      ctx.db,
+      (await getDb(ctx.db).select().from(email)).map((row) => ({
+        kind: "emailState",
+        key: row.id,
+      })),
+    );
+    expect(outcomes.filter((outcome) => outcome.status === "failed")).toEqual(
+      [],
+    );
     const context = buildKernelContext(ctx.db);
     const list = await executeEntity(context, {
       action: "list",
@@ -304,19 +318,24 @@ describe("Email generic persisted reads", () => {
           kind,
           externalKey: `${externalKey}:historical-alias`,
           canonicalClaimId: root.id,
-          checksum: "synthetic-historical-source-checksum",
+          checksum: await sha256Hex("synthetic-historical-source"),
           firstRunId,
           lastRunId: firstRunId,
         })
         .returning();
       if (!alias) throw new Error("Synthetic alias did not persist");
-      await getDb(ctx.db).insert(importSourceOrder).values({
-        sourceClaimId: alias.id,
-        orderKey: "synthetic-order",
-        purchaseId: purchase.id,
-        checksum: alias.checksum,
-        outputFingerprint: "synthetic-output",
-      });
+      const [accepted] = await getDb(ctx.db)
+        .insert(importSourceOrder)
+        .values({
+          sourceClaimId: alias.id,
+          orderKey: "synthetic-order",
+          purchaseId: purchase.id,
+          checksum: alias.checksum,
+          outputFingerprint: "synthetic-output",
+        })
+        .returning();
+      if (!accepted) throw new Error("Synthetic accepted source missing");
+      await retainAcceptedSourceFixture(ctx.db, accepted.id, content.id);
     }
     for (const messageId of ["lifecycle", "dismissed", "superseded"]) {
       const content = emails.get(messageId)!;
@@ -333,6 +352,7 @@ describe("Email generic persisted reads", () => {
         eventId: event.id,
         purchaseId: purchase.id,
         decision: messageId === "dismissed" ? "dismissed" : "linked",
+        proposedBy: messageId === "superseded" ? "heuristic" : "member",
         evidenceChecksum: content.rawChecksum,
         decidedByUserId: ctx.actor.userId,
       });
@@ -347,6 +367,16 @@ describe("Email generic persisted reads", () => {
       sql`UPDATE "OrderMail" SET "content" = '{"snippet":null,"bodyText":null,"bodyHtml":null}'::jsonb`,
     );
     await drainStoredDerived(ctx.db);
+    const outcomes = await reconcileNow(
+      ctx.db,
+      (await getDb(ctx.db).select().from(email)).map((row) => ({
+        kind: "emailState",
+        key: row.id,
+      })),
+    );
+    expect(outcomes.filter((outcome) => outcome.status === "failed")).toEqual(
+      [],
+    );
     const context = buildKernelContext(ctx.db);
     const linked = await executeEntity(context, {
       action: "list",

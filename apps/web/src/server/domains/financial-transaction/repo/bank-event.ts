@@ -23,6 +23,8 @@ import {
   withinPostingDateWindow,
 } from "~/server/domains/financial-transaction/policy/settlement-window";
 import { mergeBankEvents } from "~/server/domains/financial-transaction/repo/bank-merge";
+import { isTransferPairKind } from "~/server/domains/ledger-transfer/policy/transfer-kind";
+import { paymentAmountKey } from "~/server/domains/purchase-import/policy/payment-keys";
 import {
   statementEffectiveMovement,
   statementLoanInput,
@@ -74,7 +76,14 @@ export const bankTransactionWrites = writes(
     entity: "financialTransaction",
     merge: mergeBankEvents,
     remove: policyRemoval("financialTransaction"),
-    discovers: (row) => [{ kind: "purchaseEvent", key: row.id }],
+    keys: (row) =>
+      row.amount == null ? [] : [paymentAmountKey(BigInt(String(row.amount)))],
+    discovers: (row) => [
+      { kind: "purchaseEvent", key: row.id },
+      ...(typeof row.kind === "string" && isTransferPairKind(row.kind)
+        ? [{ kind: "transferPair", key: row.id }]
+        : []),
+    ],
   },
 );
 

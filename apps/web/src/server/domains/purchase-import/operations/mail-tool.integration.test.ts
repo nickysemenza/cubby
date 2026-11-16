@@ -1,9 +1,3 @@
-import {
-  MAIL_ATTACHMENT_MAX_BYTES,
-  MAIL_READ_RESPONSE_MAX_BYTES,
-  mailResolveInput,
-} from "@cubby/schemas/mailbox-research";
-import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 /**
  * Failures: search reaches a mailbox the member never connected, follows a
  * page into another mailbox, pages without Spam/Trash exclusion, or advances
@@ -18,6 +12,14 @@ import { mailResearchRunInput } from "@cubby/schemas/run-fields";
  * Run still reads, resolves, or spends on search; linking a shipping-label Email
  * promotes printable labels to Purchase documents or discards its cost evidence.
  */
+import type { PurchaseId, VendorId, RunId } from "@cubby/schemas/identifiers";
+import {
+  MAIL_ATTACHMENT_MAX_BYTES,
+  MAIL_READ_RESPONSE_MAX_BYTES,
+  mailResolveInput,
+} from "@cubby/schemas/mailbox-research";
+import { importWriterInput } from "@cubby/schemas/purchase-import";
+import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { shipmentEvidence } from "@cubby/schemas/shipment-evidence";
 import { moneyToMinor } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -35,9 +37,8 @@ import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import {
   emailClassificationObservation,
-  emailReview,
   importSourceClaim,
-  importSourceOrder,
+  sourceOrderObservation,
   mailboxCursor,
   email as emailTable,
   orderMail,
@@ -54,14 +55,24 @@ import {
   expense,
   inventoryEntry,
 } from "~/server/db/schema";
+import { emailReviewsRead as emailReview } from "~/server/domains/email/repo/email-decision-sql";
+import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import { seedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
 import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   readRetainedMail,
+  type RetainedMail,
   retainedMailJoin,
 } from "~/server/domains/mail/repo/retained-mail";
+import { acceptedOrders } from "~/server/domains/purchase-import/repo/accepted-order-read";
+import {
+  appendOrderEvidence,
+  orderEventKey,
+} from "~/server/domains/purchase-import/repo/order-evidence";
+import { settleOrderEvidence } from "~/server/domains/purchase-import/repo/settle-order-evidence";
 import { deletePurchases } from "~/server/domains/purchase/repo/purchase";
+import { decide } from "~/server/kernel/api";
 import { HouseholdWriteBusyError } from "~/server/kernel/gate";
 import { activeEmailPurchaseDecision as orderMailCandidateDecision } from "~/server/testing/email-link.fixtures";
 
@@ -89,6 +100,63 @@ const receiptBytes = new TextEncoder().encode(
 describe("public mail tool", () => {
   const ctx = withTestDb();
   afterEach(() => vi.restoreAllMocks());
+
+  const acceptSource = async (input: {
+    mail: RetainedMail;
+    purchaseId: PurchaseId;
+    vendorId: VendorId;
+    runId: RunId;
+    sourceClaimId: string;
+    orderKey: string;
+  }) => {
+    const observations = await appendOrderEvidence(ctx.db, [
+      {
+        emailId: input.mail.emailId,
+        retainedSubject: {
+          sourceClaimId: input.sourceClaimId,
+          purchaseId: input.purchaseId,
+        },
+        orderKey: input.orderKey,
+        input: importWriterInput.parse({
+          ledgerPartyId: input.mail.ledgerPartyId,
+          vendorId: input.vendorId,
+          runId: input.runId,
+          vendorAccountId: null,
+          source: mailSource(input.mail),
+          extraction: {
+            status: "ready",
+            candidate: {
+              orderId: null,
+              orderedAt: null,
+              merchant: "Synthetic accepted mail source",
+              currency: "USD",
+              printedGrandTotal: null,
+              lines: [],
+              payments: [],
+            },
+          },
+          primaryDocumentImageId: null,
+          screenshotImageId: null,
+        }),
+      },
+    ]);
+    await decide(
+      ctx.db,
+      ctx.actor,
+      observations.map((observation) => ({
+        channel: "assignment",
+        kind: "set",
+        subject: orderEventKey(observation),
+        field: "purchaseId",
+        value: input.purchaseId,
+        scopes: [{ kind: "purchaseEvent", key: orderEventKey(observation) }],
+      })),
+    );
+    await settleOrderEvidence(ctx.db, observations);
+    const observation = observations[0];
+    if (!observation) throw new Error("Synthetic accepted source missing");
+    return observation;
+  };
 
   const member = () =>
     insertWithShortcode(ctx.db, "ledgerParty", {
@@ -259,17 +327,18 @@ describe("public mail tool", () => {
       messageId: "disposed-newsletter",
       checksum: "e".repeat(64),
     });
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({
+    await updateEmailStateWhere(
+      ctx.db,
+      {
         classification: "unrelated",
         classificationStage: "decision",
         classificationReason: "Newsletter",
         status: "completed",
         orderMailId: null,
         contentClearedAt: new Date(),
-      })
-      .where(eq(emailTable.messageId, mail.messageId));
+      },
+      eq(emailTable.messageId, mail.messageId),
+    );
     const input = {
       mailboxId,
       messageId: mail.messageId,
@@ -363,11 +432,7 @@ describe("public mail tool", () => {
     expect(await history()).toEqual(beforeReplay);
     await getDb(ctx.db)
       .update(emailTable)
-      .set({
-        classification: "related",
-        classificationStage: "decision",
-        orderMailId: mail.id,
-      })
+      .set({ orderMailId: mail.id })
       .where(eq(emailTable.id, resolved!.id));
     await expect(
       settleMail(ctx.db, {
@@ -920,17 +985,14 @@ describe("public mail tool", () => {
       })
       .returning();
     if (!acceptedClaim) throw new Error("Synthetic accepted source missing");
-    const [acceptedOrder] = await getDb(ctx.db)
-      .insert(importSourceOrder)
-      .values({
-        sourceClaimId: acceptedClaim.id,
-        orderKey: "synthetic-review-handle",
-        purchaseId: secondPurchase.id,
-        checksum: source.rawChecksum,
-        outputFingerprint: "0".repeat(64),
-      })
-      .returning();
-    if (!acceptedOrder) throw new Error("Synthetic accepted order missing");
+    const acceptedOrder = await acceptSource({
+      mail: source,
+      purchaseId: secondPurchase.id,
+      vendorId: seller.id,
+      runId: acceptedRun.id,
+      sourceClaimId: acceptedClaim.id,
+      orderKey: "synthetic-review-handle",
+    });
     const beforeDeletion = await readMail(ctx.db, readInput, ctx.actor);
     expect(beforeDeletion).toHaveProperty("acceptedSourceOrders", [
       {
@@ -986,12 +1048,20 @@ describe("public mail tool", () => {
       messageId: "synthetic-deleted-import",
       checksum: await sha256Hex("Synthetic deleted import"),
     });
-    const importOrder = async (key: string) => {
+    const { createProductFixture, makeProductInput } =
+      await import("~/server/testing/repo.fixtures");
+    const item = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic retained widget" }),
+      ctx.actor,
+    );
+    const importResult = async (key: string) => {
       const { committed } = await memberImport(ctx.db, ctx.actor, {
         key,
         orders: [
           {
             stableOrderId: key,
+            resolutions: [{ kind: "existing", productId: item.id }],
             vendorId: vendor.shortcode,
             source: mailSource(mail),
             extraction: {
@@ -1016,19 +1086,76 @@ describe("public mail tool", () => {
           },
         ],
       });
-      const code = committed.items[0]?.purchaseId;
+      return committed.items[0];
+    };
+    const importOrder = async (key: string) => {
+      const code = (await importResult(key))?.purchaseId;
       if (!code) throw new Error("Synthetic import created no Purchase");
       return code;
     };
     const readInput = { mailboxId, messageId: mail.messageId };
     const deleted = await importOrder("deleted-import-first");
-    await deletePurchases(ctx.db, [deleted], ctx.actor);
+    const readSpending = () =>
+      getDb(ctx.db)
+        .select({
+          id: expense.id,
+          cost: expense.cost,
+          productId: expense.productId,
+          productQuantity: expense.productQuantity,
+        })
+        .from(expense);
+    const { updatePurchaseEventWhere } =
+      await import("~/server/domains/financial-transaction/repo/purchase-event-mutations");
+    const originalSpending = await readSpending();
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { cost: 1300n },
+      eq(expense.id, originalSpending[0]!.id),
+      ctx.actor,
+    );
+    const spending = await readSpending();
+    const [beforeRemoval] = await getDb(ctx.db)
+      .select()
+      .from(sourceOrderObservation);
+    if (!beforeRemoval) throw new Error("Synthetic accepted capture missing");
+    const [predecessor] = await getDb(ctx.db)
+      .select({ id: purchase.id })
+      .from(purchase)
+      .where(eq(purchase.shortcode, deleted));
+    if (!predecessor) throw new Error("Synthetic predecessor missing");
+    const { householdWrite, reconcileNow } =
+      await import("~/server/kernel/api");
+    const { orderEventKey } =
+      await import("~/server/domains/purchase-import/policy/payment-keys");
+    const { removePurchases } =
+      await import("~/server/domains/purchase/repo/purchase");
+    // Persisted predecessor deletions ran the policy without recording rejection.
+    await householdWrite(ctx.db, (database) =>
+      removePurchases(database, [predecessor.id], ctx.actor),
+    );
+
+    await reconcileNow(ctx.db, [
+      { kind: "purchaseEvent", key: orderEventKey(beforeRemoval) },
+    ]);
+    expect(
+      await getDb(ctx.db)
+        .select({ deletedAt: purchase.deletedAt })
+        .from(purchase)
+        .where(eq(purchase.id, predecessor.id)),
+    ).toEqual([{ deletedAt: expect.any(Date) }]);
+    expect(
+      await getDb(ctx.db)
+        .select({ purchaseId: expense.purchaseId })
+        .from(expense),
+    ).toEqual(spending.map(() => ({ purchaseId: null })));
+    expect(await readSpending()).toEqual(spending);
 
     const [retained, ...extra] = await getDb(ctx.db)
       .select()
-      .from(importSourceOrder);
+      .from(sourceOrderObservation);
     expect(extra).toEqual([]);
-    expect(retained).toMatchObject({ purchaseId: null });
+    expect(retained).toEqual(beforeRemoval);
     expect(await readMail(ctx.db, readInput, ctx.actor)).toMatchObject({
       purchaseIds: [deleted],
       purchaseAssociations: [
@@ -1046,6 +1173,16 @@ describe("public mail tool", () => {
     // The identical extraction imports again beside the deleted history.
     const replacement = await importOrder("deleted-import-second");
     expect(replacement).not.toBe(deleted);
+    const { recordKey } = await import("~/server/db/kernel-schema");
+    expect(
+      await getDb(ctx.db)
+        .select({ rejectedAt: recordKey.rejectedAt })
+        .from(recordKey)
+        .where(eq(recordKey.entityId, predecessor.id)),
+    ).toEqual([{ rejectedAt: expect.any(Date) }]);
+    expect(await readSpending()).toEqual(spending);
+    expect(await importOrder("deleted-import-replay")).toBe(replacement);
+    expect(await readSpending()).toEqual(spending);
     const read = await readMail(ctx.db, readInput, ctx.actor);
     expect([...read.purchaseIds].sort()).toEqual([deleted, replacement].sort());
     expect(read.purchaseAssociations).toEqual(
@@ -1068,6 +1205,49 @@ describe("public mail tool", () => {
       ]),
     );
     expect(read.acceptedSourceOrders).toHaveLength(2);
+    expect(await getDb(ctx.db).select().from(sourceOrderObservation)).toEqual([
+      beforeRemoval,
+    ]);
+    await deletePurchases(ctx.db, [replacement], ctx.actor);
+    const scope = { kind: "purchaseEvent", key: orderEventKey(beforeRemoval) };
+    const background = await reconcileNow(ctx.db, [scope]);
+    expect(
+      background
+        .flatMap((row) => row.gaps)
+        .some((gap) => gap.kind === "decision"),
+    ).toBe(false);
+    const again = await importOrder("deleted-import-third");
+    expect([deleted, replacement]).not.toContain(again);
+    expect(await readSpending()).toEqual(spending);
+    expect(
+      (await readMail(ctx.db, readInput, ctx.actor)).acceptedSourceOrders,
+    ).toHaveLength(3);
+    await deletePurchases(ctx.db, [again], ctx.actor);
+    const other = await createPurchaseEventRecord(
+      ctx.db,
+      "purchase",
+      { vendorId: vendor.id },
+      ctx.actor,
+    );
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { purchaseId: other.id },
+      eq(expense.id, spending[0]!.id),
+      ctx.actor,
+    );
+    const moved = await getDb(ctx.db).select().from(expense);
+    expect((await importResult("deleted-import-ambiguous"))?.outcome).toBe(
+      "conflict",
+    );
+    expect(await getDb(ctx.db).select().from(expense)).toEqual(moved);
+    const { scopeState } = await import("~/server/db/kernel-schema");
+    expect(
+      await getDb(ctx.db)
+        .select({ stage: scopeState.stage, error: scopeState.error })
+        .from(scopeState)
+        .where(eq(scopeState.scopeKey, scope.key)),
+    ).toEqual([{ stage: "needs_you", error: null }]);
   });
 
   describe("search", () => {
@@ -1352,7 +1532,7 @@ describe("public mail tool", () => {
       const f = await fixture();
       const relevance = vi.spyOn(routing, "productionMailRelevance");
       const found = await searchMail(ctx.db, f.input, ctx.actor);
-      // Provider/model work runs in the durable classifier Job, outside search.
+      // Pending source retention has no relevance verdict; classification runs outside search.
       expect(routing.productionMailTriage).not.toHaveBeenCalled();
       expect(relevance).not.toHaveBeenCalled();
       expect(found.messages.map((row) => row.messageId).sort()).toEqual([
@@ -1373,7 +1553,7 @@ describe("public mail tool", () => {
         expect.arrayContaining([
           expect.objectContaining({
             messageId: "synthetic-first",
-            classification: "uncertain",
+            classification: null,
             classificationStage: null,
             status: "pending",
             orderMailId: expect.any(String),
@@ -1454,7 +1634,7 @@ describe("public mail tool", () => {
     // Regression: a member's search re-saved every match as `uncertain`,
     // downgrading an Email whose Relevance was already decided under an older
     // classification version.
-    it("keeps an existing Relevance decision, its stage and retained content, retaining only new matches as uncertain", async () => {
+    it("keeps an existing Relevance decision, its stage and retained content, leaving new matches pending", async () => {
       const f = await fixture();
       const related = await retainedMailFixture(ctx.db, {
         ledgerPartyId: f.party.id,
@@ -1462,10 +1642,11 @@ describe("public mail tool", () => {
         checksum: await sha256Hex("synthetic-first-earlier-capture"),
         bodyText: "Synthetic earlier capture",
       });
-      await getDb(ctx.db)
-        .update(emailTable)
-        .set({ classificationStage: "decision", status: "completed" })
-        .where(eq(emailTable.messageId, "synthetic-first"));
+      await updateEmailStateWhere(
+        ctx.db,
+        { classificationStage: "decision", status: "completed" },
+        eq(emailTable.messageId, "synthetic-first"),
+      );
       await insertWithShortcode(ctx.db, "email", {
         ledgerPartyId: f.party.id,
         mailboxId,
@@ -1485,16 +1666,22 @@ describe("public mail tool", () => {
         checksum: await sha256Hex("synthetic-cleared-earlier-capture"),
         content: { snippet: null, bodyText: null, bodyHtml: null },
       });
-      await getDb(ctx.db)
-        .update(emailTable)
-        .set({
+      await updateEmailStateWhere(
+        ctx.db,
+        {
           classification: "uncertain",
           classificationStage: "rule",
           searchOrigin: "member_search",
           searchExpiresAt: new Date("2026-01-01T00:00:00Z"),
           contentClearedAt: new Date("2026-01-01T00:00:00Z"),
-        })
-        .where(eq(emailTable.messageId, "synthetic-cleared"));
+        },
+        eq(emailTable.messageId, "synthetic-cleared"),
+      );
+      const [clearedCapture] = await getDb(ctx.db)
+        .select()
+        .from(orderMail)
+        .where(eq(orderMail.id, cleared.id));
+      expect(clearedCapture).toBeDefined();
       f.list.mockResolvedValueOnce({
         messages: [
           { id: "synthetic-first" },
@@ -1535,7 +1722,7 @@ describe("public mail tool", () => {
           },
           expect.objectContaining({
             messageId: "synthetic-second",
-            classification: "uncertain",
+            classification: null,
             classificationStage: null,
             searchExpiresAt: null,
           }),
@@ -1561,12 +1748,20 @@ describe("public mail tool", () => {
       expect(refound).toMatchObject({
         classification: "uncertain",
         contentClearedAt: null,
-        orderMailId: cleared.id,
+        orderMailId: expect.any(String),
       });
       expect(refound?.searchExpiresAt).toBeNull();
+      if (!refound?.orderMailId)
+        throw new Error("Synthetic refreshed original missing");
+      expect(refound.orderMailId).not.toBe(cleared.id);
+      const [unchangedCapture] = await getDb(ctx.db)
+        .select()
+        .from(orderMail)
+        .where(eq(orderMail.id, cleared.id));
+      expect(unchangedCapture).toEqual(clearedCapture);
       const [retained] = await readRetainedMail(ctx.db, {
         ledgerPartyIds: [f.party.id],
-        orderMailIds: [cleared.id],
+        orderMailIds: [refound.orderMailId],
       });
       expect(retained?.content.bodyText).toContain("synthetic copper kettle");
     });
@@ -2002,20 +2197,19 @@ describe("public mail tool", () => {
           if (!mapped) throw new Error("Synthetic mapped source unavailable");
           claim = mapped;
         }
-        await getDb(ctx.db)
-          .insert(importSourceOrder)
-          .values({
-            sourceClaimId: claim.id,
-            orderKey: `${f.seller.id}/order/PROTECTED-ORDER`,
-            purchaseId: f.positive.id,
-            checksum: f.source.rawChecksum,
-            outputFingerprint: "synthetic-positive",
-          });
+        await acceptSource({
+          mail: f.source,
+          purchaseId: f.positive.id,
+          vendorId: f.seller.id,
+          runId: f.importRun.id,
+          sourceClaimId: claim.id,
+          orderKey: `${f.seller.id}/order/PROTECTED-ORDER`,
+        });
         await f.resolve();
         await expectOriginalKept(f);
-        expect(
-          await getDb(ctx.db).select().from(importSourceOrder),
-        ).toHaveLength(1);
+        expect(await getDb(ctx.db).select().from(acceptedOrders)).toHaveLength(
+          1,
+        );
         expect(
           await getDb(ctx.db)
             .select({ id: importSourceClaim.id })
@@ -2026,15 +2220,19 @@ describe("public mail tool", () => {
 
     it("preserves the previous prediction before a member settlement appends a resolution", async () => {
       const f = await fixture();
-      await getDb(ctx.db)
-        .update(emailTable)
-        .set({
+      await updateEmailStateWhere(
+        ctx.db,
+        {
           classification: "related",
           classificationStage: null,
           classificationReason: null,
           classificationVersion: "synthetic-previous-version",
-        })
-        .where(eq(emailTable.orderMailId, f.source.id));
+        },
+        eq(emailTable.orderMailId, f.source.id),
+      );
+      const before = await getDb(ctx.db)
+        .select()
+        .from(emailClassificationObservation);
       await settleMail(ctx.db, {
         mail: f.source,
         importRunId: null,
@@ -2045,8 +2243,15 @@ describe("public mail tool", () => {
       const rows = await getDb(ctx.db)
         .select()
         .from(emailClassificationObservation);
-      expect(rows).toHaveLength(2);
-      expect(rows.find((row) => row.stage === null)).toMatchObject({
+      expect(rows).toHaveLength(before.length + 1);
+      expect(rows).toEqual(expect.arrayContaining(before));
+      expect(
+        rows.find(
+          (row) =>
+            row.stage === null &&
+            row.classificationVersion === "synthetic-previous-version",
+        ),
+      ).toMatchObject({
         checksum: f.source.rawChecksum,
         classification: "related",
         reason: null,
@@ -2179,13 +2384,14 @@ describe("public mail tool", () => {
                 checksum: "b".repeat(64),
               });
         if (source)
-          await getDb(ctx.db)
-            .update(emailTable)
-            .set({
+          await updateEmailStateWhere(
+            ctx.db,
+            {
               classification: mode === "unrelated" ? "unrelated" : "related",
               contentClearedAt: mode === "cleared" ? new Date() : null,
-            })
-            .where(eq(emailTable.orderMailId, source.id));
+            },
+            eq(emailTable.orderMailId, source.id),
+          );
         else
           await insertWithShortcode(ctx.db, "email", {
             ledgerPartyId: party.id,

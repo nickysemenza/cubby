@@ -18,11 +18,3 @@ export const CHARGE_STATE = sql`(
     WHERE r.source = state.source AND r."chargeKey" = state."chargeKey"
       AND ${notDeleted("r")})
 )`;
-
-/** Membership and equal bank facts cannot establish an independent occurrence. */
-export function hasStatementOccurrence(row: {
-  occurrenceId: string | null;
-  reviewState: string | null;
-}): boolean {
-  return row.occurrenceId !== null && row.reviewState === "ready";
-}

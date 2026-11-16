@@ -13,12 +13,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import {
-  getDb,
-  notDeleted,
-  withHouseholdWrite,
-  databaseForTransaction,
-} from "~/server/db/helpers";
+import { getDb, notDeleted } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { financialTransaction, purchase } from "~/server/db/schema";
 import {
@@ -28,7 +23,6 @@ import {
 import { digestValue } from "~/server/domains/financial-transaction/policy/booking-fingerprint";
 import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
 import { loadFinancialBookingLineage } from "~/server/domains/financial-transaction/repo/financial-booking";
-import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import {
   readLedgerTransfer,
@@ -250,8 +244,8 @@ export async function commitFinancialBookingCorrection(
   review: FinancialBookingCorrectionPreview,
   actor: ActorContext,
 ) {
-  return withHouseholdWrite(db, async (tx) => {
-    const txDb = databaseForTransaction(tx);
+  const { householdWrite } = await import("~/server/kernel/api");
+  return householdWrite(db, async (txDb) => {
     const decisionDigest = await digestValue(
       financialBookingCorrectionPreview.parse(review),
     );
@@ -286,7 +280,7 @@ export async function commitFinancialBookingCorrection(
         "This booking already has a different reviewed correction. Refresh its financial record.",
       );
     }
-    await lockFinancialTransactionSources(tx, [review.transactionId]);
+
     const fresh = await previewFinancialBookingCorrection(txDb, review);
     if (
       JSON.stringify(fresh) !==

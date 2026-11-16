@@ -117,29 +117,6 @@ const suggestionSubject = z.discriminatedUnion("kind", [
   suggestionSubjects.transfer_pair,
 ]);
 
-/**
- * Families whose subject names two live records of one entity
- * (`recordId` < `otherId`): a pending one is a possible duplicate that list
- * rows flag and the record's Suggestions panel reviews.
- */
-export const entityPairSuggestionFamilies = [
-  "product_pair",
-] as const satisfies readonly (keyof {
-  [
-    F in keyof typeof suggestionSubjects as z.infer<
-      (typeof suggestionSubjects)[F]
-    > extends { entity: string; recordId: string; otherId: string }
-      ? F
-      : never
-  ]: true;
-})[];
-export type EntityPairSuggestionFamily =
-  (typeof entityPairSuggestionFamilies)[number];
-export const isEntityPairSuggestionFamily = (
-  family: string | undefined,
-): family is EntityPairSuggestionFamily =>
-  entityPairSuggestionFamilies.some((pair) => pair === family);
-
 /** Internal event authority is never a public entity, shortcode, or search target. */
 const publicSuggestionTarget = z.object({
   entity: z.enum(shortcodeEntities),

@@ -1,20 +1,16 @@
 import { emailLinkEvidenceKind } from "@cubby/schemas/email-fields";
 import type { EmailId } from "@cubby/schemas/identifiers";
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 
 import { type Database } from "~/server/db/database";
 import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
-import {
-  importSourceClaim,
-  importSourceOrder,
-  purchase,
-  sourceOrderObservation,
-} from "~/server/db/retained-tables";
+import { purchase, sourceOrderObservation } from "~/server/db/retained-tables";
 import {
   emailAcceptedEvidenceSql,
   emailPurchaseAssociationsSql,
 } from "~/server/domains/email/repo/email-sql";
+import { acceptedOrderPurchasesSql } from "~/server/domains/purchase-import/repo/accepted-order-read";
 
 const KIND = emailLinkEvidenceKind.enum;
 
@@ -23,43 +19,29 @@ export async function readEmailAcceptedSourceOrders(
   db: Database | DrizzleTransaction,
   emailId: EmailId,
 ) {
-  // includes-deleted: a deleted target remains retained accepted history.
+  // includes-deleted: accepted evidence retains its target's identity.
   return unwrapDb(db)
     .select({
-      sourceOrderId: importSourceOrder.id,
+      sourceOrderId: sourceOrderObservation.id,
       purchaseId: purchase.shortcode,
-      purchaseDeleted: sql<boolean>`${importSourceOrder.purchaseId} IS NULL OR ${purchase.deletedAt} IS NOT NULL`,
+      purchaseDeleted: sql<boolean>`${purchase.id} IS NULL OR ${purchase.deletedAt} IS NOT NULL`,
       source: {
-        kind: importSourceClaim.kind,
-        externalKey: importSourceClaim.externalKey,
-        checksum: importSourceOrder.checksum,
+        kind: sourceOrderObservation.sourceKind,
+        externalKey: sourceOrderObservation.sourceExternalKey,
+        checksum: sourceOrderObservation.checksum,
       },
     })
-    .from(importSourceOrder)
+    .from(sourceOrderObservation)
     .innerJoin(
-      importSourceClaim,
-      eq(importSourceClaim.id, importSourceOrder.sourceClaimId),
-    )
-    .leftJoin(
-      sourceOrderObservation,
-      and(
-        isNull(importSourceOrder.purchaseId),
-        eq(sourceOrderObservation.id, importSourceOrder.acceptedObservationId),
-      ),
+      sql`${acceptedOrderPurchasesSql} accepted`,
+      sql`accepted.id=${sourceOrderObservation.id} AND accepted."acceptedPurchaseId" IS NOT NULL`,
     )
     .leftJoin(
       purchase,
-      eq(
-        purchase.id,
-        sql`coalesce(${importSourceOrder.purchaseId}, ${sourceOrderObservation.purchaseId})`,
-      ),
+      sql`${purchase.id} = accepted."acceptedPurchaseId"::uuid`,
     )
-    .where(sql`"ImportSourceOrder"."id" IN (
-      SELECT evidence."sourceOrderId" FROM "Email"
-      CROSS JOIN LATERAL (${emailAcceptedEvidenceSql(true)}) evidence
-      WHERE "Email"."id" = ${emailId}
-    )`)
-    .orderBy(asc(purchase.shortcode), asc(importSourceOrder.id));
+    .where(eq(sourceOrderObservation.emailId, emailId))
+    .orderBy(asc(purchase.shortcode), asc(sourceOrderObservation.id));
 }
 
 /** Accepted history retains deleted targets; thread and dismissed candidates never bind. */

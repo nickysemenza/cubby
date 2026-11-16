@@ -50,19 +50,20 @@ import {
   email as emailTable,
   orderMail,
   orderMailAttachment,
-  emailPurchaseDecision,
   orderMailEvent,
   purchase,
   runOperation,
   run as runTable,
   vendorAccount,
 } from "~/server/db/schema";
+import { emailLinkDecisionsRead as emailPurchaseDecision } from "~/server/domains/email/repo/email-decision-sql";
 import { readEmailFinancialAssociations } from "~/server/domains/email/repo/email-financial-associations";
-import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-decision";
+import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-write";
 import {
   readEmailAcceptedSourceOrders,
   readEmailPurchaseAssociations,
 } from "~/server/domains/email/repo/email-purchase-associations";
+import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import { attachFileToEntity } from "~/server/domains/image/repo/image-storage";
 import {
   readRetainedMail,
@@ -70,7 +71,6 @@ import {
   type RetainedMail,
 } from "~/server/domains/mail/repo/retained-mail";
 import { controlledMailScopeForRun } from "~/server/domains/purchase-import/repo/controlled-mail-import";
-import { republishEmailRelationship } from "~/server/domains/purchase-import/repo/email-purchase-decision";
 import { GmailApiError } from "~/server/domains/purchase-import/repo/gmail/types";
 import { isClosedMailSearch } from "~/server/domains/purchase-import/repo/gmail/vendor-mail-scope";
 import {
@@ -81,7 +81,11 @@ import { learnAcceptedSender } from "~/server/domains/purchase-import/repo/sende
 import { recordShipmentEvidence } from "~/server/domains/shipment/repo/evidence";
 import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { householdWrite, HouseholdWriteBusyError } from "~/server/kernel/gate";
+import {
+  householdWrite,
+  HouseholdWriteBusyError,
+  enterHouseholdGate,
+} from "~/server/kernel/gate";
 
 import { loadMailAttachmentOriginal } from "../repo/gmail/attachment-original";
 import {
@@ -674,7 +678,6 @@ async function linkOrderMail(
       },
       "automatic",
       undefined,
-      input.rule,
     );
   if (input.attributed !== false)
     await ensureMailVendorAccount(db, {
@@ -728,6 +731,7 @@ export async function settleMail(
       "A delegated Email settlement requires its retained source.",
     );
   return withTransaction(db, async (tx) => {
+    await enterHouseholdGate(tx);
     const identity = and(
       eq(emailTable.ledgerPartyId, input.mail.ledgerPartyId),
       eq(emailTable.mailboxId, input.mail.mailboxId),
@@ -817,11 +821,11 @@ export async function settleMail(
         },
         actor,
       );
-    const settledEmails = await tx
-      .update(emailTable)
-      .set(settled)
-      .where(identity)
-      .returning({ id: emailTable.id });
+    const settledEmails = await updateEmailStateWhere(
+      tx,
+      settled,
+      identity,
+    ).then((rows) => rows.map((row) => ({ id: row.id })));
     if (input.importRunId && input.mail.id) {
       if (settledEmails.length !== 1)
         throw createAppError(
@@ -901,8 +905,18 @@ export async function settleMail(
     }
     // Lists, filters and the Email panel read the snapshot: a link, outcome
     // or status written here must reach it now, not at the hourly pass.
-    for (const { id } of settledEmails)
-      await republishEmailRelationship(databaseForTransaction(tx), id);
+    const { emitWrites, reconcileNow } = await import("~/server/kernel/api");
+    const scopes = settledEmails.map(({ id }) => ({
+      kind: "emailState",
+      key: id,
+    }));
+    await emitWrites(databaseForTransaction(tx), {
+      table: runOperation,
+      ids: [],
+      columns: ["result", "completedAt"],
+      discovers: scopes,
+    });
+    await reconcileNow(databaseForTransaction(tx), scopes);
   });
 }
 

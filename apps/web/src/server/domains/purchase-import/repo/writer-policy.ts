@@ -1,12 +1,10 @@
+import { expenseLineBasisSchema } from "@cubby/schemas/expense-line-kind";
 import { mailEvent } from "@cubby/schemas/mailbox-research";
-import { eq, sql, type SQL } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 
-import {
-  importSourceOrder,
-  importSourceProduct,
-} from "~/server/db/generated/entity-table-definitions.gen";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { related } from "~/server/db/helpers/related";
+import { sqlEnumConstant } from "~/server/db/sql-enum";
+import { acceptedOrderLinesSql } from "~/server/domains/purchase-import/repo/accepted-order-read";
 
 /** Eligible original evidence, independent of its USD ledger valuation. */
 export const foreignReceiptSourceSql = (
@@ -27,52 +25,33 @@ const unpricedItemizationSourceSql = (original: SQL): SQL<boolean> =>
  * moving/reclassifying the Expense: a foreign receipt line, or an unpriced
  * itemization line whose money its aggregate Expense already carries.
  */
-export const foreignExpenseOriginSql = (expenseId: SQL): SQL<boolean> =>
-  related(importSourceProduct, (binding) => eq(binding.expenseId, expenseId))
-    .join(
-      importSourceOrder,
-      (order, binding) => sql`${order.id} = ${binding.sourceOrderId}
-  AND ((${order.originalOrder} #>> '{extraction,candidate,currency}' IS NOT NULL
-  AND ${order.originalOrder} #>> '{extraction,candidate,currency}' <> 'USD')
-  OR ${unpricedItemizationSourceSql(order.originalOrder)})`,
-    )
-    .exists();
+export const foreignExpenseOriginSql = (
+  expenseId: SQL,
+): SQL<boolean> => sql<boolean>`EXISTS (
+  SELECT 1 FROM ${acceptedOrderLinesSql} accepted WHERE accepted."expenseId"=${expenseId}
+  AND ((accepted.extraction#>>'{candidate,currency}' IS NOT NULL AND accepted.extraction#>>'{candidate,currency}' <> 'USD')
+    OR ${unpricedItemizationSourceSql(sql`accepted."originalOrder"`)}))`;
 
-/** Coverage requires the current item still to belong to the original Purchase and role. */
+/** Coverage follows accepted item identity and its current line role. */
 export const foreignReceiptExpenseSql = (row: {
   id: SQL;
   purchaseId: SQL;
   lineKind: SQL;
-}): SQL<boolean> =>
-  related(importSourceProduct, (binding) => eq(binding.expenseId, row.id))
-    .join(
-      importSourceOrder,
-      (order, binding) => sql`${order.id} = ${binding.sourceOrderId}
-  AND ${order.purchaseId} = ${row.purchaseId} AND ${foreignReceiptSourceSql(order.originalOrder)}
-  AND (${order.originalOrder} #> '{extraction,candidate,lines}') -> ${binding.lineIndex} ->> ${"lineKind"} = ${row.lineKind}`,
-    )
-    .exists();
+}): SQL<boolean> => sql<boolean>`EXISTS (
+  SELECT 1 FROM ${acceptedOrderLinesSql} accepted WHERE accepted."expenseId"=${row.id} AND accepted."purchaseId"=${row.purchaseId}
+  AND ${foreignReceiptSourceSql(sql`accepted."originalOrder"`)}
+  AND (accepted.extraction#>'{candidate,lines}')->accepted."lineIndex"->>${"lineKind"}=${row.lineKind})`;
 
-/** An unpriced item line of an unpriced USD itemization, still on its original Purchase and role. */
 const unpricedItemizationExpenseSql = (row: {
   id: SQL;
   purchaseId: SQL;
   lineKind: SQL;
-}): SQL<boolean> =>
-  related(importSourceProduct, (binding) => eq(binding.expenseId, row.id))
-    .join(
-      importSourceOrder,
-      (order, binding) => sql`${order.id} = ${binding.sourceOrderId}
-  AND ${order.purchaseId} = ${row.purchaseId} AND ${unpricedItemizationSourceSql(order.originalOrder)}
-  AND (${order.originalOrder} #> '{extraction,candidate,lines}') -> ${binding.lineIndex} ->> ${"lineKind"} = ${row.lineKind}
-  AND EXISTS (
-    SELECT 1 FROM "Expense" carried
-    WHERE carried."purchaseId" = ${row.purchaseId} AND ${notDeleted("carried")}
-      AND carried."lineBasis" = ${"allocation"}
-      AND carried."costMinor"::numeric = (${order.originalOrder} #>> '{extraction,candidate,printedGrandTotal}')::numeric * 100
-  )`,
-    )
-    .exists();
+}): SQL<boolean> => sql<boolean>`EXISTS (
+  SELECT 1 FROM ${acceptedOrderLinesSql} accepted WHERE accepted."expenseId"=${row.id} AND accepted."purchaseId"=${row.purchaseId}
+  AND ${unpricedItemizationSourceSql(sql`accepted."originalOrder"`)}
+  AND (accepted.extraction#>'{candidate,lines}')->accepted."lineIndex"->>${"lineKind"}=${row.lineKind}
+  AND EXISTS(SELECT 1 FROM "Expense" carried WHERE carried."purchaseId"=${row.purchaseId} AND ${notDeleted("carried")}
+    AND carried."lineBasis"=${sqlEnumConstant(expenseLineBasisSchema, expenseLineBasisSchema.enum.allocation)} AND carried."costMinor"::numeric=(accepted.extraction#>>'{candidate,printedGrandTotal}')::numeric*100))`;
 
 /**
  * An unpriced item line whose money is carried elsewhere by source provenance:

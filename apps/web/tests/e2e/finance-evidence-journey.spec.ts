@@ -1,7 +1,7 @@
 import type { PgTable } from "drizzle-orm/pg-core";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { recordSourceTransactionRecordsOut } from "@cubby/schemas/source-transaction-record";
-import { eq } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { getDb } from "~/server/db/helpers";
 import * as schema from "~/server/db/schema";
 import { createEvidenceHarnessContext } from "./fixtures/core";
@@ -119,18 +119,19 @@ test("source evidence uses generic records while provider facts remain immutable
     batchId: collection.id,
   });
 
-  const annotation = await getDb(
-    db,
-  ).query.sourceObservationAnnotation.findFirst({
-    where: {
-      RAW: (table: PgTable) =>
-        relationalSql(
-          table,
-          eq(schema.sourceObservationAnnotation.observationId, evidence.id),
-        ),
-    },
-  });
-  expect(annotation?.notes).toBe("Synthetic judgment reviewed against source");
+  const [annotation] = await getDb(db)
+    .select()
+    .from(schema.decision)
+    .where(
+      and(
+        eq(schema.decision.channel, "assignment"),
+        eq(schema.decision.subject, `sourceObservation:${evidence.id}`),
+        eq(schema.decision.field, "notes"),
+      ),
+    )
+    .orderBy(desc(schema.decision.at), desc(schema.decision.id))
+    .limit(1);
+  expect(annotation?.value).toBe("Synthetic judgment reviewed against source");
 
   await gotoAuthenticatedPage(
     page,

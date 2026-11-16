@@ -24,10 +24,7 @@ import {
   sourceTransactionRecord,
 } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
-import {
-  financialEvidenceAmountMinor,
-  lockFinancialEvidenceKeys,
-} from "~/server/domains/financial-transaction/repo/financial-evidence";
+import { financialEvidenceAmountMinor } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import {
   checkLockedIdentity,
@@ -39,6 +36,7 @@ import { providerIdentityClaims } from "~/server/domains/transaction-import/poli
 import { constraintViolation } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { emitWrites } from "~/server/kernel/api";
+import { enterHouseholdGate } from "~/server/kernel/gate";
 
 import { auditEvidenceRows } from "./intake-audit";
 import { dirtySourceOccurrences } from "./source-event-dirty";
@@ -62,7 +60,7 @@ export async function lockAndLoadSourceIdentity(
     return constraintViolation(
       "The reviewed source observation is no longer live.",
     );
-  await lockFinancialEvidenceKeys(tx, "source", [initial.source]);
+  await enterHouseholdGate(tx);
   const initialOwners = await db
     .select()
     .from(sourceOccurrence)
@@ -82,14 +80,7 @@ export async function lockAndLoadSourceIdentity(
           .where(eq(financialTransaction.shortcode, input.transactionId))
           .then((rows) => rows.map(transactionDollars))
       : [];
-  await lockFinancialEvidenceKeys(tx, "reviewed-booking", [
-    ...initialOwners.flatMap((owner) =>
-      owner.acceptedTransactionId
-        ? [`transaction:${owner.acceptedTransactionId}`]
-        : [],
-    ),
-    ...(chosenTransaction ? [`transaction:${chosenTransaction.id}`] : []),
-  ]);
+  await enterHouseholdGate(tx);
   const owners = initialOwners.length
     ? await db
         .select()

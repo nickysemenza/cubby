@@ -670,7 +670,7 @@ export const { definition, readSchemas } = defineEntityModel(
           role: "history",
           label: "original order lines",
           description:
-            "The exact original ordered line identifies this Product without implying an inventory movement or financial amount.",
+            "Retained original-line bindings and immutable capture identities retain the canonical Product without implying an inventory movement or financial amount.",
           liveness: {
             kind: "must-target-live",
           },

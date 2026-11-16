@@ -1,4 +1,3 @@
-import { systemActor } from "@cubby/schemas/context";
 import { emailLinkEvidenceKind } from "@cubby/schemas/email-fields";
 import { MAIL_IMPORT_GAP_EXECUTOR } from "@cubby/schemas/email-fields";
 /**
@@ -62,7 +61,6 @@ import {
 import { requestedRows } from "~/server/db/helpers/requested";
 import {
   ledgerParty,
-  importSourceOrder,
   purchase,
   vendor,
   vendorAccount,
@@ -70,14 +68,18 @@ import {
   orderMail,
   run,
   runOperation,
-  sourceOrderObservation,
 } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
+import { emailReviewsSql } from "~/server/domains/email/repo/email-decision-sql";
 import { emailPurchaseEvidenceSql } from "~/server/domains/email/repo/email-purchase-links";
 import {
   readRetainedMail,
   type RetainedMail,
 } from "~/server/domains/mail/repo/retained-mail";
+import {
+  acceptedOrders,
+  acceptedOrderPurchasesSql,
+} from "~/server/domains/purchase-import/repo/accepted-order-read";
 import {
   findControlledMailImport,
   CONTROLLED_MAIL_SOURCE_STATUSES,
@@ -275,21 +277,14 @@ async function importedPurchaseRechecks(
       orderId: purchase.orderId,
       vendorId: vendor.shortcode,
       vendorUuid: vendor.id,
-      sourceId: importSourceOrder.id,
-      checksum: importSourceOrder.checksum,
-      outputFingerprint: importSourceOrder.outputFingerprint,
-      evidenceAt:
-        sql<Date>`least(coalesce(${sourceOrderObservation.createdAt}, ${importSourceOrder.createdAt}), ${importSourceOrder.updatedAt})`.mapWith(
-          importSourceOrder.createdAt,
-        ),
+      sourceId: acceptedOrders.id,
+      checksum: acceptedOrders.checksum,
+      outputFingerprint: acceptedOrders.contentFingerprint,
+      evidenceAt: acceptedOrders.createdAt,
     })
-    .from(importSourceOrder)
-    .innerJoin(purchase, eq(purchase.id, importSourceOrder.purchaseId))
+    .from(acceptedOrders)
+    .innerJoin(purchase, eq(purchase.id, acceptedOrders.purchaseId))
     .innerJoin(vendor, eq(vendor.id, purchase.vendorId))
-    .leftJoin(
-      sourceOrderObservation,
-      eq(sourceOrderObservation.id, importSourceOrder.acceptedObservationId),
-    )
     .innerJoin(
       vendorAccount,
       and(
@@ -312,7 +307,7 @@ async function importedPurchaseRechecks(
             ),
       ),
     )
-    .orderBy(asc(importSourceOrder.id));
+    .orderBy(asc(acceptedOrders.id));
   const groups = new Map<string, typeof rows>();
   for (const row of rows)
     groups.set(row.purchaseId, [...(groups.get(row.purchaseId) ?? []), row]);
@@ -462,7 +457,7 @@ const untouchedAutomaticUnresolved = (
       })`
     : sql`true`
 } AND NOT EXISTS (
-  SELECT 1 FROM "EmailReview" reviewed
+  SELECT 1 FROM ${emailReviewsSql} reviewed
   WHERE reviewed.family = ${suggestionFamily.enum.mail_import_outcome}
     AND reviewed."emailId" = ${emailTable.id} AND reviewed.authority = ${feedbackAuthority.enum.member}
 ) AND NOT ${emailHasProtectingIntentSql(sql`${emailTable.id}`, sql`${emailTable.orderMailId}`)}`;
@@ -1115,8 +1110,8 @@ const awaitedOrderKeySql = normalizedOrderIdSql(
  * was imported or linked. Null while it has not.
  */
 const waitedSourceSettledSql = sql`SELECT max(at) AS at FROM (
-  SELECT greatest(x.created, (SELECT max(accepted."updatedAt") FROM ${importSourceOrder} accepted
-      WHERE accepted."purchaseId" = x.id)) AS at
+  SELECT greatest(x.created, (SELECT max(accepted."createdAt") FROM ${acceptedOrderPurchasesSql} accepted
+      WHERE accepted."boundPurchaseId" = x.id)) AS at
   FROM unnest(keyed.ids, keyed.created, keyed.vendor_ids, keyed.parties) AS x(id, created, vendor_id, party)
   WHERE newest.result #>> '{mailOutcome,judgment,waitingOn,kind}' = ${"order"}
     AND (newest.result #>> '{mailOutcome,judgment,waitingOn,vendorId}' IS NULL
@@ -1167,9 +1162,7 @@ export async function importPendingEmails(
   let senderAfter: { mailboxId: string; afterId: string } | null = null;
   try {
     // A Purchase that gained a Shipment's order number holds that Shipment.
-    await withTransactionDatabase(db, (tx) =>
-      linkShipmentsByOrderId(tx, systemActor()),
-    );
+    await withTransactionDatabase(db, (tx) => linkShipmentsByOrderId(tx));
   } catch (error) {
     errors.push(error);
   }

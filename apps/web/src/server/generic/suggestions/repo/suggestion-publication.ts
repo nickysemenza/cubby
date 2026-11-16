@@ -213,12 +213,6 @@ export type SuggestionOutcome<
 
 type PublishedSuggestion = typeof suggestionTable.$inferSelect;
 
-/** Financial feedback dismisses this revision, not every later bank event or proposal. */
-export const revisionSuppresses = (row: SuggestionRow, f: Fingerprints) =>
-  row.active &&
-  (row.fingerprint === f.fingerprint ||
-    row.evidenceFingerprint === f.evidenceFingerprint);
-
 /**
  * Take every slot's advisory lock in key order, then lock and read each
  * slot's history. Stable order keeps overlapping batches deadlock-free.

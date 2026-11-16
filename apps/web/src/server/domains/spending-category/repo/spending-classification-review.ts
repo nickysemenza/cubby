@@ -54,7 +54,7 @@ import {
   resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { householdWrite } from "~/server/kernel/gate";
+import { householdWrite } from "~/server/kernel/api";
 
 import { lockLiveSpendingCategories } from "./spending-category";
 

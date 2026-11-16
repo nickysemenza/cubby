@@ -16,11 +16,11 @@ import {
   previewFinancialBookingCorrection,
   commitFinancialBookingCorrection,
 } from "~/server/domains/financial-transaction/repo/financial-booking-correction";
+import { convergeFinancialEvidence } from "~/server/domains/financial-transaction/repo/financial-convergence";
 import { applyFinancialSettlementAllocation } from "~/server/domains/financial-transaction/repo/financial-settlement-allocation";
 import { previewFinancialTransactionImport } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
 import { financialTransactionSourceOptions } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { acceptFinancialTransferPair } from "~/server/domains/financial-transaction/repo/financial-transfer-accept";
-import { convergeFinancialEvidence } from "~/server/domains/financial-transaction/service/financial-convergence";
 import {
   listMemberLogins,
   setMemberLoginParty,

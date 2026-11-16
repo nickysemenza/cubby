@@ -19,6 +19,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
+import { feedbackAuthority } from "@cubby/schemas/suggestion";
 import { sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
@@ -34,6 +35,7 @@ import { notDeleted } from "~/server/db/helpers/predicates";
 import { householdDaySqlText, uuidArrayParam } from "~/server/db/helpers/query";
 import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
+import { emailLinkDecisionsSql } from "~/server/domains/email/repo/email-decision-sql";
 import { emailAcceptedEvidenceSql } from "~/server/domains/email/repo/email-sql";
 import type { PageStoredMeta } from "~/server/generic/derived/repo/read-context";
 
@@ -93,16 +95,24 @@ export const emailPurchaseEvidenceSql = (
     decision."evidenceChecksum" <> original."rawChecksum", decision."proposedBy"
   FROM "OrderMailEvent" event
   INNER JOIN "OrderMail" original ON original."id" = event."orderMailId"
-  INNER JOIN "EmailPurchaseDecision" decision ON decision."eventId" = event."id" AND decision.active
+  INNER JOIN ${emailLinkDecisionsSql} decision ON decision."eventId" = event."id" AND decision.active
   INNER JOIN "Purchase" p ON p."id" = decision."purchaseId" AND ${notDeleted(livePurchase)}
   LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND ${notDeleted(liveAccount)}
   WHERE original."id" = "Email"."orderMailId"
     ${purchaseIds ? sql`AND p."id" IN (${purchaseIds})` : sql``}
     AND original."ledgerPartyId" = "Email"."ledgerPartyId"
-    AND event."supersededAt" IS NULL
+    AND (event."supersededAt" IS NULL OR decision.authority=${feedbackAuthority.enum.member})
     AND ${accountOwnerScope === "respect" ? sql`(account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")` : sql`true`}
   UNION ALL
-  SELECT p."id", event."id", ${KIND.suggested}::text, false, ${PROPOSER.heuristic}::text
+  ${emailSuggestedEvidenceSql(accountOwnerScope, purchaseIds)}
+`;
+
+/** Undecided order matches share one source policy with the stored Email projection. */
+export const emailSuggestedEvidenceSql = (
+  accountOwnerScope: "respect" | "ignore" = "respect",
+  purchaseIds?: SQL,
+): SQL => sql`
+  SELECT p."id" AS "purchaseId", event."id" AS "eventId", ${KIND.suggested}::text AS "kind", false AS "changed", ${PROPOSER.heuristic}::text AS "proposedBy"
   FROM "OrderMailEvent" event
   INNER JOIN "OrderMail" original ON original."id" = event."orderMailId"
   -- Exact-order and amount/date candidates are disjoint; each gets its own lookup.
@@ -126,7 +136,7 @@ export const emailPurchaseEvidenceSql = (
     AND event."supersededAt" IS NULL
     AND ${accountOwnerScope === "respect" ? sql`(account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")` : sql`true`}
     AND NOT EXISTS (
-      SELECT 1 FROM "EmailPurchaseDecision" decided
+      SELECT 1 FROM ${emailLinkDecisionsSql} decided
       WHERE decided."eventId" = event."id" AND decided."purchaseId" = p."id" AND decided.active
     )
 `;
@@ -181,7 +191,7 @@ export async function readExactOrderLinkCandidates(
     LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND ${notDeleted(liveAccount)}
     -- A member's dismissal of this Email for the Purchase, on any of its events, wins.
     LEFT JOIN LATERAL (
-      SELECT 1 AS "found" FROM "EmailPurchaseDecision" decided
+      SELECT 1 AS "found" FROM ${emailLinkDecisionsSql} decided
       INNER JOIN "OrderMailEvent" decided_event ON decided_event."id" = decided."eventId"
       WHERE decided_event."orderMailId" = original."id" AND decided."purchaseId" = p."id"
         AND decided."decision" = ${KIND.dismissed} AND decided.active
@@ -189,7 +199,7 @@ export async function readExactOrderLinkCandidates(
     ) dismissed ON true
     WHERE ${notDeleted("Email")} AND ${scoped}
       AND NOT EXISTS (
-        SELECT 1 FROM "EmailPurchaseDecision" decided
+        SELECT 1 FROM ${emailLinkDecisionsSql} decided
         WHERE decided."eventId" = event."id" AND decided.active
       )
       AND NOT EXISTS (${emailAcceptedEvidenceSql()})
@@ -257,7 +267,9 @@ const emailRelationshipResultExistsSql = sql`EXISTS (
 )`;
 
 /** Fixed typed facts, with current account-owner eligibility kept separate. */
-const cachedEmailPurchaseEvidenceSql = (): SQL => sql`
+const cachedEmailPurchaseEvidenceSql = (
+  accountOwnerScope: "respect" | "ignore" = "respect",
+): SQL => sql`
   SELECT fact."purchaseId", fact."eventId", fact.kind, fact.changed, fact."proposedBy"
   FROM (${declaredStoredSourceSql("email", "relationshipFacts", sql`"Email".id`)}) v
   CROSS JOIN LATERAL jsonb_to_recordset(CASE WHEN jsonb_typeof(v.value->'facts') = 'array'
@@ -266,7 +278,7 @@ const cachedEmailPurchaseEvidenceSql = (): SQL => sql`
   JOIN "Purchase" p ON p.id = fact."purchaseId" AND ${notDeleted(livePurchase)}
   LEFT JOIN "VendorAccount" account ON account.id = p."vendorAccountId" AND ${notDeleted(liveAccount)}
   WHERE v."decidedBy"#>>'{outcome,kind}' = 'value'
-    AND (account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")
+    AND ${accountOwnerScope === "respect" ? sql`(account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")` : sql`true`}
 `;
 
 /**
@@ -298,13 +310,6 @@ export const cachedEmailLinkedSql = (): SQL<
   SELECT 1 FROM (${cachedEmailPurchaseEvidenceSql()}) evidence WHERE evidence.kind IN (${KIND.accepted}, ${KIND.linked})
 ) ELSE NULL::boolean END`;
 
-/** An import accepted the Email as a live Purchase's source, by its published facts. */
-export const cachedEmailAcceptedSql = (): SQL<
-  boolean | null
-> => sql`CASE WHEN ${emailRelationshipResultExistsSql} THEN EXISTS (
-  SELECT 1 FROM (${cachedEmailPurchaseEvidenceSql()}) evidence WHERE evidence.kind = ${KIND.accepted}
-) ELSE NULL::boolean END`;
-
 const evidenceRow = emailPurchaseFact.extend({ emailId: z.string() });
 type EvidenceRow = z.infer<typeof evidenceRow>;
 
@@ -322,7 +327,13 @@ export async function readEmailPurchaseEvidence(
       p."shortcode" AS "purchaseShortcode", p."vendorId", evidence."eventId", evidence."kind",
       evidence."changed", evidence."proposedBy"
     FROM "Email"
-    CROSS JOIN LATERAL (${emailPurchaseEvidenceSql(accountOwnerScope)}) evidence
+    CROSS JOIN LATERAL (
+      SELECT * FROM (${cachedEmailPurchaseEvidenceSql(accountOwnerScope)}) cached
+      WHERE ${emailRelationshipResultExistsSql}
+      UNION ALL
+      SELECT * FROM (${emailPurchaseEvidenceSql(accountOwnerScope)}) pending
+      WHERE NOT ${emailRelationshipResultExistsSql}
+    ) evidence
     INNER JOIN "Purchase" p ON p."id" = evidence."purchaseId"
     WHERE "Email"."id" = ANY(${uuidArrayParam(emailIds)})
       ${scope ? sql`AND ${inScope(scope, sql`evidence."purchaseId"`)}` : sql``}
@@ -453,7 +464,7 @@ const currentPurchase = z.object({
 });
 
 /** Current cheap eligibility gates do not rerun candidate discovery. */
-export async function loadRelationshipPurchaseGates(
+async function loadRelationshipPurchaseGates(
   db: Database | DrizzleTransaction,
   ids: readonly string[],
 ) {

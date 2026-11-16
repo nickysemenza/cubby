@@ -19,6 +19,7 @@ import {
   orderMailAttachment,
   emailCandidateObservation,
 } from "~/server/db/schema";
+import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import { startMailImport } from "~/server/domains/purchase-import/repo/mail-import-run";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { findPgError } from "~/server/errors/db-errors";
@@ -106,7 +107,9 @@ describe("Gmail final publication concurrency", () => {
         : "a".repeat(64),
       content: {
         snippet: null,
-        bodyText: "Synthetic frozen original",
+        bodyText: sameChecksum
+          ? "Synthetic changed evidence"
+          : "Synthetic frozen original",
         bodyHtml: null,
       },
     });
@@ -122,14 +125,15 @@ describe("Gmail final publication concurrency", () => {
         checksum: "b".repeat(64),
         pendingObjectKey: "synthetic-existing-cache",
       });
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({
+    await updateEmailStateWhere(
+      ctx.db,
+      {
         classification: "related",
         classificationVersion: "synthetic-prior",
         status: "pending",
-      })
-      .where(eq(emailTable.orderMailId, source.id));
+      },
+      eq(emailTable.orderMailId, source.id),
+    );
     const discovery = await insertWithShortcode(ctx.db, "run", {
       purpose: "mail_discovery",
       trigger: "manual",
@@ -720,10 +724,11 @@ describe("Gmail final publication concurrency", () => {
           bodyHtml: null,
         },
       });
-      await getDb(ctx.db)
-        .update(emailTable)
-        .set({ classification: "unrelated", status: "completed" })
-        .where(eq(emailTable.orderMailId, other.id));
+      await updateEmailStateWhere(
+        ctx.db,
+        { classification: "unrelated", status: "completed" },
+        eq(emailTable.orderMailId, other.id),
+      );
       await getDb(ctx.db)
         .insert(orderMailAttachment)
         .values({

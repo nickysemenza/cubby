@@ -57,7 +57,7 @@ export const disposalPurchaseIds = () =>
     .having(sql`sum(${expense.cost}) < 0`);
 
 /** A zero-cost negative quantity records an ownership exit, not an acquisition. */
-export const zeroCostOwnershipExitExpensePredicate = (): SQL =>
+const zeroCostOwnershipExitExpensePredicate = (): SQL =>
   and(eq(expense.cost, 0n), lt(expense.productQuantity, 0))!;
 
 /**

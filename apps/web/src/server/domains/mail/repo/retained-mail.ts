@@ -10,6 +10,7 @@ import { email as emailTable, orderMail } from "~/server/db/retained-tables";
 /** The original owns content; Email alone owns provider identity and headers. */
 export const retainedMailProjection = {
   id: orderMail.id,
+  emailId: emailTable.id,
   ledgerPartyId: orderMail.ledgerPartyId,
   vendorId: orderMail.vendorId,
   rawChecksum: orderMail.rawChecksum,

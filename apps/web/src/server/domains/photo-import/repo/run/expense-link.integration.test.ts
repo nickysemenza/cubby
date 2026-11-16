@@ -14,6 +14,7 @@ import {
   purchasePaymentEvidence,
 } from "~/server/db/schema";
 import { memberImport } from "~/server/domains/purchase-import/operations/order-import.fixtures";
+import { acceptedOrders } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import { prepareSourceOrderReconciliation } from "~/server/domains/purchase-import/repo/reconciliation";
 import { commitAcceptedSourceOrderReconciliation } from "~/server/domains/purchase-import/repo/reconciliation-accepted";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
@@ -100,8 +101,8 @@ describe("photo review Expense link", () => {
     });
     const db = getDb(ctx.db);
     const line = await db.query.expense.findFirst();
-    const association = await db.query.importSourceOrder.findFirst();
-    if (!run || !line || !association?.acceptedObservationId)
+    const [association] = await db.select().from(acceptedOrders);
+    if (!run || !line || !association?.purchaseId)
       throw new Error("Known source line missing");
     const candidates = await linkablePhotoGroupExpenses(
       ctx.db,

@@ -16,6 +16,10 @@ spend. Corrections and replacements preserve source observations and reject
 stale proposals. Changed accepted financial facts require explicit
 reconciliation; exact replay remains automatic. The server enforces identity,
 money and replay contracts while the member's client supplies judgment.
+Committed import receipts retain the actual kernel audit ids they produced.
+Batch review follows those receipts and retained direct judgment writes; rule
+publication alone grants no Run authority, and inherited findings remain
+report-only until the current Run has its own write receipt.
 
 A changed source is recorded as a new observation before reconciliation; it
 does not refresh accepted payment evidence automatically. Commit rechecks the
@@ -77,7 +81,7 @@ This uses a derived queue and bounded caller-driven batches rather than adding
 an unattended reconciliation worker or a second persisted task system. Web
 views expose the same findings and supported resolutions. Sources accompany
 researched facts. Spend remains SUM(Expense.cost), independent of source count
-and arrival order.
+and arrival order. Duplicate-source convergence requires compatible Vendor/account identity, matching order keys or a shared member/mailbox/thread/date, and a unique complete pairing of identical amounts that preserves effective party cents, Products, quantities and booking facts. It records source and line Decisions, rejects duplicate Expenses, folds the Purchase through its domain edge policy, and verifies the survivor's identities and spending. Immutable captures remain unchanged; an audit receipt distinguishes convergence replay from an ordinary merge. Printed order labels are removed when storing a Purchase identity, and missing identity evidence does not clear an existing value. An import records its resolved Vendor Account as a scope assignment. A new Purchase, or an existing unbound Purchase with accepted itemization, uses that account; an existing account or explicit field Decision keeps precedence. Missing account context does not clear an existing association.
 
 Wardrobe import uses this same Product and photo workflow: one Product per exact
 apparel variant, explicit owned copies and locations, retained item/label

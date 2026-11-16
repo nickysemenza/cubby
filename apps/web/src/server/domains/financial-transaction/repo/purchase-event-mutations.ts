@@ -72,9 +72,11 @@ export async function createPurchaseEventRecords<K extends PurchaseEventTable>(
   entity: K,
   inputs: readonly Omit<InferInsertModel<Table<K>>, "id" | "shortcode">[],
   actor: ActorContext = systemActor(),
-  options: { basis?: "manual" | "decision" } = {},
+  options: { basis?: "manual" | "decision"; supplemental?: boolean } = {},
 ): Promise<Saved<K>[]> {
   if (!inputs.length) return [];
+  if (options.supplemental && entity !== "expense")
+    throw new Error("Only Expenses can supplement source itemization");
   const { householdWrite } = await import("~/server/kernel/api");
   return householdWrite(
     isTransaction(db) ? databaseForTransaction(db) : db,
@@ -89,20 +91,21 @@ export async function createPurchaseEventRecords<K extends PurchaseEventTable>(
       const parentIds = inputs.flatMap((values) =>
         "purchaseId" in values && typeof values.purchaseId === "string"
           ? [values.purchaseId]
-          : [],
+          : "expenseId" in values && typeof values.expenseId === "string"
+            ? [values.expenseId]
+            : [],
       );
-      const parents =
-        entity === "expense" && parentIds.length
-          ? await repositoryQueries(database)
-              .select()
-              .from(recordKey)
-              .where(
-                and(
-                  eq(recordKey.entity, "purchase"),
-                  inArray(recordKey.entityId, parentIds),
-                ),
-              )
-          : [];
+      const parents = parentIds.length
+        ? await repositoryQueries(database)
+            .select()
+            .from(recordKey)
+            .where(
+              and(
+                inArray(recordKey.entity, ["purchase", "expense"]),
+                inArray(recordKey.entityId, parentIds),
+              ),
+            )
+        : [];
       const entries = inputs.map((values) => {
         const id = crypto.randomUUID();
         return {
@@ -111,8 +114,11 @@ export async function createPurchaseEventRecords<K extends PurchaseEventTable>(
             ("purchaseId" in values && typeof values.purchaseId === "string"
               ? parents.find((parent) => parent.entityId === values.purchaseId)
                   ?.scopeKey
-              : null) ?? id,
-          naturalKey: `manual:${id}`,
+              : "expenseId" in values && typeof values.expenseId === "string"
+                ? parents.find((parent) => parent.entityId === values.expenseId)
+                    ?.scopeKey
+                : null) ?? id,
+          naturalKey: `${options.supplemental ? "supplemental" : "manual"}:${id}`,
           values: jsonValues(values),
         };
       });
@@ -417,7 +423,7 @@ export async function createPurchaseEventRecord<K extends PurchaseEventTable>(
   entity: K,
   values: Omit<InferInsertModel<Table<K>>, "id" | "shortcode">,
   actor: ActorContext = systemActor(),
-  options: { basis?: "manual" | "decision" } = {},
+  options: { basis?: "manual" | "decision"; supplemental?: boolean } = {},
 ): Promise<Saved<K>> {
   const [row] = await createPurchaseEventRecords(
     db,

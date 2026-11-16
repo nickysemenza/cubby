@@ -18,6 +18,7 @@ import {
 import { decideEmailPurchase } from "~/server/domains/purchase-import/repo/email-purchase-decision";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { eligibleTargets } from "~/server/generic/suggestions/repo/eligible-targets";
+import { enterHouseholdGate } from "~/server/kernel/gate";
 import { WorkEvidenceObsoleteError } from "~/server/kernel/work-errors";
 
 const retainedChoice = z.object({
@@ -125,6 +126,7 @@ export async function captureEmailConnectionBasis(
   candidate: ConnectionCandidate,
   lock = false,
 ) {
+  if (lock) await enterHouseholdGate(db);
   const purchaseId = await resolveOrThrow(
     db,
     "purchase",
@@ -209,10 +211,6 @@ export async function captureEmailConnectionBasis(
     )
     .sort((a, b) => (a.eventId ?? "").localeCompare(b.eventId ?? ""))[0];
   if (!chosen?.eventId) return { source, target, dependencies: null };
-  if (lock)
-    await getDb(db).execute(
-      sql`SELECT pg_advisory_xact_lock(hashtextextended(${`email-link-event:${chosen.eventId}`},0))`,
-    );
   const eventQuery = getDb(db)
     .select({
       id: orderMailEvent.id,

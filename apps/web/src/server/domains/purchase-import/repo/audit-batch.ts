@@ -1,5 +1,5 @@
 import type { RunId } from "@cubby/schemas/identifiers";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql, type SQL } from "drizzle-orm";
 
 import type { PurchaseAuditRenderedBatch } from "~/server/ai/policy/prompts/purchase-import";
 import type { Database } from "~/server/db";
@@ -14,6 +14,36 @@ import {
   purchase,
   purchasePaymentEvidence,
 } from "~/server/db/schema";
+
+/** A completed command's actual insert receipts, independent of publication channel. */
+export const importRunAuditReceiptSql = (
+  runIds: SQL,
+  auditId: SQL,
+): SQL => sql`EXISTS (
+  SELECT 1 FROM "RunOperation" operation WHERE operation."runId" IN (${runIds})
+    AND operation.kind=${"commit_purchase_import"} AND operation.state=${"completed"}
+    AND operation.result->'auditIds' ? ${auditId}::text
+)`;
+
+/** A Purchase's financial graph includes its separately audited item records. */
+export const purchaseAuditTargetSql = (
+  id: SQL,
+  kind: SQL,
+  entityId: SQL,
+): SQL => sql`/* includes-deleted: Removed items retain their Purchase audit history. */ (
+  (${kind}=${"purchase"} AND ${entityId}=${id}) OR
+  (${kind}=${"expense"} AND EXISTS (SELECT 1 FROM "Expense" item
+    WHERE item.id=${entityId} AND item."purchaseId"=${id}))
+)`;
+
+/** Actual Purchase and item audit receipts identify the Run's judgment writes. */
+export const purchaseImportJudgmentSql = (runIds: SQL): SQL => sql`EXISTS (
+  SELECT 1 FROM ${auditLog} judged WHERE
+    (judged."entityKind"=${"purchase"} AND judged."entityId"=${purchase.id}
+      AND judged.channel=${"mcp"} AND judged."runId" IN (${runIds})) OR
+    (${purchaseAuditTargetSql(sql`${purchase.id}`, sql`judged."entityKind"`, sql`judged."entityId"`)}
+      AND ${importRunAuditReceiptSql(runIds, sql`judged.id`)})
+)`;
 
 /**
  * A successor also audits matching unaudited predecessor writes. Stop at an
@@ -35,15 +65,11 @@ export async function loadPurchaseAuditBatch(
       >`${minorToDollarsSql(purchase.statedTotal, "numeric")}`.mapWith(Number),
       displayLabel: purchase.displayLabel,
     })
-    .from(auditLog)
-    .innerJoin(
-      purchase,
-      and(eq(purchase.id, auditLog.entityId), notDeleted(purchase)),
-    )
+    .from(purchase)
     .where(
       and(
-        inArray(
-          auditLog.runId,
+        notDeleted(purchase),
+        purchaseImportJudgmentSql(
           sql`(WITH RECURSIVE audit_runs AS (
             SELECT r."id", r."predecessorRunId", r."ledgerPartyId", r."actorUserId",
               r."vendorAccountId", r."vendorId", r."purpose", ARRAY[r."id"] AS visited
@@ -61,10 +87,6 @@ export async function loadPurchaseAuditBatch(
               AND NOT p."id" = ANY(a.visited)
           ) SELECT "id" FROM audit_runs)`,
         ),
-        eq(auditLog.entityKind, "purchase"),
-        // Judgment writes only: rule-settled writes are "system"; replayed
-        // commits record no Purchase write.
-        eq(auditLog.channel, "mcp"),
       ),
     )
     .orderBy(asc(purchase.id))

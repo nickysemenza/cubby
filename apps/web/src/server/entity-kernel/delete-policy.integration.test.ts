@@ -87,6 +87,7 @@ import {
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   purchase,
+  ledgerTransfer,
   entityExternalId,
   email as emailTable,
   emailFinancialAssociation,
@@ -110,7 +111,7 @@ import {
   sourceTransactionRecord,
   sourceObservationAnnotation,
 } from "~/server/db/schema";
-import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-decision";
+import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-write";
 import { updateBankTransactionsWhere } from "~/server/domains/financial-transaction/repo/bank.fixtures";
 import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
@@ -483,6 +484,31 @@ const pointEdgeAt = async (
     physical(edge);
   const table = sql.identifier(tableName);
   const column = sql.identifier(columnName);
+  if (
+    tableName === "FinancialTransaction" &&
+    columnName === "ledgerTransferId"
+  ) {
+    const [transfer] = await getDb(db)
+      .select()
+      .from(ledgerTransfer)
+      .where(eq(ledgerTransfer.id, parseEntityId("ledgerTransfer", targetId)));
+    if (!transfer?.date) return false;
+    const account = await insertWithShortcode(db, "financialAccount", {
+      name: "Synthetic transfer deletion account",
+      identity: { kind: "cash" },
+      ledgerPartyId: transfer.fromPartyId,
+    });
+    await insertWithShortcode(db, "financialTransaction", {
+      accountId: account.id,
+      ledgerTransferId: transfer.id,
+      kind: "account_transfer",
+      status: "posted",
+      amount: transfer.amount,
+      transactionDate: transfer.date,
+      postedDate: transfer.date,
+    });
+    return true;
+  }
   if (
     tableName === "Product" &&
     ["ingredientId", "categoryId", "growsPlantId", "brandId"].includes(

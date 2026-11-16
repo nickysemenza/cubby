@@ -30,11 +30,12 @@ import {
   run,
   runFinding,
   runOperation,
-  emailReview,
   vendor,
   vendorAccount,
   purchase,
 } from "~/server/db/schema";
+import { emailReviewsRead as emailReview } from "~/server/domains/email/repo/email-decision-sql";
+import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { recordEmailClassificationObservation } from "~/server/domains/purchase-import/repo/gmail/observations";
@@ -290,6 +291,11 @@ describe("mail research admission", () => {
         expect(result?.outcome).not.toBe("conflict");
         if (!result?.purchaseId)
           throw new Error("Synthetic accepted receipt missing");
+        const [acceptedPurchase] = await getDb(ctx.db)
+          .select({ vendorAccountId: purchase.vendorAccountId })
+          .from(purchase)
+          .where(eq(purchase.shortcode, result.purchaseId));
+        expect(acceptedPurchase?.vendorAccountId).toBe(vendorAccountRow.id);
         purchases.set(orderId, result.purchaseId);
       };
       await history("SYN-RECOVERY-42", "a");
@@ -1340,14 +1346,15 @@ describe("mail research admission", () => {
       mailboxId: "synthetic-mailbox",
       enabled: true,
     });
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({
+    await updateEmailStateWhere(
+      ctx.db,
+      {
         status: "unsettled",
         classificationVersion:
           sourceIdentity.HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
-      })
-      .where(eq(emailTable.orderMailId, mail.id));
+      },
+      eq(emailTable.orderMailId, mail.id),
+    );
     for (let index = 0; index < 50; index += 1) {
       await retainedMailFixture(ctx.db, {
         ledgerPartyId: party.id,
@@ -2085,13 +2092,14 @@ describe("mail research admission", () => {
       .update(runOperation)
       .set({ operationId: `migrated-target:${crypto.randomUUID()}` })
       .where(eq(runOperation.runId, parent.id));
-    await db
-      .update(emailTable)
-      .set({
+    await updateEmailStateWhere(
+      ctx.db,
+      {
         status: "unsettled",
         classificationReason: "Synthetic current classification",
-      })
-      .where(eq(emailTable.runId, parent.id));
+      },
+      eq(emailTable.runId, parent.id),
+    );
     const receipts = await db.select().from(runOperation);
     const before = (await loadRunDetail(ctx.db, parent.shortcode)).targets;
     expect(before).toMatchObject([
@@ -2123,12 +2131,13 @@ describe("mail research admission", () => {
       status: "completed",
       detail: "Synthetic successor resolved the source",
     });
-    await db
-      .update(emailTable)
-      .set({
+    await updateEmailStateWhere(
+      ctx.db,
+      {
         classificationReason: "Synthetic later classification",
-      })
-      .where(eq(emailTable.runId, child.id));
+      },
+      eq(emailTable.runId, child.id),
+    );
     expect((await loadRunDetail(ctx.db, parent.shortcode)).targets).toEqual(
       before,
     );
@@ -2402,13 +2411,14 @@ describe("mail research admission", () => {
 
   it("refuses a historical ownership block before admitting or dispatching mail", async () => {
     const { party, mail } = await source();
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({
+    await updateEmailStateWhere(
+      ctx.db,
+      {
         status: "unsettled",
         classificationVersion: "legacy-source-identity-unresolved/v1",
-      })
-      .where(eq(emailTable.orderMailId, mail.id));
+      },
+      eq(emailTable.orderMailId, mail.id),
+    );
     const before = await getDb(ctx.db).select().from(emailTable);
     const retainedBefore = await getDb(ctx.db).select().from(orderMail);
     await expect(

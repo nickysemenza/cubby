@@ -126,16 +126,6 @@ export async function vendorStatementLabels(
   );
 }
 
-/** Independent order proof may settle an unknown label, but cannot contradict history. */
-export const merchantVendorAllowsSettlementSql = (
-  merchant: SQL,
-  vendorId: VendorId,
-): SQL => sql`
-  NOT EXISTS (
-    SELECT 1 FROM (${merchantVendorCandidatesSql(sql`btrim(regexp_replace(lower(${merchant}), '\\s+', ' ', 'g'))`)}) history
-    WHERE "vendorId" <> ${vendorId}
-  )`;
-
 /**
  * Load advisory Vendor evidence for a whole page in one query.
  *

@@ -27,9 +27,9 @@ import {
   aiUsage,
   run,
   image,
-  emailReview,
   imageProcessingOrphan,
 } from "~/server/db/schema";
+import { emailReviewsRead as emailReview } from "~/server/domains/email/repo/email-decision-sql";
 import { readEmailProtectingIntent } from "~/server/domains/purchase-import/repo/email-review-intent";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";

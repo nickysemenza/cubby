@@ -3,13 +3,11 @@ import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import {
-  emailClassificationObservation,
-  emailReview,
-} from "~/server/db/schema";
+import { emailClassificationObservation } from "~/server/db/schema";
 import { getDb } from "~/server/db/helpers";
-import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-decision";
-import { appendEmailReview } from "~/server/domains/email/repo/email-review-store";
+import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-write";
+import { emailReviewsRead } from "~/server/domains/email/repo/email-decision-sql";
+import { appendEmailReview } from "~/server/domains/email/repo/email-review-write";
 
 type EmailLinkDecision = Omit<
   Parameters<typeof publishEmailLinkDecision>[1],
@@ -22,8 +20,10 @@ type EmailLinkDecision = Omit<
 export async function listEmailReviewsByKind(db: Database, kind: string) {
   return getDb(db)
     .select()
-    .from(emailReview)
-    .where(sql`${emailReview.metadata} @> ${JSON.stringify({ kind })}::jsonb`);
+    .from(emailReviewsRead)
+    .where(
+      sql`${emailReviewsRead.metadata} @> ${JSON.stringify({ kind })}::jsonb`,
+    );
 }
 
 /** Seed a real shared Email link decision for integration-test setup. */

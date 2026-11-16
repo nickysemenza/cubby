@@ -46,7 +46,6 @@ import {
 } from "../../repo/gmail/attachment-storage";
 import { gmailExecutionPolicy } from "../../repo/gmail/execution-policy";
 import {
-  confirmEmailClassification,
   hasStoredClassificationForChecksum,
   hasRetainedOrderMailContent,
   readMemberClassification,
@@ -370,7 +369,6 @@ async function reclassifyPublication(
   if (decision.classification === current.classification) {
     if (retain && !imported && !(await hasRetainedContent(db, current)))
       return null;
-    await confirmEmailClassification(db, current.id, decision);
     return { kind: "confirmed" };
   }
   if (imported) return { kind: "kept", reason: "awaiting_acceptance" };
@@ -449,9 +447,20 @@ async function stageGmailAttachments(
   identity: MessageIdentity,
   normalized: GmailNormalizedMessage,
   orderMailId: string | null,
+  checksum: string,
   transientAttachments: Map<string, string>,
   storage: OrderMailAttachmentStorage,
 ) {
+  const [retained] = orderMailId
+    ? await readRetainedMail(db, {
+        ledgerPartyIds: [ledgerPartyId.parse(identity.ledgerPartyId)],
+        mailboxId: identity.mailboxId,
+        messageId: identity.messageId,
+        orderMailIds: [orderMailId],
+      })
+    : [];
+  // A refreshed original owns separate attachments even when part labels match.
+  if (retained?.rawChecksum !== checksum) orderMailId = null;
   for (const attachment of normalized.attachments) {
     if (
       orderMailId &&
@@ -728,6 +737,7 @@ async function acquireEligible(
         identity,
         normalized,
         prior?.orderMailId ?? null,
+        checksum,
         transientAttachments,
         storage,
       )

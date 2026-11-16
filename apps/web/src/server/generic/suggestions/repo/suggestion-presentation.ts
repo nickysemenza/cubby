@@ -10,10 +10,7 @@ import {
   type ConnectionProposal,
   type ConnectionRelation,
 } from "@cubby/schemas/entity-connections";
-import {
-  suggestionFamily,
-  type suggestionReviewInput,
-} from "@cubby/schemas/suggestion";
+import { type suggestionReviewInput } from "@cubby/schemas/suggestion";
 import {
   type SuggestionColumnValue,
   type SuggestionCountsOut,
@@ -25,12 +22,11 @@ import {
   type SuggestionStrength,
   type suggestionAction,
 } from "@cubby/schemas/suggestion-list";
-import { transferPairJudgment } from "@cubby/schemas/transfer-pair-suggestion";
 import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
+import { uuidArrayParam } from "~/server/db/helpers";
 import { suggestionCounts } from "~/server/generic/suggestions/repo/field-gaps";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
@@ -102,19 +98,6 @@ export function changedTerms({ reviewed, current }: ApplicationTerms) {
   );
 }
 
-export const cleanAcceptance = (
-  row: Pick<SuggestionKey, "suggestionId" | "fingerprint">,
-) =>
-  ({
-    suggestionId: row.suggestionId,
-    operationId: crypto.randomUUID(),
-    verdict: "correct",
-    correction: { present: false },
-    intent: "apply",
-    expectedFingerprint: reviewKey(row),
-    reason: null,
-    evidence: null,
-  }) satisfies ReviewItem;
 type Action = z.infer<typeof suggestionAction>;
 type RowOf<F extends SuggestionListFamily> = Extract<
   SuggestionListRow,
@@ -175,7 +158,7 @@ const qualityImpact = (check: DataCheck): SuggestionImpact => ({
   label: dataCheckPresentation[check].satisfiedLabel,
   qualityCheck: check,
 });
-export const outcome = (label: string): SuggestionImpact => ({
+const outcome = (label: string): SuggestionImpact => ({
   kind: "resolves",
   label,
 });
@@ -266,40 +249,3 @@ export const connectionActions = (proposal: ConnectionProposal): Action[] => {
     ...verbs("reject", "dismiss", "never_suggest"),
   ];
 };
-
-export async function transferPairRows(
-  db: Database,
-  query: SuggestionFamilyQuery,
-  ids?: readonly string[],
-) {
-  const rows = await unwrapDb(db).execute<{
-    id: string;
-    fingerprint: string | null;
-    createdAt: Date | string;
-    judgment: unknown;
-  }>(
-    sql`
-    SELECT s.id, s.fingerprint, s."createdAt", s.judgment
-    FROM "Suggestion" s
-    WHERE s.family = ${suggestionFamily.enum.transfer_pair} AND s.status = ${query.filters.status}
-      AND ${suggestionIdScope(query.suggestionIds, sql`s.id`)}
-      ${ids ? sql`AND s.id = ANY(${uuidArrayParam(ids)})` : sql``}
-      ${query.filters.status === "pending" ? sql`AND s.active` : sql``}
-      ${query.filters.runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${query.filters.runId})` : sql``}
-  `,
-    "objects",
-  );
-  return rows.map((row) => ({
-    ...row,
-    evidence: transferPairJudgment.parse(row.judgment),
-    createdAt: new Date(row.createdAt),
-  }));
-}
-
-export const TRANSFER_WEAK_BLOCKERS = [
-  "weak_movement",
-  "competing_candidates",
-  "unresolved_overlap",
-  "cash_leg_missing",
-  "owner_missing",
-];

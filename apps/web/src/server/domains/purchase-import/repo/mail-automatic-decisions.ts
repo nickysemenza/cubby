@@ -9,6 +9,11 @@ import { z } from "zod";
 
 import { uuidArrayParam } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import {
+  emailLinkDecisionHistorySql,
+  emailLinkDecisionsSql,
+  emailReviewsSql,
+} from "~/server/domains/email/repo/email-decision-sql";
 
 type DecisionValue = z.infer<ReturnType<typeof z.json>>;
 
@@ -63,7 +68,7 @@ const ref = (entity: string, id: SQL) =>
 
 /** The latest member grade of a handle, excluding its decision and receipts. */
 const latestReview = (subject: SQL) => sql`LEFT JOIN LATERAL (
-    SELECT r.id, r.verdict, r."createdAt" FROM "EmailReview" r
+    SELECT r.id, r.verdict, r."createdAt" FROM ${emailReviewsSql} r
     WHERE r."subjectId" = ${subject} AND r.authority = ${feedbackAuthority.enum.member}
       AND r."operationId" <> ${"decision"}
       AND r.metadata->>${"kind"} IS DISTINCT FROM ${"assessment_application"}
@@ -90,7 +95,7 @@ function relevanceBranch(scope: MailDecisionScope, reviewFilter: SQL) {
       o."createdAt", o.checksum AS fingerprint, NULL::text AS "automaticRule",
       (o.application = ${"applied"}) AS "applicationVerified",
       latest.verdict, latest."createdAt" AS "reviewedAt", true AS active,
-      CASE WHEN EXISTS (SELECT 1 FROM "EmailReview" applied
+      CASE WHEN EXISTS (SELECT 1 FROM ${emailReviewsSql} applied
         WHERE applied."subjectId" = o.id AND applied.metadata->>${"kind"} = ${"assessment_application"})
         THEN ${"applied"} ELSE ${"pending"} END AS status,
       o."createdAt" AS "sortAt",
@@ -98,7 +103,7 @@ function relevanceBranch(scope: MailDecisionScope, reviewFilter: SQL) {
     FROM "EmailClassificationObservation" o
     ${latestReview(handle)}
     WHERE o.application IN (${"applied"}, ${"unverified"})
-      AND NOT EXISTS (SELECT 1 FROM "EmailReview" resolved
+      AND NOT EXISTS (SELECT 1 FROM ${emailReviewsSql} resolved
         WHERE resolved."subjectId" = o.id AND resolved."operationId" = ${"resolution"}
           AND resolved.authority = ${feedbackAuthority.enum.member})
       ${scope ? sql`AND ${anyOf(sql`o."emailId"`, scope.emailIds)}` : sql``}
@@ -115,7 +120,7 @@ function linkBranch(scope: MailDecisionScope, reviewFilter: SQL) {
       latest.verdict, latest."createdAt" AS "reviewedAt", d.active, d.status,
       d."createdAt" AS "sortAt",
       jsonb_build_array(${ref("email", mail)}, ${ref("purchase", sql`d."purchaseId"`)}) AS refs
-    FROM "EmailPurchaseDecision" d
+    FROM ${emailLinkDecisionHistorySql} d
     ${latestReview(sql`d.id`)}
     WHERE d.authority = ${feedbackAuthority.enum.automatic}
       ${
@@ -133,7 +138,7 @@ function outcomeBranch(scope: MailDecisionScope, reviewFilter: SQL) {
   const target = sql`(op.result #>> '{target,entityId}')::uuid`;
   const createdAt = sql`((op.result #>> '{mailOutcome,createdAt}')::timestamptz AT TIME ZONE 'UTC')`;
   // The Email's linked Purchases, from either its id or its retained original.
-  const linked = sql`"EmailPurchaseDecision" link
+  const linked = sql`${emailLinkDecisionsSql} link
     WHERE link.active AND link.decision = ${"linked"} AND EXISTS (
       SELECT 1 FROM "Email" mail WHERE mail.id = ${target} AND ${notDeleted("mail")}
         AND (link."emailId" = mail.id OR link."originalId" = mail."orderMailId"))`;

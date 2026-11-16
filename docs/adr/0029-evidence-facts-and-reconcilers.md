@@ -8,10 +8,12 @@ read" rule of [ADR 0024](0024-repository-read-declaration.md). It amends item 1
 of ADR 0028 for one case (section 9). Everything else in those ADRs stays in
 force, including ADR 0026's occurrence, head-selection and proof rules.
 
-The implemented scopes are `bankEvent`, statement-first `purchaseEvent` and
-`fields`. `paymentMatch`, `transferPair`, `shipment`, `emailState` and order
-evidence use the existing import code. The remaining scope descriptions below
-state the intended architecture.
+The implemented money scopes are `bankEvent`, `purchaseEvent`, `transferPair`
+and `emailState`. Purchase events accept statement and Order/Email evidence.
+Payment matching is a phase of `purchaseEvent`, not a second binding writer:
+payment keys plan bindings and bank/order keys publish money. Order and payment evidence creates matching scopes. Bank publication raises payment keys to invalidate existing consumers without creating matching scopes for amounts that have no order evidence. Bank rows discover transfer pairing only for the transfer kinds that the pairing policy accepts; authored transfer evidence discovers its own scope. `shipment`,
+`fields` and the catalog scopes retain their declared owners. Product identity
+continues using its existing publication and review path.
 
 Where an older ADR conflicts with this one, this one wins, and the older ADR
 is edited or reduced to a stub as [the index](README.md) describes.
@@ -44,7 +46,9 @@ shows all of its machinery.
    table that holds both a source observation and mutable state splits them:
    the observation columns are insert-only and the state columns belong to a
    reconciler (for Email: headers, body and attachments are evidence;
-   relevance, link and outcome columns belong to `emailState`).
+   relevance, link and outcome columns belong to `emailState`). A system header
+   update with the current values is a no-op; changing back to an earlier value
+   appends a new observation rather than replaying the older one.
 
    The traced repository boundary refuses updates, including conflict updates,
    to these observation columns, even inside a kernel apply:
@@ -111,16 +115,15 @@ keyed reads, runs a pure function that returns the records that should exist
 and the gaps that remain, and the kernel applies the difference to what is
 stored in one short transaction.
 
-| Scope           | Lane    | Scope key                                        | Owns                                                                                         |
-| --------------- | ------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------- |
-| `bankEvent`     | money   | one source occurrence, or one manual transaction | FinancialTransaction                                                                         |
-| `paymentMatch`  | money   | one payment key: amount, order number or tender  | `EvidenceBinding`                                                                            |
-| `purchaseEvent` | money   | one purchase event id                            | Purchase, Expense, allocations, attributions, and the Vendor and alias a booking must create |
-| `transferPair`  | money   | one unordered pair of bank events                | LedgerTransfer                                                                               |
-| `shipment`      | catalog | one shipment identity                            | Shipment                                                                                     |
-| `emailState`    | catalog | one Email                                        | Email relevance, link and outcome columns                                                    |
-| `fields`        | catalog | one record of an entity that declares AI fill-in | that record's `apply: "auto"` columns not owned by another reconciler                        |
-| `quality`       | catalog | one record of an entity that declares checks     | nothing; its output is gaps                                                                  |
+| Scope           | Lane    | Scope key                                        | Owns                                                                                                   |
+| --------------- | ------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `bankEvent`     | money   | one source occurrence, or one manual transaction | FinancialTransaction                                                                                   |
+| `purchaseEvent` | money   | a payment key, bank event, or order identity     | EvidenceBinding, Purchase, Expense, allocations, attributions, and booking-created Vendors and aliases |
+| `transferPair`  | money   | one unordered pair of bank events                | LedgerTransfer                                                                                         |
+| `shipment`      | catalog | one shipment identity                            | Shipment                                                                                               |
+| `emailState`    | money   | one Email                                        | Email relevance and its typed link/outcome snapshot                                                    |
+| `fields`        | catalog | one record of an entity that declares AI fill-in | that record's `apply: "auto"` columns not owned by another reconciler                                  |
+| `quality`       | catalog | one record of an entity that declares checks     | nothing; its output is gaps                                                                            |
 
 Each reconciler declares the tables and columns it reads and the tables and
 columns it writes. The kernel's registry build, checked by a unit test in CI,
@@ -142,6 +145,26 @@ occurrences may attach to one accepted transaction without minting or rewriting
 it; an unresolved accepted identity remains a gap and retains its stored link. Its desired output carries each record's provenance, its
 relationship effects, and an explicit disposition for a record that should no
 longer exist (section 9).
+
+An explicit Purchase assignment applies even when an order has no payment
+facts. Its order-key reconciliation binds the accepted evidence to the existing
+Purchase owner; absent payment evidence never invents a bank movement. Priced
+itemization cannot add spending beside an aggregate still owned by another
+event. That ownership change requires review before the aggregate is retired.
+An unlinked positive-quantity item Expense matching a selected Product, date
+and price also requires reviewed correspondence before an order can add spending.
+Disposal and reversal quantities are not acquisition candidates.
+A held capture can publish its Purchase header and financial review while retaining
+all recorded spending. The review proves the member, canonical source identity
+and live Purchase owner from the capture and its economic event. Its source claim
+tracks the review Run; the immutable capture retains its original Run provenance. Applying a review reuses its proven capture and publishes payment evidence from those bytes. Product and line choices are Decisions, without another source capture. Historical provenance retains the first capture independently of the current accepted head. A source review records which previously accepted captures its selected head supersedes, retaining earlier reviewed supersessions. This choice applies only while the selected capture remains a current source head; later unreviewed captures still participate in conflict detection.
+Publishing a review does not advance an accepted source association.
+The import commit counts member decision and unsupported gaps as findings;
+pending bank evidence stays visible as background settlement work.
+When a review attaches an independently recorded Expense, its original event
+applies the record Decisions and remains its sole writer. The order keeps an
+accepted-record reference and refuses contradictory item facts; it does not mint
+a replacement Expense or take over the original event.
 
 Adding a scope kind needs a measured reason. One reconciler per derived field
 is ADR 0021's engine again and is not allowed; derived values stay views,
@@ -215,8 +238,13 @@ table, and a row read once serves the rest of the batch. `load` may read
 Answers through `reads.answers`, so a scope whose inputs depend on an Answer
 reconciles in its first round. Apply locks the union of input revisions and dirty claims once,
 then writes each table as a set. Identity reservations, RecordKeys, bindings,
-audits, dependencies and cached scope outcomes are batch writes. Audit rows
-retain their individual scope provenance. A batch is one coherent input
+audits, dependencies and cached scope outcomes are batch writes. Kernel publication
+alone audits owned column changes; domain receipts describe independent source
+operations. Audit rows
+retain their individual scope provenance. Derived audit entries use the system
+actor and cite their evidence and Decisions; those inputs retain their originating
+Run and member authorship. Authored source changes retain their actor and Run.
+A batch is one coherent input
 snapshot: its output notifications exclude every completed scope in that
 batch and still notify other dependent scopes. Each read through `Reads` records its key, including a read that
 returns no rows, and `Reads` reaches only the sources the reconciler declared.
@@ -266,7 +294,7 @@ the first new declaration reserves the shared id; every participating scope
 keeps a RecordKey to it. Existing RecordKeys always retain their ids. The
 coalescer supplies creation values only; member edits remain authored.
 
-`c.record` returns the record's UUID. For an existing `RecordKey` it returns
+`c.record` returns the record's UUID. Its `authored` option marks a member-created record as ineligible for a proof merge. For an existing `RecordKey` it returns
 the retained id; for a new natural key it derives a UUID v8 from the scope
 kind, scope key, table and natural key using SHA-256. Contents never enter
 that identity. Other records declared in the same reconcile use that UUID as
@@ -312,8 +340,9 @@ entity's writer). The statement inserts the row's `FactKey` rows and upserts
   `ScopeDep` yet; and
 - every scope whose `ScopeDep` holds one of the row's keys.
 
-A scope whose key is itself a fact key (`paymentMatch`) is discovered by that
-key.
+A purchase-event payment scope uses the payment fact key itself. Evidence
+discovers it directly; its binding output dirties the bank/order scopes that
+consume those bindings. There is one EvidenceBinding column owner throughout.
 
 Registration and mutation serialize per key through `KeyRev(key, rev)`. An
 input mutation raises `rev` for each of its keys with an upsert before it reads
@@ -348,9 +377,8 @@ rejects work computed before the input changed.
 Correctness comes from dirtying, not from order. `after` is a scheduling
 preference that avoids rework: the runner does not claim a scope of a kind
 while a claimable dirty scope of an upstream kind exists in the same lane. The
-graph is `bankEvent → paymentMatch → purchaseEvent`, `bankEvent →
-transferPair`, and across lanes `purchaseEvent → emailState`; `shipment`,
-`fields` and `quality` have no upstream.
+graph is `bankEvent → purchaseEvent → transferPair` and
+`purchaseEvent → emailState`; `shipment`, `fields` and `quality` have no upstream.
 
 Predicate reads record declared index membership keys, including empty reads.
 Catalog rosters track the declared columns they consume. The registry rejects
@@ -542,23 +570,28 @@ Cubby merges on its own, amending ADR 0028 item 1. Every other case is a gap.
 A merge runs the declared merge policy inside the apply transaction: foreign
 keys, `EntityLink`, `EntityExternalId`, attachments and collision rules, as
 `generic/merge` does today, and search artifacts are retired. The absorbed
-record's `RecordKey` rows repoint to the survivor, the older record survives,
+record's `RecordKey` rows repoint to the survivor, the older record survives unless a member decision explicitly names the survivor, and the absorbed scope's remaining child RecordKeys transfer to the surviving scope,
 and the absorbed id and shortcode keep resolving to the survivor on reads.
+Explicit member merges and implicit Purchase folds use the same kernel merge
+operation, including domain-specific metadata and attribution preservation.
 Writes addressed to an absorbed id are refused and name the survivor. Audit
 and evidence rows keep the identity they were written with. Web, native caches
 and MCP resolve through the same function.
 
 A delete is a `reject` decision. It runs the entity's existing transactional
 delete policy and search cleanup, and marks the `RecordKey` rejected so the
-record is not created again when its evidence returns. Rejecting one row of
+record is not created again when its evidence returns. Public repository deletion records this rejection even when its policy has already soft-deleted the row. Derivation retirement runs the policy without adding a member rejection. An explicit import can create a replacement Purchase through a record Decision while retaining the rejected identity. Automatic reuse requires the same previously accepted immutable capture and a unique surviving source-owned Expense for every line. It preserves Expense identities and cents and changes only their Purchase assignment; moved, missing, independently owned or ambiguous items remain for review. Background replay does not request this replacement. Repeating the rejection
+retains its first timestamp and resolves the same owner and delete policy. Rejecting one row of
 evidence removes its record only when no other evidence, merge or allocation
 holds the record. A record with decisions
 and no remaining evidence stays, with an `unsupported` gap.
 
 Reconcilers resolve retained decision and manual-entry references through
-`c.reference(entity, idOrShortcode)`. It follows redirects from the identity
+`c.reference(entity, idOrShortcode, { format })` resolves an id by default or a public shortcode when requested. Every batch loads the identity roster, including binding-only consumers. It follows redirects from the identity
 snapshot loaded for the batch, returns the live survivor only for the requested
 entity kind, and does not alter the retained input.
+
+Member gaps on scopes keyed by a payment or identity pair appear on the public records named by their actions. Needs you, record machinery and list machinery use the same action endpoints even before that scope creates an output.
 
 ### 10. Stage and the machinery read
 
@@ -672,7 +705,11 @@ At cutover every scope gets `ScopeState` at version 0 and its stored records
 enter as inputs: `EvidenceBinding` rows with basis `baseline`, and for each
 reconciled value a `set` decision when a person holds it or a legacy Answer
 when Cubby does. The derivation treats a baseline binding as fixed, below a
-member decision and above automatic matching. A value Cubby held stands
+member decision and above automatic matching. Accepted order identity requires
+an effective binding to its Purchase owner; a captured Purchase pointer alone
+is not acceptance. Accepted history retains rejected owners with their deletion status; active linkage requires a live owner. An accepted identity without a captured extraction retains
+its source key, owner and checksum with explicitly unreadable evidence, without
+reconstructing prices or lines from mutable records. A value Cubby held stands
 without an ask while its basis and value are unchanged and no person has
 since ruled that value out on another record of the entity, so a
 correction's recheck asks again. The first sweep then proposes
@@ -684,8 +721,9 @@ records gets version 0 and an empty baseline.
 An input-triggered reconcile also protects accepted baselines. An automatic
 difference records a Drift proposal, computed as approval computes it, and
 applies no record changes or new asks. Decision changes still apply above the
-baseline, also while the scope has a gap, and are not part of the proposal: a field assignment with the current
-Decision as its provenance, a new record whose supplied values all cite current
+baseline, also while the scope has a gap, and are not part of the proposal: a
+field assignment on a record or patch whose exact proposed value cites the
+current Decision as its provenance, a new record whose supplied values all cite current
 Decisions or a member's explicit accept or book Decision for that record, and a decision-basis binding with the decision binding it replaces.
 They do not authorize other automatic differences. Creation authority applies
 to those immutable decision values; it does not authorize later changes
@@ -730,6 +768,175 @@ fresh database and on synthetic predecessor data. It:
    9), then drops the tables section 7 retires.
 
 Undecided Suggestions and rebuildable derived state are dropped.
+
+The Order/Email follow-up carries the retained source identities into FactKey,
+baseline order/payment bindings and the existing purchase owner. The migration
+keeps all six money tables unchanged and verifies retained extraction bytes.
+Accepted line-to-record identities become baseline `line-record` decisions;
+source snapshots and existing RecordKey natural keys remain intact. An old
+payment receives a baseline bank binding only for one complete, unambiguous
+stored allocation. A retained payment without a direct observation link keeps
+its source-claim and Purchase identity; a direct observation link takes priority.
+Unexplained current payment evidence retains recorded settlement as a disagreement.
+An explicitly reviewed cost correction carries its unchanged bank associations
+as identity Decisions, so a partial settlement survives a corrected total without
+enabling new automatic partial-payment matches. Read-back verifies that source
+review changes neither the accepted bank allocations nor its exact reviewed spend.
+A reviewed split reuses each selected Expense once; additional lines receive their
+own identities while retaining the reviewed beneficiary and funder cent totals.
+Allocation Decisions load their referenced bank movements and all existing slices
+under tracked reads before validating conservation, including newly named movements
+that have no stored allocation to the Purchase.
+Ambiguity remains visible. Email links, reviews and reviewed
+account facts retain their ids, times and payloads in Decision slots. Existing
+transfers become authored baseline inputs, never newly inferred transfers.
+
+Import preparation persists immutable `ImportPreparedOrder` and
+`ImportPreparedLine` records and the public operation result. It publishes no
+money. Commit reads the same stored shape for every preparation, validates the
+original target and evidence fingerprints, and only then appends accepted source
+facts and member Decisions. Retained preparations need no re-extraction or
+internal JSON-handle conversion.
+
+Import preparation and commit take the household gate, then the Run row lock,
+then the operation row lock, matching cancellation's lock order. A completed
+operation replays before the active-Run check; a new write re-reads ownership,
+purpose, Vendor scope and Run status while holding the lock. Commit fingerprints
+exclude transport execution context and keep the original operation argument
+order. A member's Email/Purchase dismissal remains authoritative across later
+source events, Purchase merges and inferred order matches. Link projections
+resolve Purchase redirects, require live targets, and keep event-specific pointers
+for Emails containing several orders. A later member choice supersedes the
+canonical target's pre-merge choices; automatic publishers preserve them. Removed
+Email targets detach from retained decisions. A refused commit rolls back its
+money and evidence writes together.
+
+An order without a printed order id includes the immutable source kind and
+source key in its economic event identity. Distinct originals at one Vendor stay
+separate unless payment evidence or a member links them. Request handles never
+participate in that identity; the retained receipt section key stays intact.
+
+Preparation line handles identify a request, not source facts. Accepted line
+identities use canonical line contents and a duplicate occurrence ordinal, so
+replaying the same source with new request handles creates no evidence or
+payment duplicates. Commit maps request handles back to accepted line identities.
+A merged Vendor's source replay retains the original order key and observation
+Vendor identity only when the durable redirect proves the current Vendor is its
+survivor. Exact retained observations are reused before appending new evidence.
+Member line/default decisions use the stable source event and follow its bank
+purchase after convergence. A reviewed `line-record` assignment names the retained Expense; an explicit
+`none` creates a new item instead of guessing correspondence. Reviewed removals
+use the existing per-record rejection Decision and owned delete policy.
+Reviewed record values and attribution weights enter the owning scope as authored
+`record` assignments; exact costs and member-selected references retain Decision
+provenance. The accepted-line read uses those same correspondence Decisions and active
+RecordKeys. Product receipt claims require that live Expense association; raw
+unresolved Product bindings alone never become catalog claims. Derived claim
+identities retain the UUID version and variant contract.
+Accepted-source new Product review shares the original-preparation lookup and
+line freeze with source reconciliation. The lookup checks member, source, checksum,
+extraction and Vendor identity; the line freeze checks prepared candidates and
+explicit distinct-from identities. Ledger-owned or ambiguous item Expenses
+require accounting review before Product creation. Product review validates the
+complete accepted item roster, including untouched lines and ledger claims,
+before both initial application and replay. Other accepted sources use
+the same item ownership and contradiction policy. Product-only commit reads back
+Purchase and Expense money and ownership, attribution, bank allocations, linked
+transactions and transfers in its transaction; any change outside the Product
+association rolls back the command. An accepted import retains an explicitly unresolved Product choice as a Run
+finding. A held financial conflict retains that work when reviewed accounting
+applies. Replay preserves the finding without creating stock.
+
+Retained-original review verifies the owned current preparation and canonical
+source family before accepting new evidence. The historical original snapshot
+stays unchanged; the current association and audit receipt identify the member's
+accepted review. An accepted capture advances only the canonical source cursor
+and its current observation pointer. Historical aliases keep their captured bytes
+and first-seen identity. A subject-free observation proves retained ownership
+through its canonical source family and effective Purchase binding; held or failed
+proposals do not advance the accepted association. Prepared import choices and accepted-source Product reviews use the existing
+identity resolver, issuer locks and identifier learner before capture. The immutable
+capture records the resolved Product bindings. Explicit Product choices can fill
+a uniquely matched, unclaimed item roster through record Decisions while keeping
+its money unchanged. Ambiguous or source-owned rosters require review before
+Product creation. Identified incomplete orders keep
+a Purchase header and source/Product identity while missing financial evidence
+prevents Expense, stock and bank movement creation. Confirmation dates prefer the
+printed household day, then the linked Purchase date, then the retained original
+Email receipt day. Receipt-time fallback records its provenance in the Purchase
+notes; lifecycle mail supplies no receipt-time order date. Creating a Product for an
+already accepted item requires its source review; ordinary replay retains the item
+and exposes that decision gap. The accepted-source audit receipt preserves replay
+through catalog merges. Observation creation records capture time rather than
+transaction-start time, avoiding transaction-wide timestamp ties between
+successive snapshots. Verifiable stored accepted originals are promoted with unknown
+Run and document provenance left null. Repeated source capture reuses the exact
+original extraction and document attachments when it supplies no Product binding
+review; internal binding representation does not create another source fact.
+A fresh request for the same immutable original reuses its proven Product binding,
+including after catalog redirects, while preserving the captured identity. Deleted
+identities and contradictory distinct-from evidence require review. Incomplete
+orders retain an editable Purchase/Product link without money or quantity; active
+identifier claims follow that link, while original source evidence survives its removal.
+Orphan suggestions and transactional deletion share the canonical projection of
+retained line bindings and immutable capture references, including catalog redirects.
+
+A Product binding review appends its accepted binding snapshot and line
+correspondence Decisions while retaining the original extraction. Binding
+snapshots reuse payment evidence only for the same member, Vendor, source
+identity, order key, checksum and entire extraction. Direct observation links
+and retained claim/Purchase links keep their original identities. A retained
+subject carries its unchanged frozen payment list across capture revisions;
+changed payment facts require their own evidence. Subject-free snapshots with a
+different original or extraction cannot inherit that payment evidence. Synchronous settling
+includes payment keys from related accepted originals. Across original heads,
+complete accounting evidence supplies money while partial lifecycle sources
+retain their corroborating bindings; the latest head within each original
+still owns that original's evidence.
+
+Original source correspondences retain record
+identities and later member overrides; matching against current mutable values
+alone cannot undo a member's rename or cost decision.
+Explicitly supplemental Expense records use the `supplemental:` natural-key
+namespace and remain under their own retained facts or Decisions; they do not
+become unexplained lines in the source's itemization comparison. Ordinary manual
+spending remains eligible for source correspondence and review. Source changes
+still require complete correspondence.
+
+Attachment reuse is fenced by the retained original's checksum. A new original
+captures its own attachment bytes even when its part labels match the previous
+original; the previous original and its attachments remain unchanged.
+Automatic candidate extraction admits only the checksum-bound retained original;
+a refreshed capture with a different checksum stays retained without being
+silently admitted under the Email's first-observation identity.
+
+Email classification observations retain each change in source or request proof;
+consecutive identical publications replay. An observation alone grants no routing
+authority: its application marker publishes the effective classification, while
+member Decisions retain classification, reason and version precedence. A member
+resolution keeps its reviewed checksum; retaining the original Email identity
+does not append another prediction at that identity's checksum.
+Routing status and retained-content updates do
+not append another classifier result. Contradictions against accepted sources stay
+independent observations and preserve the accepted original.
+
+Email link history retains superseded receipts and their original producer and
+review metadata. Current links follow canonical Purchase identities and preserve
+each event pointer, including several events that refer to the same Purchase.
+Automatic exact-order links use the shared eligibility policy; amount/date matches
+remain suggestions. Superseded extraction events retire automatic links;
+member link and dismissal Decisions survive a later extraction.
+
+Email evidence reads, link filters and link state consume the same typed
+relationship result after it exists. A pending computation keeps its live
+candidate read; it cannot downgrade an already computed exact link to a
+suggestion. Current account-owner eligibility still gates both read paths.
+
+Order reads follow only the event's facts, bindings and stored money graph.
+Payment matching follows the connected set of payment amounts so all competing
+orders and each complete payment set participate. Email snapshots fetch only
+their originals, decisions, order records and operations. These bounded reads
+retain revision fences for empty results and current membership.
 
 ### 13. Relationships and modules
 

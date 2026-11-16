@@ -16,8 +16,7 @@ import {
   expense,
   importPreparedOrder,
   importPreparedLine,
-  importSourceClaim,
-  importSourceOrder,
+  sourceOrderObservation,
   email as emailTable,
   orderMail,
   orderMailEvent,
@@ -391,9 +390,9 @@ describe("retained mail source associations", () => {
       .select({ cost: expenseCostDollarsSql() })
       .from(expense);
     expect(costs.map(({ cost }) => cost).sort()).toEqual([18, 24]);
-    expect(await getDb(ctx.db).select().from(importSourceOrder)).toHaveLength(
-      2,
-    );
+    expect(
+      await getDb(ctx.db).select().from(sourceOrderObservation),
+    ).toHaveLength(2);
   });
 
   it.each([
@@ -706,12 +705,15 @@ describe("retained mail source associations", () => {
       30,
     );
     expect(await getDb(ctx.db).select().from(product)).toEqual([]);
-    expect(await getDb(ctx.db).select().from(importSourceClaim)).toHaveLength(
-      1,
-    );
-    expect(await getDb(ctx.db).select().from(importSourceOrder)).toHaveLength(
-      2,
-    );
+    const sources = await getDb(ctx.db).select().from(sourceOrderObservation);
+    expect(
+      new Set(
+        sources.map((row) => `${row.sourceKind}:${row.sourceExternalKey}`),
+      ).size,
+    ).toBe(1);
+    expect(
+      await getDb(ctx.db).select().from(sourceOrderObservation),
+    ).toHaveLength(2);
     expect(await getDb(ctx.db).select().from(orderMailEvent)).toHaveLength(2);
     expect(
       await getDb(ctx.db).select().from(orderMailCandidateDecision),

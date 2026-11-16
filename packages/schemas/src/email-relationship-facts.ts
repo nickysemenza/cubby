@@ -4,6 +4,7 @@ import {
   emailLinkProposer,
   emailLinkState,
   emailPurchaseLink,
+  emailImportOutcomeDetail,
 } from "./email-fields";
 import { purchaseShortcode } from "./identifier-fields";
 
@@ -21,6 +22,7 @@ const emailRelationshipEvidence = emailPurchaseFact
   .pick({ kind: true, changed: true, proposedBy: true })
   .extend({ purchaseId: purchaseShortcode });
 export const emailRelationshipResult = z.object({
+  outcome: emailImportOutcomeDetail.nullable().default(null),
   linked: z.boolean(),
   facts: z.array(emailPurchaseFact),
   evidence: z.array(emailRelationshipEvidence),

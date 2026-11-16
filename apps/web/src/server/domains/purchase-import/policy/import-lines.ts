@@ -7,6 +7,17 @@ import { cents } from "@cubby/shared";
 
 import { completePaymentMatches } from "~/server/domains/purchase-import/policy/payment-match";
 
+/** Payment descriptions and timestamp spelling do not change exact settlement facts. */
+const sourcePaymentFacts = (payments: readonly ExtractedPaymentEvidence[]) =>
+  payments.map((payment) => ({
+    amount: cents(payment.amount),
+    chargedAt: payment.chargedAt
+      ? new Date(payment.chargedAt).toISOString()
+      : null,
+    cardLastFour: payment.cardLastFour ?? null,
+    tender: payment.tender ?? "unknown",
+  }));
+
 /** Cosmetic evidence changes cannot replace accepted ledger or payment rows. */
 export const sourceFinancialFacts = (candidate: ExtractedOrderCandidate) => {
   const text = (value: string | undefined) =>
@@ -33,15 +44,7 @@ export const sourceFinancialFacts = (candidate: ExtractedOrderCandidate) => {
         seller: text(line.seller),
       })),
     ),
-    payments: sorted(
-      candidate.payments.map((payment) => ({
-        amount: cents(payment.amount),
-        chargedAt: payment.chargedAt
-          ? new Date(payment.chargedAt).toISOString()
-          : null,
-        cardLastFour: payment.cardLastFour ?? null,
-      })),
-    ),
+    payments: sorted(sourcePaymentFacts(candidate.payments)),
   };
 };
 

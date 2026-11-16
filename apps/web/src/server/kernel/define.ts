@@ -297,6 +297,8 @@ export type Disposition = "remove" | "keep";
 export type ColumnRef = {
   /** A record table (with `id`), or the kernel's own binding table. */
   readonly table: PgTable;
+  /** A disposable row keyed by an existing entity; patch may create the cache row. */
+  readonly projection?: boolean;
   readonly name: string;
   readonly columns: readonly string[];
   /** Authored catalog values supplied on creation; never owned or re-derived. */
@@ -318,10 +320,11 @@ export type ColumnRef = {
   readonly remove?: RemovePort;
 };
 
-export function writes<T extends KeyedTable>(
+export function writes<T extends PgTable>(
   table: T,
   columns: readonly (keyof T["_"]["columns"] & string)[],
   options: {
+    projection?: boolean;
     createOnly?: readonly (keyof T["_"]["columns"] & string)[];
     coalesceCreation?: (values: readonly ColumnValues[]) => ColumnValues;
     entity?: string;
@@ -332,6 +335,11 @@ export function writes<T extends KeyedTable>(
   } = {},
 ): ColumnRef {
   if (
+    options.projection &&
+    (options.entity || options.createOnly?.length || options.coalesceCreation)
+  )
+    throw new Error("Projection targets cannot own entity creation");
+  if (
     options.coalesceCreation &&
     (columns.length > 0 || !options.createOnly?.length)
   )
@@ -341,6 +349,7 @@ export function writes<T extends KeyedTable>(
     name: getTableName(table),
     columns,
     entity: options.entity ?? null,
+    projection: options.projection ?? false,
     createOnly: options.createOnly ?? [],
     coalesceCreation: options.coalesceCreation,
     // SAFETY: the kernel passes rows read from or written to this table.
@@ -390,7 +399,11 @@ export interface Pure {
   /** Every assignment in force for a subject, keyed by field. */
   assignments(subject: string): ReadonlyMap<string, DecisionInForce>;
   /** Resolve a retained id or shortcode through identity redirects on reads. */
-  reference(entity: ShortcodeType, ref: string): string | null;
+  reference(
+    entity: ShortcodeType,
+    ref: string,
+    options?: { format?: "id" | "shortcode" },
+  ): string | null;
   /**
    * `request: false` reads an existing answer without owing a producer call.
    * `fill: true` marks an ask whose answer can only fill a value no accepted
@@ -421,13 +434,18 @@ export interface Pure {
     target: ColumnRef,
     naturalKey: string,
     values: ColumnValues,
-    options?: { provenance?: Record<string, string> },
+    options?: { provenance?: Record<string, string>; authored?: boolean },
   ): string;
   /**
    * Set declared columns of an existing record another scope owns (a
    * `fields` scope's `apply: "auto"` columns). Never creates or removes it.
    */
-  patch(target: ColumnRef, id: string, values: ColumnValues): void;
+  patch(
+    target: ColumnRef,
+    id: string,
+    values: ColumnValues,
+    options?: { provenance?: Record<string, string> },
+  ): void;
   /**
    * The explicit disposition of a record that should no longer exist.
    * `decision` names the current Decision that requires the removal, so a
@@ -440,12 +458,13 @@ export interface Pure {
     options?: { decision?: string },
   ): void;
   bind(fact: FactRef, eventKey: string, basis?: "proven" | "decision"): void;
-  /** Merge two owned records; `proof` merges only in the one automatic case. */
+  /** Merge existing ids or local natural keys through the declared policy; a member may name the survivor. */
   merge(
     target: ColumnRef,
     survivor: string,
     absorbed: string,
     basis: "proof" | "decision",
+    options?: { keepId?: string },
   ): void;
   /** An own-scope follow-up is honored only after a nonempty difference is published. */
   emit(scope: ScopeRef): void;
@@ -474,6 +493,7 @@ export type Desired = {
     target: ColumnRef;
     id: string;
     values: Readonly<ColumnValues>;
+    provenance: Readonly<Record<string, string>>;
   }[];
   readonly retired: readonly {
     target: ColumnRef;
@@ -491,6 +511,7 @@ export type Desired = {
     survivor: string;
     absorbed: string;
     basis: "proof" | "decision";
+    keepId?: string;
   }[];
   readonly emits: readonly ScopeRef[];
   readonly gaps: readonly KernelGap[];
@@ -504,6 +525,8 @@ export type DesiredRecord = {
   readonly naturalKey: string;
   readonly values: Readonly<ColumnValues>;
   readonly provenance: Readonly<Record<string, string>>;
+  /** A member-authored creation cannot be absorbed by an automatic proof. */
+  readonly authored?: boolean;
 };
 
 export type Reconciler<In = unknown> = {

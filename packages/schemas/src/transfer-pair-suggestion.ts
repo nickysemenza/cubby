@@ -37,9 +37,6 @@ export const transferPairMovementLabel = z.object({
   confidence: z.enum(["low", "medium", "high"]),
   model: z.string(),
 });
-export type TransferPairMovementLabel = z.infer<
-  typeof transferPairMovementLabel
->;
 
 /**
  * `explicit` only from a high-confidence `account_move` label. A recorded

@@ -19,12 +19,8 @@ import type { DecisionPort } from "~/server/ai/decision-model";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import * as runFeature from "~/server/ai/run-feature";
 import { getDb } from "~/server/db/helpers";
-import {
-  email as emailTable,
-  emailFinancialAssociation,
-  expense,
-  purchase,
-} from "~/server/db/schema";
+import { email as emailTable, expense, purchase } from "~/server/db/schema";
+import { emailFinancialAssociationsRead as emailFinancialAssociation } from "~/server/domains/email/repo/email-decision-sql";
 
 import { resolveMail } from "./mail-tool";
 import {

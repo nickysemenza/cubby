@@ -75,7 +75,8 @@ async function loadOccurrenceClosures(
       expenses AS MATERIALIZED (SELECT * FROM "Expense" WHERE "purchaseId" IN (SELECT id FROM purchases)),
       memberships AS MATERIALIZED (SELECT * FROM ${transactionImportRecord} WHERE "statementRowId" IN (SELECT id FROM observations)),
       aliases AS MATERIALIZED (SELECT * FROM observation_aliases UNION SELECT * FROM bindings),
-      judgments AS MATERIALIZED (SELECT * FROM "SourceObservationAnnotation" WHERE "observationId" IN (SELECT id FROM observations)),
+      judgments AS MATERIALIZED (SELECT d.* FROM "Decision" d WHERE d.subject IN (
+        SELECT 'sourceObservation:' || id FROM observations UNION SELECT 'bank:' || id FROM owners)),
       collections AS MATERIALIZED (SELECT * FROM "TransactionImport" WHERE id IN (SELECT "importId" FROM memberships)),
       attribution AS MATERIALIZED (SELECT * FROM "ExpenseAttribution" WHERE "expenseId" IN (SELECT id FROM expenses)),
       transfers AS MATERIALIZED (SELECT * FROM "LedgerTransfer" WHERE id IN (SELECT "ledgerTransferId" FROM transactions)),
@@ -141,7 +142,7 @@ async function loadOccurrenceClosures(
       ];
       const sets = selections.map(
         ([name, table, value]) =>
-          sql`${name}::text, (SELECT coalesce(jsonb_agg(data ORDER BY identity), '[]'::jsonb) FROM (SELECT ${sql.raw(table === "judgments" ? 'r."observationId"::text' : table === "memberships" ? 'jsonb_build_array(r."importId", r."statementRowId")::text' : "r.id::text")} AS identity, ${sql.raw(value)} AS data FROM ${sql.identifier(table)} r ORDER BY identity LIMIT 1001) captured)`,
+          sql`${name}::text, (SELECT coalesce(jsonb_agg(data ORDER BY identity), '[]'::jsonb) FROM (SELECT ${sql.raw(table === "memberships" ? 'jsonb_build_array(r."importId", r."statementRowId")::text' : "r.id::text")} AS identity, ${sql.raw(value)} AS data FROM ${sql.identifier(table)} r ORDER BY identity LIMIT 1001) captured)`,
       );
       const loaded = await query.execute(
         sql`${definitions}, bundle AS MATERIALIZED (SELECT jsonb_build_object(${sql.join(sets, sql`, `)}) AS data)

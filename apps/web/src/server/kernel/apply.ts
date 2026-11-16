@@ -7,7 +7,11 @@ import type { KernelAuditProvenance } from "@cubby/schemas/kernel/machinery";
  * moved since its load. A conflict spends no attempt; after three in a row
  * the scope runs locked: load, compute and apply in one bounded transaction.
  */
-import { resolveStage, nextActor } from "@cubby/schemas/kernel/stage";
+import {
+  resolveStage,
+  nextActor,
+  kernelStage,
+} from "@cubby/schemas/kernel/stage";
 import type { KernelGap } from "@cubby/schemas/kernel/stage";
 import { getTableColumns, getTableName, sql } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
@@ -93,7 +97,13 @@ import {
   rowKey,
   tableKey,
 } from "./keys";
-import { KernelContractError, LockedReadChangedError } from "./reads";
+import {
+  KernelContractError,
+  LockedReadChangedError,
+  idColumn,
+  identityProperty,
+  rowIdentity,
+} from "./reads";
 import type { KernelRegistry } from "./registry";
 import { wakeAfterCommit } from "./wake";
 
@@ -263,7 +273,7 @@ async function updateRecords(q: Q, updates: Difference["updates"]) {
       FROM jsonb_array_elements(${canonicalJson(rows)}::jsonb) AS incoming(value)
       CROSS JOIN LATERAL jsonb_populate_record(NULL::${target.table}, incoming.value->'nextValues') AS desired
       CROSS JOIN LATERAL jsonb_populate_record(NULL::${target.table}, incoming.value->'seen') AS seen
-      WHERE t.id = (incoming.value->>'id')::uuid AND ${sql.join(conditions, sql` AND `)} RETURNING t.id`);
+      WHERE t.${sql.identifier(idColumn(target.table).name)} = (incoming.value->>'id')::uuid AND ${sql.join(conditions, sql` AND `)} RETURNING t.${sql.identifier(idColumn(target.table).name)} AS id`);
     if (result.rows.length !== group.length)
       throw new KernelConflict(
         `${target.name}: a record changed since the load`,
@@ -305,7 +315,10 @@ function holdsBaseline(
     desired.disagreements.length > 0 ||
     (!options.releaseBaseline &&
       computed.storedBindings.some((binding) => binding.basis === "baseline") &&
-      (proposed.inserts.some((insert) => !citesDecisions(computed, insert)) ||
+      (proposed.inserts.some(
+        (insert) =>
+          !insert.target.projection && !citesDecisions(computed, insert),
+      ) ||
         proposed.removals.some(
           (removal) => !decisionIds.has(removal.decision ?? ""),
         ) ||
@@ -319,7 +332,20 @@ function holdsBaseline(
                 record.target.name === update.target.name &&
                 record.naturalKey === update.naturalKey,
             );
-            return !decisionIds.has(desiredRecord?.provenance[field] ?? "");
+            const patch = desired.patches.find(
+              (patch) =>
+                patch.target.name === update.target.name &&
+                patch.id === update.id &&
+                Object.hasOwn(patch.values, field),
+            );
+            return (
+              !update.target.projection &&
+              !decisionIds.has(
+                desiredRecord?.provenance[field] ??
+                  patch?.provenance[field] ??
+                  "",
+              )
+            );
           }),
         ) ||
         proposed.bindingsAdd.some(
@@ -345,15 +371,25 @@ function decisionUpdates(computed: Computed, proposed: Difference): Difference {
   const decisionIds = new Set(
     computed.decisions.map((decision) => decision.id),
   );
-  const records = computed.desired!.records;
+  const sources = [...computed.desired!.records, ...computed.desired!.patches];
+  const byRecord = new Map<string, typeof sources>();
+  for (const source of sources) {
+    const key = `${source.target.name}\0${source.id}`;
+    byRecord.set(key, [...(byRecord.get(key) ?? []), source]);
+  }
   const result = emptyDifference();
   for (const update of proposed.updates) {
-    const record = records.find(
-      (record) =>
-        record.target.name === update.target.name && record.id === update.id,
-    );
+    const records = byRecord.get(`${update.target.name}\0${update.id}`) ?? [];
+    // A patch has the same authority contract as a record: the current
+    // Decision must cite this exact proposed field value, not another write.
     const fields = Object.keys(update.set).filter((field) =>
-      decisionIds.has(record?.provenance[field] ?? ""),
+      records.some(
+        (record) =>
+          Object.hasOwn(record.values, field) &&
+          canonicalJson(record.values[field]) ===
+            canonicalJson(update.set[field]) &&
+          decisionIds.has(record.provenance[field] ?? ""),
+      ),
     );
     if (!fields.length) continue;
     const set = Object.fromEntries(
@@ -821,7 +857,9 @@ async function applyBatch(
   }
   const recordKeys = plans.flatMap((plan) =>
     [
-      ...plan.diff.inserts.map((entry) => ({ ...entry, minted: true })),
+      ...plan.diff.inserts
+        .filter((entry) => !entry.target.projection)
+        .map((entry) => ({ ...entry, minted: true })),
       ...(plan.computed.desired!.attachments ?? []).map((entry) => ({
         ...entry,
         minted: false,
@@ -832,7 +870,13 @@ async function applyBatch(
       entity: recordEntity(entry.target),
       naturalKey: entry.naturalKey,
       entityId: entry.id,
-      minted: entry.minted,
+      minted:
+        entry.minted &&
+        !plan.computed.desired!.records.find(
+          (record) =>
+            record.target.name === entry.target.name &&
+            record.naturalKey === entry.naturalKey,
+        )?.authored,
     })),
   );
   const uniqueInserts = new Map<string, Difference["inserts"][number]>();
@@ -884,8 +928,9 @@ async function applyBatch(
     changed.add(tableKey(target.name));
     for (const column of [...target.columns, ...(target.createOnly ?? [])])
       changed.add(columnKey(target.name, column));
-    changed.add(rowKey(target.name, String(row.id)));
-    changed.add(`record:${recordEntity(target)}:${String(row.id)}`);
+    changed.add(rowKey(target.name, rowIdentity(target.table, row)));
+    if (!target.projection)
+      changed.add(`record:${recordEntity(target)}:${String(row.id)}`);
     for (const key of target.keys?.(row) ?? []) changed.add(key);
     for (const key of rowIndexKeys(registry, target.name, row))
       changed.add(key);
@@ -914,7 +959,7 @@ async function applyBatch(
         for (const group of orderedInserts(combined.inserts)) {
           const rows = group.map((entry) => ({
             ...entry.values,
-            id: entry.id,
+            [identityProperty(entry.target.table)]: entry.id,
             ...(entry.target.entity ? { createdAt: now, deletedAt: null } : {}),
           }));
           await insertRows(q, group[0]!.target.table, rows);
@@ -935,20 +980,32 @@ async function applyBatch(
           touch(entry.target, entry.row);
         }
         await auditApply(tx, combined);
-        const removals = new Map<string, Difference["removals"]>();
-        for (const entry of combined.removals)
-          removals.set(entry.target.name, [
-            ...(removals.get(entry.target.name) ?? []),
+        const removals = new Map(
+          combined.removals.map((entry) => [
+            `${entry.target.name}:${entry.id}`,
             entry,
-          ]);
-        for (const group of removals.values()) {
+          ]),
+        );
+        for (const group of orderedInserts(
+          combined.removals.map((entry) => ({
+            target: entry.target,
+            id: entry.id,
+            naturalKey: entry.id,
+            values: entry.row ?? { id: entry.id },
+          })),
+        ).reverse()) {
           await removeRecords(
             tx,
             group[0]!.target,
             group.map((entry) => entry.id),
           );
           for (const entry of group)
-            touch(entry.target, entry.row ?? { id: entry.id });
+            touch(
+              entry.target,
+              removals.get(`${entry.target.name}:${entry.id}`)?.row ?? {
+                id: entry.id,
+              },
+            );
         }
         if (combined.removals.length)
           await q.execute(sql`
@@ -965,6 +1022,7 @@ async function applyBatch(
               target: merge.target,
               a: merge.survivorId,
               b: merge.absorbedId,
+              keepId: merge.keepId,
               basis: merge.basis,
             });
             if (verdict.merged) {
@@ -1131,8 +1189,8 @@ async function applyBatch(
       scopeState,
       states,
       sql`ON CONFLICT ("scopeKind", "scopeKey") DO UPDATE SET
-      version = excluded.version, rules = excluded.rules, gaps = excluded.gaps, inputs = excluded.inputs, stage = excluded.stage,
-      "nextActor" = excluded."nextActor", "firstGap" = excluded."firstGap", "inputsHash" = excluded."inputsHash", "durationMs" = excluded."durationMs",
+      version = excluded.version, rules = excluded.rules, gaps = CASE WHEN "ScopeState"."mergedIntoKey" IS NOT NULL THEN '[]'::jsonb ELSE excluded.gaps END, inputs = excluded.inputs, stage = CASE WHEN "ScopeState"."mergedIntoKey" IS NOT NULL THEN ${kernelStage.enum.ended} ELSE excluded.stage END,
+      "nextActor" = CASE WHEN "ScopeState"."mergedIntoKey" IS NOT NULL THEN NULL ELSE excluded."nextActor" END, "firstGap" = CASE WHEN "ScopeState"."mergedIntoKey" IS NOT NULL THEN NULL ELSE excluded."firstGap" END, "inputsHash" = excluded."inputsHash", "durationMs" = excluded."durationMs",
       "errorClass" = NULL, error = NULL, "reconciledAt" = excluded."reconciledAt", "inputsChangedAt" = excluded."inputsChangedAt"`,
     );
     if (!stateWrite)

@@ -8,10 +8,13 @@ import { type Database } from "~/server/db/database";
 import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import {
-  emailFinancialAssociation,
   financialAccount,
   financialTransaction,
 } from "~/server/db/retained-tables";
+import {
+  emailFinancialAssociationsRead,
+  emailFinancialAssociationsReadFields,
+} from "~/server/domains/email/repo/email-decision-sql";
 
 /** Reviewed evidence survives soft-deleted targets; it is not current settlement. */
 export async function readEmailFinancialAssociations(
@@ -25,28 +28,28 @@ export async function readEmailFinancialAssociations(
   // includes-deleted: immutable reviewed history retains both target identities.
   const rows = await unwrapDb(db)
     .select({
-      evidence: emailFinancialAssociation,
+      evidence: emailFinancialAssociationsReadFields,
       transaction: financialTransaction,
       reviewedAccount: financialAccount,
       currentAccount,
     })
-    .from(emailFinancialAssociation)
+    .from(emailFinancialAssociationsRead)
     .innerJoin(
       financialTransaction,
-      eq(financialTransaction.id, emailFinancialAssociation.transactionId),
+      eq(financialTransaction.id, emailFinancialAssociationsRead.transactionId),
     )
     .innerJoin(
       financialAccount,
-      eq(financialAccount.id, emailFinancialAssociation.reviewedAccountId),
+      eq(financialAccount.id, emailFinancialAssociationsRead.reviewedAccountId),
     )
     .innerJoin(
       currentAccount,
       eq(currentAccount.id, financialTransaction.accountId),
     )
-    .where(eq(emailFinancialAssociation.emailId, emailId))
+    .where(eq(emailFinancialAssociationsRead.emailId, emailId))
     .orderBy(
-      desc(emailFinancialAssociation.createdAt),
-      emailFinancialAssociation.id,
+      desc(emailFinancialAssociationsRead.createdAt),
+      emailFinancialAssociationsRead.id,
     );
   return rows.map(
     ({ evidence, transaction, reviewedAccount, currentAccount: current }) => ({

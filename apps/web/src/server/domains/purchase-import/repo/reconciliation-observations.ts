@@ -8,14 +8,29 @@ import {
   type ImportWriterInput,
 } from "@cubby/schemas/purchase-import";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, asc, eq, inArray, or, sql, type SQLWrapper } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  sql,
+  type SQLWrapper,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { DrizzleTransaction } from "~/server/db";
+import { databaseForTransaction } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers";
+import { requestedRows } from "~/server/db/helpers/requested";
+import { evidenceBinding, recordKey } from "~/server/db/kernel-schema";
 import {
   entityIdentity,
+  entityAttachment,
+  importSourceProduct,
   importSourceClaim,
   importSourceOrder,
   ledgerParty,
@@ -24,12 +39,14 @@ import {
   purchase,
   sourceOrderObservation,
 } from "~/server/db/schema";
+import { orderEventKey } from "~/server/domains/purchase-import/policy/payment-keys";
 import {
-  isLiveSourceOrder,
   type LiveSourceOrder,
   readImportSourceClaimFamily,
   readSourceFamilyOrder,
 } from "~/server/domains/purchase-import/repo/source-claim-family";
+import { append, evidenceRow } from "~/server/kernel/api";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 import { jsonSnapshot } from "~/server/lib/canonical-json";
 
 /** JSONB changes object-key order; review hashes must describe values, not serialization order. */
@@ -47,8 +64,51 @@ export function reconciliationFingerprint(value: unknown): Promise<string> {
   return sha256Hex(canonical(jsonSnapshot.parse(value)));
 }
 
+/** Subject-free captures prove their Purchase through the live economic event owner. */
+export async function sourceObservationOwnsPurchase(
+  tx: Pick<DrizzleTransaction, "select">,
+  observation: typeof sourceOrderObservation.$inferSelect,
+  purchaseId: typeof purchase.$inferSelect.id,
+): Promise<boolean> {
+  if (observation.purchaseId)
+    return sourceObservationIdentityMatches(
+      tx,
+      "purchase",
+      observation.purchaseId,
+      purchaseId,
+    );
+  const bindings = await tx
+    .select({ key: evidenceBinding.eventKey })
+    .from(evidenceBinding)
+    .where(
+      and(
+        eq(evidenceBinding.factKind, "orderObservation"),
+        eq(evidenceBinding.factId, observation.id),
+      ),
+    );
+  const [owner] = await tx
+    .select({ id: recordKey.entityId })
+    .from(recordKey)
+    .where(
+      and(
+        eq(recordKey.scopeKind, "purchaseEvent"),
+        eq(recordKey.entity, "purchase"),
+        eq(recordKey.entityId, purchaseId),
+        isNull(recordKey.mergedAt),
+        isNull(recordKey.rejectedAt),
+        inArray(recordKey.scopeKey, [
+          ...new Set([
+            orderEventKey(observation),
+            ...bindings.map((row) => row.key),
+          ]),
+        ]),
+      ),
+    );
+  return !!owner;
+}
+
 export async function recordSourceOrderObservation(
-  tx: Pick<DrizzleTransaction, "insert" | "select">,
+  tx: DrizzleTransaction,
   identity: Pick<
     typeof sourceOrderObservation.$inferInsert,
     "sourceClaimId" | "orderKey" | "purchaseId"
@@ -75,6 +135,10 @@ export async function recordSourceOrderObservation(
     }),
   ),
 ) {
+  if (!identity.sourceClaimId || !identity.purchaseId)
+    throw new Error(
+      "A retained source association requires its original subject",
+    );
   const extraction = importExtractionOutcome.parse(input.extraction);
   const productBindings = sourceOrderObservationBindings.parse(bindings);
   const contentFingerprint = await reconciliationFingerprint({
@@ -84,8 +148,15 @@ export async function recordSourceOrderObservation(
     primaryDocumentImageId: input.primaryDocumentImageId,
     screenshotImageId: input.screenshotImageId,
   });
+  const [source] = await tx
+    .select({ ledgerPartyId: importSourceClaim.ledgerPartyId })
+    .from(importSourceClaim)
+    .where(eq(importSourceClaim.id, identity.sourceClaimId));
   const values = {
     ...identity,
+    ledgerPartyId: source?.ledgerPartyId ?? null,
+    sourceKind: input.source.kind,
+    sourceExternalKey: input.source.externalKey,
     vendorId: parseEntityId("vendor", input.vendorId),
     runId: input.runId,
     checksum: input.source.checksum,
@@ -136,11 +207,18 @@ export async function recordSourceOrderObservation(
     throw new Error(
       "Source observation identity changed; review its ownership.",
     );
+  const observationId = crypto.randomUUID();
+  await append(databaseForTransaction(tx), [
+    evidenceRow(
+      (await import("~/server/domains/purchase-import/repo/order-evidence"))
+        .orderEvidence,
+      { ...values, id: observationId, createdAt: new Date() },
+    ),
+  ]);
   const [created] = await tx
-    .insert(sourceOrderObservation)
-    .values(values)
-    .onConflictDoNothing()
-    .returning();
+    .select()
+    .from(sourceOrderObservation)
+    .where(eq(sourceOrderObservation.id, observationId));
   if (!created)
     throw new Error(
       "Source observation identity changed; review its ownership.",
@@ -187,59 +265,12 @@ export async function sourceObservationIdentityMatches(
   return Boolean(identity);
 }
 
-/** Reuse a vendor's historical order key only through its durable merge identity. */
-export async function mergedVendorSourceOrder(
-  tx: Pick<DrizzleTransaction, "select">,
-  claimIds: readonly string[],
-  orderKey: string,
-  vendorId: typeof purchase.$inferSelect.vendorId,
-) {
-  const originalVendor = alias(entityIdentity, "source_order_original_vendor");
-  const suffix = orderKey.slice(orderKey.indexOf("/"));
-  const rows = await tx
-    .select({ association: importSourceOrder })
-    .from(importSourceOrder)
-    .innerJoin(
-      purchase,
-      and(
-        eq(purchase.id, importSourceOrder.purchaseId),
-        eq(purchase.vendorId, vendorId),
-        notDeleted(purchase),
-      ),
-    )
-    .innerJoin(
-      originalVendor,
-      and(
-        sql`${originalVendor.id}::text = split_part(${importSourceOrder.orderKey}, '/', 1)`,
-        eq(originalVendor.kind, "vendor"),
-        or(
-          eq(originalVendor.id, vendorId),
-          eq(originalVendor.mergedIntoId, vendorId),
-        ),
-      ),
-    )
-    .where(
-      and(
-        inArray(importSourceOrder.sourceClaimId, [...claimIds]),
-        sql`substring(${importSourceOrder.orderKey} from position('/' in ${importSourceOrder.orderKey})) = ${suffix}`,
-      ),
-    )
-    .orderBy(importSourceOrder.id)
-    .limit(2)
-    .for("update", { of: [importSourceOrder, purchase] });
-  if (rows.length > 1)
-    throw new Error(
-      "Ambiguous merged Vendor source order associations require explicit review.",
-    );
-  const [row] = rows;
-  return row && isLiveSourceOrder(row.association) ? row.association : null;
-}
-
 /** Promote stored evidence only; absent historical decisions and media remain unknown. */
 export async function promoteHistoricalAcceptedObservation(
-  tx: Pick<DrizzleTransaction, "select" | "insert" | "update">,
+  tx: DrizzleTransaction,
   sourceOrderId: string,
 ) {
+  await enterWriteTransaction(tx, { lane: "money", mode: "member" });
   const [initial] = await tx
     .select()
     .from(importSourceOrder)
@@ -338,7 +369,7 @@ export async function promoteHistoricalAcceptedObservation(
   return observation.id;
 }
 
-/** A historical accepted extraction whose bytes were overwritten remains unknown. */
+/** Read the association's selected immutable capture and prove its original ownership. */
 export async function acceptedSourceExtraction(
   tx: Pick<DrizzleTransaction, "select">,
   order: LiveSourceOrder,
@@ -348,14 +379,35 @@ export async function acceptedSourceExtraction(
       .select()
       .from(sourceOrderObservation)
       .where(eq(sourceOrderObservation.id, order.acceptedObservationId));
+    let ownedClaim = observation?.sourceClaimId === order.sourceClaimId;
+    if (observation && observation.sourceClaimId === null) {
+      const [claim] = await tx
+        .select()
+        .from(importSourceClaim)
+        .where(eq(importSourceClaim.id, order.sourceClaimId));
+      const family = claim
+        ? await readImportSourceClaimFamily(tx, claim)
+        : null;
+      const retained = family
+        ? await readSourceFamilyOrder(tx, family, order.orderKey)
+        : null;
+      ownedClaim =
+        !!family &&
+        retained?.association.id === order.id &&
+        observation.ledgerPartyId === family.root.ledgerPartyId &&
+        family.members.some(
+          (member) =>
+            member.kind === observation.sourceKind &&
+            member.externalKey === observation.sourceExternalKey,
+        );
+    }
     if (
       !observation ||
-      observation.sourceClaimId !== order.sourceClaimId ||
+      !ownedClaim ||
       observation.orderKey !== order.orderKey ||
-      !(await sourceObservationIdentityMatches(
+      !(await sourceObservationOwnsPurchase(
         tx,
-        "purchase",
-        observation.purchaseId,
+        observation,
         order.purchaseId,
       )) ||
       observation.checksum !== order.checksum
@@ -384,4 +436,175 @@ export async function acceptedSourceExtraction(
   return order.originalOrder?.checksum === order.checksum
     ? acceptedSourceOrder.parse(order.originalOrder)
     : null;
+}
+
+/** Publish retained source correspondences and provenance after the kernel proves the reviewed money. */
+export async function recordReviewedSourceMetadata(
+  tx: DrizzleTransaction,
+  state: import("./reconciliation-state").ReconciliationState,
+  fix: import("./reconciliation-state").ReconciliationFix,
+  plan: import("./reconciliation-plan").ReconciliationPlan,
+  head: typeof sourceOrderObservation.$inferSelect,
+  lineExpenses: ReadonlyMap<number, string>,
+  actor: import("@cubby/schemas/context").ActorContext,
+  current: import("zod").z.infer<
+    typeof import("@cubby/schemas/purchase-import").sourceOrderReconciliationReview
+  >,
+): Promise<void> {
+  const {
+    planReconciliationBindings,
+    planReconciliationOutputFingerprint,
+    planReconciliationFinal,
+  } = await import("./reconciliation-plan");
+  const claimId =
+    state.association?.sourceClaimId ??
+    state.observation.sourceClaimId ??
+    state.family.root.id;
+  // The first capture is provenance even when a later capture is accepted.
+  // The reviewed state has already proved this source family and Purchase.
+  const [first] = await tx
+    .select()
+    .from(sourceOrderObservation)
+    .where(
+      and(
+        or(
+          inArray(
+            sourceOrderObservation.sourceClaimId,
+            state.family.members.map((row) => row.id),
+          ),
+          and(
+            isNull(sourceOrderObservation.sourceClaimId),
+            eq(
+              sourceOrderObservation.ledgerPartyId,
+              state.family.root.ledgerPartyId,
+            ),
+            sql`EXISTS (SELECT 1 FROM ${
+              requestedRows(
+                state.family.members.map((row) => ({
+                  kind: row.kind,
+                  externalKey: row.externalKey,
+                })),
+                { kind: "text", externalKey: "text" },
+                "family_source",
+              ).from
+            }
+          WHERE family_source.kind=${sourceOrderObservation.sourceKind} AND family_source."externalKey"=${sourceOrderObservation.sourceExternalKey})`,
+          ),
+        ),
+        eq(sourceOrderObservation.orderKey, fix.orderKey),
+        or(
+          isNull(sourceOrderObservation.purchaseId),
+          sourceObservationIdentitySql(
+            "purchase",
+            sourceOrderObservation.purchaseId,
+            sql`${state.target.id}`,
+          ),
+        ),
+      ),
+    )
+    .orderBy(
+      asc(sourceOrderObservation.createdAt),
+      asc(sourceOrderObservation.id),
+    )
+    .limit(1);
+  if (!first)
+    throw new Error("Reviewed source observation provenance is missing");
+  const outputFingerprint = await planReconciliationOutputFingerprint(
+    state,
+    fix,
+  );
+  const originalOrder = state.association?.originalOrder ?? {
+    checksum: first.checksum,
+    extraction: first.extraction,
+  };
+  const [association] = await tx
+    .insert(importSourceOrder)
+    .values({
+      sourceClaimId: claimId,
+      orderKey: fix.orderKey,
+      purchaseId: state.target.id,
+      checksum: head.checksum,
+      outputFingerprint,
+      originalOrder,
+      acceptedObservationId: head.id,
+    })
+    .onConflictDoUpdate({
+      target: [importSourceOrder.sourceClaimId, importSourceOrder.orderKey],
+      targetWhere: isNotNull(importSourceOrder.purchaseId),
+      set: {
+        purchaseId: state.target.id,
+        checksum: head.checksum,
+        outputFingerprint,
+        acceptedObservationId: head.id,
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
+  if (!association)
+    throw new Error("Reviewed source association was not persisted");
+  const bindings = await planReconciliationBindings(
+    state,
+    plan,
+    first,
+    association.id,
+    new Map(
+      [...lineExpenses].map(([index, id]) => [
+        index,
+        parseEntityId("expense", id),
+      ]),
+    ),
+  );
+  if (bindings.detached.length)
+    await tx
+      .update(importSourceProduct)
+      .set({ expenseId: null })
+      .where(inArray(importSourceProduct.id, bindings.detached));
+  if (bindings.bindings.length)
+    await tx
+      .insert(importSourceProduct)
+      .values(
+        bindings.bindings.map((row) => ({
+          sourceOrderId: association.id,
+          ...row,
+        })),
+      )
+      .onConflictDoUpdate({
+        target: [
+          importSourceProduct.sourceOrderId,
+          importSourceProduct.lineIndex,
+        ],
+        set: { expenseId: sql`excluded."expenseId"` },
+      });
+  if (plan.header.imageIds.length)
+    await tx
+      .insert(entityAttachment)
+      .values(
+        plan.header.imageIds.map((imageId) => ({
+          entityId: state.target.id,
+          entityKind: "purchase" as const,
+          role: "attachment" as const,
+          imageId,
+          documentKind: "order_confirmation" as const,
+        })),
+      )
+      .onConflictDoNothing();
+  const final = planReconciliationFinal(
+    state,
+    current,
+    plan,
+    head,
+    fix,
+    state.family.root.ledgerPartyId,
+  );
+  if (final.shipment)
+    await (
+      await import("~/server/domains/purchase-import/repo/shipment-intake")
+    ).recordImportedShipmentEvidence(
+      databaseForTransaction(tx),
+      final.shipment,
+      actor,
+    );
+  await (
+    await import("~/server/generic/audit-log/repo/audit-log")
+  ).logAuditEntry(tx, actor, final.audit);
 }

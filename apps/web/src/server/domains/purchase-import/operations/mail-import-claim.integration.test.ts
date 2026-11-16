@@ -14,7 +14,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import type { PurchaseId, RunId } from "@cubby/schemas/identifiers";
-import { preparePurchaseImportInput } from "@cubby/schemas/purchase-import";
+import {
+  importWriterInput,
+  preparePurchaseImportInput,
+} from "@cubby/schemas/purchase-import";
 import { runTargetOutcomeReceipt } from "@cubby/schemas/run-fields";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -34,8 +37,6 @@ import {
   emailClassificationObservation,
   email as emailTable,
   expense,
-  importSourceClaim,
-  importSourceOrder,
   orderMail,
   orderMailEvent,
   runOperation,
@@ -43,6 +44,7 @@ import {
   purchase,
   vendor,
 } from "~/server/db/schema";
+import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import {
@@ -51,7 +53,14 @@ import {
 } from "~/server/domains/purchase-agent/service/cubby-mcp";
 import { storedMailOutcome } from "~/server/domains/purchase-import/repo/mail-outcome/outcome";
 import { readMailProductCandidates } from "~/server/domains/purchase-import/repo/mail-rule-evidence";
+import {
+  appendOrderEvidence,
+  orderEventKey,
+} from "~/server/domains/purchase-import/repo/order-evidence";
+import { settleOrderEvidence } from "~/server/domains/purchase-import/repo/settle-order-evidence";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
+import { updateShipmentWhere } from "~/server/domains/shipment/repo/shipment-mutations";
+import { decide } from "~/server/kernel/api";
 import { describeToolError } from "~/server/mcp/tools/tool-error";
 import { activeEmailPurchaseDecision } from "~/server/testing/email-link.fixtures";
 import {
@@ -139,26 +148,49 @@ describe("Mail import claim", () => {
         actorLedgerPartyName: party.name,
         actorLedgerPartyKind: "member",
       });
-      const [claim] = await getDb(ctx.db)
-        .insert(importSourceClaim)
-        .values({
-          ledgerPartyId: party.id,
-          kind: "vendor_export",
-          externalKey: orderKey,
-          checksum: orderKey,
-          firstRunId: imported.id,
-          lastRunId: imported.id,
-        })
-        .returning({ id: importSourceClaim.id });
-      if (!claim) throw new Error("Expected a source claim fixture");
-      await getDb(ctx.db).insert(importSourceOrder).values({
-        id: claim.id,
-        sourceClaimId: claim.id,
-        purchaseId,
-        orderKey,
-        checksum: orderKey,
-        outputFingerprint: orderKey,
-      });
+      const observations = await appendOrderEvidence(ctx.db, [
+        {
+          orderKey,
+          input: importWriterInput.parse({
+            ledgerPartyId: party.id,
+            vendorId: seller.id,
+            vendorAccountId: account.id,
+            runId: imported.id,
+            source: {
+              kind: "vendor_export",
+              externalKey: orderKey,
+              checksum: await sha256Hex(orderKey),
+            },
+            extraction: {
+              status: "ready",
+              candidate: {
+                orderId: null,
+                orderedAt: null,
+                merchant: seller.name,
+                currency: "USD",
+                printedGrandTotal: null,
+                lines: [],
+                payments: [],
+              },
+            },
+            primaryDocumentImageId: null,
+            screenshotImageId: null,
+          }),
+        },
+      ]);
+      await decide(
+        ctx.db,
+        ctx.actor,
+        observations.map((observation) => ({
+          channel: "assignment",
+          kind: "set",
+          subject: orderEventKey(observation),
+          field: "purchaseId",
+          value: purchaseId,
+          scopes: [{ kind: "purchaseEvent", key: orderEventKey(observation) }],
+        })),
+      );
+      await settleOrderEvidence(ctx.db, observations);
     };
     return { party, seller, order, retain, itemize };
   }
@@ -275,10 +307,11 @@ describe("Mail import claim", () => {
       fedex,
     );
     const first = await admit(party, [unmatched, inexact]);
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({ classification: "related", classificationStage: "decision" })
-      .where(eq(emailTable.runId, first.owner.id));
+    await updateEmailStateWhere(
+      ctx.db,
+      { classification: "related", classificationStage: "decision" },
+      eq(emailTable.runId, first.owner.id),
+    );
 
     expect(await claimMailImportWork(ctx.db, first.owner.id)).toMatchObject({
       kind: "email",
@@ -297,7 +330,12 @@ describe("Mail import claim", () => {
 
     // A later notice for the same package links only the Purchase it holds.
     const target = await order("SYN-CARRIER");
-    await getDb(ctx.db).update(shipment).set({ purchaseId: target.id });
+    await updateShipmentWhere(
+      ctx.db,
+      { purchaseId: target.id },
+      eq(shipment.trackingNumber, "100000000001"),
+      ctx.actor,
+    );
     const later = await retain(
       "carrier-later",
       "Your shipment is scheduled for delivery tomorrow 100000000001",
@@ -305,10 +343,11 @@ describe("Mail import claim", () => {
       fedex,
     );
     const second = await admit(party, [later]);
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({ classification: "related", classificationStage: "decision" })
-      .where(eq(emailTable.runId, second.owner.id));
+    await updateEmailStateWhere(
+      ctx.db,
+      { classification: "related", classificationStage: "decision" },
+      eq(emailTable.runId, second.owner.id),
+    );
 
     expect(await claimMailImportWork(ctx.db, second.owner.id)).toEqual({
       kind: "none",
@@ -382,10 +421,11 @@ describe("Mail import claim", () => {
       "Order #SYN-5001 is on its way via UPS. Tracking number: 1Z999AA10123456791",
     );
     const { owner } = await admit(party, [notice]);
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({ classification: "related", classificationStage: "decision" })
-      .where(eq(emailTable.runId, owner.id));
+    await updateEmailStateWhere(
+      ctx.db,
+      { classification: "related", classificationStage: "decision" },
+      eq(emailTable.runId, owner.id),
+    );
 
     expect(await claimMailImportWork(ctx.db, owner.id)).toEqual({
       kind: "none",
@@ -707,14 +747,15 @@ describe("Mail import claim", () => {
       "Seasonal planting tips from the synthetic garden club.",
       "Garden Club <club@garden-club.example.test>",
     );
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({
+    await updateEmailStateWhere(
+      ctx.db,
+      {
         classification: "unrelated",
         classificationStage: "decision",
         classificationReason: "Synthetic newsletter",
-      })
-      .where(eq(emailTable.orderMailId, newsletter.id));
+      },
+      eq(emailTable.orderMailId, newsletter.id),
+    );
     const refund = await retain(
       "coordinator-refund",
       "Your refund for order SYN-2001",

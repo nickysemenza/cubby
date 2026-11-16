@@ -1,6 +1,39 @@
 import { defineChildTable } from "../entity-definitions/child-definition.js";
 
 export const shipmentChildren = [
+  defineChildTable({
+    name: "ShipmentPackageObservation",
+    exportName: "shipmentPackageObservation",
+    columns: [
+      {
+        key: "id",
+        kind: "uuid",
+        primaryKey: true,
+        default: { sql: "gen_random_uuid()" },
+      },
+      { key: "scopeKey", kind: "text", notNull: true },
+      { key: "sourceKey", kind: "text", notNull: true },
+      { key: "packageKey", kind: "text", notNull: true },
+      { key: "actorUserId", kind: "text" },
+      { key: "values", kind: "jsonb", notNull: true, type: "KernelJson" },
+      { key: "manual", kind: "boolean", notNull: true, default: false },
+      {
+        key: "createdAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+      },
+    ],
+    types: [
+      { module: "@cubby/schemas/kernel/machinery", exports: ["KernelJson"] },
+    ],
+    indexes: [
+      {
+        name: "ShipmentPackageObservation_scope_idx",
+        on: ["scopeKey", "createdAt"],
+      },
+    ],
+  }),
   // The revision makes snapshot transactions retry after a concurrent identity writer.
   defineChildTable({
     name: "ShipmentIdentityLock",

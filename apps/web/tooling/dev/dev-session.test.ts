@@ -13,7 +13,7 @@ import { resolveDevProfile } from "../dev-services/dev-profile.ts";
 // underneath concurrently running script tests.
 test("down preserves live legacy sessions and reports how to resolve ownership", () => {
   const root = resolve(import.meta.dirname, "../../../..");
-  const instance = `synthetic_identity_${process.pid}`;
+  const instance = `synthetic_id_${process.pid}`;
   const profile = resolveDevProfile(root, { CUBBY_DEV_INSTANCE: instance });
   const file = join(profile.stateDir, "session.json");
   const legacy = execFileSync(

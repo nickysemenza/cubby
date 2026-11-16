@@ -93,7 +93,8 @@ and model usage; it publishes no Email classification, observation, retained
 content, import or member grade. Preview never grants import authority or
 bypasses paid-request admission.
 Member search retains each new original and queues its classifier Run and AI
-work in the same transaction. Pending classification is not a rule verdict;
+work in the same transaction. A newly retained original has no Relevance verdict
+or deciding stage until classification publishes one. Pending classification is not a rule verdict;
 repeated searches reuse the same checksum-scoped Run and never revive a stopped
 Job. Queued classifier originals have no caller-judged cache expiry, so funding
 waits cannot discard them. Search in an existing import Run uses that Run's normal classifier.

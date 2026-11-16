@@ -9,7 +9,7 @@ import {
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
 /** Compare stored values, including JSON evidence and observation timestamps. */
-export function evidenceChanges<T extends object>(
+function evidenceChanges<T extends object>(
   before: T | undefined,
   after: T,
 ): AuditChangeMap | undefined {

@@ -26,7 +26,7 @@ import type { DecisionPort } from "~/server/ai/decision-model";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { expense, purchase, vendor } from "~/server/db/schema";
+import { expense, purchase, vendor, recordKey } from "~/server/db/schema";
 import {
   expenseAnalyzeWorkflow,
   expenseChartDataWorkflow,
@@ -462,7 +462,24 @@ describe("expense repository — CRUD", () => {
     expect(updated.projectName).toBeNull();
 
     await deleteExpenses(ctx.db, [created.id], ctx.actor);
-
+    const [removed] = await getDb(ctx.db)
+      .select()
+      .from(expense)
+      .where(eq(expense.shortcode, created.id));
+    if (!removed) throw new Error("Synthetic removed Expense missing");
+    const owners = await getDb(ctx.db)
+      .select()
+      .from(recordKey)
+      .where(eq(recordKey.entityId, removed.id));
+    expect(owners).toEqual([
+      expect.objectContaining({ rejectedAt: expect.any(Date) }),
+    ]);
+    const { reconcileNow } = await import("~/server/kernel/api");
+    const outcomes = await reconcileNow(
+      ctx.db,
+      owners.map((owner) => ({ kind: owner.scopeKind, key: owner.scopeKey })),
+    );
+    expect(outcomes.every((outcome) => !outcome.error)).toBe(true);
     expect(await readExpense(ctx.db, created.id)).toBeNull();
 
     const { data } = await expenseScaffold.read(ctx.db, {

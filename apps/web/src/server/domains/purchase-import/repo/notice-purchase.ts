@@ -3,7 +3,6 @@ import type { EmailPurchaseDecisionValue } from "@cubby/schemas/email-fields";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   LedgerPartyId,
-  PurchaseId,
   ShortcodeFor,
   VendorId,
 } from "@cubby/schemas/identifiers";
@@ -13,12 +12,14 @@ import { and, eq, sql, type SQL } from "drizzle-orm";
 import type { DrizzleTransaction } from "~/server/db";
 import { notDeleted } from "~/server/db/helpers";
 import { purchase, vendorAccount } from "~/server/db/schema";
+import { emailLinkDecisionsSql } from "~/server/domains/email/repo/email-decision-sql";
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { acceptedOrderPurchasesSql } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import { enterWriteTransaction } from "~/server/kernel/gate";
 
 import { normalizedOrderIdSql, normalizeOrderKey } from "./order-identity";
-import { lockPartySettlement } from "./retained-settlement";
 import { recordRunWrites } from "./run-audit";
+import { lockPartySettlement } from "./settlement-lock";
 
 /**
  * A Purchase waiting for its order details: no live Expense, no accepted
@@ -32,9 +33,9 @@ export const awaitingOrderDetailsSql = (purchaseId: SQL): SQL<boolean> =>
     SELECT 1 FROM "Expense" aod_expense
     WHERE aod_expense."purchaseId" = ${purchaseId} AND ${notDeleted("aod_expense")}
   ) AND NOT EXISTS (
-    SELECT 1 FROM "ImportSourceOrder" aod_order WHERE aod_order."purchaseId" = ${purchaseId}
+    SELECT 1 FROM ${acceptedOrderPurchasesSql} aod_order WHERE aod_order."boundPurchaseId" = ${purchaseId}
   ) AND EXISTS (
-    SELECT 1 FROM "EmailPurchaseDecision" aod_link
+    SELECT 1 FROM ${emailLinkDecisionsSql} aod_link
     JOIN "OrderMailEvent" aod_event ON aod_event.id = aod_link."eventId"
     WHERE aod_link."purchaseId" = ${purchaseId} AND aod_link.active
       AND aod_link.decision = ${"linked" satisfies EmailPurchaseDecisionValue}
@@ -107,17 +108,4 @@ export async function createNoticePurchase(
     },
   ]);
   return parseShortcodeFor("purchase", created.shortcode);
-}
-
-/** Whether this Purchase still waits for its order details (`awaitingOrderDetailsSql`). */
-export async function isAwaitingOrderDetails(
-  tx: DrizzleTransaction,
-  purchaseId: PurchaseId,
-): Promise<boolean> {
-  const [row] = await tx
-    .select({ awaiting: awaitingOrderDetailsSql(sql`${purchase.id}`) })
-    .from(purchase)
-    .where(eq(purchase.id, purchaseId))
-    .limit(1);
-  return row?.awaiting === true;
 }

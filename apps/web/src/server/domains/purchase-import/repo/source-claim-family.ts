@@ -1,5 +1,7 @@
-import { and, asc, eq, inArray, isNotNull, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
+import { notDeleted } from "~/server/db/helpers/predicates";
 import {
   type RepositoryQueryClient as DrizzleClient,
   type RepositoryQueryTransaction as DrizzleTransaction,
@@ -7,6 +9,8 @@ import {
 import {
   importSourceClaim,
   importSourceOrder,
+  entityIdentity,
+  purchase,
 } from "~/server/db/retained-tables";
 
 type Reader = Pick<DrizzleClient, "select">;
@@ -209,11 +213,130 @@ export async function resolveImportSourceOrder(
   db: Reader,
   input: FamilyIdentity & {
     orderKey: typeof importSourceOrder.$inferSelect.orderKey;
+    vendorId?: import("@cubby/schemas/identifiers").VendorId;
   },
   options: ReadOptions = {},
 ) {
   const family = await readImportSourceClaimFamily(db, input, options);
-  return family
-    ? readSourceFamilyOrder(db, family, input.orderKey, options.lock)
-    : null;
+  if (!family) return null;
+  const exact = await readSourceFamilyOrder(
+    db,
+    family,
+    input.orderKey,
+    options.lock,
+  );
+  if (exact || !input.vendorId) return exact;
+  const association = await mergedVendorSourceOrder(
+    db,
+    family.members.map((row) => row.id),
+    input.orderKey,
+    input.vendorId,
+    options.lock ?? "share",
+  );
+  if (!association) return null;
+  const claim = family.members.find(
+    (row) => row.id === association.sourceClaimId,
+  );
+  if (!claim) throw new Error("Source family order owner is unavailable.");
+  return { claim, association };
+}
+
+/** Reuse a vendor's historical order key only through its durable merge identity. */
+async function mergedVendorSourceOrder(
+  tx: Reader,
+  claimIds: readonly string[],
+  orderKey: string,
+  vendorId: typeof purchase.$inferSelect.vendorId,
+  lock: "update" | "share" = "update",
+) {
+  const originalVendor = alias(entityIdentity, "source_order_original_vendor");
+  const suffix = orderKey.slice(orderKey.indexOf("/"));
+  const rows = await tx
+    .select({ association: importSourceOrder })
+    .from(importSourceOrder)
+    .innerJoin(
+      purchase,
+      and(
+        eq(purchase.id, importSourceOrder.purchaseId),
+        eq(purchase.vendorId, vendorId),
+        notDeleted(purchase),
+      ),
+    )
+    .innerJoin(
+      originalVendor,
+      and(
+        sql`${originalVendor.id}::text = split_part(${importSourceOrder.orderKey}, '/', 1)`,
+        eq(originalVendor.kind, "vendor"),
+        or(
+          eq(originalVendor.id, vendorId),
+          eq(originalVendor.mergedIntoId, vendorId),
+        ),
+      ),
+    )
+    .where(
+      and(
+        inArray(importSourceOrder.sourceClaimId, [...claimIds]),
+        sql`substring(${importSourceOrder.orderKey} from position('/' in ${importSourceOrder.orderKey})) = ${suffix}`,
+      ),
+    )
+    .orderBy(importSourceOrder.id)
+    .limit(2)
+    .for(lock, { of: [importSourceOrder, purchase] });
+  if (rows.length > 1)
+    throw new Error(
+      "Ambiguous merged Vendor source order associations require explicit review.",
+    );
+  const [row] = rows;
+  return row && isLiveSourceOrder(row.association) ? row.association : null;
+}
+
+/** Accepted captures advance the canonical cursor while aliases and original snapshots retain history. */
+export async function recordRetainedImportAcceptance(
+  tx: Pick<DrizzleTransaction, "select" | "update">,
+  input: FamilyIdentity & {
+    checksum: string;
+    orderKey: string;
+    vendorId: import("@cubby/schemas/identifiers").VendorId;
+    purchaseId: LiveSourceOrder["purchaseId"];
+    observationId: string;
+    runId: typeof importSourceClaim.$inferSelect.lastRunId | null;
+  },
+) {
+  const family = await readImportSourceClaimFamily(tx, input, {
+    lock: "update",
+    writable: true,
+  });
+  if (!family) return;
+  const retained = await resolveImportSourceOrder(tx, input, {
+    lock: "update",
+    writable: true,
+  });
+  if (!retained) return;
+  if (retained.association.purchaseId !== input.purchaseId)
+    throw new Error(
+      "Accepted source capture changed its retained Purchase identity",
+    );
+  if (
+    family.root.checksum !== input.checksum ||
+    (input.runId && family.root.lastRunId !== input.runId)
+  )
+    await tx
+      .update(importSourceClaim)
+      .set({
+        checksum: input.checksum,
+        lastRunId: input.runId ?? family.root.lastRunId,
+        updatedAt: new Date(),
+      })
+      .where(eq(importSourceClaim.id, family.root.id));
+  if (
+    retained.association.checksum !== input.checksum ||
+    retained.association.acceptedObservationId !== input.observationId
+  )
+    await tx
+      .update(importSourceOrder)
+      .set({
+        checksum: input.checksum,
+        acceptedObservationId: input.observationId,
+      })
+      .where(eq(importSourceOrder.id, retained.association.id));
 }

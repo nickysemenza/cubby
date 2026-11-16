@@ -1,46 +1,69 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { parseEntityId } from "@cubby/schemas/identifiers";
-import { parseShortcodeFor, type PurchaseId } from "@cubby/schemas/identifiers";
+import {
+  parseEntityId,
+  parseShortcodeFor,
+  type PurchaseId,
+} from "@cubby/schemas/identifiers";
+import {
+  convergeDuplicateSourceOrderInput,
+  convergeDuplicateSourceOrderOut,
+} from "@cubby/schemas/purchase-import";
+import { tradeSchema } from "@cubby/schemas/task-fields";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
+import type { Database } from "~/server/db";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
-import {
-  databaseForTransaction,
-  notDeleted,
-  withTransaction,
-} from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import { textArrayParam } from "~/server/db/helpers/query";
+import { recordKey } from "~/server/db/kernel-schema";
+import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import {
   auditLog,
-  email as emailTable,
+  email,
   expense,
   expenseAttribution,
-  importSourceClaim,
-  importSourceOrder,
-  importSourceProduct,
   ledgerSourceClaim,
   purchase,
 } from "~/server/db/schema";
-import { deleteExpensesWithPurchaseEffects } from "~/server/domains/expense/repo/crud";
-import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
-import { duplicateSourceOrderReplay } from "~/server/domains/purchase-import/policy/duplicate-source-order";
-import { duplicateSourceOrderRefusal } from "~/server/domains/purchase-import/policy/duplicate-source-order";
 import {
-  Line,
+  rejectPurchaseEventWhere,
+  updatePurchaseEventWhere,
+} from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { purchaseRecords } from "~/server/domains/financial-transaction/repo/purchase-event-records";
+import { loadExpenseAllocations } from "~/server/domains/household-contribution/repo/allocation";
+import {
+  duplicateSourceOrderReplay,
+  duplicateSourceOrderRefusal,
   pairLines,
+  type Line,
 } from "~/server/domains/purchase-import/policy/duplicate-source-order";
-import { mergePurchases } from "~/server/domains/purchase/repo/purchase";
+import { normalizeOrderKey } from "~/server/domains/purchase-import/policy/order-identity";
+import {
+  orderEventKey,
+  orderPaymentKeys,
+} from "~/server/domains/purchase-import/policy/payment-keys";
+import {
+  acceptedOrders,
+  acceptedOrderLinesSql,
+} from "~/server/domains/purchase-import/repo/accepted-order-read";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
-import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { enterWriteTransaction } from "~/server/kernel/gate";
+import {
+  decide,
+  householdWrite,
+  merge,
+  recordSubject,
+  resolveForRead,
+  type DecisionInput,
+} from "~/server/kernel/api";
 
-import { normalizeOrderKey } from "./order-identity";
+import { settleOrderEvidence } from "./settle-order-evidence";
 
 async function readLines(
-  tx: DrizzleTransaction,
+  database: Database,
   purchaseId: PurchaseId,
 ): Promise<Line[]> {
+  const tx = repositoryQueries(database);
   const rows = await tx
     .select({
       id: expense.id,
@@ -59,7 +82,7 @@ async function readLines(
     .from(expense)
     .where(and(eq(expense.purchaseId, purchaseId), notDeleted(expense)))
     .for("update");
-  const attributions = rows.length
+  const recorded = rows.length
     ? await tx
         .select({
           expenseId: expenseAttribution.expenseId,
@@ -78,6 +101,12 @@ async function readLines(
           ),
         )
     : [];
+  const attributions = rows.length
+    ? await loadExpenseAllocations(database, {
+        expenseIds: rows.map((row) => row.id),
+        includeFuture: true,
+      })
+    : [];
   return rows.map((row) => ({
     id: row.id,
     shortcode: row.shortcode,
@@ -88,8 +117,14 @@ async function readLines(
     productId: row.productId,
     projectId: row.projectId,
     productQuantity: row.productQuantity,
-    attribution: JSON.stringify(
+    effectiveAttribution: JSON.stringify(
       attributions
+        .filter((item) => item.expenseId === row.id)
+        .map((item) => [item.role, item.ledgerPartyId, item.cents.toString()])
+        .sort(),
+    ),
+    attribution: JSON.stringify(
+      recorded
         .filter((item) => item.expenseId === row.id)
         .map((item) => [item.role, item.ledgerPartyId, item.weight])
         .sort(),
@@ -102,68 +137,62 @@ async function readLines(
   }));
 }
 
-/**
- * One order imported twice from two source documents (a pre-payment notice
- * and its receipt): move the duplicate Purchase's accepted source orders onto
- * the survivor, bind their lines to the survivor's identical lines, retire the
- * duplicate lines and fold the rest of the duplicate (Email links, documents,
- * payments, allocations, shipments) through the Purchase merge. One
- * transaction; a repeat after success returns `already_applied`.
- */
+/** Converge proven duplicate line sets without rewriting their source captures. */
 export async function convergeDuplicateSourceOrder(
   db: Database,
-  input: { survivorPurchaseId: string; duplicatePurchaseId: string },
+  raw: { survivorPurchaseId: string; duplicatePurchaseId: string },
   actor: ActorContext,
 ) {
-  return withTransaction(db, async (tx) => {
-    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
-    const survivorId = await resolveOrThrow(
-      tx,
-      "purchase",
-      input.survivorPurchaseId,
-    );
-    const [identity] = await tx
+  const input = convergeDuplicateSourceOrderInput.parse(raw);
+  return householdWrite(db, async (database) => {
+    const first = await resolveForRead(database, input.survivorPurchaseId);
+    if (first?.entity !== "purchase")
+      throw new Error("Review two live Purchases");
+    const q = repositoryQueries(database);
+    const [identity] = await q
       .select({
         id: entityIdentity.id,
         mergedIntoId: entityIdentity.mergedIntoId,
       })
       .from(entityIdentity)
-      .where(eq(entityIdentity.shortcode, input.duplicatePurchaseId))
-      .limit(1);
-    const [converged] =
-      identity?.mergedIntoId === survivorId
-        ? await tx
+      .where(
+        and(
+          eq(entityIdentity.shortcode, input.duplicatePurchaseId),
+          eq(entityIdentity.kind, "purchase"),
+        ),
+      );
+    const [receipt] =
+      identity?.mergedIntoId === first.id
+        ? await q
             .select({ id: auditLog.id })
             .from(auditLog)
             .where(
               and(
-                eq(auditLog.entityId, survivorId),
-                sql`${auditLog.changes} -> 'convergedSourceOrder' -> 'to' ->> 'duplicate' = ${identity.id}`,
+                eq(auditLog.entityId, first.id),
+                sql`${auditLog.changes}->'convergedSourceOrder'->'to'->>'duplicate'=${identity.id}`,
               ),
             )
             .limit(1)
         : [];
     const replay = duplicateSourceOrderReplay({
       identity: identity ?? null,
-      survivorId,
-      survivorCode: input.survivorPurchaseId,
+      survivorId: first.id,
+      survivorCode: first.shortcode,
       duplicateCode: input.duplicatePurchaseId,
-      hasReceipt: Boolean(converged),
+      hasReceipt: !!receipt,
     });
     if (replay.kind === "refused")
       throw createAppError(replay.code, replay.reason);
     if (replay.kind === "already_applied")
-      return {
-        status: "already_applied" as const,
-        survivorPurchaseId: parseShortcodeFor(
-          "purchase",
-          input.survivorPurchaseId,
-        ),
+      return convergeDuplicateSourceOrderOut.parse({
+        status: "already_applied",
+        survivorPurchaseId: first.shortcode,
         retiredExpenseIds: [],
         movedSourceOrders: 0,
-      };
-    const duplicateId = parseEntityId("purchase", replay.identity.id);
-    const rows = await tx
+      });
+    const survivorId = parseEntityId("purchase", first.id),
+      duplicateId = parseEntityId("purchase", replay.identity.id);
+    const rows = await q
       .select()
       .from(purchase)
       .where(
@@ -172,67 +201,62 @@ export async function convergeDuplicateSourceOrder(
           notDeleted(purchase),
         ),
       )
+      .orderBy(purchase.id)
       .for("update");
-    const survivor = rows.find((row) => row.id === survivorId);
-    const duplicate = rows.find((row) => row.id === duplicateId);
-    if (!survivor || !duplicate)
-      throw createAppError(
-        "PURCHASE_NOT_FOUND",
-        "Both Purchases must be live.",
-      );
-    let sharesThread = false;
-    if (survivor.orderId === null || duplicate.orderId === null) {
-      const threads = await tx
-        .selectDistinct({
-          purchaseId: importSourceOrder.purchaseId,
-          thread: sql<string>`${emailTable.mailboxId} || ':' || ${emailTable.threadId}`,
-        })
-        .from(importSourceOrder)
-        .innerJoin(
-          importSourceClaim,
-          eq(importSourceClaim.id, importSourceOrder.sourceClaimId),
-        )
-        .innerJoin(
-          emailTable,
-          and(
-            // A message key, or one of its attachments' keys.
-            sql`(${importSourceClaim.externalKey} = ${emailTable.provider} || ':' || ${emailTable.mailboxId} || ':' || ${emailTable.messageId}
-              OR starts_with(${importSourceClaim.externalKey}, ${emailTable.provider} || ':' || ${emailTable.mailboxId} || ':' || ${emailTable.messageId} || ':attachment:'))`,
-            isNotNull(emailTable.threadId),
-            notDeleted(emailTable),
+    const survivor = rows.find((row) => row.id === survivorId),
+      duplicate = rows.find((row) => row.id === duplicateId);
+    if (!survivor || !duplicate) throw new Error("Review two live Purchases");
+    const sources = await q
+      .select()
+      .from(acceptedOrders)
+      .where(inArray(acceptedOrders.purchaseId, [survivorId, duplicateId]));
+    const duplicateSources = sources.filter(
+      (row) => row.purchaseId === duplicateId,
+    );
+    const threads = await q
+      .select({
+        id: email.id,
+        party: email.ledgerPartyId,
+        mailbox: email.mailboxId,
+        thread: email.threadId,
+      })
+      .from(email)
+      .where(
+        and(
+          inArray(
+            email.id,
+            sources.flatMap((row) => (row.emailId ? [row.emailId] : [])),
           ),
-        )
-        .where(
-          inArray(importSourceOrder.purchaseId, [survivorId, duplicateId]),
-        );
-      const survivorThreads = new Set(
-        threads
-          .filter((row) => row.purchaseId === survivorId)
-          .map((row) => row.thread),
+          isNotNull(email.threadId),
+          notDeleted(email),
+        ),
       );
-      sharesThread = threads.some(
-        (row) =>
-          row.purchaseId === duplicateId && survivorThreads.has(row.thread),
-      );
-    }
-    const sourceOrders = await tx
-      .select({ id: importSourceOrder.id })
-      .from(importSourceOrder)
-      .where(eq(importSourceOrder.purchaseId, duplicateId))
-      .for("update");
-    const duplicateLines = await readLines(tx, duplicateId);
-    const survivorLines = await readLines(tx, survivorId);
+    const threadOf = (id: string | null) => {
+      const row = threads.find((row) => row.id === id);
+      return row ? `${row.party}:${row.mailbox}:${row.thread}` : null;
+    };
+    const survivorThreads = new Set(
+      sources
+        .filter((row) => row.purchaseId === survivorId)
+        .map((row) => threadOf(row.emailId))
+        .filter(Boolean),
+    );
+    const sharesThread = duplicateSources.some((row) => {
+      const thread = threadOf(row.emailId);
+      return thread !== null && survivorThreads.has(thread);
+    });
+    const duplicateLines = await readLines(database, duplicateId),
+      survivorLines = await readLines(database, survivorId);
     const claimed = duplicateLines.length
-      ? await tx
-          .select({ expenseId: ledgerSourceClaim.expenseId })
+      ? await q
+          .select({ id: ledgerSourceClaim.id })
           .from(ledgerSourceClaim)
           .where(
             and(
               inArray(
                 ledgerSourceClaim.expenseId,
-                duplicateLines.map((line) => line.id),
+                duplicateLines.map((row) => row.id),
               ),
-              isNotNull(ledgerSourceClaim.expenseId),
               notDeleted(ledgerSourceClaim),
             ),
           )
@@ -240,14 +264,14 @@ export async function convergeDuplicateSourceOrder(
     const refusal = duplicateSourceOrderRefusal({
       survivor,
       duplicate,
-      survivorOrderKey:
-        survivor.orderId === null ? null : normalizeOrderKey(survivor.orderId),
-      duplicateOrderKey:
-        duplicate.orderId === null
-          ? null
-          : normalizeOrderKey(duplicate.orderId),
+      survivorOrderKey: survivor.orderId
+        ? normalizeOrderKey(survivor.orderId)
+        : null,
+      duplicateOrderKey: duplicate.orderId
+        ? normalizeOrderKey(duplicate.orderId)
+        : null,
       sharesThread,
-      hasSourceOrder: sourceOrders.length > 0,
+      hasSourceOrder: duplicateSources.length > 0,
       hasClaimedLine: claimed.length > 0,
       duplicateLines,
       survivorLines,
@@ -257,28 +281,106 @@ export async function convergeDuplicateSourceOrder(
     if (!paired.pairs)
       throw createAppError(
         "PURCHASE_SOURCE_CONVERGENCE_REFUSED",
-        paired.error ?? "The duplicate lines do not match the survivor.",
+        paired.error ?? "The duplicate lines do not match the survivor",
       );
-
-    // Source bindings move to the survivor's identical line before the
-    // duplicate is retired, so the accepted source replays onto it.
-    for (const { from, to } of paired.pairs)
-      await tx
-        .update(importSourceProduct)
-        .set({ expenseId: to.id })
-        .where(
-          and(
-            inArray(
-              importSourceProduct.sourceOrderId,
-              sourceOrders.map((row) => row.id),
+    const records = await q
+      .select()
+      .from(recordKey)
+      .where(
+        and(
+          eq(recordKey.entity, "purchase"),
+          inArray(recordKey.entityId, [survivorId, duplicateId]),
+        ),
+      );
+    const scopes = records.map((row) => ({
+      kind: row.scopeKind,
+      key: row.scopeKey,
+    }));
+    const decisions: DecisionInput[] = [
+      {
+        channel: "identity",
+        kind: "same",
+        subject: recordSubject("purchase", survivorId),
+        field: recordSubject("purchase", duplicateId),
+        scopes,
+      },
+    ];
+    const lineOwners = await q.execute<{
+      sourceOrderId: string;
+      lineIndex: number;
+      expenseId: string | null;
+    }>(sql`
+      SELECT "sourceOrderId", "lineIndex", "expenseId" FROM ${acceptedOrderLinesSql} lines
+      WHERE lines."sourceOrderId"=ANY(${textArrayParam(duplicateSources.map((row) => row.id))}::uuid[])`);
+    for (const capture of duplicateSources) {
+      const sourceScope = {
+        kind: "purchaseEvent",
+        key: orderEventKey(capture),
+      };
+      const affected = [
+        ...scopes,
+        sourceScope,
+        ...orderPaymentKeys(capture).map((key) => ({
+          kind: "purchaseEvent",
+          key,
+        })),
+      ];
+      decisions.push({
+        channel: "assignment",
+        kind: "set",
+        subject: sourceScope.key,
+        field: "purchaseId",
+        value: survivorId,
+        scopes: affected,
+      });
+      for (const binding of capture.productBindings) {
+        const expenseId = lineOwners.rows.find(
+          (row) =>
+            row.sourceOrderId === capture.id &&
+            row.lineIndex === binding.lineIndex,
+        )?.expenseId;
+        const pair = paired.pairs.find((pair) => pair.from.id === expenseId);
+        if (!pair)
+          throw new Error(
+            "Every duplicate source line needs a proven survivor Expense",
+          );
+        for (const scope of [
+          ...scopes.filter((row) =>
+            records.some(
+              (owner) =>
+                owner.entityId === survivorId && owner.scopeKey === row.key,
             ),
-            eq(importSourceProduct.expenseId, from.id),
           ),
-        );
+          sourceScope,
+        ]) {
+          decisions.push(
+            {
+              channel: "assignment",
+              kind: "set",
+              subject: `purchaseEvent:${scope.key}`,
+              field: `line-record:${binding.stableLineId ?? binding.lineIndex}`,
+              value: pair.to.id,
+              scopes: affected,
+            },
+            {
+              channel: "assignment",
+              kind: "set",
+              subject: `purchaseEvent:${scope.key}`,
+              field: `line:${binding.stableLineId ?? binding.lineIndex}`,
+              value: pair.to.productId
+                ? { kind: "existing", productId: pair.to.productId }
+                : { kind: "expense_only" },
+              scopes: affected,
+            },
+          );
+        }
+      }
+    }
+    await decide(database, actor, decisions);
     for (const { to, carry } of paired.pairs) {
-      if (Object.keys(carry).length === 0) continue;
+      if (!Object.keys(carry).length) continue;
       await updatePurchaseEventWhere(
-        tx,
+        database,
         "expense",
         {
           ...(carry.bookingTransactionCode
@@ -286,49 +388,82 @@ export async function convergeDuplicateSourceOrder(
             : {}),
           ...(carry.spendingCategoryId
             ? {
-                // SAFETY: copied from a live Expense's own spendingCategoryId column.
-                spendingCategoryId:
-                  carry.spendingCategoryId as typeof expense.$inferInsert.spendingCategoryId,
+                spendingCategoryId: parseEntityId(
+                  "spendingCategory",
+                  carry.spendingCategoryId,
+                ),
               }
             : {}),
-          ...(carry.trade
-            ? {
-                // SAFETY: copied from a live Expense's own trade column.
-                trade: carry.trade as typeof expense.$inferInsert.trade,
-              }
-            : {}),
+          ...(carry.trade ? { trade: tradeSchema.parse(carry.trade) } : {}),
         },
         eq(expense.id, to.id),
         actor,
       );
-      await logAuditEntries(tx, actor, [
-        {
-          entityKind: "expense" as const,
-          entityId: to.id,
-          action: "update" as const,
-          changes: Object.fromEntries(
-            Object.entries(carry).map(([field, value]) => [
-              field,
-              { from: null, to: value },
-            ]),
-          ),
-        },
-      ]);
     }
-    const transactionDb = databaseForTransaction(tx);
-    if (duplicateLines.length)
-      await deleteExpensesWithPurchaseEffects(
-        transactionDb,
-        duplicateLines.map((line) =>
-          parseShortcodeFor("expense", line.shortcode),
-        ),
-        actor,
+    await rejectPurchaseEventWhere(
+      database,
+      "expense",
+      inArray(
+        expense.id,
+        duplicateLines.map((row) => row.id),
+      ),
+      actor,
+    );
+    const result = await merge(database, {
+      target: purchaseRecords,
+      a: survivorId,
+      b: duplicateId,
+      basis: "decision",
+      keepId: survivorId,
+      actor,
+    });
+    if (!result.merged)
+      throw new Error(`The orders cannot merge: ${result.reason}`);
+    const outcomes = await settleOrderEvidence(database, sources);
+    if (
+      outcomes.some(
+        (row) => row.status === "failed" || row.status === "conflict",
+      )
+    )
+      throw new Error("Duplicate source ownership did not reconcile");
+    const after = await readLines(database, survivorId);
+    if (
+      after.length !== survivorLines.length ||
+      after.some(
+        (row) =>
+          !survivorLines.some(
+            (old) => old.id === row.id && old.amountMinor === row.amountMinor,
+          ),
+      )
+    )
+      throw new Error(
+        "Source convergence must preserve the survivor's exact Expense identities and spending",
       );
-    await logAuditEntries(tx, actor, [
+    const accepted = await q
+      .select({ id: acceptedOrders.id, purchaseId: acceptedOrders.purchaseId })
+      .from(acceptedOrders)
+      .where(
+        inArray(
+          acceptedOrders.id,
+          duplicateSources.map((row) => row.id),
+        ),
+      );
+    if (
+      duplicateSources.some(
+        (row) =>
+          !accepted.some(
+            (bound) => bound.id === row.id && bound.purchaseId === survivorId,
+          ),
+      )
+    )
+      throw new Error(
+        "Source convergence did not retain every accepted capture",
+      );
+    await logAuditEntries(database, actor, [
       {
-        entityKind: "purchase" as const,
+        entityKind: "purchase",
         entityId: survivorId,
-        action: "update" as const,
+        action: "update",
         changes: {
           convergedSourceOrder: {
             from: null,
@@ -340,21 +475,13 @@ export async function convergeDuplicateSourceOrder(
         },
       },
     ]);
-    await mergePurchases(
-      transactionDb,
-      {
-        keepId: parseShortcodeFor("purchase", survivor.shortcode),
-        mergeIds: [parseShortcodeFor("purchase", duplicate.shortcode)],
-      },
-      actor,
-    );
-    return {
-      status: "applied" as const,
-      survivorPurchaseId: parseShortcodeFor("purchase", survivor.shortcode),
-      retiredExpenseIds: duplicateLines.map((line) =>
-        parseShortcodeFor("expense", line.shortcode),
+    return convergeDuplicateSourceOrderOut.parse({
+      status: "applied",
+      survivorPurchaseId: first.shortcode,
+      retiredExpenseIds: duplicateLines.map((row) =>
+        parseShortcodeFor("expense", row.shortcode),
       ),
-      movedSourceOrders: sourceOrders.length,
-    };
+      movedSourceOrders: duplicateSources.length,
+    });
   });
 }

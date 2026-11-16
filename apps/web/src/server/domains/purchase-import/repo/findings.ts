@@ -34,6 +34,7 @@ import {
   isNotNull,
   isNull,
   ne,
+  not,
   or,
   sql,
 } from "drizzle-orm";
@@ -79,8 +80,12 @@ import {
   loadAggregateReplacementSnapshot,
   redistributeReplacementAttributions,
 } from "./aggregate-replacement";
+import {
+  importRunAuditReceiptSql,
+  purchaseAuditTargetSql,
+} from "./audit-batch";
 import { commitSourceOrderReconciliation } from "./reconciliation";
-import { lockFindingSettlement } from "./reconciliation-state";
+import { lockPartySettlement } from "./settlement-lock";
 import { existingExpenses, lineProductResolver } from "./writer";
 import { receiptProductQuantity } from "./writer-plan";
 
@@ -182,17 +187,26 @@ const assertRunProvenance = async (
   if (!finding.runId) return;
   const auditEntity = auditEntitySchema.parse(finding.entityKind);
   const runId = runEntityId.parse(finding.runId);
-  // The run's newest audit row for the target is its last write to it.
+  const target =
+    auditEntity === "purchase"
+      ? purchaseAuditTargetSql(
+          sql`${finding.entityId}::uuid`,
+          sql`${auditLog.entityKind}`,
+          sql`${auditLog.entityId}`,
+        )
+      : and(
+          eq(auditLog.entityKind, auditEntity),
+          eq(auditLog.entityId, finding.entityId),
+        );
+  const receipts = importRunAuditReceiptSql(
+    sql`SELECT ${runId}::uuid`,
+    sql`${auditLog.id}`,
+  );
+  // Receipts preserve Run authority when the kernel publishes under the system actor.
   const [mutation] = await tx
     .select({ createdAt: auditLog.createdAt })
     .from(auditLog)
-    .where(
-      and(
-        eq(auditLog.runId, runId),
-        eq(auditLog.entityKind, auditEntity),
-        eq(auditLog.entityId, finding.entityId),
-      ),
-    )
+    .where(and(target, or(eq(auditLog.runId, runId), receipts)))
     .orderBy(desc(auditLog.createdAt))
     .limit(1);
   if (!mutation) {
@@ -205,10 +219,10 @@ const assertRunProvenance = async (
     .from(auditLog)
     .where(
       and(
-        eq(auditLog.entityKind, auditEntity),
-        eq(auditLog.entityId, finding.entityId),
+        target,
         gt(auditLog.createdAt, mutation.createdAt),
         or(isNull(auditLog.runId), ne(auditLog.runId, runId)),
+        not(receipts),
       ),
     )
     .limit(1);
@@ -306,16 +320,22 @@ async function applyFix(
       }))
     )
       return;
-    const row = await createPurchaseEventRecord(tx, "expense", {
-      purchaseId,
-      name: fix.title,
-      cost: wholeCentToMinor(fix.amount),
-      date: targetPurchase.date,
-      lineKind: "principal",
-      lineBasis: "item_line",
-      costType: "materials",
-      trade: null,
-    });
+    const row = await createPurchaseEventRecord(
+      tx,
+      "expense",
+      {
+        purchaseId,
+        name: fix.title,
+        cost: wholeCentToMinor(fix.amount),
+        date: targetPurchase.date,
+        lineKind: "principal",
+        lineBasis: "item_line",
+        costType: "materials",
+        trade: null,
+      },
+      actor,
+      { basis: "decision", supplemental: true },
+    );
     await validateExpenseInheritance(tx, row);
     await logAuditEntries(tx, actor, [
       { entityKind: "expense", entityId: row.id, action: "create" },
@@ -392,7 +412,7 @@ async function applyAggregateReplacement(
       line,
       decision: reviewedLineIdentities[lineIndex]!,
     })),
-    {},
+    { actor },
   );
   for (const [lineIndex, line] of fix.lines.entries()) {
     const identity = fix.reviewedLineIdentities[lineIndex]!;
@@ -468,6 +488,30 @@ async function applyAggregateReplacement(
     { displayLabel: targetPurchase.displayLabel ?? aggregate.name },
     and(eq(purchase.id, purchaseId), isNull(purchase.deletedAt)),
     actor,
+  );
+}
+
+async function lockFindingSettlement(
+  tx: DrizzleTransaction,
+  id: string,
+  actor: ActorContext,
+) {
+  const [owner] = await tx
+    .select({ ledgerPartyId: runFindingColumns.ledgerPartyId })
+    .from(runFinding)
+    .innerJoin(
+      ledgerParty,
+      and(
+        eq(ledgerParty.id, runFindingColumns.ledgerPartyId),
+        eq(ledgerParty.userId, actor.userId),
+        notDeleted(ledgerParty),
+      ),
+    )
+    .where(eq(runFindingColumns.id, id));
+  if (!owner) throw new Error("Import finding not found for this member.");
+  await lockPartySettlement(
+    tx,
+    parseEntityId("ledgerParty", owner.ledgerPartyId),
   );
 }
 

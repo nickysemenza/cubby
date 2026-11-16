@@ -1183,11 +1183,17 @@ export const deleteExpensesWithPurchaseEffects = async (
 
   return await withTransaction(db, async (tx) => {
     await enterWriteTransaction(tx, { lane: "money", mode: "member" });
-    return removeExpensesWithPurchaseEffects(
+    const ids = await resolveAllOrThrow(tx, "expense", shortcodes);
+    const result = await removeExpensesWithPurchaseEffects(tx, ids, actor);
+    const { rejectPurchaseEventWhere } =
+      await import("~/server/domains/financial-transaction/repo/purchase-event-mutations");
+    await rejectPurchaseEventWhere(
       tx,
-      await resolveAllOrThrow(tx, "expense", shortcodes),
+      "expense",
+      inArray(expense.id, ids),
       actor,
     );
+    return result;
   });
 };
 

@@ -289,15 +289,28 @@ describe("explicit member-search cache expiry", () => {
         payload: {},
       })
       .returning();
-    await getDb(ctx.db)
+    const [expiredEmail] = await getDb(ctx.db)
       .update(emailTable)
       .set({
         searchExpiresAt: new Date("2026-10-09T12:00:00Z"),
         updatedAt: now,
         status: "unsettled",
-        classificationReason: "Synthetic unresolved disposition",
       })
-      .where(eq(emailTable.messageId, "expired-search"));
+      .where(eq(emailTable.messageId, "expired-search"))
+      .returning();
+    if (!expiredEmail) throw new Error("Synthetic expired Email missing");
+    const { decide, reconcileNow } = await import("~/server/kernel/api");
+    await decide(ctx.db, ctx.actor, [
+      {
+        channel: "assignment",
+        kind: "set",
+        subject: `email:${expiredEmail.id}`,
+        field: "classificationReason",
+        value: "Synthetic unresolved disposition",
+        scopes: [{ kind: "emailState", key: expiredEmail.id }],
+      },
+    ]);
+    await reconcileNow(ctx.db, [{ kind: "emailState", key: expiredEmail.id }]);
     // An expiry timestamp alone never makes discovery a member-search cache.
     await getDb(ctx.db)
       .update(emailTable)
@@ -382,6 +395,7 @@ describe("explicit member-search cache expiry", () => {
         checksum: original.rawChecksum,
       })
       .where(eq(importSourceClaim.id, fixture.association.sourceClaimId));
+    await fixture.retainSource(original.id);
     await getDb(ctx.db)
       .update(emailTable)
       .set({ searchExpiresAt: new Date("2026-10-09T12:00:00Z") })

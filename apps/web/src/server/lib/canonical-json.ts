@@ -40,7 +40,7 @@ export function sha256CanonicalJson(
 }
 
 /** Emit complete JSON tokens so consumers can avoid retaining the whole string. */
-export function writeCanonicalJson(
+function writeCanonicalJson(
   value: z.infer<ReturnType<typeof z.json>>,
   write: (fragment: string) => void,
 ): void {

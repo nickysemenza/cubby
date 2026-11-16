@@ -1,5 +1,5 @@
 import { userId } from "@cubby/schemas/identifiers";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -9,6 +9,7 @@ import {
   auditLog,
   expense,
   run,
+  runOperation,
   user,
   importSourceClaim,
   purchasePaymentEvidence,
@@ -16,6 +17,7 @@ import {
 import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { auditImportBatch } from "~/server/domains/purchase-import/operations/run-review";
+import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
 
 import { importedPurchaseFixture } from "../service/import-run.fixtures";
@@ -238,14 +240,34 @@ describe("purchase audit restart recovery", () => {
       orderId: "SYNTHETIC-SUCCESSOR",
       date: "2026-09-01",
     });
-    await getDb(ctx.db).insert(auditLog).values({
-      entityKind: "purchase",
-      entityId: writable.id,
-      action: "create",
-      channel: "mcp",
-      userId: ctx.actor.userId,
-      runId: successor.id,
-    });
+    const { auditIds } = await withAuditReceipts(() =>
+      createPurchaseEventRecord(ctx.db, "expense", {
+        purchaseId: writable.id,
+        name: "Synthetic judged item",
+        cost: 100n,
+        date: "2026-09-01",
+        lineKind: "principal",
+        costType: "materials",
+      }),
+    );
+    const itemReceipts = await getDb(ctx.db)
+      .select({ id: auditLog.id })
+      .from(auditLog)
+      .where(
+        and(inArray(auditLog.id, auditIds), eq(auditLog.entityKind, "expense")),
+      );
+    expect(itemReceipts.length).toBeGreaterThan(0);
+    await getDb(ctx.db)
+      .insert(runOperation)
+      .values({
+        runId: successor.id,
+        operationId: "synthetic-receipted-commit",
+        kind: "commit_purchase_import",
+        inputFingerprint: "synthetic-input",
+        state: "completed",
+        result: { auditIds: itemReceipts.map((row) => row.id) },
+        completedAt: new Date(),
+      });
     const batch = await loadPurchaseAuditBatch(ctx.db, successor.id);
     const expenseId = batch.find((row) => row.id === f.order.id)?.expenses[0]
       ?.id;

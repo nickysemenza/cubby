@@ -432,9 +432,6 @@ export async function finalizePhotoRun(
       // Review and the grouping agent read a whole Run at once and stop at
       // the limit, so a photo past it would upload but never be imported.
       // The lock serializes concurrent chunks of the same Run for the count.
-      await getDb(transactionDb).execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${scope.public.runId}))`,
-      );
       const targeted = new Set(
         (
           await getDb(transactionDb)

@@ -133,18 +133,43 @@ it("retains reused discovery decisions without consuming queued reclassification
     expect(handled).toHaveLength(2);
     expect(handled.every((request) => request.receipt != null)).toBe(true);
   }
-  await getDb(ctx.db)
-    .update(email)
-    .set({
-      classification: "related",
-      classificationStage: "resolution",
-      classificationReason: "Synthetic later member decision",
-    })
-    .where(eq(email.id, selected.id));
-  await getDb(ctx.db)
-    .update(email)
-    .set({ classification: null, classificationStage: null })
-    .where(eq(email.id, frozen.id));
+  const { decide, reconcileNow } = await import("~/server/kernel/api");
+  await decide(ctx.db, ctx.actor, [
+    {
+      channel: "assignment",
+      kind: "set",
+      subject: `email:${selected.id}`,
+      field: "classification",
+      value: "related",
+      scopes: [{ kind: "emailState", key: selected.id }],
+    },
+    {
+      channel: "assignment",
+      kind: "set",
+      subject: `email:${selected.id}`,
+      field: "classificationReason",
+      value: "Synthetic later member decision",
+      scopes: [{ kind: "emailState", key: selected.id }],
+    },
+  ]);
+  await reconcileNow(ctx.db, [{ kind: "emailState", key: selected.id }]);
+  await decide(ctx.db, ctx.actor, [
+    {
+      channel: "assignment",
+      kind: "none",
+      subject: `email:${frozen.id}`,
+      field: "classification",
+      scopes: [{ kind: "emailState", key: frozen.id }],
+    },
+    {
+      channel: "assignment",
+      kind: "none",
+      subject: `email:${frozen.id}`,
+      field: "classificationStage",
+      scopes: [{ kind: "emailState", key: frozen.id }],
+    },
+  ]);
+  await reconcileNow(ctx.db, [{ kind: "emailState", key: frozen.id }]);
   for (const owner of owners) {
     const ownerRef = { userId: ctx.actor.userId, ledgerPartyId: party.id };
     const read = await loadMailDiscoveryRead(

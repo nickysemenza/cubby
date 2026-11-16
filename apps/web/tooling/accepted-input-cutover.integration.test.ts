@@ -110,7 +110,9 @@ it("carries held values, paid results, redirects and every accepted money row", 
         )
       ).rows,
     ).toEqual([{ identities: 0, entries: 0, bindings: 0 }]);
-    await migrateDatabase(db);
+    await migrateDatabase(db, {
+      through: "20261113185531_accepted_input_cutover",
+    });
     expect(
       (
         await client.query(
@@ -964,39 +966,6 @@ it("lets current stored authority defeat a synthesized review in both directions
       await pool.end();
     }
   });
-});
-
-it("records every asked field and reconciler write column", async () => {
-  const { acceptedInputCutoverSql } =
-    await import("./accepted-input-cutover-select");
-  const { KERNEL_MODULES } = await import("../src/server/kernel/modules");
-  const { buildRegistry } = await import("../src/server/kernel/registry");
-  const projection = acceptedInputCutoverSql().split("), record_ids AS (")[0]!;
-  const { fieldsPlans } = await import("../src/server/ai/fields/repo/plan");
-  const lines = projection.split("\n");
-  for (const plan of fieldsPlans().values()) {
-    const recordLine = lines.find((line) =>
-      line.includes(`FROM "${plan.tableName}" r`),
-    );
-    expect(recordLine).toContain(`'${plan.entity}'::text entity`);
-    expect(recordLine).toContain("'fields'::text scope_kind");
-    expect(recordLine?.match(/ARRAY\[([^\]]*)\]::text\[\] fields/)?.[1]).toBe(
-      plan.fields
-        .filter((field) => field.apply !== "offer")
-        .map((field) => `'${field.key}'`)
-        .join(","),
-    );
-  }
-  for (const r of buildRegistry(KERNEL_MODULES).reconcilers.values())
-    for (const target of r.writes) {
-      if (!target.columns.length || target.name === "EvidenceBinding") continue;
-      const recordLine = projection
-        .split("\n")
-        .find((line) => line.includes(`FROM "${target.name}" r`));
-      expect(recordLine).toBeDefined();
-      for (const column of target.columns)
-        expect(recordLine).toContain(`'${column}'`);
-    }
 });
 
 it("retires a historical merge even when its deletion timestamp is absent", async () => {

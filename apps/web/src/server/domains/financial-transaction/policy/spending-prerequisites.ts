@@ -81,7 +81,7 @@ export function spendingBlocker(input: {
 }
 
 /** Standard card fee descriptions identify the issuer, not a merchant. */
-export function issuerCardFee(facts: SpendingPrerequisiteFacts) {
+function issuerCardFee(facts: SpendingPrerequisiteFacts) {
   if (
     facts.account.identity.kind !== "credit_card" ||
     facts.source.kind !== "fee"

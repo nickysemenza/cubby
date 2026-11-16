@@ -177,6 +177,14 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "ownership",
     reason: "a step-ledger Run's own ordered steps",
   },
+  "SourceOrderObservation.ledgerPartyId": {
+    classification: "ownership",
+    reason: "the source evidence belongs to its capturing ledger party",
+  },
+  "SourceOrderObservation.emailId": {
+    classification: "metadata",
+    reason: "retains the source Email identity for captured order evidence",
+  },
   "SourceOrderObservation.purchaseId": {
     classification: "metadata",
     reason:

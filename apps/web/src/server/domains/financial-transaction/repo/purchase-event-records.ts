@@ -39,6 +39,20 @@ export const purchaseRecords = writes(
         ids.map((id) => parseEntityId("purchase", id)),
         systemActor(),
       )),
+    merge: async (db, { keepId, loserIds, actor }) => {
+      const { withTransaction } = await import("~/server/db/helpers");
+      const { foldChargeContents } =
+        await import("~/server/domains/purchase/repo/purchase");
+      await withTransaction(db, async (tx) => {
+        for (const id of loserIds)
+          await foldChargeContents(
+            tx,
+            parseEntityId("purchase", id),
+            parseEntityId("purchase", keepId),
+            actor,
+          );
+      });
+    },
   },
 );
 

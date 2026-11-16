@@ -58,6 +58,13 @@ export const purchaseExpenses = defineReadIndex(expense, {
   where: (values) =>
     sql`${expense.purchaseId} = ANY(${columnArrayParam(values)})`,
 });
+export const unlinkedProductExpenses = defineReadIndex(expense, {
+  name: "expense.unlinkedProduct",
+  values: (row) =>
+    !row.deletedAt && !row.purchaseId && row.productId ? [row.productId] : [],
+  where: (values) =>
+    sql`${expense.productId} = ANY(${columnArrayParam(values)}) AND ${expense.purchaseId} IS NULL AND ${expense.deletedAt} IS NULL`,
+});
 export const expenseAttributions = defineReadIndex(expenseAttribution, {
   name: "attribution.expense",
   values: (row) => [row.expenseId],
@@ -79,9 +86,15 @@ export const amountPayments = defineReadIndex(purchasePaymentEvidence, {
 });
 export const purchasePayments = defineReadIndex(purchasePaymentEvidence, {
   name: "payment.purchase",
-  values: (row) => [row.purchaseId],
+  values: (row) => (row.purchaseId ? [row.purchaseId] : []),
   where: (values) =>
     sql`${purchasePaymentEvidence.purchaseId} = ANY(${columnArrayParam(values)})`,
+});
+export const orderPayments = defineReadIndex(purchasePaymentEvidence, {
+  name: "payment.orderObservation",
+  values: (row) => (row.orderObservationId ? [row.orderObservationId] : []),
+  where: (values) =>
+    sql`${purchasePaymentEvidence.orderObservationId} = ANY(${columnArrayParam(values)})`,
 });
 export const vendorNames = defineReadIndex(vendor, {
   name: "vendor.name",

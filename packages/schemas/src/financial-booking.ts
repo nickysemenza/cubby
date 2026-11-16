@@ -23,8 +23,6 @@ import { plainDate } from "./project";
 import { ledgerAttributions } from "./ledger-party-fields";
 import { publicFieldResolutionSchema } from "./field-resolution";
 
-export const FINANCIAL_SPENDING_POLICY = "2026-10-29.2";
-
 /** Advice never bypasses planning; explicit commands and queue policy authorize execution. */
 export const financialSpendingAdvice = z.object({
   /** High-confidence classification of an escrow disbursement on a loan. */
@@ -68,45 +66,6 @@ export const financialSpendingRequest = z.object({
   categoryHistoryReviewed: z.boolean().optional(),
   rejectedPurchaseIds: z.array(purchaseShortcode).default([]),
 });
-const spendingCandidate = z.object({
-  purchaseId: purchaseShortcode,
-  name: z.string(),
-  strength: z.enum(["strong", "weak", "context"]),
-});
-const spendingPlanBasis = z.object({
-  request: financialSpendingRequest,
-  snapshot: z.string(),
-  candidates: z.array(spendingCandidate),
-});
-export const financialSpendingPlan = z.discriminatedUnion("status", [
-  spendingPlanBasis.extend({
-    status: z.literal("deferred"),
-    reason: z.string(),
-  }),
-  spendingPlanBasis.extend({
-    status: z.literal("review_required"),
-    reason: z.string(),
-  }),
-  spendingPlanBasis.extend({
-    status: z.literal("already_booked"),
-    purchaseIds: z.array(purchaseShortcode),
-  }),
-  spendingPlanBasis.extend({
-    status: z.literal("ready"),
-    effect: z.enum(["create_aggregate", "link_existing", "settle_existing"]),
-    purchaserId: ledgerPartyShortcode.nullable(),
-    /** Retained proposals without purchaser proof remain readable but cannot commit or replay. */
-    purchaserSnapshot: z.string().optional(),
-    vendorId: vendorShortcode.nullable(),
-    vendorName: z.string(),
-    spendingCategoryId: spendingCategoryShortcode.nullable(),
-    categoryOverride: spendingCategoryShortcode.nullable().optional(),
-    effectiveCategory: publicFieldResolutionSchema.optional(),
-    purchaseId: purchaseShortcode.nullable(),
-  }),
-]);
-export type FinancialSpendingPlan = z.infer<typeof financialSpendingPlan>;
-
 export const financialBookingInput = z.object({
   confirmsMerchant: z
     .boolean()
@@ -182,18 +141,6 @@ export const financialConvergenceResult = z.discriminatedUnion("status", [
 export type FinancialConvergenceInput = z.infer<
   typeof financialConvergenceInput
 >;
-
-const financialWorkPreview = z.object({
-  transactionId: financialTransactionShortcode,
-  canApplyAutomatically: z.boolean(),
-  blocker: z.string().nullable(),
-  purchaseId: purchaseShortcode.nullable(),
-  vendorId: vendorShortcode.nullable(),
-  effect: z
-    .enum(["link_existing", "create_aggregate", "already_recorded"])
-    .nullable(),
-});
-export type FinancialWorkPreview = z.infer<typeof financialWorkPreview>;
 
 export const financialSettlementAllocationInput = z.strictObject({
   transactionId: financialTransactionShortcode,

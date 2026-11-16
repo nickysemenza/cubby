@@ -10,6 +10,7 @@ export type Line = {
   projectId: string | null;
   productQuantity: number | null;
   attribution: string;
+  effectiveAttribution: string;
   /** Booking facts a retired line hands to its survivor when the survivor has none. */
   carried: Record<CarriedField, string | null>;
   economicRole: string;
@@ -46,7 +47,8 @@ function pairOne(
     !keeps(line.productId, to.productId) ||
     !keeps(line.projectId, to.projectId) ||
     !keeps(line.productQuantity, to.productQuantity) ||
-    (line.attribution !== "[]" && line.attribution !== to.attribution)
+    (line.attribution !== "[]" && line.attribution !== to.attribution) ||
+    line.effectiveAttribution !== to.effectiveAttribution
   )
     return {
       error: `The duplicate line "${line.title}" carries a Product, Project, quantity or attribution the survivor's line does not.`,

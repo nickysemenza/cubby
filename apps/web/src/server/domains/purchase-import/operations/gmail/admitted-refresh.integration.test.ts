@@ -124,6 +124,9 @@ describe("classification-only refresh of admitted Email", () => {
       const relevance = vi.fn(async () => ({
         classification: "related" as const,
       }));
+      const observations = await getDb(ctx.db)
+        .select()
+        .from(emailClassificationObservation);
       const outcome = await ingestGmailMessages(ctx.db, provider(getMessage), {
         ledgerPartyId: party.id,
         mailboxId,
@@ -153,7 +156,7 @@ describe("classification-only refresh of admitted Email", () => {
       });
       expect(
         await getDb(ctx.db).select().from(emailClassificationObservation),
-      ).toEqual([]);
+      ).toEqual(observations);
     },
   );
 });

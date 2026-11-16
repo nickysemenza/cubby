@@ -5,8 +5,10 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
-import { expense, importSourceOrder, purchase } from "~/server/db/schema";
+import { expense, purchase } from "~/server/db/schema";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { acceptedOrders } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import {
   findOrCreatePurchase,
   renameChargeOrderId,
@@ -126,6 +128,30 @@ describe("one order from two source documents", () => {
       { shortcode: first.committed.items[0]?.purchaseId, orderId: "abc-123" },
     ]);
     expect(await liveCents()).toBe(1250);
+    const weak = await memberImport(ctx.db, ctx.actor, {
+      key: "missing-id",
+      defaultTrade: "other",
+      orders: [
+        {
+          stableOrderId: "missing-id",
+          vendorId: vendor.shortcode,
+          targetPurchaseId: first.committed.items[0]!.purchaseId!,
+          source: {
+            kind: "receipt_photo",
+            externalKey: "synthetic:missing-id",
+            checksum: checksum("e"),
+          },
+          extraction: { status: "ready", candidate: candidate(null) },
+        },
+      ],
+    });
+    expect(weak.committed.items[0]?.purchaseId).toBe(
+      first.committed.items[0]?.purchaseId,
+    );
+    expect(await livePurchases()).toEqual([
+      { shortcode: first.committed.items[0]?.purchaseId, orderId: "abc-123" },
+    ]);
+    expect(await liveCents()).toBe(1250);
   });
 
   it("refuses a second Purchase beside a same-thread Purchase and imports into the reviewed target", async () => {
@@ -209,6 +235,37 @@ describe("one order from two source documents", () => {
     if (!survivor) throw new Error("The receipt must commit");
     expect(duplicate).not.toBe(survivor);
     expect(await liveCents()).toBe(2500);
+    const [duplicateRow] = await getDb(ctx.db)
+      .select({ id: purchase.id })
+      .from(purchase)
+      .where(eq(purchase.shortcode, duplicate));
+    const [duplicateLine] = await getDb(ctx.db)
+      .select({ id: expense.id, cost: expense.cost })
+      .from(expense)
+      .where(eq(expense.purchaseId, duplicateRow!.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { cost: duplicateLine!.cost! + 1n },
+      eq(expense.id, duplicateLine!.id),
+      ctx.actor,
+    );
+    const changed = await getDb(ctx.db).select().from(expense);
+    await expect(
+      convergeDuplicateSourceOrder(
+        ctx.db,
+        { survivorPurchaseId: survivor, duplicatePurchaseId: duplicate },
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/same amount/);
+    expect(await getDb(ctx.db).select().from(expense)).toEqual(changed);
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { cost: duplicateLine!.cost },
+      eq(expense.id, duplicateLine!.id),
+      ctx.actor,
+    );
 
     const converged = await convergeDuplicateSourceOrder(
       ctx.db,
@@ -231,8 +288,8 @@ describe("one order from two source documents", () => {
       .where(eq(purchase.shortcode, survivor));
     expect(
       await getDb(ctx.db)
-        .select({ purchaseId: importSourceOrder.purchaseId })
-        .from(importSourceOrder),
+        .select({ purchaseId: acceptedOrders.purchaseId })
+        .from(acceptedOrders),
     ).toEqual([{ purchaseId: kept?.id }, { purchaseId: kept?.id }]);
 
     const replay = await importOne("notice-replay", notice, null);

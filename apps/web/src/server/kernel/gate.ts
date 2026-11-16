@@ -117,10 +117,10 @@ async function enterGate(
  * kernel writes, before any of its row locks.
  */
 export async function enterHouseholdGate(
-  db: Database,
+  db: Database | Q,
   mode: WriteMode = "member",
 ): Promise<void> {
-  await enterGate(repositoryQueries(db), mode);
+  await enterGate("execute" in db ? db : repositoryQueries(db), mode);
 }
 
 /**

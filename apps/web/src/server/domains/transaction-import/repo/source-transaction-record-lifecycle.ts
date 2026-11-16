@@ -1,5 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { SourceTransactionRecordId } from "@cubby/schemas/identifiers";
+import { decisionChannel, decisionKind } from "@cubby/schemas/kernel/stage";
 import { and, eq, inArray } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
@@ -8,9 +9,9 @@ import { isTransaction, unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { uuidArrayParam } from "~/server/db/helpers/query";
 import { sourceOccurrence, sourceTransactionRecord } from "~/server/db/schema";
-import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { tombstoneEntityIdentities } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { createAppError } from "~/server/errors/app-error";
+import { enterHouseholdGate } from "~/server/kernel/gate";
 
 import { auditEvidenceRows } from "./intake-audit";
 
@@ -34,9 +35,13 @@ export async function assertSourceTransactionRecordDeletionAllowed(
           AND EXISTS (SELECT 1 FROM "SourceTransactionRecord" observation
           WHERE observation."occurrenceId" = owner.id AND observation.id = ANY(${uuidArrayParam(ids)}))))
       UNION ALL
-      SELECT 1 FROM "SourceObservationAnnotation" annotation
-      JOIN "SourceTransactionRecord" predecessor ON predecessor.id = annotation."observationId"
-      WHERE annotation."supersededByObservationId" = ANY(${uuidArrayParam(ids)})
+      SELECT 1 FROM (
+        SELECT DISTINCT ON (subject,slot) subject,field,value,kind FROM "Decision"
+        WHERE channel=${decisionChannel.enum.assignment} AND field IN ('supersededByObservationId','supersededByRowId','currentObservationId')
+        ORDER BY subject,slot,at DESC,id DESC
+      ) choice JOIN "SourceTransactionRecord" predecessor ON choice.subject='sourceObservation:' || predecessor.id
+        OR choice.subject='bank:' || predecessor."occurrenceId"
+      WHERE choice.kind=${decisionKind.enum.set} AND choice.value #>> '{}' = ANY(${uuidArrayParam(ids)}::text[])
         AND predecessor.id <> ALL(${uuidArrayParam(ids)}) AND ${notDeleted("predecessor")}
       UNION ALL
       -- Historical bindings remain evidence blockers; they never choose a current owner.
@@ -68,26 +73,14 @@ export async function lockSourceObservationRemoval(
     })
     .from(sourceTransactionRecord)
     .where(inArray(sourceTransactionRecord.id, [...ids]));
-  await lockFinancialEvidenceKeys(
-    tx,
-    "source",
-    observations.map((row) => row.source),
-  );
+  await enterHouseholdGate(tx);
   const ownerIds = observations.map((row) => row.occurrenceId);
   if (!ownerIds.length) return;
   const before = await db
     .select()
     .from(sourceOccurrence)
     .where(inArray(sourceOccurrence.id, ownerIds));
-  await lockFinancialEvidenceKeys(
-    tx,
-    "reviewed-booking",
-    before.flatMap((owner) =>
-      owner.acceptedTransactionId
-        ? [`transaction:${owner.acceptedTransactionId}`]
-        : [],
-    ),
-  );
+  await enterHouseholdGate(tx);
   const locked = await db
     .select()
     .from(sourceOccurrence)

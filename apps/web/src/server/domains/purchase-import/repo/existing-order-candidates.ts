@@ -30,11 +30,11 @@ import {
   email as emailTable,
   expense,
   financialTransactionAllocation,
-  importSourceOrder,
   purchase,
   vendorAccount,
 } from "~/server/db/schema";
 import { emailPurchaseAssociationsSql } from "~/server/domains/email/repo/email-sql";
+import { acceptedOrders } from "~/server/domains/purchase-import/repo/accepted-order-read";
 
 /** Most existing-order candidates a claim shows of each kind. */
 export const EXISTING_ORDER_CANDIDATES_MAX = 5;
@@ -179,9 +179,9 @@ export async function readExistingOrderCandidates(
               // Accepted import sources already itemize; only a bare booking qualifies.
               notExists(
                 database
-                  .select({ id: importSourceOrder.id })
-                  .from(importSourceOrder)
-                  .where(eq(importSourceOrder.purchaseId, purchase.id)),
+                  .select({ id: acceptedOrders.id })
+                  .from(acceptedOrders)
+                  .where(eq(acceptedOrders.purchaseId, purchase.id)),
               ),
               exists(
                 database

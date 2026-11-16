@@ -6,35 +6,21 @@ import {
   type FinancialBookingPreview,
 } from "@cubby/schemas/financial-booking";
 import { purchaseSettlementKinds } from "@cubby/schemas/financial-transaction";
-import {
-  type FinancialTransactionId,
-  parseShortcodeFor,
-  type VendorId,
-} from "@cubby/schemas/identifiers";
-import { expenseCreateInput } from "@cubby/schemas/project";
-import { purchaseCreateInput } from "@cubby/schemas/purchase";
+import { parseShortcodeFor, type VendorId } from "@cubby/schemas/identifiers";
 import {
   cents,
   moneyToMinor,
   minorToMoney,
   nullableMinorToMoney,
-  type ShortcodeFor,
 } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
-import { groupBy, uniq } from "es-toolkit";
+import { groupBy, uniq, isEqual } from "es-toolkit";
 
 import type { Database } from "~/server/db";
-import type { DrizzleTransaction } from "~/server/db";
 import { minorToDollarsSql } from "~/server/db/computed/money";
-import {
-  getDb,
-  notDeleted,
-  unwrapDb,
-  withHouseholdWrite,
-  databaseForTransaction,
-} from "~/server/db/helpers";
+import { getDb, notDeleted, unwrapDb } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { requestedRows } from "~/server/db/helpers/requested";
 import {
@@ -48,7 +34,6 @@ import {
   purchase,
   spendingCategory,
 } from "~/server/db/schema";
-import { createExpenses } from "~/server/domains/expense/repo/crud";
 import { readExpenseAttributionParties } from "~/server/domains/expense/repo/expense-attribution";
 import {
   expenseSpendingCategoryResolutionSql,
@@ -64,25 +49,17 @@ import {
 import { loadAccountPurchaserProofs } from "~/server/domains/financial-account/repo/purchaser";
 import { bookingAction as decideBookingAction } from "~/server/domains/financial-transaction/policy/booking-action";
 import { digestValue } from "~/server/domains/financial-transaction/policy/booking-fingerprint";
-import { statementBookingRows } from "~/server/domains/financial-transaction/policy/booking-rows";
 import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
-import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
-import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import type { FinancialTransactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
-import { lockLedgerPartiesForReference } from "~/server/domains/ledger-party/repo/ledger-party-reference";
 import { unpricedForeignExpenseSql } from "~/server/domains/purchase-import/repo/writer-policy";
-import { createPurchases } from "~/server/domains/purchase/repo/purchase";
 import { merchantVendorInferenceFor } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import { resolveNames } from "~/server/entity-kernel/resolve";
 import { constraintViolation } from "~/server/errors/app-error";
-import { recordChange } from "~/server/generic/changes/repo/change";
 import {
   resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
-
-import { allocateFinancialBookings } from "./financial-transaction";
 
 type BookingProjection = Partial<
   Pick<FinancialTransactionDollars, "amount" | "status" | "postedDate">
@@ -163,7 +140,7 @@ async function resolveOptional<
   return codes.map((code) => (code ? ids[index++]! : null));
 }
 
-export async function bookingGraph(
+async function bookingGraph(
   db: Database,
   purchaseId: typeof purchase.$inferSelect.id | null,
 ) {
@@ -189,7 +166,7 @@ const dollarJoinedExpense = <
 });
 
 /** Read-only page preparation; authoritative booking still loads its current graph. */
-export async function bookingGraphs(
+async function bookingGraphs(
   db: Database,
   purchaseIds: readonly (typeof purchase.$inferSelect.id)[],
 ) {
@@ -485,7 +462,7 @@ async function previewFinancialBookings(
  * so the preview reuses them instead of reading again. A missing entry falls
  * back to the read.
  */
-export type KnownBookingFacts = {
+type KnownBookingFacts = {
   transactions: ReadonlyMap<string, FinancialTransactionDollars>;
   vendorIds: ReadonlyMap<string, VendorId>;
   /** Live categories by code and by id. */
@@ -926,18 +903,85 @@ async function bookingClassificationRevisions(
   return Promise.all(rows.map((row) => sha256Hex(JSON.stringify(row.policy))));
 }
 
-/** Already-booked reviews replay; the rest return null. */
-async function replayBookings(
+export async function loadFinancialBookingLineage(
   db: Database,
-  reviews: readonly FinancialBookingPreview[],
-  rows: Awaited<ReturnType<typeof transactionsForBooking>>,
+  transactionCode: FinancialBookingInput["transactionId"],
 ) {
-  const results = [];
-  for (const [index, review] of reviews.entries())
-    results.push(await replayBooking(db, review, rows[index]!));
-  return results;
+  return (await loadFinancialBookingLineages(db, [transactionCode])).get(
+    transactionCode,
+  )!;
 }
 
+/** Each transaction's booked Expense lineage, read in three statements. */
+async function loadFinancialBookingLineages(
+  db: Database,
+  transactionCodes: readonly FinancialBookingInput["transactionId"][],
+) {
+  const codes = uniq(transactionCodes);
+  const lines = await getDb(db)
+    .select()
+    .from(expense)
+    .where(
+      and(inArray(expense.bookingTransactionCode, codes), notDeleted(expense)),
+    )
+    .orderBy(expense.id)
+    .then((rows) => rows.map(dollarExpense));
+  const attributions = await getDb(db)
+    .select()
+    .from(expenseAttribution)
+    .innerJoin(expense, eq(expense.id, expenseAttribution.expenseId))
+    .where(
+      and(
+        inArray(expense.bookingTransactionCode, codes),
+        notDeleted(expense),
+        notDeleted(expenseAttribution),
+      ),
+    )
+    .orderBy(expenseAttribution.id)
+    .then((rows) => rows.map(dollarJoinedExpense));
+  const sourceClaims = await getDb(db)
+    .select()
+    .from(ledgerSourceClaim)
+    .innerJoin(expense, eq(expense.id, ledgerSourceClaim.expenseId))
+    .where(
+      and(
+        inArray(expense.bookingTransactionCode, codes),
+        notDeleted(expense),
+        notDeleted(ledgerSourceClaim),
+      ),
+    )
+    .orderBy(ledgerSourceClaim.id)
+    .then((rows) => rows.map(dollarJoinedExpense));
+  return new Map(
+    codes.map((code) => [
+      code,
+      {
+        lines: lines.filter((line) => line.bookingTransactionCode === code),
+        attributions: attributions.filter(
+          (row) => row.Expense.bookingTransactionCode === code,
+        ),
+        sourceClaims: sourceClaims
+          .filter((row) => row.Expense.bookingTransactionCode === code)
+          .map((row) => ({
+            ...row,
+            // Preserve predecessor fingerprint key order and dollar values; storage bigint never enters JSON.
+            LedgerSourceClaim: Object.fromEntries(
+              Object.entries(row.LedgerSourceClaim).map(([key, value]) =>
+                key === "targetAmountMinor"
+                  ? [
+                      "targetAmountAtClaim",
+                      minorToMoney(row.LedgerSourceClaim.targetAmountMinor),
+                    ]
+                  : [key, value],
+              ),
+            ),
+          })),
+      },
+    ]),
+  );
+}
+
+/** A reviewed booking records choices; the event owner applies the money plan. */
 async function replayBooking(
   db: Database,
   review: FinancialBookingPreview,
@@ -1036,402 +1080,137 @@ export async function commitFinancialBooking(
   review: FinancialBookingPreview,
   actor: ActorContext,
 ) {
-  const [saved] = await withHouseholdWrite(db, (tx) =>
-    commitFinancialBookings(tx, [review], actor),
-  );
-  return saved!;
-}
-
-type FinancialBookingResult = {
-  purchaseId: ShortcodeFor<"purchase">;
-  expenseId: ShortcodeFor<"expense"> | null;
-  replayed: boolean;
-};
-
-/**
- * Commit reviewed bookings inside the caller's snapshot write. Replays are
- * read first; the remaining bookings take their source and party locks
- * together, are previewed again under them unless `current` says the caller
- * previewed them in this transaction after the same source locks, and then
- * write their Purchases, Expenses, allocations and fingerprints as one set.
- */
-function bookingRowIntents(review: FinancialBookingPreview) {
-  return statementBookingRows({
-    charge: {
-      transactionId: review.transactionId,
-      amountMinor: moneyToMinor(review.amount),
-      date: review.date,
-      name: review.name,
-    },
-    purchaseId: review.purchaseId,
-    purchaserId: review.purchaserId,
-    vendorId: review.vendorId,
-    categoryOverride: review.categoryOverride,
-    economicRole: review.economicRole,
-    costType: review.costType,
-    trade: review.trade,
-    beneficiaries: review.beneficiaries,
-    confirmsMerchant: review.confirmsMerchant,
-    remainingBookedMinor: moneyToMinor(review.remainingBookedAmount),
-  });
-}
-
-function bookingExpenseWire(
-  intent: NonNullable<ReturnType<typeof statementBookingRows>["expense"]>,
-  purchaseId: string | null | undefined,
-) {
-  const {
-    costMinor,
-    attributions,
-    beneficiariesSpecified,
-    bookingTransactionCode: _bookingTransactionCode,
-    ...fields
-  } = intent;
-  return expenseCreateInput.parse({
-    ...fields,
-    cost: minorToMoney(costMinor),
-    purchaseId,
-    ...(beneficiariesSpecified
-      ? {
-          beneficiaries: attributions.map(({ partyId, weight }) => ({
-            partyId,
-            weight,
-          })),
-        }
-      : {}),
-  });
-}
-
-async function commitFinancialBookings(
-  tx: DrizzleTransaction,
-  reviews: readonly FinancialBookingPreview[],
-  actor: ActorContext,
-  current = false,
-  /** The preview's rows when `current`: same snapshot, same order. */
-  previewed?: Awaited<ReturnType<typeof transactionsForBooking>>,
-): Promise<FinancialBookingResult[]> {
-  if (!reviews.length) return [];
-  if (
-    new Set(reviews.map((review) => review.transactionId)).size !==
-    reviews.length
-  )
-    throw new Error("One booking batch names a transaction twice");
-  const txDb = databaseForTransaction(tx);
-  const rows = previewed ?? (await transactionsForBooking(txDb, reviews));
-  const results: (FinancialBookingResult | null)[] = await replayBookings(
-    txDb,
-    reviews,
-    rows,
-  );
-  const pending = reviews.filter((_, index) => !results[index]);
-  const pendingRows = rows.filter((_, index) => !results[index]);
-  const settled = () =>
-    results.map((result) => {
-      if (!result) throw new Error("A booking in the batch has no result");
-      return result;
-    });
-  if (!pending.length) return settled();
-  if (!current)
-    await lockFinancialTransactionSources(
-      tx,
-      pending.map((review) => review.transactionId),
+  const { householdWrite, decide, reconcileNow } =
+    await import("~/server/kernel/api");
+  return householdWrite(db, async (database) => {
+    const id = await resolveOrThrow(
+      database,
+      "financialTransaction",
+      review.transactionId,
     );
-  await lockLedgerPartiesForReference(
-    tx,
-    pending.flatMap((review) => [
-      ...(review.purchaserId ? [review.purchaserId] : []),
-      ...(review.beneficiaries?.flatMap((share) =>
-        share.partyId ? [share.partyId] : [],
-      ) ?? []),
-    ]),
-  );
-  const fresh = current
-    ? pending
-    : await previewFinancialBookings(
-        txDb,
-        pending.map((review) => ({
+    const scope = { kind: "purchaseEvent", key: id };
+    const { decision } = await import("~/server/db/kernel-schema");
+    const [held] = await getDb(database)
+      .select()
+      .from(decision)
+      .where(
+        and(
+          eq(decision.subject, `purchaseEvent:${id}`),
+          eq(decision.field, "bookingReview"),
+        ),
+      )
+      .orderBy(sql`${decision.at} DESC`)
+      .limit(1);
+    const replayed = isEqual(held?.value, review);
+    if (replayed) {
+      const [row] = await transactionsForBooking(database, [review]);
+      const result = await replayBooking(database, review, row!);
+      if (!result)
+        return constraintViolation("The approved booking receipt is missing.");
+      return result;
+    }
+    if (!replayed) {
+      const fresh = await previewFinancialBooking(database, {
+        ...review,
+        spendingCategoryId: review.categoryOverride,
+      });
+      if (fresh.snapshot !== review.snapshot)
+        return constraintViolation(
+          "Booking changed after review; preview it again",
+        );
+      const { jsonSnapshot } = await import("~/server/lib/canonical-json");
+      const choices = Object.entries({
+        ...financialBookingInput.parse({
           ...review,
           spendingCategoryId: review.categoryOverride,
-        })),
-      );
-  for (const [index, review] of pending.entries())
-    if (
-      JSON.stringify(fresh[index]) !==
-      JSON.stringify(financialBookingPreview.parse(review))
-    )
-      return constraintViolation(
-        "Spending changed after this review. Preview the booking again.",
-      );
-  const intents = fresh.map(bookingRowIntents);
-  const bare = intents.flatMap((intent, index) =>
-    intent.purchaseReference.kind === "existing" ? [] : [index],
-  );
-  const purchases = await createPurchases(
-    tx,
-    bare.map((index) => purchaseCreateInput.parse(intents[index]!.purchase)),
-    actor,
-  );
-  const targets = intents.map((intent) =>
-    intent.purchaseReference.kind === "existing"
-      ? intent.purchaseReference.purchaseId
-      : null,
-  );
-  for (const [position, index] of bare.entries())
-    targets[index] = parseShortcodeFor(
-      "purchase",
-      purchases[position]!.shortcode,
-    );
-  const aggregates = pending.flatMap((_, index) =>
-    intents[index]!.expense ? [index] : [],
-  );
-  const { created: expenses } = await createExpenses(
-    txDb,
-    aggregates.map((index) =>
-      bookingExpenseWire(intents[index]!.expense!, targets[index]),
-    ),
-    actor,
-  );
-  if (expenses.length)
-    await updatePurchaseEventWhere(
-      txDb,
-      "expense",
-      {
-        bookingTransactionCode: sql`CASE ${expense.id} ${sql.join(
-          expenses.map(
-            (row, position) =>
-              sql`WHEN ${row.id}::uuid THEN ${pending[aggregates[position]!]!.transactionId}`,
-          ),
-          sql` `,
-        )} END`,
-      },
-      inArray(
-        expense.id,
-        expenses.map((row) => row.id),
-      ),
-      actor,
-    );
-  const expenseIds = new Map(
-    aggregates.map((index, position) => [
-      index,
-      parseShortcodeFor("expense", expenses[position]!.shortcode),
-    ]),
-  );
-  const ids = await allocateFinancialBookings(
-    tx,
-    pending.map((_, index) => ({
-      row: pendingRows[index]!,
-      allocation: {
-        purchaseId: targets[index]!,
-        amount: minorToMoney(intents[index]!.allocation.amountMinor),
-        confirmsMerchant: intents[index]!.allocation.confirmsMerchant,
-      },
-    })),
-    actor,
-  );
-  let position = 0;
-  for (const [index, result] of results.entries())
-    if (!result) {
-      const pendingIndex = position++;
-      results[index] = {
-        purchaseId: targets[pendingIndex]!,
-        expenseId: expenseIds.get(pendingIndex) ?? null,
-        replayed: false,
-      };
+        }),
+        book: true,
+        bookingReview: review,
+      })
+        .filter(([field]) => field !== "transactionId")
+        .map(([field, value]) => ({
+          channel: "assignment" as const,
+          kind: value === null ? ("none" as const) : ("set" as const),
+          subject: `purchaseEvent:${id}`,
+          field,
+          value: jsonSnapshot.parse(value),
+          scopes: [scope],
+        }));
+      await decide(database, actor, choices);
     }
-  await writeBookingFingerprints(
-    txDb,
-    pending,
-    ids,
-    await loadFinancialBookingLineages(
-      txDb,
-      pending.map((review) => review.transactionId),
-    ),
-  );
-  return settled();
-}
-
-/** Store each booking's decision and lineage fingerprints and announce the change. */
-async function writeBookingFingerprints(
-  db: Database,
-  reviews: readonly FinancialBookingPreview[],
-  ids: readonly FinancialTransactionId[],
-  lineages: ReadonlyMap<string, object>,
-) {
-  const fingerprints: SQL[] = [];
-  const lineageFingerprints: SQL[] = [];
-  for (const [index, review] of reviews.entries()) {
-    const id = ids[index]!;
-    fingerprints.push(
-      sql`WHEN ${id}::uuid THEN ${await digestValue(financialBookingPreview.parse(review))}`,
-    );
-    lineageFingerprints.push(
-      sql`WHEN ${id}::uuid THEN ${await digestValue(lineages.get(review.transactionId)!)}`,
-    );
-  }
-  await getDb(db)
-    .update(financialTransaction)
-    .set({
-      bookingDecisionFingerprint: sql`CASE ${financialTransaction.id} ${sql.join(fingerprints, sql` `)} END`,
-      bookingExpenseFingerprint: sql`CASE ${financialTransaction.id} ${sql.join(lineageFingerprints, sql` `)} END`,
-    })
-    .where(inArray(financialTransaction.id, [...ids]));
-  await recordChange(db, {
-    kind: "source",
-    categories: ["purchase", "financialTransaction", "expense"],
+    const { acceptedOrders } =
+      await import("~/server/domains/purchase-import/repo/accepted-order-read");
+    const targetId = review.purchaseId
+      ? await resolveOrThrow(database, "purchase", review.purchaseId)
+      : null;
+    const orders = targetId
+      ? await getDb(database)
+          .select()
+          .from(acceptedOrders)
+          .where(eq(acceptedOrders.purchaseId, targetId))
+      : [];
+    if (orders.length)
+      await (
+        await import("~/server/domains/purchase-import/repo/settle-order-evidence")
+      ).settleOrderEvidence(database, orders);
+    const outcomes = await reconcileNow(database, [scope]);
+    const slices = await getDb(database)
+      .select({ purchaseId: purchase.shortcode, expenseId: expense.shortcode })
+      .from(financialTransactionAllocation)
+      .innerJoin(
+        purchase,
+        eq(purchase.id, financialTransactionAllocation.purchaseId),
+      )
+      .leftJoin(
+        expense,
+        and(
+          eq(expense.purchaseId, purchase.id),
+          eq(expense.bookingTransactionCode, review.transactionId),
+          notDeleted(expense),
+        ),
+      )
+      .where(
+        and(
+          eq(financialTransactionAllocation.transactionId, id),
+          notDeleted(financialTransactionAllocation),
+          notDeleted(purchase),
+        ),
+      );
+    if (!slices[0])
+      return constraintViolation(
+        outcomes
+          .flatMap((row) => row.error ?? row.gaps.map((gap) => gap.input))
+          .join("; ") || "Booking is waiting for evidence",
+      );
+    await getDb(database)
+      .update(financialTransaction)
+      .set({
+        bookingDecisionFingerprint: await digestValue(
+          financialBookingPreview.parse(review),
+        ),
+        bookingExpenseFingerprint: await digestValue(
+          await loadFinancialBookingLineage(database, review.transactionId),
+        ),
+      })
+      .where(eq(financialTransaction.id, id));
+    return {
+      purchaseId: parseShortcodeFor("purchase", slices[0].purchaseId),
+      expenseId: slices[0].expenseId
+        ? parseShortcodeFor("expense", slices[0].expenseId)
+        : null,
+      replayed,
+    };
   });
 }
 
-export async function loadFinancialBookingLineage(
-  db: Database,
-  transactionCode: FinancialBookingInput["transactionId"],
-) {
-  return (await loadFinancialBookingLineages(db, [transactionCode])).get(
-    transactionCode,
-  )!;
-}
-
-/** Each transaction's booked Expense lineage, read in three statements. */
-export async function loadFinancialBookingLineages(
-  db: Database,
-  transactionCodes: readonly FinancialBookingInput["transactionId"][],
-) {
-  const codes = uniq(transactionCodes);
-  const lines = await getDb(db)
-    .select()
-    .from(expense)
-    .where(
-      and(inArray(expense.bookingTransactionCode, codes), notDeleted(expense)),
-    )
-    .orderBy(expense.id)
-    .then((rows) => rows.map(dollarExpense));
-  const attributions = await getDb(db)
-    .select()
-    .from(expenseAttribution)
-    .innerJoin(expense, eq(expense.id, expenseAttribution.expenseId))
-    .where(
-      and(
-        inArray(expense.bookingTransactionCode, codes),
-        notDeleted(expense),
-        notDeleted(expenseAttribution),
-      ),
-    )
-    .orderBy(expenseAttribution.id)
-    .then((rows) => rows.map(dollarJoinedExpense));
-  const sourceClaims = await getDb(db)
-    .select()
-    .from(ledgerSourceClaim)
-    .innerJoin(expense, eq(expense.id, ledgerSourceClaim.expenseId))
-    .where(
-      and(
-        inArray(expense.bookingTransactionCode, codes),
-        notDeleted(expense),
-        notDeleted(ledgerSourceClaim),
-      ),
-    )
-    .orderBy(ledgerSourceClaim.id)
-    .then((rows) => rows.map(dollarJoinedExpense));
-  return new Map(
-    codes.map((code) => [
-      code,
-      {
-        lines: lines.filter((line) => line.bookingTransactionCode === code),
-        attributions: attributions.filter(
-          (row) => row.Expense.bookingTransactionCode === code,
-        ),
-        sourceClaims: sourceClaims
-          .filter((row) => row.Expense.bookingTransactionCode === code)
-          .map((row) => ({
-            ...row,
-            // Preserve predecessor fingerprint key order and dollar values; storage bigint never enters JSON.
-            LedgerSourceClaim: Object.fromEntries(
-              Object.entries(row.LedgerSourceClaim).map(([key, value]) =>
-                key === "targetAmountMinor"
-                  ? [
-                      "targetAmountAtClaim",
-                      minorToMoney(row.LedgerSourceClaim.targetAmountMinor),
-                    ]
-                  : [key, value],
-              ),
-            ),
-          })),
-      },
-    ]),
-  );
-}
-
-/**
- * `finance.book_transaction`: preview and commit one booking in a single call.
- * A reimbursement naming neither Purchase nor Vendor books into a new lump
- * Purchase for the Vendor its merchant names exactly (name or alias); an
- * unknown merchant is refused rather than inventing a Vendor.
- */
 export async function bookFinancialTransaction(
   db: Database,
   raw: FinancialBookingInput,
   actor: ActorContext,
 ) {
-  const [saved] = await bookFinancialTransactions(db, [raw], actor);
-  return saved!;
-}
-
-/**
- * Preview and commit bookings together in one snapshot write: the source
- * locks come first, every preview reads the same state, and the writes follow
- * as one set without previewing again.
- *
- * Every preview runs before any write, so the caller must exclude bookings
- * that share state within one batch: bookings that settle or link the same
- * existing Purchase (an earlier booking changes the later preview's capacity
- * and graph) and bookings that need the same not-yet-existing Vendor. The
- * first case refuses the whole batch.
- */
-async function bookFinancialTransactions(
-  db: Database,
-  raws: readonly FinancialBookingInput[],
-  actor: ActorContext,
-  loanEscrowIds: ReadonlySet<string> = new Set(),
-) {
-  if (!raws.length) return [];
-  const purchases = raws.flatMap((raw) =>
-    raw.purchaseId ? [raw.purchaseId] : [],
+  return commitFinancialBooking(
+    db,
+    await previewFinancialBooking(db, raw),
+    actor,
   );
-  if (new Set(purchases).size !== purchases.length)
-    return constraintViolation(
-      "One booking batch names the same Purchase twice; book them separately.",
-    );
-  return withHouseholdWrite(db, async (tx) => {
-    await lockFinancialTransactionSources(
-      tx,
-      raws.map((raw) => raw.transactionId),
-    );
-    return bookLockedFinancialTransactions(tx, raws, actor, loanEscrowIds);
-  });
-}
-
-/**
- * `bookFinancialTransactions` inside the caller's serializable transaction,
- * which already holds every named transaction's source locks.
- */
-export async function bookLockedFinancialTransactions(
-  tx: DrizzleTransaction,
-  raws: readonly FinancialBookingInput[],
-  actor: ActorContext,
-  loanEscrowIds: ReadonlySet<string> = new Set(),
-) {
-  if (!raws.length) return [];
-  const purchases = raws.flatMap((raw) =>
-    raw.purchaseId ? [raw.purchaseId] : [],
-  );
-  if (new Set(purchases).size !== purchases.length)
-    return constraintViolation(
-      "One booking batch names the same Purchase twice; book them separately.",
-    );
-  const { previews, rows } = await prepareBookingPreviews(
-    databaseForTransaction(tx),
-    raws,
-    [],
-    undefined,
-    loanEscrowIds,
-  );
-  return commitFinancialBookings(tx, previews, actor, true, rows);
 }
