@@ -1804,8 +1804,8 @@ load. Expense analytics remove share-scoped filters before preparing scaffold WH
 allocation shares apply them. Location identity and stock Product embeds load brand and category
 summaries only. Project subtree reads load the tree beside household-grouped Expense and Task inputs
 and apply the descendant scope in memory; a shared in-flight tree serves settings and rollups.
-Product matched/mismatched quantity filters use the published Quantity Variance; a missing variance
-has no comparison state, and an edit keeps the previous membership until publication.
+Product matched/mismatched quantity filters use live stock and ledger quantities. Incomparable
+history has no comparison state; Expense, Inventory and Location edits change membership immediately.
 
 Work Problems prune excluded reason declarations before preparing their filter contexts, predicates
 or routing expressions. They project admitted filter values, readiness and related predicates into a materialized facts

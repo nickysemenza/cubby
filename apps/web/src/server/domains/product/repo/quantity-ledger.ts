@@ -85,8 +85,6 @@ const PROJECTED_ACQUIRED = `CASE WHEN bool_or(${serviceProductSqlText("ka.target
 const PROJECTED_EXITED = `CASE WHEN bool_or(${serviceProductSqlText("ka.target")}) THEN 0 ELSE ${unitWeighted('"exitedUnits"')} END`;
 const PROJECTED_EXPECTED = `COALESCE(${PROJECTED_ACQUIRED} - ${PROJECTED_EXITED}, 0)::double precision`;
 const PROJECTED_COMPARABLE_HISTORY = `COALESCE(sum(ko."unknownAcquisitionLines") + sum(ko."unknownExitLines"), 0) = 0 AND COALESCE(${PROJECTED_ACQUIRED} + ${PROJECTED_EXITED}, 0) > 0`;
-const comparableQuantityHistorySql = (productAlias = '"product"') =>
-  `(${kitAncestorCteText(kitSeedForProductAlias(productAlias))} SELECT ${PROJECTED_COMPARABLE_HISTORY} ${QUANTITY_PROJECTION_FROM})`;
 
 /**
  * Correlated scalar for Product root-list sorting and filtering.
@@ -144,15 +142,18 @@ export const onHandUnitsSql = (productAlias = '"product"') =>
                AND ohu_ol."productId" = ${productAlias}."id") ohu_loc)`;
 
 /**
- * Shelf minus ledger. Zero means the two agree; a product with no inventory and
- * no ledger is trivially zero, which is why the *filters* pair this with an
- * "is stocked" predicate rather than treating every untouched product as
- * reconciled.
+ * Shelf minus ledger where known unit history is comparable. Missing or
+ * unquantified ledger history leaves variance unknown; filters also require
+ * stock rather than treating untouched Products as reconciled.
  *
  * includes-installed: inherited from `onHandUnitsSql` — see that doc.
+ * Comparability and expected balance share one kit-ledger projection.
  */
 export const quantityVarianceSql = (productAlias = '"product"') =>
-  `(CASE WHEN ${comparableQuantityHistorySql(productAlias)} THEN ${onHandUnitsSql(productAlias)} - ${expectedQuantitySql(productAlias)} END)`;
+  `(${kitAncestorCteText(kitSeedForProductAlias(productAlias))}
+    SELECT CASE WHEN ${PROJECTED_COMPARABLE_HISTORY}
+      THEN ${onHandUnitsSql(productAlias)} - ${PROJECTED_EXPECTED} END
+    ${QUANTITY_PROJECTION_FROM})`;
 
 const ownershipQuantityEvidenceRow = z.object({
   productId,
