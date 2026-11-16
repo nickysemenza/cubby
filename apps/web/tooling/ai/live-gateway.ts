@@ -290,7 +290,7 @@ export default {
         .parse(JSON.parse(new TextDecoder().decode(body)));
       const orchestration =
         env.READ_FANOUT_MODE === "code-bulk"
-          ? "Use one codemode call containing one tools.mcp__cubby__entity_read resolve query with all eight names. Parse its JSON text and text({fanoutMatches: matches.results.map(row => ({name: row.name, exact: row.exact, candidates: row.candidates.map(candidate => ({id: candidate.id, name: candidate.name}))}))}). Do not print full candidate records. The query inputs above are complete; schema discovery is unnecessary."
+          ? "First load codemode with tool_search (query codemode, limit 1) if it is not offered. Then use one codemode call containing one tools.mcp__cubby__entity_read resolve query with all eight names. Parse its JSON text and text({fanoutMatches: matches.results.map(row => ({name: row.name, exact: row.exact, candidates: row.candidates.map(candidate => ({id: candidate.id, name: candidate.name}))}))}). Do not print full candidate records. The query inputs above are complete; schema discovery is unnecessary."
           : env.READ_FANOUT_MODE === "code"
             ? "Use exactly one codemode call to run these queries with Promise.all via tools.mcp__cubby__entity_read, and text({fanoutMatches: results}) where results contains one {name,matches} object per query. Each nested tool returns JSON text; parse it. The query inputs above are complete; schema discovery is unnecessary."
             : env.READ_FANOUT_MODE === "bulk"

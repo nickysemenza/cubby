@@ -14,7 +14,7 @@ import {
 } from "@cubby/shared/ai/gateway-metadata";
 import { supportedChatModelSchema } from "@cubby/shared/ai/models";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, desc, eq, inArray, or } from "drizzle-orm";
+import { and, count, desc, eq, inArray, or } from "drizzle-orm";
 import { liveReplayBudget } from "tooling/ai/live-replay-budget";
 import { localSecret } from "tooling/local-secret";
 import {
@@ -29,10 +29,17 @@ import { withWorkerdRuntime } from "tooling/workerd-runtime";
 import { afterAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { insertFieldsFixture } from "~/server/ai/fields/fields.fixtures";
 import { user } from "~/server/db/auth.schema";
-import { getDb } from "~/server/db/helpers";
+import { getDb, notDeleted } from "~/server/db/helpers";
 import { kernelPass } from "~/server/db/kernel-schema";
-import { aiUsage, runOperation, run as runTable } from "~/server/db/schema";
+import {
+  aiUsage,
+  expense,
+  product as productTable,
+  runOperation,
+  run as runTable,
+} from "~/server/db/schema";
 import { storedMailOutcome } from "~/server/domains/purchase-import/repo/mail-outcome/outcome";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 
@@ -92,6 +99,8 @@ const replayCases = z
       baseline: mailImportOutcome,
       /** Trusted synthetic benchmark configuration, never derived from Email prose. */
       readFanout: z.array(z.string().min(1)).length(8).optional(),
+      /** Existing catalog identities whose reuse is verified after settlement. */
+      catalogProducts: z.array(z.string().min(1)).min(1).max(50).optional(),
     }),
   )
   .min(1)
@@ -104,6 +113,7 @@ const scriptedReads: ScriptStep[] = [
   call("load-reads", "tool_search", { query: "entity_read", limit: 1 }),
   ...(readCode
     ? [
+        call("load-code", "tool_search", { query: "codemode", limit: 1 }),
         call("read-code-failure", "codemode", {
           code: 'throw new Error("Synthetic script failure")',
         }),
@@ -318,11 +328,28 @@ describe("isolated Mail coordinator replay", () => {
         let admittedAt = caseStartedAt;
         let diagnose = async (): Promise<string[]> => [];
         let fanoutVerified = false;
+        let catalogVerified = false;
+        const catalogProductIds: Array<typeof productTable.$inferSelect.id> =
+          [];
+        let initialProductCount = 0;
         const queueCapture = captureBackgroundQueue();
         try {
           const { party } = await memberImportWorld(ctx.db, ctx.actor, {
             memberName: sample.owner?.name,
           });
+          for (const name of sample.catalogProducts ?? []) {
+            const product = await insertFieldsFixture(ctx.db, "product", {
+              name,
+            });
+            catalogProductIds.push(product.id);
+          }
+          if (catalogProductIds.length) {
+            const [row] = await getDb(ctx.db)
+              .select({ count: count() })
+              .from(productTable)
+              .where(notDeleted(productTable));
+            initialProductCount = row!.count;
+          }
           // Owner evidence is the member's sign-in address (the Gmail profile
           // is unreachable), so it carries the original recipient's address.
           if (sample.owner)
@@ -446,6 +473,35 @@ describe("isolated Mail coordinator replay", () => {
                   })
                   .from(runTable)
                   .where(eq(runTable.id, runId));
+                const catalogDiagnostics: string[] = [];
+                if (catalogProductIds.length) {
+                  const lines = await getDb(ctx.db)
+                    .select({ productId: expense.productId })
+                    .from(expense)
+                    .where(
+                      and(
+                        notDeleted(expense),
+                        eq(expense.lineKind, "principal"),
+                      ),
+                    );
+                  const [products] = await getDb(ctx.db)
+                    .select({ count: count() })
+                    .from(productTable)
+                    .where(notDeleted(productTable));
+                  const existingLinks = catalogProductIds.filter(
+                    (id) =>
+                      lines.filter((line) => line.productId === id).length ===
+                      1,
+                  ).length;
+                  const newProducts = products!.count - initialProductCount;
+                  catalogVerified =
+                    lines.length === catalogProductIds.length &&
+                    existingLinks === catalogProductIds.length &&
+                    newProducts === 0;
+                  catalogDiagnostics.push(
+                    `catalog reuse: ${JSON.stringify({ verified: catalogVerified, expectedProducts: catalogProductIds.length, principalLines: lines.length, existingLinks, newProducts })}`,
+                  );
+                }
                 return {
                   status,
                   failure:
@@ -471,9 +527,12 @@ describe("isolated Mail coordinator replay", () => {
                         DIAGNOSTIC_CHARS,
                       ),
                     ),
-                  diagnostics: await diagnose().catch((error: unknown) => [
-                    `Replay diagnostics unavailable: ${String(error).slice(0, DIAGNOSTIC_CHARS)}`,
-                  ]),
+                  diagnostics: [
+                    ...(await diagnose().catch((error: unknown) => [
+                      `Replay diagnostics unavailable: ${String(error).slice(0, DIAGNOSTIC_CHARS)}`,
+                    ])),
+                    ...catalogDiagnostics,
+                  ],
                   usage: usage.map((row) => ({
                     feature: row.feature,
                     model: row.model,
@@ -917,6 +976,10 @@ describe("isolated Mail coordinator replay", () => {
             );
           }
           expect(observedOutcome).not.toBeNull();
+          expect(
+            !sample.catalogProducts || catalogVerified,
+            "Catalog-backed imports must reuse existing Products without duplicates",
+          ).toBe(true);
           expect(
             !sample.readFanout || fanoutVerified,
             "The live model must complete the configured independent read workload",

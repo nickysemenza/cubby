@@ -691,7 +691,8 @@ only beside a model peer; production configuration has no enabling variable.
 Photo inventory and external MCP retain their ordinary tools.
 
 The experiment uses Pi's `createCodemodeExtension` and its durable nested-tool
-replay. Its prompt catalog inlines no declarations: visible ordinary tools
+replay. Code Mode itself is deferred through `tool_search`; its prompt section
+is absent until the tool is loaded. Its prompt catalog inlines no declarations: visible ordinary tools
 already carry their schemas, and deferred reads remain discoverable on demand.
 Wrappers restrict the prompt
 catalog, script discovery and dispatch to `entity_read` and
@@ -752,6 +753,12 @@ The transcript verifies every requested name and one successful nested read
 for the code variant.
 Compare Code Mode against this bulk baseline before attributing a benefit to
 scripting.
+
+`mail-import-catalog-comparison.json` adds existing Products to the same order.
+The replay verifies that each principal line reuses its expected catalog
+identity and that no additional Product is created. This exercises filtering
+real candidate projections rather than empty lookup results. Benchmark scripts
+return names, exact-match status and candidate identity only.
 
 `eval:mail-replay:stdin` replays the synthetic originals in
 `apps/web/tooling/ai/mail-import-comparison.json` through the current writers;
