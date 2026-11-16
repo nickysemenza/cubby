@@ -72,9 +72,11 @@ export async function createPurchaseEventRecords<K extends PurchaseEventTable>(
   entity: K,
   inputs: readonly Omit<InferInsertModel<Table<K>>, "id" | "shortcode">[],
   actor: ActorContext = systemActor(),
-  options: { basis?: "manual" | "decision" } = {},
+  options: { basis?: "manual" | "decision"; supplemental?: boolean } = {},
 ): Promise<Saved<K>[]> {
   if (!inputs.length) return [];
+  if (options.supplemental && entity !== "expense")
+    throw new Error("Only Expenses can supplement source itemization");
   const { householdWrite } = await import("~/server/kernel/api");
   return householdWrite(
     isTransaction(db) ? databaseForTransaction(db) : db,
@@ -116,7 +118,7 @@ export async function createPurchaseEventRecords<K extends PurchaseEventTable>(
                 ? parents.find((parent) => parent.entityId === values.expenseId)
                     ?.scopeKey
                 : null) ?? id,
-          naturalKey: `manual:${id}`,
+          naturalKey: `${options.supplemental ? "supplemental" : "manual"}:${id}`,
           values: jsonValues(values),
         };
       });
@@ -421,7 +423,7 @@ export async function createPurchaseEventRecord<K extends PurchaseEventTable>(
   entity: K,
   values: Omit<InferInsertModel<Table<K>>, "id" | "shortcode">,
   actor: ActorContext = systemActor(),
-  options: { basis?: "manual" | "decision" } = {},
+  options: { basis?: "manual" | "decision"; supplemental?: boolean } = {},
 ): Promise<Saved<K>> {
   const [row] = await createPurchaseEventRecords(
     db,

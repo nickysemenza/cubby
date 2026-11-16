@@ -897,9 +897,11 @@ still owns that original's evidence.
 Original source correspondences retain record
 identities and later member overrides; matching against current mutable values
 alone cannot undo a member's rename or cost decision.
-Separately authored supplemental Expense records remain under their own retained
-facts or Decisions; they do not become unexplained lines in the source's
-itemization comparison. Source changes still require complete correspondence.
+Explicitly supplemental Expense records use the `supplemental:` natural-key
+namespace and remain under their own retained facts or Decisions; they do not
+become unexplained lines in the source's itemization comparison. Ordinary manual
+spending remains eligible for source correspondence and review. Source changes
+still require complete correspondence.
 
 Attachment reuse is fenced by the retained original's checksum. A new original
 captures its own attachment bytes even when its part labels match the previous

@@ -8,7 +8,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
@@ -50,6 +50,7 @@ import {
 } from "~/server/testing/repo.fixtures";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
 
+import * as extraction from "../operations/agents/extract";
 import {
   memberImport,
   memberImportWorld,
@@ -69,6 +70,7 @@ import { commitAcceptedSourceOrderReconciliation } from "./reconciliation-accept
 // the household day, and a missing day cannot be supplied by the import time.
 describe("incomplete itemized purchase identity", () => {
   const ctx = withTestDb();
+  afterEach(() => vi.restoreAllMocks());
   async function scope() {
     const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor, {
       vendor: { name: "Example variant maker" },
@@ -1013,6 +1015,9 @@ describe("incomplete itemized purchase identity", () => {
   );
 
   it("keeps a competing item identity unresolved without fabricating a Product or financial line", async () => {
+    vi.spyOn(extraction, "auditPurchaseImportBatch").mockResolvedValue({
+      findings: [],
+    });
     const { input, vendor } = await scope();
     const order: MemberImportOrder = {
       stableOrderId: "unresolved-identity",

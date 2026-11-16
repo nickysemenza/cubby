@@ -320,16 +320,22 @@ async function applyFix(
       }))
     )
       return;
-    const row = await createPurchaseEventRecord(tx, "expense", {
-      purchaseId,
-      name: fix.title,
-      cost: wholeCentToMinor(fix.amount),
-      date: targetPurchase.date,
-      lineKind: "principal",
-      lineBasis: "item_line",
-      costType: "materials",
-      trade: null,
-    });
+    const row = await createPurchaseEventRecord(
+      tx,
+      "expense",
+      {
+        purchaseId,
+        name: fix.title,
+        cost: wholeCentToMinor(fix.amount),
+        date: targetPurchase.date,
+        lineKind: "principal",
+        lineBasis: "item_line",
+        costType: "materials",
+        trade: null,
+      },
+      actor,
+      { basis: "decision", supplemental: true },
+    );
     await validateExpenseInheritance(tx, row);
     await logAuditEntries(tx, actor, [
       { entityKind: "expense", entityId: row.id, action: "create" },

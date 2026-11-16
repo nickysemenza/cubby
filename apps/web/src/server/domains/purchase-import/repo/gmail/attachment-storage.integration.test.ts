@@ -459,34 +459,36 @@ describe("Gmail ingestion and attachment storage", () => {
     expect(fetches).toBe(1);
     expect(objects.size).toBe(0);
     const originals = await getDb(ctx.db).select().from(orderMail);
-    await ingestGmailMessages(
-      ctx.db,
-      provider({
-        getMessage: async (id) => {
-          const source = message(id);
-          return {
-            ...source,
-            payload: {
-              ...source.payload,
-              headers: [
-                { name: "From", value: "orders@forgewear.example" },
-                { name: "Subject", value: "Synthetic revised receipt" },
-              ],
-            },
-          };
+    await expect(
+      ingestGmailMessages(
+        ctx.db,
+        provider({
+          getMessage: async (id) => {
+            const source = message(id);
+            return {
+              ...source,
+              payload: {
+                ...source.payload,
+                headers: [
+                  { name: "From", value: "orders@forgewear.example" },
+                  { name: "Subject", value: "Synthetic revised receipt" },
+                ],
+              },
+            };
+          },
+          getAttachment: async () => {
+            fetches += 1;
+            return { data: PDF_BYTES.toString("base64url") };
+          },
+        }),
+        {
+          ledgerPartyId: party.id,
+          mailboxId: "synthetic-google-subject",
+          messageIds: ["msg-legacy"],
+          storage,
         },
-        getAttachment: async () => {
-          fetches += 1;
-          return { data: PDF_BYTES.toString("base64url") };
-        },
-      }),
-      {
-        ledgerPartyId: party.id,
-        mailboxId: "synthetic-google-subject",
-        messageIds: ["msg-legacy"],
-        storage,
-      },
-    );
+      ),
+    ).rejects.toThrow("Email candidate original source changed");
     expect(await attachments()).toHaveLength(2);
     expect(fetches).toBe(2);
     expect(objects.size).toBe(1);

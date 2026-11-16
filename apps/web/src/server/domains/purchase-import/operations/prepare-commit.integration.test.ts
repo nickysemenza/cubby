@@ -20,7 +20,7 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { seedEmailLinkDecision } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { insertFieldsFixture } from "~/server/ai/fields/fields.fixtures";
@@ -85,6 +85,7 @@ import {
 import { resolveRunFinding } from "../repo/findings";
 import { prepareSourceOrderReconciliation } from "../repo/reconciliation";
 import { startImportRunFixture } from "../service/import-run.fixtures";
+import * as extraction from "./agents/extract";
 import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
 import { resolveMail } from "./mail-tool";
 import {
@@ -2005,6 +2006,7 @@ describe("caller-driven purchase import writes", () => {
 });
 
 describe("shared purchase-import prepare and commit", () => {
+  afterEach(() => vi.restoreAllMocks());
   const ctx = withTestDb();
 
   it("reuses an exact ASIN and replays the committed business result", async () => {
@@ -3177,6 +3179,9 @@ describe("shared purchase-import prepare and commit", () => {
   );
 
   it("files product_unresolved for goods an applied replacement leaves unresolved", async () => {
+    vi.spyOn(extraction, "auditPurchaseImportBatch").mockResolvedValue({
+      findings: [],
+    });
     const { manualPurchase, manualExpense, commitInput, importRunId, result } =
       await importOverManualAggregate(false, false, false, false, true);
     expect(result.status).toBe("needs_review");

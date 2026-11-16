@@ -943,15 +943,6 @@ async function relatedEmailPreview(
     (await deferClassificationRefresh(db, executionPolicy, email))
   )
     return null;
-  const [original] = email.orderMailId
-    ? await readRetainedMail(db, {
-        ledgerPartyIds: [email.ledgerPartyId],
-        mailboxId: email.mailboxId,
-        messageId: email.messageId,
-        orderMailIds: [email.orderMailId],
-      })
-    : [];
-  if (!original || original.rawChecksum !== email.checksum) return null;
   const preview = await extractEmailCandidatePreview(
     db,
     {

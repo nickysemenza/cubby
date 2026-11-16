@@ -525,6 +525,7 @@ export function reconcileOrderPurchase(
         !seeds.some(
           (seed) =>
             !seed.baseline &&
+            seed.naturalKey.startsWith("supplemental:") &&
             seed.target === expenseRecords &&
             c.recordId(expenseRecords, seed.naturalKey) === row.id,
         ),
