@@ -299,7 +299,7 @@ export default {
           : env.READ_FANOUT_MODE === "code"
             ? "Use exactly one codemode call to run these queries with Promise.all via tools.mcp__cubby__entity_read, and text({fanoutMatches: results}) where results contains one {name,matches} object per query. Each nested tool returns JSON text; parse it. The query inputs above are complete; schema discovery is unnecessary."
             : env.READ_FANOUT_MODE === "bulk"
-              ? "Use one ordinary mcp__cubby__entity_read resolve call with all eight names in its names array."
+              ? "First load entity_read with tool_search (query entity_read, limit 1) if it is not offered. Then use one ordinary mcp__cubby__entity_read resolve call with all eight names in its names array."
               : "Use eight separate ordinary mcp__cubby__entity_read calls, one name per call.";
       const lookupInstructions =
         env.READ_FANOUT_MODE === "bulk" || env.READ_FANOUT_MODE === "code-bulk"
