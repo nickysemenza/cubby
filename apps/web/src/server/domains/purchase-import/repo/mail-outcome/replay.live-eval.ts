@@ -727,12 +727,17 @@ describe("isolated Mail coordinator replay", () => {
                   const conversation = agentConversationSchema.parse(
                     await transcript.json(),
                   );
-                  const calls = conversation.messages
-                    .flatMap((message) => message.parts)
-                    .filter(
-                      (part) =>
-                        part.type === "tool" && part.toolName === "codemode",
-                    );
+                  const toolParts = [
+                    ...new Map(
+                      conversation.messages
+                        .flatMap((message) => message.parts)
+                        .filter((part) => part.type === "tool")
+                        .map((part) => [part.toolCallId, part]),
+                    ).values(),
+                  ];
+                  const calls = toolParts.filter(
+                    (part) => part.toolName === "codemode",
+                  );
                   const fanoutDiagnostics: string[] = [];
                   if (sample.readFanout) {
                     const returnedNames: string[] = [];
@@ -782,24 +787,22 @@ describe("isolated Mail coordinator replay", () => {
                     calls.forEach((part) => {
                       if (part.type === "tool") inspect(part.output);
                     });
-                    const directNames = conversation.messages
-                      .flatMap((message) => message.parts)
-                      .flatMap((part) => {
-                        if (
-                          part.type !== "tool" ||
-                          part.toolName !== "mcp__cubby__entity_read" ||
-                          part.state !== "output-available"
-                        )
-                          return [];
-                        const query = z
-                          .object({
-                            action: z.literal("resolve"),
-                            entity: z.literal("product"),
-                            names: z.array(z.string()).length(1),
-                          })
-                          .safeParse(part.input);
-                        return query.success ? query.data.names : [];
-                      });
+                    const directNames = toolParts.flatMap((part) => {
+                      if (
+                        part.type !== "tool" ||
+                        part.toolName !== "mcp__cubby__entity_read" ||
+                        part.state !== "output-available"
+                      )
+                        return [];
+                      const query = z
+                        .object({
+                          action: z.literal("resolve"),
+                          entity: z.literal("product"),
+                          names: z.array(z.string()).length(1),
+                        })
+                        .safeParse(part.input);
+                      return query.success ? query.data.names : [];
+                    });
                     const observed = readCode ? returnedNames : directNames;
                     fanoutVerified =
                       sample.readFanout.every((name) =>
