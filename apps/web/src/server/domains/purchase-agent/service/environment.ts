@@ -147,7 +147,7 @@ export interface AgentGateway extends UniversalGateway {
  * address another Run.
  */
 export interface PurchaseAgentEnvironment {
-  /** Evaluation harness only: bounded read-only Code Mode, absent in production. */
+  /** Bounded read-only sandbox selected by the host's Mail manifest policy. */
   readCodeSandbox?: () => Promise<
     import("@earendil-works/pi-codemode/portable").CodemodeSandboxBase
   >;

@@ -687,8 +687,10 @@ until a session itemizes it.
 ## Mail replay evaluation
 
 `MAIL_REPLAY_READ_CODE=1` selects the read-only Code Mode experiment in the
-isolated replay harness. The default uses ordinary tools. The host enables it
-only beside a model peer; production configuration has no enabling variable.
+isolated replay harness. The default uses ordinary tools. Production follows
+the Mail manifest's `readCode` policy; a model peer uses the explicit replay
+override instead. The manifest keeps Code Mode disabled until its cost and
+outcome comparison qualifies.
 Photo inventory and external MCP retain their ordinary tools.
 
 The experiment uses Pi's `createCodemodeExtension` and its durable nested-tool
@@ -700,8 +702,9 @@ catalog, script discovery and dispatch to `entity_read` and
 `purchase_import_read`, still narrowed by the Mail manifest and checked by
 the delegated MCP handler. Full schemas are discovered inside the sandbox
 with `describeTool`. Mail's ordinary `entity_read` is deferred through Pi's
-`tool_search`, so its schema is loaded only when requested and stays available
-for the rest of the Run. This ordinary read path is also the fallback after a
+`tool_search`, so its schema is loaded only when requested. Each durable claim
+unloads deferred tools; the next Email's context folds the system deltas so
+previously loaded schemas and the Code prompt section are absent. This ordinary read path is also the fallback after a
 script error. Writers stay immediately available. Ordinary
 `purchase_import_read` stays available for attachment originals, whose media
 Pi's schema-less Code Mode mapping cannot forward. Claims,
@@ -724,7 +727,7 @@ deadline, 32 nested reads per execution attempt, 32,000 source characters and
 2,000 selected-output tokens plus the compact read-count and failure summary.
 QuickJS exposes no network, modules, process or Worker bindings. Computation
 blocks the coordinator until a tool await or the interrupt limit; this inline
-configuration is an evaluation capability, not a production rollout.
+configuration uses the same compiled Worker module in replay and production.
 
 Compare identical synthetic corpus, models, effort and repeats with
 `MAIL_REPLAY_READ_CODE` unset and set to `1`. `MAIL_REPLAY_SCRIPTED=1` exercises

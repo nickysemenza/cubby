@@ -3,7 +3,10 @@ import {
   agentConversationSchema,
 } from "@cubby/schemas/agent-conversation";
 import { coordinatorModelsSchema } from "@cubby/schemas/coordinator-models";
-import { importRunIdFromAgentIdentity } from "@cubby/schemas/import-run-agent";
+import {
+  importRunAgentManifest,
+  importRunIdFromAgentIdentity,
+} from "@cubby/schemas/import-run-agent";
 import { aiGatewayId } from "@cubby/shared/ai/gateway-metadata";
 import { createLogger } from "@cubby/worker-tracing";
 /**
@@ -110,18 +113,19 @@ function purchaseAgentEnvironment(
     // pi's database work runs only under a live coordinator turn.
     services: runServicesFor(env, ctx, runId, { fence }),
     mcpTools: purchaseAgentMcpTools,
-    ...(testModel &&
-      readCode === "1" && {
-        readCodeSandbox: async () => {
-          const { createInlineCodemodeSandbox } =
-            await import("@earendil-works/pi-codemode/cloudflare");
-          return createInlineCodemodeSandbox({
-            memoryLimitBytes: 16 * 1024 * 1024,
-            interruptBudget: 10_000,
-            timeoutMs: 30_000,
-          });
-        },
-      }),
+    ...((testModel
+      ? readCode === "1"
+      : importRunAgentManifest.mail_import.readCode) && {
+      readCodeSandbox: async () => {
+        const { createInlineCodemodeSandbox } =
+          await import("@earendil-works/pi-codemode/cloudflare");
+        return createInlineCodemodeSandbox({
+          memoryLimitBytes: 16 * 1024 * 1024,
+          interruptBudget: 10_000,
+          timeoutMs: 30_000,
+        });
+      },
+    }),
     ...(testModel && {
       testModel: {
         fetch: (request: Request) =>

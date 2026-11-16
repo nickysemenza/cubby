@@ -1,7 +1,7 @@
 import type { ImportRunAgentToolName } from "@cubby/schemas/import-run-agent";
 import { EXTRACT_ORDER_TOOL } from "@cubby/schemas/import-run-agent";
 import { parseJsonAs } from "@cubby/shared/parse-json-as";
-import type { Message } from "@earendil-works/pi-ai";
+import { getCurrentSystemMessage, type Message } from "@earendil-works/pi-ai";
 import { z } from "zod";
 
 import { CLAIM_IMPORT_WORK_TOOL, CUBBY_MCP_TOOL_PREFIX } from "./tool-protocol";
@@ -20,8 +20,9 @@ const CONTINUING_TOOLS: readonly string[] = [
 /**
  * A request's messages without earlier work items: everything from the first
  * claim up to the latest claim is dropped except user messages (kickoff,
- * resume, member input) and system messages (pi records tool-list and
- * instruction deltas there once and never resends them). Durable records are the only memory between work
+ * resume, member input) and the current system state. Prior tool declarations
+ * are folded with the claim's unload delta, so dormant schemas do not survive
+ * in Responses additional_tools history. Durable records are the only memory between work
  * items; the stored transcript keeps every item for the Run page.
  */
 export function currentWorkItemMessages(
@@ -56,14 +57,23 @@ export function currentWorkItemMessages(
   const latest =
     messages.length - 1 - [...messages].reverse().findIndex(claims);
   if (first === latest) return messages;
+  const prior = messages
+    .slice(0, latest)
+    .filter((message) => message.role === "user" || message.role === "system");
+  const next = messages
+    .slice(latest + 1)
+    .findIndex((message) => message.role === "assistant");
+  const boundary = next === -1 ? messages.length : latest + 1 + next;
+  const claim = messages.slice(latest, boundary);
+  const system = getCurrentSystemMessage([
+    ...prior,
+    ...claim.filter((message) => message.role === "system"),
+  ]);
   return [
-    ...messages.slice(0, first),
-    ...messages
-      .slice(first, latest)
-      .filter(
-        (message) => message.role === "user" || message.role === "system",
-      ),
-    ...messages.slice(latest),
+    ...(system ? [system] : []),
+    ...prior.filter((message) => message.role === "user"),
+    ...claim.filter((message) => message.role !== "system"),
+    ...messages.slice(boundary),
   ];
 }
 

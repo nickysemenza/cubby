@@ -109,6 +109,8 @@ export type ImportRunAgentConfig = {
    */
   escalationModel?: SupportedChatModel;
   effort: "low" | "medium" | "high";
+  /** Offer bounded read-only Code Mode through on-demand tool discovery. */
+  readCode: boolean;
   agentTools: readonly ImportRunAgentToolName[];
   /**
    * The coordinator mounts MCP tools by name and sends every mounted schema
@@ -209,6 +211,7 @@ export const importRunAgentManifest = {
   photo_inventory: {
     model: QUALITY_MODEL,
     effort: "medium",
+    readCode: false,
     agentTools: RUN_AGENT_TOOLS,
     mcpActions: PHOTO_MCP_ACTIONS,
     mcpTools: toolsOf(PHOTO_MCP_ACTIONS),
@@ -218,6 +221,7 @@ export const importRunAgentManifest = {
     model: FAST_MODEL,
     escalationModel: STANDARD_MODEL,
     effort: "medium",
+    readCode: false,
     agentTools: [
       ...RUN_AGENT_TOOLS.filter((tool) => tool !== "report_agent_progress"),
       ESCALATE_TOOL,
