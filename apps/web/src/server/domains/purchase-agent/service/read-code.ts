@@ -104,8 +104,8 @@ function boundedReadCodeTool(tool: ToolRegistration) {
         },
         context,
       );
-      // Nested results stay out of model context; their names and outcomes
-      // remain inspectable in the ordinary Run transcript, even on failure.
+      // Pi retains detailed call records outside the model-visible content.
+      // The Run projection exposes them; the model only needs counts and errors.
       const details = nestedCalls.safeParse(result.details);
       return details.success
         ? {
@@ -115,8 +115,17 @@ function boundedReadCodeTool(tool: ToolRegistration) {
               {
                 type: "text" as const,
                 text: JSON.stringify({
-                  readCalls: details.data.calls.slice(0, 32),
-                  omittedReadCalls: Math.max(0, details.data.calls.length - 32),
+                  readCalls: {
+                    ok: details.data.calls.filter(
+                      (call) => call.status === "ok",
+                    ).length,
+                    failed: details.data.calls.filter(
+                      (call) => call.status !== "ok",
+                    ).length,
+                  },
+                  failures: details.data.calls
+                    .filter((call) => call.status !== "ok")
+                    .slice(0, 8),
                 }),
               },
             ],

@@ -704,12 +704,16 @@ are unavailable to scripts. Ordinary writers retain their host-owned nested
 calls. Pi's conversation store is cleared before each script invocation,
 including recovery, so `store`/`load` cannot carry evidence between Emails.
 The transcript includes each script's nested read names, outcomes and
-durations without copying its intermediate results into model context.
+durations through Pi's execution details, without copying those records or
+intermediate results into model context. The model receives aggregate success
+and failure counts plus at most eight failure diagnostics. The Run inspector
+projects tool results with execution details as `{output, details}`; those
+details are absent from the model's tool-result text.
 
 The harness runs QuickJS on the coordinator's thread with 16 MiB of VM memory
 and 10,000 interrupt polls per execution. Scripts have a maximum 30-second
 deadline, 32 nested reads per execution attempt, 32,000 source characters and
-2,000 selected-output tokens plus the nested-call summary.
+2,000 selected-output tokens plus the compact read-count and failure summary.
 QuickJS exposes no network, modules, process or Worker bindings. Computation
 blocks the coordinator until a tool await or the interrupt limit; this inline
 configuration is an evaluation capability, not a production rollout.

@@ -749,6 +749,7 @@ describe("isolated Mail coordinator replay", () => {
                   const fanoutDiagnostics: string[] = [];
                   if (sample.readFanout) {
                     const returnedNames: string[] = [];
+                    const nestedNames: string[] = [];
                     let successfulNestedReads = 0;
                     const inspect = (value: unknown): void => {
                       if (typeof value === "string") {
@@ -776,21 +777,41 @@ describe("isolated Mail coordinator replay", () => {
                           );
                         const summary = z
                           .object({
-                            readCalls: z.array(
+                            calls: z.array(
                               z.object({
                                 name: z.string(),
                                 status: z.string(),
+                                args: z.string(),
                               }),
                             ),
                           })
                           .safeParse(value);
-                        if (summary.success)
-                          successfulNestedReads +=
-                            summary.data.readCalls.filter(
-                              (row) =>
-                                row.name === "mcp__cubby__entity_read" &&
-                                row.status === "ok",
-                            ).length;
+                        if (summary.success) {
+                          const successful = summary.data.calls.filter(
+                            (row) =>
+                              row.name === "mcp__cubby__entity_read" &&
+                              row.status === "ok",
+                          );
+                          successfulNestedReads += successful.length;
+                          for (const call of successful) {
+                            let args: unknown;
+                            try {
+                              args = JSON.parse(call.args);
+                            } catch {
+                              // SILENT: truncated native previews cannot verify a requested name.
+                              continue;
+                            }
+                            const query = z
+                              .object({
+                                action: z.literal("resolve"),
+                                entity: z.literal("product"),
+                                names: z.array(z.string()),
+                              })
+                              .safeParse(args);
+                            if (query.success)
+                              nestedNames.push(...query.data.names);
+                          }
+                        }
                         Object.values(value).forEach(inspect);
                       }
                     };
@@ -821,10 +842,13 @@ describe("isolated Mail coordinator replay", () => {
                         observed.includes(name),
                       ) &&
                       (!readCode ||
-                        successfulNestedReads ===
-                          (bulkReads ? 1 : sample.readFanout.length));
+                        (successfulNestedReads ===
+                          (bulkReads ? 1 : sample.readFanout.length) &&
+                          sample.readFanout.every((name) =>
+                            nestedNames.includes(name),
+                          )));
                     fanoutDiagnostics.push(
-                      `read fanout: ${JSON.stringify({ verified: fanoutVerified, directNames, returnedNames, successfulNestedReads })}`,
+                      `read fanout: ${JSON.stringify({ verified: fanoutVerified, directNames, returnedNames, nestedNames, successfulNestedReads })}`,
                     );
                     if (!fanoutVerified)
                       fanoutDiagnostics.push(

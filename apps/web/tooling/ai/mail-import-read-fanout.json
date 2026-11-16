@@ -11,55 +11,55 @@
       "name": "Sam Synthetic",
       "address": "sam.synthetic@example.com"
     },
-    "bodyText": "Hi Sam, thanks for your order!\nOrder SYN-7001, placed November 3, 2026.\n1 x Synthetic ceramic mug: $5.00\n1 x Synthetic tea towel: $5.00\n1 x Synthetic refill tablet box: $5.00\n1 x Synthetic linen napkin: $5.00\n1 x Synthetic bamboo tray: $5.00\n1 x Synthetic glass jar: $5.00\n1 x Synthetic cotton apron: $5.00\n1 x Synthetic wooden spoon: $5.00\nSubtotal: $40.00\nOrder total: $40.00, charged to Visa ending 0000.",
+    "bodyText": "Hi Sam, thanks for your order!\nOrder SYN-7001, placed November 3, 2026.\n1 x Synthetic mug: $5.00\n1 x Synthetic towel: $5.00\n1 x Synthetic refill: $5.00\n1 x Synthetic napkin: $5.00\n1 x Synthetic tray: $5.00\n1 x Synthetic jar: $5.00\n1 x Synthetic apron: $5.00\n1 x Synthetic spoon: $5.00\nSubtotal: $40.00\nOrder total: $40.00, charged to Visa ending 0000.",
     "bodyHtml": null,
     "baseline": {
       "kind": "imported",
       "total": 40,
       "lines": [
         {
-          "name": "Synthetic ceramic mug",
+          "name": "Synthetic mug",
           "cost": 5
         },
         {
-          "name": "Synthetic tea towel",
+          "name": "Synthetic towel",
           "cost": 5
         },
         {
-          "name": "Synthetic refill tablet box",
+          "name": "Synthetic refill",
           "cost": 5
         },
         {
-          "name": "Synthetic linen napkin",
+          "name": "Synthetic napkin",
           "cost": 5
         },
         {
-          "name": "Synthetic bamboo tray",
+          "name": "Synthetic tray",
           "cost": 5
         },
         {
-          "name": "Synthetic glass jar",
+          "name": "Synthetic jar",
           "cost": 5
         },
         {
-          "name": "Synthetic cotton apron",
+          "name": "Synthetic apron",
           "cost": 5
         },
         {
-          "name": "Synthetic wooden spoon",
+          "name": "Synthetic spoon",
           "cost": 5
         }
       ]
     },
     "readFanout": [
-      "Synthetic ceramic mug",
-      "Synthetic tea towel",
-      "Synthetic refill tablet box",
-      "Synthetic linen napkin",
-      "Synthetic bamboo tray",
-      "Synthetic glass jar",
-      "Synthetic cotton apron",
-      "Synthetic wooden spoon"
+      "Synthetic mug",
+      "Synthetic towel",
+      "Synthetic refill",
+      "Synthetic napkin",
+      "Synthetic tray",
+      "Synthetic jar",
+      "Synthetic apron",
+      "Synthetic spoon"
     ]
   }
 ]

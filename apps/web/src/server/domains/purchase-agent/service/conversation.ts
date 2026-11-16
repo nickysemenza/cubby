@@ -123,12 +123,19 @@ function assistantMessage(
         ...part,
         state: "output-error",
         errorText: String(toolOutput(result)),
+        ...(result.details === undefined
+          ? {}
+          : { output: { details: result.details } }),
         durationMs,
       };
     return {
       ...part,
       state: "output-available",
-      output: toolOutput(result),
+      // Execution details belong to the inspector, not the model's tool text.
+      output:
+        result.details === undefined
+          ? toolOutput(result)
+          : { output: toolOutput(result), details: result.details },
       durationMs,
     };
   });
