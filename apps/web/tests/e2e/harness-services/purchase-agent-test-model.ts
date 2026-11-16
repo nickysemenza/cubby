@@ -423,7 +423,17 @@ export default {
     const input =
       wire === "messages"
         ? messagesInput(body.messages ?? [])
-        : (body.input ?? []);
+        : (body.input ?? []).map((item) => ({
+            ...item,
+            // Grammar tools use custom calls on Responses; the script engine
+            // inspects the same call identities and outputs on both wires.
+            type:
+              item.type === "custom_tool_call"
+                ? "function_call"
+                : item.type === "custom_tool_call_output"
+                  ? "function_call_output"
+                  : item.type,
+          }));
     const normalized = {
       ...body,
       input,
@@ -487,7 +497,9 @@ export default {
         );
       }
       if ("check" in step) {
-        const output = JSON.stringify(toolOutput(input, step.check) ?? null);
+        const value = toolOutput(input, step.check) ?? null;
+        const output =
+          typeof value === "string" ? value : JSON.stringify(value);
         if (!output.includes(step.includes)) {
           const message = `${step.check} output lacks ${step.includes}: ${output.slice(0, 500)}`;
           if (!violations.includes(message)) violations.push(message);

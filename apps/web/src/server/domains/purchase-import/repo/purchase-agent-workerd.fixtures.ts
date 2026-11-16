@@ -176,7 +176,7 @@ export async function startScenarioHarness(
   profile: "purchase-agent" | "gmail-research" = "purchase-agent",
   options: Pick<
     WorkerdRuntimeOptions,
-    "coordinatorModels" | "objectStorage"
+    "coordinatorModels" | "objectStorage" | "readCode"
   > = {},
 ) {
   const { runtime, prepared: controls } = await openWorkerdRuntime(

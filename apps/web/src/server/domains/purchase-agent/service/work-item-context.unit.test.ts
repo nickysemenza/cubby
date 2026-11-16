@@ -4,7 +4,11 @@ import { EXTRACT_ORDER_TOOL } from "@cubby/schemas/import-run-agent";
  * each request, so a 50-Email Run reached ~970k context tokens; trimming
  * splits a tool call from its result, or drops a member's mid-Run message.
  */
-import type { Message } from "@earendil-works/pi-ai";
+import {
+  getCurrentTools,
+  getCurrentSystemPrompt,
+  type Message,
+} from "@earendil-works/pi-ai";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
@@ -82,20 +86,50 @@ describe("currentWorkItemMessages", () => {
     const delta: Message = fromPartial({
       role: "system",
       content: "Tool list changed.",
+      timestamp: 0,
+    });
+    const loaded: Message = fromPartial({
+      role: "system",
+      content: "",
+      toolsAdded: [
+        { name: "codemode", description: "Synthetic code", parameters: {} },
+      ],
+      sections: { codemode: "Synthetic code catalog" },
+    });
+    const unloaded: Message = fromPartial({
+      role: "system",
+      content: "",
+      toolsRemoved: [{ name: "codemode" }],
+      sections: { codemode: null },
     });
     const messages = [
       kickoff,
       ...claim("c1"),
+      loaded,
       ...read("r1"),
       resume,
       delta,
       ...claim("c2"),
+      unloaded,
     ];
-    expect(currentWorkItemMessages(messages)).toEqual([
+    const current = currentWorkItemMessages(messages);
+    expect(current.filter((message) => message.role === "user")).toEqual([
       kickoff,
       resume,
-      delta,
-      ...claim("c2"),
+    ]);
+    expect(current.slice(-2)).toEqual(claim("c2"));
+    expect(getCurrentTools(current)).toEqual([]);
+    expect(getCurrentSystemPrompt(current)).toBe("Tool list changed.");
+    expect(messages).toContain(loaded);
+    const reloaded = currentWorkItemMessages([
+      ...messages,
+      call("load-current", "tool_search"),
+      outcome("load-current", "tool_search", "Synthetic discovery"),
+      loaded,
+    ]);
+    expect(reloaded.at(-1)).toBe(loaded);
+    expect(getCurrentTools(reloaded).map((tool) => tool.name)).toEqual([
+      "codemode",
     ]);
   });
 });

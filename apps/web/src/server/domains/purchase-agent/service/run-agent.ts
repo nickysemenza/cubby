@@ -41,6 +41,7 @@ import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { createModels, type MutableModels } from "@earendil-works/pi-ai/models";
 import {
   createRegistry,
+  AgentDoc,
   defineExtension,
   GenerationTask,
   Harness,
@@ -51,6 +52,7 @@ import {
   type EntryRecord,
 } from "@earendil-works/pi-durable";
 import type { ToolExecutionApi } from "@earendil-works/pi-durable";
+import { createToolSearchExtension } from "@earendil-works/pi-durable/tool-search";
 import * as Sentry from "@sentry/cloudflare";
 import { Agent } from "agents";
 import {
@@ -707,6 +709,45 @@ export class PurchaseImportRunAgent
                         // SILENT: an unreadable claim grants no source budget.
                       }
                       attempts.observeClaim(value);
+                      if (
+                        !result.isError &&
+                        z
+                          .object({
+                            kind: z.enum(["email", "none", "stopped"]),
+                          })
+                          .safeParse(value).success
+                      ) {
+                        // Discovery belongs to one Email. Pi records the unload
+                        // delta; the context projection folds it at this claim.
+                        const conversation = await (
+                          await this.harness.pi()
+                        ).conversation(api.conversationId, context);
+                        if (!conversation)
+                          throw new Error("Claim conversation is missing");
+                        const loaded = new Set(
+                          (await conversation.agent(context)).tools
+                            .filter((tool) => tool.deferred)
+                            .map((tool) => tool.name),
+                        );
+                        if (loaded.size)
+                          await conversation.commit(async (tx) => {
+                            const state = await tx.doc(
+                              AgentDoc,
+                              api.conversationId,
+                            );
+                            if (Array.isArray(state.modelTools))
+                              state.modelTools = state.modelTools.filter(
+                                (name) => !loaded.has(name),
+                              );
+                            else if (state.modelTools?.add)
+                              state.modelTools = {
+                                ...state.modelTools,
+                                add: state.modelTools.add.filter(
+                                  (name) => !loaded.has(name),
+                                ),
+                              };
+                          }, context);
+                      }
                     }
                     return escalation.afterTool(call, result);
                   },
@@ -868,6 +909,8 @@ export class PurchaseImportRunAgent
       }),
     );
     const mcpTools = await this.agentEnv.mcpTools(purpose);
+    const readCode =
+      purpose === "mail_import" && this.agentEnv.readCodeSandbox !== undefined;
     this.registry.install(
       cubbyMcpExtension(
         mcpTools,
@@ -876,6 +919,14 @@ export class PurchaseImportRunAgent
         purpose === "mail_import" ? runId : undefined,
       ),
     );
+    if (purpose === "mail_import")
+      this.registry.install(createToolSearchExtension());
+    if (readCode && this.agentEnv.readCodeSandbox) {
+      const { readCodeExtension } = await import("./read-code");
+      this.registry.install(
+        readCodeExtension(await this.agentEnv.readCodeSandbox()),
+      );
+    }
     if (workflow.skills)
       this.registry.install(await piSkills([workflow.skills]));
     this.installed = runId;

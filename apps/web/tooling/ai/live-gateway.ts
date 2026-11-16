@@ -30,13 +30,11 @@ type Env = {
   PRICING_CATALOG?: string;
   RESPONSES_MODEL?: string;
   RESPONSES_EFFORT?: string;
-  /**
-   * "1" forwards a ChatGPT plan attempt to the paid OpenAI route, so a replay
-   * measures the requested OpenAI model instead of falling down the funding
-   * ladder. Anthropic has no Unified Billing route on this gateway (only the
-   * `subscriber-credit` key), so Claude attempts stay on credit.
-   */
-  PLAN_AS_PAID?: string;
+  /** Explicitly authorized, budget-guarded OpenAI paid evaluation. */
+  ALLOW_PAID?: string;
+  /** Synthetic orchestration benchmark; supplied only to the agent peer. */
+  READ_FANOUT_NAMES?: string;
+  READ_FANOUT_MODE?: string;
   /** Shared host-owned physical-call allowance. */
   EVAL_BUDGET_URL?: string;
 };
@@ -47,6 +45,11 @@ type RouteUsage = {
   failedStatuses: number[];
   /** Requests per wire model named in a JSON body. */
   models: Record<string, number>;
+  /** Public schema metadata only; never prompts, arguments or source content. */
+  firstToolNames?: string[];
+  firstToolSchemaChars?: number;
+  maxToolSchemaChars?: number;
+  codeOfferedRequests?: number;
 };
 let usage: Record<string, RouteUsage> = {};
 const decisionBody = z.object({ questions: z.record(z.string(), z.unknown()) });
@@ -61,12 +64,16 @@ async function reserveEvaluation(
 ) {
   if (!env.EVAL_BUDGET_URL) return undefined;
   const frontier = route === "openai" || route === "anthropic";
+  const paid =
+    env.ALLOW_PAID === "1" &&
+    route === "openai" &&
+    request.headers.get("x-cubby-inference-funding") === "paid";
   if (
-    env.PLAN_AS_PAID === "1" ||
-    request.headers.get("x-cubby-inference-funding") === "paid" ||
-    (frontier &&
-      (request.headers.get("cf-aig-byok-alias") !== "subscriber-credit" ||
-        request.headers.get("cf-aig-no-wholesale") !== "true"))
+    !paid &&
+    (request.headers.get("x-cubby-inference-funding") === "paid" ||
+      (frontier &&
+        (request.headers.get("cf-aig-byok-alias") !== "subscriber-credit" ||
+          request.headers.get("cf-aig-no-wholesale") !== "true")))
   )
     return Response.json(
       {
@@ -185,6 +192,14 @@ function forward(
     return fetch(run.url, run.init);
   }
   const headers = strippedHeaders({ headers: request.headers });
+  if (
+    env.ALLOW_PAID === "1" &&
+    route === "openai" &&
+    request.headers.get("x-cubby-inference-funding") === "paid"
+  ) {
+    headers.delete("cf-aig-byok-alias");
+    headers.delete("cf-aig-no-wholesale");
+  }
   headers.delete("x-cubby-inference-funding");
   // The placeholder host must not follow the request to the gateway.
   headers.delete("host");
@@ -224,10 +239,7 @@ export default {
     }
     // This Worker has only a Unified Billing token, never a ChatGPT session.
     // Preserve the funding ladder by letting its owner choose the paid stage.
-    if (
-      request.headers.get("x-cubby-inference-funding") === "subscription" &&
-      env.PLAN_AS_PAID !== "1"
-    )
+    if (request.headers.get("x-cubby-inference-funding") === "subscription")
       return Response.json(
         {
           error: {
@@ -240,6 +252,24 @@ export default {
       );
     // `/openai/responses`, `/anthropic/v1/messages`, `/workers-ai/...`
     const route = url.pathname.split("/")[1] ?? "unknown";
+    // Let the funding ladder select its real paid stage, with accurate paid
+    // usage attribution, rather than buying a credit/subscription attempt.
+    if (
+      env.EVAL_BUDGET_URL &&
+      env.ALLOW_PAID === "1" &&
+      route === "openai" &&
+      request.headers.get("x-cubby-inference-funding") !== "paid"
+    )
+      return Response.json(
+        {
+          error: {
+            code: "insufficient_quota",
+            message:
+              "Credit routing is disabled for this authorized paid evaluation",
+          },
+        },
+        { status: 429 },
+      );
     let body =
       request.method === "GET" || request.method === "HEAD"
         ? undefined
@@ -254,6 +284,34 @@ export default {
       );
       body = new TextEncoder().encode(JSON.stringify(swapped)).buffer;
     }
+    if (env.READ_FANOUT_NAMES && url.pathname === "/openai/responses" && body) {
+      const names = z
+        .array(z.string().min(1))
+        .min(2)
+        .max(16)
+        .parse(JSON.parse(env.READ_FANOUT_NAMES));
+      const parsed = z
+        .looseObject({ instructions: z.string().optional() })
+        .parse(JSON.parse(new TextDecoder().decode(body)));
+      const orchestration =
+        env.READ_FANOUT_MODE === "code-bulk"
+          ? "First load codemode with tool_search (query codemode, limit 1) if it is not offered. Then use one codemode call containing one tools.mcp__cubby__entity_read resolve query with all eight names. Assign the parsed JSON directly to response; its top-level field is results, with no matches wrapper. Then text({fanoutMatches: response.results.map(row => ({name: row.name, exact: row.exact, candidates: row.candidates.map(candidate => ({id: candidate.id, name: candidate.name}))}))}). Do not print full candidate records. The query inputs above are complete; schema discovery is unnecessary."
+          : env.READ_FANOUT_MODE === "code"
+            ? "Use exactly one codemode call to run these queries with Promise.all via tools.mcp__cubby__entity_read, and text({fanoutMatches: results}) where results contains one {name,matches} object per query. Each nested tool returns JSON text; parse it. The query inputs above are complete; schema discovery is unnecessary."
+            : env.READ_FANOUT_MODE === "bulk"
+              ? "First load entity_read with tool_search (query entity_read, limit 1) if it is not offered. Then use one ordinary mcp__cubby__entity_read resolve call with all eight names in its names array."
+              : "Use eight separate ordinary mcp__cubby__entity_read calls, one name per call.";
+      const lookupInstructions =
+        env.READ_FANOUT_MODE === "bulk" || env.READ_FANOUT_MODE === "code-bulk"
+          ? 'Batch all names into one {action:"resolve",entity:"product",names:[...names]} query.'
+          : 'Each query must use {action:"resolve",entity:"product",names:[name]}. Do not combine names into a batched query: this controlled benchmark compares orchestration of independent reads.';
+      body = new TextEncoder().encode(
+        JSON.stringify({
+          ...parsed,
+          instructions: `${parsed.instructions ?? ""}\nSynthetic catalog lookup benchmark: after claiming the Email and before writing its outcome, resolve these names: ${JSON.stringify(names)}. ${lookupInstructions} ${orchestration} Do this workload once per Email, not once per turn. Never repeat it after writing an import or settling the source; stop when the claim returns no work. An empty catalog result is valid. Then complete the ordinary Mail import workflow using the Email's evidence.`,
+        }),
+      ).buffer;
+    }
     const model = body && wireModel(body);
     const admission = await reserveEvaluation(env, request, route, body, model);
     if (admission instanceof Response) return admission;
@@ -262,12 +320,50 @@ export default {
       env.GATEWAY_ENVIRONMENT,
       PROXY_CALL,
     );
-    const entry = (usage[route] ??= {
+    const entry: RouteUsage = (usage[route] ??= {
       requests: 0,
       failed: 0,
       failedStatuses: [],
       models: {},
     });
+    if (body && url.pathname === "/openai/responses") {
+      try {
+        const envelope = z
+          .object({
+            tools: z.array(z.unknown()).optional(),
+            input: z.union([z.string(), z.array(z.unknown())]).optional(),
+          })
+          .parse(JSON.parse(new TextDecoder().decode(body)));
+        const declarations = [...(envelope.tools ?? [])];
+        if (Array.isArray(envelope.input))
+          for (const item of envelope.input) {
+            const batch = z
+              .object({
+                type: z.enum(["additional_tools", "tool_search_output"]),
+                tools: z.array(z.unknown()),
+              })
+              .safeParse(item);
+            if (batch.success) declarations.push(...batch.data.tools);
+          }
+        const tools = z
+          .array(z.looseObject({ name: z.string() }))
+          .parse(declarations);
+        const names = [...new Set(tools.map((tool) => tool.name))];
+        const characters = JSON.stringify(tools).length;
+        if (entry.requests === 0) {
+          entry.firstToolNames = names;
+          entry.firstToolSchemaChars = characters;
+        }
+        entry.maxToolSchemaChars = Math.max(
+          entry.maxToolSchemaChars ?? 0,
+          characters,
+        );
+        entry.codeOfferedRequests =
+          (entry.codeOfferedRequests ?? 0) + Number(names.includes("codemode"));
+      } catch {
+        // SILENT: optional catalog telemetry must not change provider forwarding.
+      }
+    }
     entry.requests += 1;
     const countedModel =
       route === "workers-ai"
