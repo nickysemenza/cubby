@@ -35,12 +35,16 @@ import { getDb, notDeleted } from "~/server/db/helpers";
 import { kernelPass } from "~/server/db/kernel-schema";
 import {
   aiUsage,
+  email as emailTable,
   expense,
   product as productTable,
   runOperation,
   run as runTable,
 } from "~/server/db/schema";
-import { storedMailOutcome } from "~/server/domains/purchase-import/repo/mail-outcome/outcome";
+import {
+  storedMailOutcome,
+  mailOutcomeOfEmailSql,
+} from "~/server/domains/purchase-import/repo/mail-outcome/outcome";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 
 import {
@@ -61,46 +65,57 @@ import {
 } from "../purchase-agent-workerd.fixtures";
 
 /** Source originals arrive over an ephemeral loopback socket, never files or argv. */
+const replayMail = z.object({
+  subject: z.string().nullable(),
+  sender: z.string().nullable(),
+  receivedAt: z.iso.datetime(),
+  bodyText: z.string(),
+  bodyHtml: z.string().nullable().default(null),
+  /**
+   * The original's addressing and forwarding headers. Attribution reads
+   * only `mailAttributionHeaders`' subset, so any other header is dropped.
+   */
+  headers: z
+    .record(z.string(), z.string())
+    .optional()
+    .transform((headers) =>
+      headers
+        ? mailAttributionHeaders(
+            Object.fromEntries(
+              Object.entries(headers).map(([name, value]) => [
+                name.toLowerCase(),
+                value,
+              ]),
+            ),
+          )
+        : undefined,
+    ),
+  /**
+   * The mailbox owner production judged against: the member's LedgerParty
+   * name and sign-in address. Absent, the synthetic member owns the
+   * mailbox and own-mail attribution cannot match a real recipient.
+   */
+  owner: z.object({ name: z.string().min(1), address: z.email() }).optional(),
+  baseline: mailImportOutcome,
+  /** Trusted synthetic benchmark configuration, never derived from Email prose. */
+  readFanout: z.array(z.string().min(1)).length(8).optional(),
+  /** Existing catalog identities whose reuse is verified after settlement. */
+  catalogProducts: z.array(z.string().min(1)).min(1).max(50).optional(),
+});
 const replayCases = z
   .array(
-    z.object({
-      subject: z.string().nullable(),
-      sender: z.string().nullable(),
-      receivedAt: z.iso.datetime(),
-      bodyText: z.string(),
-      bodyHtml: z.string().nullable().default(null),
-      /**
-       * The original's addressing and forwarding headers. Attribution reads
-       * only `mailAttributionHeaders`' subset, so any other header is dropped.
-       */
-      headers: z
-        .record(z.string(), z.string())
-        .optional()
-        .transform((headers) =>
-          headers
-            ? mailAttributionHeaders(
-                Object.fromEntries(
-                  Object.entries(headers).map(([name, value]) => [
-                    name.toLowerCase(),
-                    value,
-                  ]),
-                ),
-              )
-            : undefined,
-        ),
-      /**
-       * The mailbox owner production judged against: the member's LedgerParty
-       * name and sign-in address. Absent, the synthetic member owns the
-       * mailbox and own-mail attribution cannot match a real recipient.
-       */
-      owner: z
-        .object({ name: z.string().min(1), address: z.email() })
+    replayMail.extend({
+      /** Later sources share the same durable Run and mailbox. */
+      followingEmails: z
+        .array(
+          replayMail.omit({
+            readFanout: true,
+            catalogProducts: true,
+            owner: true,
+          }),
+        )
+        .max(4)
         .optional(),
-      baseline: mailImportOutcome,
-      /** Trusted synthetic benchmark configuration, never derived from Email prose. */
-      readFanout: z.array(z.string().min(1)).length(8).optional(),
-      /** Existing catalog identities whose reuse is verified after settlement. */
-      catalogProducts: z.array(z.string().min(1)).min(1).max(50).optional(),
     }),
   )
   .min(1)
@@ -123,7 +138,7 @@ const scriptedReads: ScriptStep[] = readCode
         names: ["Synthetic ceramic mug"],
       }),
       call("read-code", "codemode", {
-        code: `if (typeof fetch !== "undefined" || typeof process !== "undefined" || typeof require !== "undefined" || "mcp__cubby__purchase_import" in tools || "claim_next_import_work" in tools || typeof models !== "undefined") throw new Error("Unexpected sandbox authority"); const matches = await Promise.all(["Synthetic ceramic mug", "Synthetic tea towel"].map(async name => JSON.parse(await tools.mcp__cubby__entity_read({action:"resolve",entity:"product",names:[name]})))); text({kind:"read-code-success",successfulReads:matches.length,matches});`,
+        code: `if (typeof fetch !== "undefined" || typeof process !== "undefined" || typeof require !== "undefined" || "mcp__cubby__purchase_import" in tools || "claim_next_import_work" in tools || typeof models !== "undefined") throw new Error("Unexpected sandbox authority"); const declaration = await describeTool("mcp__cubby__entity_read"); if (!declaration.includes("action")) throw new Error("Read declaration missing"); const matches = await Promise.all(["Synthetic ceramic mug", "Synthetic tea towel"].map(name => tools.mcp__cubby__entity_read({action:"resolve",entity:"product",names:[name]}))); if (!matches.every(value => typeof value === "object" && Array.isArray(value.results))) throw new Error("Expected structured read objects"); text({kind:"read-code-success",successfulReads:matches.length,matches});`,
       }),
       { check: "read-code", includes: "readCalls" },
       { check: "read-code", includes: "read-code-success" },
@@ -194,7 +209,23 @@ const syntheticAttemptLimit = {
   },
 };
 const synthetic = [
-  syntheticInquiry,
+  {
+    ...syntheticInquiry,
+    followingEmails: [
+      {
+        ...syntheticInquiry,
+        subject: "Synthetic shipping question",
+        bodyText:
+          "Synthetic shipping inquiry without an order identifier, amount or itemized evidence.",
+      },
+      {
+        ...syntheticInquiry,
+        subject: "Synthetic invoice question",
+        bodyText:
+          "Synthetic invoice inquiry without a receipt, order identifier or priced items.",
+      },
+    ],
+  },
   syntheticOwnOrder,
   ...(scripted ? [syntheticAttemptLimit] : []),
 ];
@@ -275,6 +306,10 @@ describe("isolated Mail coordinator replay", () => {
         primary,
         escalation,
         cases: reports.length,
+        emails: cases.reduce(
+          (total, sample) => total + 1 + (sample.followingEmails?.length ?? 0),
+          0,
+        ),
         parity: reports.length - disagreements.length,
         actualModels: [
           ...new Set(reports.flatMap((report) => report.actualModels)),
@@ -285,6 +320,8 @@ describe("isolated Mail coordinator replay", () => {
         disagreements,
         measurements: reports.map((report) => ({
           case: report.case,
+          sourceCount:
+            1 + (cases[report.case - 1]?.followingEmails?.length ?? 0),
           seconds: report.seconds ?? null,
           diagnostics: report.diagnostics,
           usage: report.usage ?? null,
@@ -328,6 +365,8 @@ describe("isolated Mail coordinator replay", () => {
         let diagnose = async (): Promise<string[]> => [];
         let fanoutVerified = false;
         let catalogVerified = false;
+        let followingVerified = false;
+        let followingDisagreements: string[] = [];
         const catalogProductIds: Array<typeof productTable.$inferSelect.id> =
           [];
         let initialProductCount = 0;
@@ -357,34 +396,55 @@ describe("isolated Mail coordinator replay", () => {
               .set({ email: sample.owner.address })
               .where(eq(user.id, ctx.actor.userId));
           const mailboxId = "synthetic-replay-mailbox";
-          const mail = await retainedMailFixture(ctx.db, {
-            ledgerPartyId: party.id,
-            mailboxId,
-            messageId: `synthetic-replay-${index}`,
-            subject: sample.subject,
-            sender: sample.sender,
-            receivedAt: new Date(sample.receivedAt),
-            checksum: await sha256Hex(
-              JSON.stringify({
-                bodyText: sample.bodyText,
-                bodyHtml: sample.bodyHtml,
-                headers: sample.headers,
+          const sources = [sample, ...(sample.followingEmails ?? [])];
+          // The frozen roster orders by id. Fresh sorted UUIDs make the
+          // dependent-read source precede the ordinary follow-up sources.
+          const ids = sources.map(() => crypto.randomUUID()).sort();
+          const mails = await Promise.all(
+            sources.map(async (source, sourceIndex) =>
+              retainedMailFixture(ctx.db, {
+                id: ids[sourceIndex]!,
+                ledgerPartyId: party.id,
+                mailboxId,
+                messageId: `synthetic-replay-${index}-${sourceIndex}`,
+                subject: source.subject,
+                sender: source.sender,
+                receivedAt: new Date(source.receivedAt),
+                checksum: await sha256Hex(
+                  JSON.stringify({
+                    bodyText: source.bodyText,
+                    bodyHtml: source.bodyHtml,
+                    headers: source.headers,
+                  }),
+                ),
+                content: {
+                  snippet: null,
+                  bodyText: source.bodyText,
+                  bodyHtml: source.bodyHtml,
+                  ...(source.headers && { headers: source.headers }),
+                },
+                classificationVersion: "isolated-replay-v1",
               }),
             ),
-            content: {
-              snippet: null,
-              bodyText: sample.bodyText,
-              bodyHtml: sample.bodyHtml,
-              ...(sample.headers && { headers: sample.headers }),
-            },
-            classificationVersion: "isolated-replay-v1",
-          });
+          );
+          const identities = await getDb(ctx.db)
+            .select({ id: emailTable.id, originalId: emailTable.orderMailId })
+            .from(emailTable)
+            .where(
+              inArray(
+                emailTable.orderMailId,
+                mails.map((source) => source.id),
+              ),
+            );
+          const emailIds = new Map(
+            identities.map((source) => [source.originalId, source.id]),
+          );
           await enableSyntheticMailImport(ctx, mailboxId);
           await authorizePurchaseAgent(ctx.db, ctx.actor.userId);
           const [started] = await startMailImport(ctx.db, {
             ledgerPartyId: party.id,
             userId: ctx.actor.userId,
-            messageIds: [mail.id],
+            messageIds: mails.map((source) => source.id),
           });
           const [dispatch] = await getDb(ctx.db)
             .select()
@@ -427,17 +487,45 @@ describe("isolated Mail coordinator replay", () => {
               baseline: sample.baseline,
               run,
               read: async () => {
-                const [outcome] = await getDb(ctx.db)
-                  .select({ result: runOperation.result })
-                  .from(runOperation)
-                  .where(
-                    and(
-                      eq(runOperation.runId, runId),
-                      eq(runOperation.kind, "target_outcome"),
+                const outcomes = await Promise.all(
+                  mails.map(async (source) => {
+                    const emailId = emailIds.get(source.id);
+                    if (!emailId)
+                      throw new Error("Replay Email identity is missing");
+                    const [outcome] = await getDb(ctx.db)
+                      .select({ result: runOperation.result })
+                      .from(runOperation)
+                      .where(
+                        and(
+                          eq(runOperation.runId, runId),
+                          mailOutcomeOfEmailSql(emailId),
+                        ),
+                      )
+                      .orderBy(desc(runOperation.completedAt))
+                      .limit(1);
+                    return outcome
+                      ? (storedMailOutcome.safeParse(outcome.result).data
+                          ?.mailOutcome.judgment ?? null)
+                      : null;
+                  }),
+                );
+                const following = sources
+                  .slice(1)
+                  .map((source, sourceIndex) => ({
+                    source: sourceIndex + 2,
+                    fields: mailReplayDisagreement(
+                      source.baseline,
+                      outcomes[sourceIndex + 1] ?? null,
                     ),
-                  )
-                  .orderBy(desc(runOperation.completedAt))
-                  .limit(1);
+                  }));
+                followingVerified = following.every((source) =>
+                  source.fields.every(
+                    (field) => field === "reason" || field === "category",
+                  ),
+                );
+                followingDisagreements = following.flatMap(
+                  (source) => source.fields,
+                );
                 const usage = await getDb(ctx.db)
                   .select({
                     feature: aiUsage.feature,
@@ -507,10 +595,7 @@ describe("isolated Mail coordinator replay", () => {
                     failed?.code || failed?.detail
                       ? [failed.code, failed.detail].filter(Boolean).join(": ")
                       : null,
-                  outcome: outcome
-                    ? (storedMailOutcome.safeParse(outcome.result).data
-                        ?.mailOutcome.judgment ?? null)
-                    : null,
+                  outcome: outcomes[0] ?? null,
                   actualModels: usage
                     .filter(
                       (row) =>
@@ -531,6 +616,11 @@ describe("isolated Mail coordinator replay", () => {
                       `Replay diagnostics unavailable: ${String(error).slice(0, DIAGNOSTIC_CHARS)}`,
                     ])),
                     ...catalogDiagnostics,
+                    ...(sample.followingEmails
+                      ? [
+                          `following Emails: ${JSON.stringify({ verified: followingVerified, sources: following })}`,
+                        ]
+                      : []),
                   ],
                   usage: usage.map((row) => ({
                     feature: row.feature,
@@ -559,6 +649,9 @@ describe("isolated Mail coordinator replay", () => {
                 const now = Date.now();
                 reports.push({
                   ...report,
+                  fields: [
+                    ...new Set([...report.fields, ...followingDisagreements]),
+                  ],
                   seconds: {
                     startup: Math.round((admittedAt - caseStartedAt) / 1000),
                     settle: Math.round((now - admittedAt) / 1000),
@@ -645,6 +738,10 @@ describe("isolated Mail coordinator replay", () => {
                         ]
                       : [
                           call("claim", "claim_next_import_work"),
+                          {
+                            check: "claim",
+                            includes: `synthetic-replay-${index}-0`,
+                          },
                           ...scriptedReads,
                           mcp("resolve", "purchase_import", started.runId, {
                             action: "mail_resolve",
@@ -656,6 +753,33 @@ describe("isolated Mail coordinator replay", () => {
                               reason: "Synthetic missing itemization",
                             },
                           }),
+                          ...(sample.followingEmails ?? []).flatMap(
+                            (_, followingIndex) => {
+                              const id = `following-${followingIndex}`;
+                              return [
+                                call(id, "claim_next_import_work"),
+                                {
+                                  check: id,
+                                  includes: `synthetic-replay-${index}-${followingIndex + 1}`,
+                                },
+                                mcp(
+                                  `resolve-${id}`,
+                                  "purchase_import",
+                                  started.runId,
+                                  {
+                                    action: "mail_resolve",
+                                    mailboxId,
+                                    messageId: from(id, "email.messageId"),
+                                    checksum: from(id, "read.checksum"),
+                                    disposition: {
+                                      kind: "unresolved",
+                                      reason: "Synthetic missing itemization",
+                                    },
+                                  },
+                                ),
+                              ];
+                            },
+                          ),
                           call("done", "claim_next_import_work"),
                         ],
               },
@@ -947,6 +1071,7 @@ describe("isolated Mail coordinator replay", () => {
                     ...logs,
                     ...fanoutDiagnostics,
                     `tool usage: ${JSON.stringify(toolUsage)}`,
+                    `request context: ${JSON.stringify(conversation.messages.flatMap((message) => message.metadata?.contextBreakdown?.calls ?? []))}`,
                     `peer usage: ${await peer.text()}`,
                     `code usage: ${JSON.stringify({ calls: calls.length, errors: calls.filter((part) => part.state === "output-error").length, failures: calls.filter((part) => part.state === "output-error").map((part) => part.errorText?.slice(0, DIAGNOSTIC_CHARS)) })}`,
                   ];
@@ -975,6 +1100,10 @@ describe("isolated Mail coordinator replay", () => {
             );
           }
           expect(observedOutcome).not.toBeNull();
+          expect(
+            !sample.followingEmails || followingVerified,
+            "Every Email in the Run must retain its disposition and monetary facts",
+          ).toBe(true);
           expect(
             !sample.catalogProducts || catalogVerified,
             "Catalog-backed imports must reuse existing Products without duplicates",

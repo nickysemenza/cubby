@@ -917,6 +917,7 @@ export class PurchaseImportRunAgent
         () => this.services(),
         (api, context) => this.toolGeneration(api, context),
         purpose === "mail_import" ? runId : undefined,
+        readCode,
       ),
     );
     if (purpose === "mail_import")

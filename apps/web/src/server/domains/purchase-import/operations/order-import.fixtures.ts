@@ -199,6 +199,7 @@ export async function purchasesForOrder(db: Database, orderId: string) {
 export async function retainedMailFixture(
   db: Database,
   input: Pick<RetainedMail, "ledgerPartyId" | "messageId"> & {
+    id?: RetainedMail["id"];
     checksum: string;
     bodyText?: string;
     mailboxId?: string;
@@ -215,6 +216,7 @@ export async function retainedMailFixture(
   const [mail] = await getDb(db)
     .insert(orderMail)
     .values({
+      id: input.id,
       ledgerPartyId: input.ledgerPartyId,
       vendorId: input.vendorId,
       rawChecksum: input.checksum,

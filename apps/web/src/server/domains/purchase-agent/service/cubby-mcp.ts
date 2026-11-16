@@ -26,7 +26,11 @@ import { z } from "zod";
 
 import type { McpToolDefinition, RunServices } from "./environment";
 import type { MailAttemptEvidence } from "./mail-attempts";
-import { CLAIM_IMPORT_WORK_TOOL, CUBBY_MCP_TOOL_PREFIX } from "./tool-protocol";
+import {
+  CLAIM_IMPORT_WORK_TOOL,
+  CUBBY_MCP_TOOL_PREFIX,
+  codeReadableTool,
+} from "./tool-protocol";
 
 // The transport needs a URL. No request leaves the Worker: `mcpFetch` hands
 // it to Cubby's MCP handler in process with the run's bearer.
@@ -41,6 +45,31 @@ const EMAIL_READ_OUTPUT_LIMITS = {
   maxBytes: MAIL_READ_RESPONSE_MAX_BYTES,
   maxLines: 10_000,
 };
+// The MCP runner owns domain validation. This is the same object transport
+// contract its structured successes expose, not a second entity schema.
+const STRUCTURED_READ_SCHEMA = { type: "object", additionalProperties: true };
+const STRUCTURED_READ_MAX_BYTES = 256 * 1024;
+
+function structuredReadResult(
+  result: ToolExecutionResult,
+  value: unknown,
+): ToolExecutionResult {
+  if (result.isError) return result;
+  const data = z.record(z.string(), z.json()).parse(value);
+  if (
+    new TextEncoder().encode(JSON.stringify(data)).byteLength >
+    STRUCTURED_READ_MAX_BYTES
+  ) {
+    const message =
+      "Read result exceeds the programmatic byte limit. Request selected fields, compact records, or a smaller page.";
+    return {
+      output: [{ type: "text", text: message }],
+      isError: true,
+      diagnostics: [{ severity: "error", code: "read_output_limit", message }],
+    };
+  }
+  return { ...result, structuredOutput: data };
+}
 
 /** The private Cubby MCP server's transport for one run. */
 function cubbyMcpFetch(services: () => RunServices): typeof fetch {
@@ -151,7 +180,10 @@ export async function settleMailAttemptLimit(input: {
   }
 }
 
-export function cubbyToolResult(raw: unknown): ToolExecutionResult {
+export function cubbyToolResult(
+  raw: unknown,
+  structured = false,
+): ToolExecutionResult {
   const parsed = callResult.parse(raw);
   // Only server metadata supplies retry codes. Email text is untrusted and
   // must never classify the outcome of a writer.
@@ -181,7 +213,7 @@ export function cubbyToolResult(raw: unknown): ToolExecutionResult {
   const original = attachmentResult.safeParse(parsed.structuredContent);
   if (original.success) {
     const { dataBase64, mimeType } = original.data.originalAttachment;
-    return {
+    const result: ToolExecutionResult = {
       output: [
         {
           type: "text",
@@ -192,13 +224,26 @@ export function cubbyToolResult(raw: unknown): ToolExecutionResult {
       isError: parsed.isError === true,
       diagnostics,
     };
+    return structured
+      ? structuredReadResult(
+          result,
+          JSON.parse(mailReadAgentText(original.data)),
+        )
+      : result;
   }
   if (content.length === 0 && parsed.structuredContent !== undefined)
     content.push({
       type: "text",
       text: JSON.stringify(parsed.structuredContent),
     });
-  return { output: content, isError: parsed.isError === true, diagnostics };
+  const result: ToolExecutionResult = {
+    output: content,
+    isError: parsed.isError === true,
+    diagnostics,
+  };
+  return structured
+    ? structuredReadResult(result, parsed.structuredContent)
+    : result;
 }
 
 /** Decision inputs remain in the transcript; complete rosters remain in durable proposals. */
@@ -318,6 +363,7 @@ export function cubbyMcpExtension(
     context: Context,
   ) => Promise<string | undefined>,
   runId?: string,
+  structuredReads = false,
 ): Extension {
   let client: Promise<Client> | undefined;
   const connected = () => {
@@ -341,6 +387,10 @@ export function cubbyMcpExtension(
         // MCP tool input schemas are always JSON-Schema objects.
         parameters: tool.inputSchema,
         replay: "safe",
+        ...(structuredReads &&
+        codeReadableTool(`${CUBBY_MCP_TOOL_PREFIX}${tool.name}`)
+          ? { structuredOutputSchema: STRUCTURED_READ_SCHEMA }
+          : {}),
         ...(tool.name === "purchase_import_read"
           ? { outputLimits: EMAIL_READ_OUTPUT_LIMITS }
           : {}),
@@ -349,25 +399,26 @@ export function cubbyMcpExtension(
           if (!isJsonObject(raw))
             throw new Error(`${tool.name} arguments must be an object`);
           const args = raw;
-          const result = photoCoordinatorToolResult(
-            tool.name,
-            args,
-            callResult.parse(
-              await (
-                await connected()
-              ).callTool(
-                {
-                  name: tool.name,
-                  arguments: await stampGeneration(
-                    args,
-                    () => generationFor?.(api, context),
-                    runId,
-                  ),
-                },
-                { signal: context.abortSignal, timeout: TOOL_CALL_TIMEOUT_MS },
-              ),
+          const response = callResult.parse(
+            await (
+              await connected()
+            ).callTool(
+              {
+                name: tool.name,
+                arguments: await stampGeneration(
+                  args,
+                  () => generationFor?.(api, context),
+                  runId,
+                ),
+              },
+              { signal: context.abortSignal, timeout: TOOL_CALL_TIMEOUT_MS },
             ),
           );
+          const result =
+            structuredReads &&
+            codeReadableTool(`${CUBBY_MCP_TOOL_PREFIX}${tool.name}`)
+              ? cubbyToolResult(response, true)
+              : photoCoordinatorToolResult(tool.name, args, response);
           // A settled Mail source continues with the next durable claim, as
           // `import_extracted_order` does, instead of a claim-only model turn.
           if (
