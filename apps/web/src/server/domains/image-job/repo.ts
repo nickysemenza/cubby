@@ -19,10 +19,12 @@ import {
 } from "~/entity/generated/entity-schema-bindings.imageJob.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
-import { uuidArrayParam } from "~/server/db/helpers/query";
+import { uuidArrayParam, textArrayParam } from "~/server/db/helpers/query";
 import { device, imageProcessingJob } from "~/server/db/schema";
 import { imageExecutionReceipts } from "~/server/domains/image-processing/repo/execution-receipts";
 import {
+  IMAGE_CLOUD_ASK_FEATURE,
+  IMAGE_DEVICE_ASK_FEATURE,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
 } from "~/server/domains/image-processing/repo/processor-policy";
@@ -48,10 +50,7 @@ type Facts = {
   storedState: string;
 };
 
-/**
- * AI usage is billed per attempt (`image_processing_attempt`) and, for older
- * rows, per job kind; both belong to the job.
- */
+/** Retained Answer costs and latest execution receipts, loaded once for the page. */
 const loadFacts = async (
   db: Database | DrizzleTransaction,
   ids: readonly string[],
@@ -66,28 +65,37 @@ const loadFacts = async (
     state: RawImageJobOut["state"];
     storedState: string;
   }>(sql`
-    SELECT j.id, j.state AS "storedState", cost.charged, cost.standard,
+    WITH page_receipts AS MATERIALIZED (
+      SELECT "jobId", number, executor FROM ${imageExecutionReceipts}
+      WHERE "jobId" = ANY(${uuidArrayParam(ids)})
+    ), page_costs AS MATERIALIZED (
+      SELECT owed.input->${"input"}->>${"receiptId"} AS job_id,
+        coalesce(sum(a."costMicros"),0)/1000000.0 AS charged,
+        coalesce(sum(coalesce((a.raw::jsonb->>'standardCostMicros')::bigint,a."costMicros")),0)/1000000.0 AS standard
+      FROM "Answer" a
+      -- Keep input reads keyed by paid execution Answers, rather than scanning unrelated Ask payloads.
+      JOIN LATERAL (
+        SELECT input FROM "Ask" owed WHERE owed.id=a."askId" LIMIT 1
+      ) owed ON true
+      WHERE a.feature = ANY(${textArrayParam([IMAGE_CLOUD_ASK_FEATURE, IMAGE_DEVICE_ASK_FEATURE])})
+        AND owed.input->${"input"}->>${"receiptId"} = ANY(${textArrayParam(ids)})
+      GROUP BY job_id
+    )
+    SELECT j.id, j.state AS "storedState", coalesce(cost.charged,0) AS charged,
+      coalesce(cost.standard,0) AS standard,
       coalesce(
-        (SELECT a.executor->>${"name"} FROM (SELECT * FROM ${imageExecutionReceipts}) a
+        (SELECT a.executor->>${"name"} FROM page_receipts a
           WHERE a."jobId" = j.id AND a.executor IS NOT NULL
           ORDER BY a.number DESC LIMIT 1),
         CASE WHEN (j.kind = ${imageProcessingJobKind.enum.describe_image} AND j."processorRevision" = ${IMAGE_DESCRIPTION_PROCESSOR_REVISION})
           OR (j.kind = ${imageProcessingJobKind.enum.identify_image} AND j."processorRevision" = ${IMAGE_IDENTIFICATION_PROCESSOR_REVISION})
           THEN 'AI Gateway' END
       ) AS executor,
-      EXISTS (SELECT 1 FROM (SELECT * FROM ${imageExecutionReceipts}) a
+      EXISTS (SELECT 1 FROM page_receipts a
         WHERE a."jobId" = j.id AND a.executor->>${"kind"} = ${"device"}) AS "deviceRan",
       ${imageJobActionStateSql("j")} AS state
     FROM "ImageProcessingJob" j
-    -- Each usage source probes "AiUsage_job_idx" by its own (jobKind, jobId).
-    -- An OR with an attempt-id IN list cannot, and scanned every attempt's
-    -- usage once per job and sum (~775 ms for a 50-row page).
-    CROSS JOIN LATERAL (
-      SELECT coalesce(sum(a."costMicros"),0)/1000000.0 AS charged,
-        coalesce(sum(coalesce((a.raw::jsonb->>'standardCostMicros')::bigint,a."costMicros")),0)/1000000.0 AS standard
-      FROM "Answer" a JOIN "Ask" owed ON owed.id=a."askId"
-      WHERE owed.input->'input'->>'receiptId'=j.id::text
-    ) cost
+    LEFT JOIN page_costs cost ON cost.job_id = j.id::text
     WHERE j.id = ANY(${uuidArrayParam(ids)})
   `);
   return new Map(

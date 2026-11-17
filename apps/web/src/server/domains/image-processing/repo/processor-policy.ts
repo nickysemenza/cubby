@@ -16,6 +16,9 @@ import {
   preferredImageDescriptionPolicy,
 } from "./description-policy";
 
+export const IMAGE_DEVICE_ASK_FEATURE = "image.device";
+export const IMAGE_CLOUD_ASK_FEATURE = "image.cloud";
+
 // Cloud eligibility no longer gates Apple subject lifting; prior skipped work can be rescheduled.
 export const IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION = 2;
 
