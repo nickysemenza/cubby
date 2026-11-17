@@ -1176,7 +1176,9 @@ parser revision; an explicit retry cannot reuse a missing-original observation
 from an earlier row revision.
 
 `ImageProcessingJob` remains a stable request receipt for its source, processor,
-submissions and displayed outcome. `ImageProcessingEvent` retains append-only
+submissions and displayed outcome. Displayed charged and standard costs sum retained cloud/device
+execution Answers whose input names that receipt; another Ask family does not acquire cost
+ownership by carrying the same key. `ImageProcessingEvent` retains append-only
 execution receipts and diagnostics read by member reports, devices and rendition
 cleanup. The Ask owns the claim: the device wire's `jobId` names the Ask and
 `attemptId` names its token. Renewal, release, cancellation and replay share the

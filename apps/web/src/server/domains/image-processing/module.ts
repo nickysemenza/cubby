@@ -11,6 +11,10 @@ import { z } from "zod";
 
 import { imageProcessingEvent } from "~/server/db/image-processing-schema";
 import { imageEvidence } from "~/server/db/retained-tables";
+import {
+  IMAGE_CLOUD_ASK_FEATURE,
+  IMAGE_DEVICE_ASK_FEATURE,
+} from "~/server/domains/image-processing/repo/processor-policy";
 import { defineAsk, defineEvidence } from "~/server/kernel/api";
 
 const imageExecutionInput = z.object({
@@ -33,7 +37,7 @@ const executionResult = imageProcessingTerminalResult.extend({
 });
 export type ImageExecutionResult = z.infer<typeof executionResult>;
 export const deviceImageAsk = defineAsk({
-  feature: "image.device",
+  feature: IMAGE_DEVICE_ASK_FEATURE,
   producer: "image",
   promptVersion: "1",
   input: imageExecutionInput,
@@ -44,7 +48,7 @@ export const deviceImageAsk = defineAsk({
 });
 export const cloudImageAsk = defineAsk({
   ...deviceImageAsk,
-  feature: "image.cloud",
+  feature: IMAGE_CLOUD_ASK_FEATURE,
   label: "a cloud image result",
 });
 export const imageExecutionEvidence = defineEvidence({

@@ -1,6 +1,6 @@
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { generateShortcode } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -10,6 +10,7 @@ import { z } from "zod";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { aiUsage, imageProcessingJob, answer } from "~/server/db/schema";
+import { imageJobRepository } from "~/server/domains/image-job/repo";
 import { readDeviceBacklog } from "~/server/domains/image-processing/repo/device-backlog";
 import { seedImageExecutionReceipts } from "~/server/domains/image-processing/repo/image-execution.fixtures";
 import { updateImageExecution } from "~/server/domains/image-processing/repo/image-execution.fixtures";
@@ -55,9 +56,8 @@ describe("image job cost", () => {
     return row;
   };
 
-  // Regression: the per-attempt and per-kind usage sources were one OR whose
-  // attempt-id IN list could not use the (jobKind, jobId) index. The rewrite
-  // must still count both sources, once each, and skip deleted usage.
+  // Only retained image execution Answers own these totals. Legacy usage and
+  // another Ask family's receipt key must not contribute, including on a batch read.
   it("reads retained Answer cost once and excludes unrelated usage", async () => {
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
     const target = await job();
@@ -88,16 +88,22 @@ describe("image job cost", () => {
     await getDb(ctx.db)
       .insert(aiUsage)
       .values([
-        usage("image_processing_attempt", attempts[0]!, 0.25),
-        usage("image_processing_attempt", attempts[1]!, 0.5),
-        usage("describe_image", target.id, 1),
+        usage("image_processing_attempt", attempts[0]!, 0.5),
+        usage("image_processing_attempt", attempts[1]!, 1),
+        usage("describe_image", target.id, 2),
         usage("describe_image", other.id, 16),
       ]);
     const { queueAsk } = await import("~/server/kernel/api");
     const { cloudImageAsk } =
       await import("~/server/domains/image-processing/module");
-    for (const [generation, cost] of [250000, 500000, 1000000].entries()) {
-      const id = await queueAsk(ctx.db, cloudImageAsk, {
+    for (const [generation, cost] of [
+      250000, 500000, 1000000, 16000000,
+    ].entries()) {
+      const kind =
+        generation === 3
+          ? { ...cloudImageAsk, feature: "synthetic.unrelated" }
+          : cloudImageAsk;
+      const id = await queueAsk(ctx.db, kind, {
         receiptId: target.id,
         imageId: target.imageId,
         sourceContentHash: target.sourceContentHash,
@@ -138,6 +144,29 @@ describe("image job cost", () => {
       .parse(read);
     expect(fieldValueOf(item.fields.chargedCost)).toBe(1.75);
     expect(fieldValueOf(item.fields.standardCost)).toBe(3.5);
+    const page = await imageJobRepository.repository.read(
+      kernelCtx(ctx),
+      [
+        parseShortcodeFor("imageJob", target.shortcode),
+        parseShortcodeFor("imageJob", other.shortcode),
+      ],
+      ["chargedCost", "standardCost"],
+    );
+    expect(page.data).toHaveLength(2);
+    expect(page.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: target.shortcode,
+          chargedCost: 1.75,
+          standardCost: 3.5,
+        }),
+        expect.objectContaining({
+          id: other.shortcode,
+          chargedCost: 0,
+          standardCost: 0,
+        }),
+      ]),
+    );
   });
 
   it("shows the Device holding a live lease, its expiry, and the device backlog", async () => {
