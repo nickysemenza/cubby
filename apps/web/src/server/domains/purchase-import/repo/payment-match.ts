@@ -148,11 +148,7 @@ const allocationInput = z.object({
       .transform((value) => BigInt(value)),
   }),
 });
-function recordedAllocations(
-  input: PaymentMatchInput,
-  c: Pure,
-  transactionId: string,
-) {
+function allocationRows(input: PaymentMatchInput, c: Pure) {
   const values = [
     ...input.manuals.map((row) => row.payload),
     ...input.recordDecisions.flatMap((row) => {
@@ -161,25 +157,26 @@ function recordedAllocations(
       return current?.kind === "set" ? [current.value] : [];
     }),
   ];
-  const rows = new Map<string, z.infer<typeof allocationInput>["values"]>();
+  const byTransaction = new Map<
+    string,
+    z.infer<typeof allocationInput>["values"][]
+  >();
   for (const value of values) {
     const parsed = allocationInput.safeParse(value);
-    if (parsed.success && parsed.data.values.transactionId === transactionId) {
-      const purchaseId = c.reference("purchase", parsed.data.values.purchaseId);
-      if (purchaseId)
-        rows.set(purchaseId, { ...parsed.data.values, purchaseId });
-    }
+    if (!parsed.success) continue;
+    const row = parsed.data.values;
+    const rows = byTransaction.get(row.transactionId) ?? [];
+    rows.push(row);
+    byTransaction.set(row.transactionId, rows);
   }
-  return [...rows.values()];
+  return byTransaction;
 }
 
-function choices(
+function paymentChoices(
   input: PaymentMatchInput,
-  order: Order,
   c: Pure,
   paymentsFor: PaymentsFor,
-): ChargeMatchRead[] {
-  const event = orderEventKey(order);
+) {
   const merchant = (value: string | null) => statementMerchantKey(value ?? "");
   const knownVendor = (transaction: Movement) =>
     input.vendors.filter(
@@ -190,10 +187,16 @@ function choices(
             merchant(name) && merchant(name) === merchant(transaction.merchant),
         ),
     );
-  return input.transactions.flatMap((transaction) => {
-    const account = input.accounts.find(
-      (row) => row.id === transaction.accountId,
-    );
+  const accounts = new Map(input.accounts.map((row) => [row.id, row]));
+  const bindings = new Map<string, Binding[]>();
+  for (const binding of input.bindings) {
+    if (binding.fact.kind !== "retainedPayment") continue;
+    const rows = bindings.get(binding.eventKey) ?? [];
+    rows.push(binding);
+    bindings.set(binding.eventKey, rows);
+  }
+  const movements = input.transactions.flatMap((transaction, position) => {
+    const account = accounts.get(transaction.accountId);
     const date = transaction.transactionDate ?? transaction.postedDate;
     if (
       !account ||
@@ -204,87 +207,152 @@ function choices(
       !["purchase", "fee", "refund"].includes(transaction.kind) ||
       (transaction.kind === "refund"
         ? transaction.amount >= 0n
-        : transaction.amount <= 0n) ||
-      account.ledgerPartyId !== order.ledgerPartyId
+        : transaction.amount <= 0n)
     )
       return [];
-    const decision = c.decision(
-      "identity",
-      event,
-      recordSubject("financialTransaction", transaction.id),
-    );
-    if (decision?.kind === "distinct") return [];
-    const known = knownVendor(transaction);
-    if (
-      decision?.kind !== "same" &&
-      known.length &&
-      !known.some((row) => row.id === order.vendorId)
-    )
-      return [];
-    // A member's recorded allocation is an accepted input, never spare capacity.
-    const recorded = recordedAllocations(input, c, transaction.id);
-    const target = c.decision("assignment", event, "purchaseId");
-    const purchaseId =
-      target?.kind === "set" && typeof target.value === "string"
-        ? c.reference("purchase", target.value)
-        : order.purchaseId;
-    if (
-      recorded.length &&
-      (!purchaseId ||
-        !recorded.some((row) => row.purchaseId === purchaseId) ||
-        allocationSetViolation({
-          transactionAmountMinor: transaction.amount,
-          kind: transaction.kind,
-          next: recorded,
-        }))
-    )
-      return [];
-    const occupied = input.bindings.some(
-      (binding) =>
-        binding.fact.kind === "retainedPayment" &&
-        binding.eventKey === paymentBankEventKey(transaction.id) &&
-        !paymentsFor(order).some((payment) => payment.id === binding.fact.id) &&
-        !input.orders.some(
-          (other) =>
-            other.id !== order.id &&
-            orderEventKey(other) === event &&
-            paymentsFor(other).some(
-              (payment) => payment.id === binding.fact.id,
-            ),
-        ),
-    );
-    if (occupied && decision?.kind !== "same") {
-      const related = input.orders.some(
-        (other) =>
-          other.id !== order.id &&
-          paymentsFor(other).some(
-            (payment) =>
-              bindingFor(input, "retainedPayment", payment.id)?.eventKey ===
-              paymentBankEventKey(transaction.id),
-          ) &&
-          other.extraction.candidate?.payments.length === 1 &&
-          order.extraction.candidate?.payments.length === 1,
-      );
-      if (!related) return [];
-    }
     return [
       {
-        id: transaction.id,
-        amountMinor: transaction.amount,
-        occurredAt: new Date(`${date}T12:00:00.000Z`),
-        cardLastFours: cardLastFoursOn(account.cardNumbers, date),
-        storedValue: account.identity.kind === "stored_value",
+        transaction,
+        position,
+        party: account.ledgerPartyId,
+        subject: recordSubject("financialTransaction", transaction.id),
+        vendors: new Set(knownVendor(transaction).map((row) => row.id)),
+        bindings: bindings.get(paymentBankEventKey(transaction.id)) ?? [],
+        choice: {
+          id: transaction.id,
+          amountMinor: transaction.amount,
+          occurredAt: new Date(`${date}T12:00:00.000Z`),
+          cardLastFours: cardLastFoursOn(account.cardNumbers, date),
+          storedValue: account.identity.kind === "stored_value",
+        } satisfies ChargeMatchRead,
       },
     ];
   });
+  const byAmount = new Map<bigint, typeof movements>();
+  const bySubject = new Map<string, (typeof movements)[number]>();
+  for (const movement of movements) {
+    const amount = movement.transaction.amount;
+    const roster = byAmount.get(amount) ?? [];
+    roster.push(movement);
+    byAmount.set(amount, roster);
+    bySubject.set(movement.subject, movement);
+  }
+  let recordedRows: ReturnType<typeof allocationRows> | undefined;
+  const allocations = new Map<
+    string,
+    { owners: Set<string>; invalid: boolean }
+  >();
+  return (order: Order, amounts?: ReadonlySet<bigint>) => {
+    const event = orderEventKey(order);
+    const decisions = c.identityDecisions(event);
+    let roster = movements;
+    if (amounts) {
+      const selected = new Set(
+        [...amounts].flatMap((amount) => byAmount.get(amount) ?? []),
+      );
+      // An explicit selection at another amount can suppress an automatic match.
+      for (const [subject, choice] of decisions) {
+        const movement = bySubject.get(subject);
+        if (movement && choice === "same") selected.add(movement);
+      }
+      roster = [...selected].sort((a, b) => a.position - b.position);
+    }
+    const eligible: ChargeMatchRead[] = [];
+    const explicit: ChargeMatchRead[] = [];
+    let purchaseId: string | null | undefined;
+    for (const movement of roster) {
+      if (movement.party !== order.ledgerPartyId) continue;
+      const { transaction } = movement;
+      const decision = decisions.get(movement.subject);
+      if (decision === "distinct") continue;
+      if (
+        decision !== "same" &&
+        movement.vendors.size &&
+        !movement.vendors.has(order.vendorId)
+      )
+        continue;
+      // A member's recorded allocation is an accepted input, never spare capacity.
+      let allocation = allocations.get(transaction.id);
+      if (!allocation) {
+        recordedRows ??= allocationRows(input, c);
+        const byOwner = new Map<
+          string,
+          z.infer<typeof allocationInput>["values"]
+        >();
+        for (const row of recordedRows.get(transaction.id) ?? []) {
+          const purchaseId = c.reference("purchase", row.purchaseId);
+          if (purchaseId) byOwner.set(purchaseId, { ...row, purchaseId });
+        }
+        const recorded = [...byOwner.values()];
+        allocation = {
+          owners: new Set(recorded.map((row) => row.purchaseId)),
+          invalid:
+            recorded.length > 0 &&
+            Boolean(
+              allocationSetViolation({
+                transactionAmountMinor: transaction.amount,
+                kind: transaction.kind,
+                next: recorded,
+              }),
+            ),
+        };
+        allocations.set(transaction.id, allocation);
+      }
+      if (purchaseId === undefined) {
+        const target = c.decision("assignment", event, "purchaseId");
+        purchaseId =
+          target?.kind === "set" && typeof target.value === "string"
+            ? (c.reference("purchase", target.value) ?? null)
+            : order.purchaseId;
+      }
+      if (
+        allocation.owners.size &&
+        (!purchaseId ||
+          !allocation.owners.has(purchaseId) ||
+          allocation.invalid)
+      )
+        continue;
+      const occupied = movement.bindings.some(
+        (binding) =>
+          !paymentsFor(order).some(
+            (payment) => payment.id === binding.fact.id,
+          ) &&
+          !input.orders.some(
+            (other) =>
+              other.id !== order.id &&
+              orderEventKey(other) === event &&
+              paymentsFor(other).some(
+                (payment) => payment.id === binding.fact.id,
+              ),
+          ),
+      );
+      if (occupied && decision !== "same") {
+        const related = input.orders.some(
+          (other) =>
+            other.id !== order.id &&
+            paymentsFor(other).some(
+              (payment) =>
+                bindingFor(input, "retainedPayment", payment.id)?.eventKey ===
+                paymentBankEventKey(transaction.id),
+            ) &&
+            other.extraction.candidate?.payments.length === 1 &&
+            order.extraction.candidate?.payments.length === 1,
+        );
+        if (!related) continue;
+      }
+      eligible.push(movement.choice);
+      if (decision === "same") explicit.push(movement.choice);
+    }
+    return { eligible, explicit };
+  };
 }
 
 function planOrder(
   input: PaymentMatchInput,
   order: Order,
-  c: Pure,
   paymentsFor: PaymentsFor,
   heads: readonly Order[],
+  choicesFor: ReturnType<typeof paymentChoices>,
 ) {
   const rows = heads.flatMap((row) => paymentsFor(row));
   const normalized = normalizePaymentSet(
@@ -302,27 +370,28 @@ function planOrder(
   const total = input.totals.get(order.id);
   const paid = payments.reduce((sum, row) => sum + row.amountMinor, 0n);
   const abs = (value: bigint) => (value < 0n ? -value : value);
-  const eligible = choices(input, order, c, paymentsFor);
-  const explicit = eligible.filter(
-    (candidate) =>
-      c.decision(
-        "identity",
-        orderEventKey(order),
-        recordSubject("financialTransaction", candidate.id),
-      )?.kind === "same",
+  const { eligible, explicit } = choicesFor(
+    order,
+    new Set(payments.map((payment) => payment.amountMinor)),
   );
   // An existing movement a member explicitly reviewed can remain a partial
   // settlement of a corrected total. New automatic matches still require the
   // complete order payment set and every ordinary movement eligibility check.
-  const candidates =
-    total !== null && total !== undefined && abs(paid) < abs(total)
-      ? explicit
-      : eligible;
+  const partial =
+    total !== null && total !== undefined && abs(paid) < abs(total);
+  const candidates = partial ? explicit : eligible;
   const matches = completePaymentMatches(
     payments,
     explicit.length ? explicit : candidates,
   );
-  return { kind: "planned" as const, rows, payments, candidates, matches };
+  return {
+    kind: "planned" as const,
+    rows,
+    payments,
+    candidates,
+    matches,
+    partial,
+  };
 }
 
 function contenderReview(input: PaymentMatchInput, c: Pure) {
@@ -597,6 +666,7 @@ export const paymentMatching: Pick<
     }
     // Decisions and references are fixed within this scope's reconcile round.
     // Reuse plans only within that round so later evidence still re-plans.
+    const choicesFor = paymentChoices(input, c, paymentsFor);
     const plans = new Map<string, ReturnType<typeof planOrder>>();
     const planFor = (order: Order) => {
       const existing = plans.get(order.id);
@@ -604,9 +674,9 @@ export const paymentMatching: Pick<
       const plan = planOrder(
         input,
         order,
-        c,
         paymentsFor,
         headsByPaymentSet.get(paymentSetKey(order)) ?? [],
+        choicesFor,
       );
       plans.set(order.id, plan);
       return plan;
@@ -658,7 +728,10 @@ export const paymentMatching: Pick<
         );
       if (ambiguous) {
         c.gap.decision("which bank charge pays this order", {
-          actions: plan.candidates.flatMap((candidate) => [
+          actions: (plan.partial
+            ? plan.candidates
+            : choicesFor(order).eligible
+          ).flatMap((candidate) => [
             {
               channel: "identity" as const,
               kind: "same" as const,
