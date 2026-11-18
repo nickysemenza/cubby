@@ -418,10 +418,16 @@ export const emailState = defineReconciler<Input>({
       [],
       sql`${purchase.id}::text = ANY(${textArrayParam(ids)})
       OR ${purchase.orderId} = ANY(${textArrayParam(events.flatMap((row) => (row.orderId ? [row.orderId] : [])))})
-      OR ${purchase.id} IN (SELECT coalesce(e."mergedIntoId",e.id) FROM "Decision" choice JOIN "Entity" e
-        ON e.id::text = choice.value #>> '{}' OR e.shortcode = choice.value #>> '{}'
-        OR e.id::text = choice.value->>'purchaseId' OR e.shortcode = choice.value->>'purchaseId'
-        OR choice.field = 'link:' || e.id::text OR choice.field = 'link:' || e.shortcode
+      OR ${purchase.id} IN (SELECT coalesce(e."mergedIntoId",e.id) FROM "Decision" choice
+        CROSS JOIN LATERAL (VALUES
+          (choice.value #>> '{}'),
+          (choice.value->>'purchaseId'),
+          (CASE WHEN starts_with(choice.field, 'link:') THEN substring(choice.field from 6) END)
+        ) reference(token)
+        JOIN "Entity" e ON (
+          e.id = CASE WHEN pg_input_is_valid(reference.token, ${"uuid"}) THEN reference.token::uuid END
+          AND e.id::text = reference.token
+        ) OR e.shortcode = reference.token
         WHERE choice.channel = ${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)} AND choice.subject = ANY(${textArrayParam(subjects)}))`,
     );
     const accounts = [
