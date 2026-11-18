@@ -3,7 +3,7 @@
  * transaction, raises `KeyRev` for each of its keys before it reads
  * `ScopeDep`, then raises `ScopeDirty.seq` for every scope that read one of
  * those keys or that the row discovers. An apply locks the same `KeyRev` rows
- * in the same upsert form, so a load's dependency registration and a
+ * before registering dependencies, so a load's dependency registration and a
  * concurrent mutation serialize per key: either the apply sees the mutation
  * and conflicts, or the mutation sees the committed `ScopeDep` and dirties.
  *
@@ -35,19 +35,30 @@ async function raiseKeys(q: Q, keys: readonly Key[]): Promise<void> {
 
 /**
  * Lock each key's revision row, creating an absent one at 0, and return the
- * revisions. The no-op update takes the same row lock a mutation's raise does.
+ * revisions. Existing rows are locked without rewriting their revisions.
  */
 export async function lockKeyRevs(
   q: Q,
   keys: readonly Key[],
 ): Promise<Map<Key, number>> {
   if (!keys.length) return new Map();
+  // The upsert returns the current revision if a key was created after the
+  // statement snapshot but before gate admission.
   const result = await q.execute<{ key: string; rev: string | number }>(sql`
-    WITH gate AS MATERIALIZED (SELECT ${takeHouseholdGate})
-    INSERT INTO "KeyRev" (key, rev)
-    SELECT key, 0 FROM unnest(${textArrayParam(keys)}) AS keys(key), gate ORDER BY key
-    ON CONFLICT (key) DO UPDATE SET rev = "KeyRev".rev
-    RETURNING key, rev`);
+    WITH gate AS MATERIALIZED (SELECT ${takeHouseholdGate}),
+    wanted AS MATERIALIZED (
+      SELECT keys.key FROM unnest(${textArrayParam(keys)}) AS keys(key) CROSS JOIN gate
+    ), locked AS MATERIALIZED (
+      SELECT current.key, current.rev FROM wanted JOIN "KeyRev" current USING (key)
+      ORDER BY current.key FOR UPDATE OF current
+    ), inserted AS (
+      INSERT INTO "KeyRev" (key, rev)
+      SELECT wanted.key, 0 FROM wanted LEFT JOIN locked USING (key)
+      WHERE locked.key IS NULL ORDER BY wanted.key
+      ON CONFLICT (key) DO UPDATE SET rev = "KeyRev".rev
+      RETURNING key, rev
+    )
+    SELECT key, rev FROM locked UNION ALL SELECT key, rev FROM inserted`);
   return new Map(result.rows.map((row) => [row.key, Number(row.rev)]));
 }
 

@@ -351,11 +351,11 @@ input mutation raises `rev` for each of its keys with an upsert before it reads
 `ScopeDep`. A load records the `rev` it saw for every key it read, 0 for a key
 with no row, and reads it in the same statement as the rows, so both come from
 one snapshot. A read returns its shared revision map once, including when no
-data rows match. An apply takes the same rows with the same upsert form, which
-creates a row for an absent key, and compares each `rev` with the one its load
-saw. Because both sides lock the same row, either the apply sees the committed
-mutation and leaves the scope dirty, or the mutation sees the committed
-`ScopeDep` row and raises `ScopeDirty.seq`.
+data rows match. An apply locks existing rows, upserts missing rows at 0, and
+compares each resulting `rev` with the one its load saw. Because both sides
+lock the same row, either the apply sees the committed mutation and leaves
+the scope dirty, or the mutation sees the committed `ScopeDep` row and raises
+`ScopeDirty.seq`.
 
 `ScopeDirty` can never hold more rows than there are scopes. Implicit output
 invalidations never dirty their applying scopes, including writes a delete
