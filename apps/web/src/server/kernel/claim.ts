@@ -12,6 +12,7 @@ import {
   kernelWaitCause,
   MACHINERY_RAW_ERROR_BYTES,
 } from "@cubby/schemas/kernel/machinery";
+import { kernelStage } from "@cubby/schemas/kernel/stage";
 import { sql, type SQL } from "drizzle-orm";
 
 import { describeErrorCauses } from "~/lib/error-diagnostics";
@@ -215,6 +216,47 @@ export async function settleFailure(
         WHERE ${owned}`);
       return failure;
   }
+}
+
+/** Release a transient batch and record its error only for claims we still own. */
+export async function settleTransientScopes(
+  q: Q,
+  scopes: readonly ClaimedScope[],
+  version: number,
+  rules: string,
+  error: string,
+): Promise<void> {
+  const packed = scopes.map(({ kind, key, token, attempts }) => ({
+    kind,
+    key,
+    token,
+    delay: backoffMs(attempts + 1) / 1000,
+  }));
+  await q.execute(sql`
+    WITH wanted AS (
+      SELECT * FROM jsonb_to_recordset(${JSON.stringify(packed)}::jsonb)
+        AS claim(kind text, key text, token uuid, delay double precision)
+    ), owned AS MATERIALIZED (
+      SELECT wanted.*
+      FROM wanted
+      JOIN "ScopeDirty" dirty ON dirty."scopeKind" = wanted.kind AND dirty."scopeKey" = wanted.key
+        AND dirty."claimToken" = wanted.token
+      ORDER BY dirty."scopeKind", dirty."scopeKey" FOR UPDATE OF dirty
+    ), settled AS (
+      UPDATE "ScopeDirty" dirty
+      SET "claimToken" = NULL, "claimDeadline" = NULL,
+        "availableAt" = now() + make_interval(secs => owned.delay),
+        "waitCause" = NULL, "lastError" = ${error}
+      FROM owned
+      WHERE dirty."scopeKind" = owned.kind AND dirty."scopeKey" = owned.key
+        AND dirty."claimToken" = owned.token
+      RETURNING dirty."scopeKind", dirty."scopeKey"
+    )
+    INSERT INTO "ScopeState" ("scopeKind", "scopeKey", version, rules, stage, "errorClass", error)
+    SELECT "scopeKind", "scopeKey", ${version}, ${rules}, ${kernelStage.enum.waiting}, 'transient', ${error}
+    FROM settled
+    ON CONFLICT ("scopeKind", "scopeKey") DO UPDATE
+    SET "errorClass" = excluded."errorClass", error = excluded.error`);
 }
 
 export type ClaimedScope = {

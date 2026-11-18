@@ -488,7 +488,10 @@ upstream scan by the whole queue; claim order and the upstream barrier stay
 unchanged. The claim module also owns the shared lease protocol
 for all three: a claim token, a deadline with renewal, an attempt count,
 `availableAt` backoff, a wait cause, cancellation, and the single failure
-classifier. A claim that outlives its deadline cannot publish. Queue permits
+classifier. Scopes that share a transient failure release their claims and
+store the error in one statement under the same claim tokens. They keep their
+attempt counts and use their own retry delays. A claim that outlives its
+deadline cannot publish. Queue permits
 and the hourly cron stay as the wake and the backstop (ADR 0025 item 2); the
 next wake is the least `availableAt` across the three tables. Commit wakes and
 `household.changed` freshness notifications stay with `generic/changes`, and a

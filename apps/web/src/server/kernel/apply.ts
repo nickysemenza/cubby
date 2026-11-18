@@ -54,6 +54,7 @@ import {
   rawError,
   renewScopeClaims,
   settleFailure,
+  settleTransientScopes,
   type ClaimedScope,
 } from "./claim";
 import {
@@ -795,6 +796,24 @@ async function applyBatch(
   const plans: Plan[] = [];
   const drifts: { computed: Computed; diff: Difference }[] = [];
   const outcomes = [...fenced.outcomes];
+  const first = fenced.active[0]?.computed;
+  if (
+    first &&
+    first.error !== null &&
+    !isConflict(first.error) &&
+    fenced.active.every(({ computed }) => computed.error === first.error) &&
+    classifyWorkFailure(first.error).kind === "transient"
+  ) {
+    return [
+      ...outcomes,
+      ...(await settleTransientBatch(
+        q,
+        first.reconciler,
+        fenced.active.map(({ claim }) => claim),
+        first.error,
+      )),
+    ];
+  }
   for (const item of fenced.active) {
     if (isConflict(item.computed.error)) {
       await releaseConflicts(q, [item.claim]);
@@ -1320,6 +1339,27 @@ async function applyOne(
   )[0]!;
 }
 
+async function settleTransientBatch(
+  q: Q,
+  reconciler: Reconciler,
+  claimed: readonly ClaimedScope[],
+  cause: UnparsedError,
+): Promise<Outcome[]> {
+  const error = rawError(cause);
+  await settleTransientScopes(
+    q,
+    claimed,
+    reconciler.version,
+    reconciler.rules,
+    error,
+  );
+  return claimed.map(({ kind, key }) => ({
+    ...outcome({ kind, key }, "failed"),
+    cause,
+    error,
+  }));
+}
+
 /** Settle claimed scopes whose whole apply transaction failed. */
 async function settleBatchFailure(
   db: Database,
@@ -1333,6 +1373,8 @@ async function settleBatchFailure(
       ? new HouseholdWriteBusyError(error)
       : error;
   const q = repositoryQueries(db);
+  if (classifyWorkFailure(surfaced).kind === "transient")
+    return settleTransientBatch(q, reconciler, claimed, surfaced);
   const outcomes: Outcome[] = [];
   for (const scope of claimed) {
     await recordScopeFailure(q, reconciler, scope, surfaced);
