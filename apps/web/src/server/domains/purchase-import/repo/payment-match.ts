@@ -475,7 +475,9 @@ export const paymentMatching: Pick<
         ${recordKey.scopeKey} = ANY(${textArrayParam([...events, ...transactionIds])})
         OR ${recordKey.entityId}::text = ANY(${textArrayParam(orders.flatMap((row) => (row.purchaseId ? [row.purchaseId] : [])))})
         OR ${recordKey.entityId}::text IN (SELECT e.id::text FROM "Decision" choice JOIN "Entity" e
-          ON e.id::text = choice.value #>> '{}' OR e.shortcode = choice.value #>> '{}'
+          ON (e.id = CASE WHEN pg_input_is_valid(choice.value #>> '{}', ${"uuid"})
+            THEN (choice.value #>> '{}')::uuid END AND e.id::text = choice.value #>> '{}')
+            OR e.shortcode = choice.value #>> '{}'
           WHERE choice.channel = ${decisionChannel.enum.assignment} AND choice.field = 'purchaseId'
             AND choice.subject = ANY(${textArrayParam([...events, ...orders.flatMap((row) => (row.emailId ? [`email:${row.emailId}`] : []))])}))
       )`,
