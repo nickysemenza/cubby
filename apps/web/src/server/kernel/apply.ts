@@ -28,6 +28,7 @@ import {
   scopeState,
 } from "~/server/db/kernel-schema";
 import {
+  repositoryParentDatabase,
   repositoryQueries,
   repositoryTransactionDatabase,
   type RepositoryQueryClient,
@@ -1504,6 +1505,84 @@ async function runHeldScopes(
   ];
 }
 
+// Leave room under the background deadline for fences, output writes and gate admission.
+const BACKGROUND_PUBLICATION_WEIGHT = 10_000;
+
+function backgroundPublicationPages(computed: readonly Computed[]) {
+  const weights = computed.map(
+    ({ keys, desired }) =>
+      keys.size +
+      16 *
+        ((desired?.records.length ?? 0) +
+          (desired?.patches.length ?? 0) +
+          (desired?.retired.length ?? 0) +
+          (desired?.attachments?.length ?? 0) +
+          (desired?.merges.length ?? 0) +
+          (desired?.bindings.length ?? 0)),
+  );
+  if (
+    weights.reduce((total, weight) => total + weight, 0) <=
+    BACKGROUND_PUBLICATION_WEIGHT
+  )
+    return [];
+
+  const parents = computed.map((_, index) => index);
+  const rootOf = (index: number) => {
+    while (parents[index] !== index) index = parents[index]!;
+    return index;
+  };
+  const ownerByOutput = new Map<string, number>();
+  const touch = (index: number, key: string) => {
+    const previous = ownerByOutput.get(key);
+    if (previous === undefined) ownerByOutput.set(key, index);
+    else parents[rootOf(index)] = rootOf(previous);
+  };
+  for (const [
+    index,
+    { desired, owned, storedBindings },
+  ] of computed.entries()) {
+    if (!desired) continue;
+    // A shared creation or attachment can be referenced by several scopes.
+    for (const row of [
+      ...desired.records,
+      ...desired.patches,
+      ...(desired.attachments ?? []),
+    ])
+      touch(index, rowKey(row.target.name, row.id));
+    for (const row of owned)
+      touch(index, rowKey(row.target.name, row.entityId));
+    for (const entry of desired.merges) {
+      touch(index, rowKey(entry.target.name, entry.survivor));
+      touch(index, rowKey(entry.target.name, entry.absorbed));
+    }
+    for (const binding of [...storedBindings, ...desired.bindings])
+      touch(index, bindingFactKey(binding.fact));
+  }
+
+  const components = new Map<number, number[]>();
+  for (const index of computed.keys()) {
+    const root = rootOf(index);
+    const component = components.get(root) ?? [];
+    component.push(index);
+    components.set(root, component);
+  }
+  const pages: number[][] = [];
+  let page: number[] = [];
+  let weight = 0;
+  for (const component of components.values()) {
+    const next = component.reduce((total, index) => total + weights[index]!, 0);
+    if (page.length && weight + next > BACKGROUND_PUBLICATION_WEIGHT) {
+      pages.push(page);
+      page = [];
+      weight = 0;
+    }
+    page.push(...component);
+    weight += next;
+  }
+  if (page.length) pages.push(page);
+  return pages.length > 1 ? pages : [];
+}
+
 /**
  * Apply one coherent, bounded batch under one write gate and revision fence.
  * `claimed[i]` is `computed[i]`'s claim.
@@ -1520,6 +1599,40 @@ export async function applyComputed(
   const proposals =
     options.proposals ??
     (await heldProposals(db, registry, reconciler, computed, options));
+  if (options.mode === "background" && !repositoryParentDatabase(db)) {
+    const pages = backgroundPublicationPages(computed);
+    if (pages.length) {
+      const outcomes = new Map<string, Outcome>();
+      let transient: { cause: UnparsedError } | undefined;
+      for (const page of pages) {
+        const claims = page.map((index) => claimed[index]!);
+        const results = transient
+          ? await settleTransientBatch(
+              repositoryQueries(db),
+              reconciler,
+              claims,
+              transient.cause,
+            )
+          : await applyComputed(
+              db,
+              registry,
+              reconciler,
+              page.map((index) => computed[index]!),
+              claims,
+              { ...options, proposals },
+            );
+        for (const result of results) {
+          outcomes.set(scopeId(result.scope), result);
+          if (
+            result.status === "failed" &&
+            classifyWorkFailure(result.cause).kind === "transient"
+          )
+            transient = { cause: result.cause };
+        }
+      }
+      return computed.map((item) => outcomes.get(scopeId(item.scope))!);
+    }
+  }
   try {
     return await repositoryTransactionDatabase(db, async (tx) => {
       await enterWriteTransaction(repositoryQueries(tx), {

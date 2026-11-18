@@ -421,8 +421,11 @@ recomputation. Admitted work keeps every revision and sequence fence. Member
 work retains its bounded gate wait. A failed locked load settles its original
 cause before issuing another query on that transaction.
 
-Publication batches dependency replacement, scope state, cleared Drift and
-claim settlement in one SQL statement after output and downstream invalidation.
+Standalone background applies group heavy batches into separate transactions.
+Scopes that publish the same record or binding stay in one group. Each group
+takes the write gate and checks its input revisions and claims before writing.
+Within the transaction, publication batches dependency replacement, scope
+state, cleared Drift and claim settlement after downstream invalidation.
 Unchanged dependency edges stay in place; removed and inserted edges are disjoint.
 Claim cleanup still compares the exact claimed sequence and token, including
 follow-up work raised by publication. Ask filing removes stale links before
