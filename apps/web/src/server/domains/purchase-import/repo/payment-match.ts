@@ -284,11 +284,9 @@ function planOrder(
   order: Order,
   c: Pure,
   paymentsFor: PaymentsFor,
+  heads: readonly Order[],
 ) {
-  const sameEvent = acceptedOrderHeads(input.orders, c).filter(
-    (row) => paymentSetKey(row) === paymentSetKey(order),
-  );
-  const rows = sameEvent.flatMap((row) => paymentsFor(row));
+  const rows = heads.flatMap((row) => paymentsFor(row));
   const normalized = normalizePaymentSet(
     rows.map((row) => ({
       ...row,
@@ -325,6 +323,58 @@ function planOrder(
     explicit.length ? explicit : candidates,
   );
   return { kind: "planned" as const, rows, payments, candidates, matches };
+}
+
+function contenderReview(input: PaymentMatchInput, c: Pure) {
+  const selectedByTransaction = new Map<string, Order[]>();
+  const combinedByTransaction = new Map<string, boolean>();
+  return (
+    transactionId: string,
+    order: Order,
+    contenders: readonly Order[],
+  ) => {
+    let selected = selectedByTransaction.get(transactionId);
+    if (!selected) {
+      selected = contenders.filter(
+        (other) =>
+          c.decision(
+            "identity",
+            orderEventKey(other),
+            recordSubject("financialTransaction", transactionId),
+          )?.kind === "same",
+      );
+      selectedByTransaction.set(transactionId, selected);
+    }
+    if (selected.length === 1 && selected[0]?.id === order.id) return false;
+    let combined = combinedByTransaction.get(transactionId);
+    if (combined === undefined) {
+      const transaction = input.transactions.find(
+        (row) => row.id === transactionId,
+      )!;
+      const members = contenders.map((other) => ({
+        id: parseEntityId(
+          "purchase",
+          recordIdentity(
+            { kind: "purchaseEvent", key: orderEventKey(other) },
+            "Purchase",
+            "purchase",
+          ),
+        ),
+        statedTotalMinor: input.totals.get(other.id) ?? null,
+        namesThisCharge: other.extraction.candidate?.payments.length === 1,
+      }));
+      combined = Boolean(
+        combinedChargeAllocations({
+          amountMinor: transaction.amount,
+          memberIds: members.map((row) => row.id),
+          hasAllocation: false,
+          purchases: members,
+        }),
+      );
+      combinedByTransaction.set(transactionId, combined);
+    }
+    return !combined;
+  };
 }
 
 export const paymentMatching: Pick<
@@ -522,32 +572,76 @@ export const paymentMatching: Pick<
   },
   reconcile(input, c) {
     const belongs = createOrderPaymentMatcher(input.orders, input.payments);
-    const paymentsFor: PaymentsFor = (order) =>
-      input.payments.filter((payment) => belongs(payment, order));
+    const paymentsByOrder = new Map<string, Payment[]>();
+    const paymentsFor: PaymentsFor = (order) => {
+      const existing = paymentsByOrder.get(order.id);
+      if (existing) return existing;
+      const payments = input.payments.filter((payment) =>
+        belongs(payment, order),
+      );
+      paymentsByOrder.set(order.id, payments);
+      return payments;
+    };
     const heads = acceptedOrderHeads(input.orders, c);
-    const events = new Map(heads.map((row) => [paymentSetKey(row), row]));
+    const headsByPaymentSet = new Map<string, Order[]>();
+    const events = new Map<string, Order>();
+    const eligibleEvents = new Set<string>();
+    for (const head of heads) {
+      if (orderPaymentKeys(head).includes(input.key))
+        eligibleEvents.add(orderEventKey(head));
+      const key = paymentSetKey(head);
+      const group = headsByPaymentSet.get(key) ?? [];
+      group.push(head);
+      headsByPaymentSet.set(key, group);
+      events.set(key, head);
+    }
+    // Decisions and references are fixed within this scope's reconcile round.
+    // Reuse plans only within that round so later evidence still re-plans.
+    const plans = new Map<string, ReturnType<typeof planOrder>>();
+    const planFor = (order: Order) => {
+      const existing = plans.get(order.id);
+      if (existing) return existing;
+      const plan = planOrder(
+        input,
+        order,
+        c,
+        paymentsFor,
+        headsByPaymentSet.get(paymentSetKey(order)) ?? [],
+      );
+      plans.set(order.id, plan);
+      return plan;
+    };
+    let contendersByTransaction: Map<string, Order[]> | undefined;
+    const contendersFor = (transactionId: string) => {
+      if (!contendersByTransaction) {
+        contendersByTransaction = new Map();
+        for (const order of events.values()) {
+          const plan = planFor(order);
+          if (plan.kind !== "planned") continue;
+          for (const id of new Set(
+            plan.matches?.map((match) => match.transactionId),
+          )) {
+            const contenders = contendersByTransaction.get(id) ?? [];
+            contenders.push(order);
+            contendersByTransaction.set(id, contenders);
+          }
+        }
+      }
+      return contendersByTransaction.get(transactionId) ?? [];
+    };
+    const requiresContenderReview = contenderReview(input, c);
     for (const order of events.values()) {
-      if (
-        !heads.some(
-          (row) =>
-            orderEventKey(row) === orderEventKey(order) &&
-            orderPaymentKeys(row).includes(input.key),
-        )
-      )
-        continue;
+      const event = orderEventKey(order);
+      if (!eligibleEvents.has(event)) continue;
+      const paymentHeads = headsByPaymentSet.get(paymentSetKey(order)) ?? [];
       const amountKeys = [
-        ...new Set(
-          heads
-            .filter((row) => paymentSetKey(row) === paymentSetKey(order))
-            .flatMap(orderPaymentKeys),
-        ),
+        ...new Set(paymentHeads.flatMap(orderPaymentKeys)),
       ].filter((key) => key.startsWith("payment:amount:"));
       if (!input.key.startsWith("payment:amount:") && amountKeys.length) {
         for (const key of amountKeys) c.emit({ kind: "purchaseEvent", key });
         continue;
       }
-      const event = orderEventKey(order);
-      const plan = planOrder(input, order, c, paymentsFor);
+      const plan = planFor(order);
       if (plan.kind === "conflicting") {
         c.gap.decision(
           "how the conflicting source payment evidence corresponds to recorded money",
@@ -585,15 +679,7 @@ export const paymentMatching: Pick<
       }
       let competing = false;
       for (const match of plan.matches ?? []) {
-        const contenders = [...events.values()].filter((other) => {
-          const proposed = planOrder(input, other, c, paymentsFor);
-          return (
-            proposed.kind === "planned" &&
-            proposed.matches?.some(
-              (row) => row.transactionId === match.transactionId,
-            )
-          );
-        });
+        const contenders = contendersFor(match.transactionId);
         if (contenders.length <= 1) {
           const total = input.totals.get(order.id);
           if (
@@ -610,38 +696,7 @@ export const paymentMatching: Pick<
             competing = true;
           continue;
         }
-        const selected = contenders.filter(
-          (other) =>
-            c.decision(
-              "identity",
-              orderEventKey(other),
-              recordSubject("financialTransaction", match.transactionId),
-            )?.kind === "same",
-        );
-        if (selected.length === 1 && selected[0]?.id === order.id) continue;
-        const transaction = input.transactions.find(
-          (row) => row.id === match.transactionId,
-        )!;
-        const members = contenders.map((other) => ({
-          id: parseEntityId(
-            "purchase",
-            recordIdentity(
-              { kind: "purchaseEvent", key: orderEventKey(other) },
-              "Purchase",
-              "purchase",
-            ),
-          ),
-          statedTotalMinor: input.totals.get(other.id) ?? null,
-          namesThisCharge: other.extraction.candidate?.payments.length === 1,
-        }));
-        if (
-          !combinedChargeAllocations({
-            amountMinor: transaction.amount,
-            memberIds: members.map((row) => row.id),
-            hasAllocation: false,
-            purchases: members,
-          })
-        )
+        if (requiresContenderReview(match.transactionId, order, contenders))
           competing = true;
       }
       if (competing) {
@@ -683,16 +738,7 @@ export const paymentMatching: Pick<
       );
       const firstOrderForBank =
         existingBankEvent &&
-        [...events.values()]
-          .filter((other) => {
-            const p = planOrder(input, other, c, paymentsFor);
-            return (
-              p.kind === "planned" &&
-              p.matches?.some(
-                (row) => row.transactionId === existingBankEvent.transactionId,
-              )
-            );
-          })
+        contendersFor(existingBankEvent.transactionId)
           .map(orderEventKey)
           .sort()[0] === event;
       const chosenScope = chosenOrderScope(input, order, c);
@@ -740,9 +786,7 @@ export const paymentMatching: Pick<
         (plan.payments[0] &&
           paymentAmountKey(plan.payments[0].amountMinor) === input.key)
       )
-        for (const head of heads.filter(
-          (row) => paymentSetKey(row) === paymentSetKey(order),
-        ))
+        for (const head of paymentHeads)
           c.bind(
             { kind: orderEvidence.kind, id: head.id },
             resolvedEvent,
