@@ -963,6 +963,18 @@ function createPure(
         return null;
       return inForce(state.decisions.get(subject) ?? [], channel, slot ?? null);
     },
+    identityDecisions(subject) {
+      state.tracked.subjects.add(subject);
+      const decisions = new Map<string, "same" | "distinct">();
+      const seen = new Set<string>();
+      for (const row of state.decisions.get(subject) ?? []) {
+        if (row.channel !== "identity" || seen.has(row.slot)) continue;
+        seen.add(row.slot);
+        if (row.kind === "same" || row.kind === "distinct")
+          decisions.set(row.slot, row.kind);
+      }
+      return decisions;
+    },
     existing(target) {
       const declared = requireTarget(target);
       return state.owned

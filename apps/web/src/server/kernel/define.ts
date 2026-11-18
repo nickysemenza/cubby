@@ -423,6 +423,8 @@ export interface Pure {
     subject: string,
     slot?: string | null,
   ): DecisionInForce | null;
+  /** In-force identity decisions keyed by other subject, under the same subject fence as decision(). */
+  identityDecisions(subject: string): ReadonlyMap<string, "same" | "distinct">;
   /** The natural keys this scope owns now, for each declared write table. */
   existing(target: ColumnRef): readonly string[];
   /** The id of a record this scope owns, for decisions about it; null before it exists. */

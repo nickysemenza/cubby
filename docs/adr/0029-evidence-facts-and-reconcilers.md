@@ -251,6 +251,8 @@ returns no rows, and `Reads` reaches only the sources the reconciler declared.
 `reconcile` has no database, clock or network access. Inside it,
 `c.answer(kind, input)` returns the Answer or `Missing`, and `Missing` files an
 Ask; `c.decision(channel, subject, field)` returns the decision in force;
+`c.identityDecisions(subject)` reads the in-force identity slots under the same
+subject revision, including when there are no decisions;
 `c.record(entity, naturalKey, values)` declares a desired record;
 `c.stored(target, naturalKey)` returns the stored row of a record the scope owns;
 `c.bind(fact, event)` binds evidence to an event; `c.emit(scopeRef)` starts a
