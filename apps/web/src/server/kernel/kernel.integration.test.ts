@@ -893,9 +893,15 @@ describe("evidence-facts kernel", () => {
       reads: [],
       writes: [target],
       load: async (_reads, keys) => new Map(keys.map((key) => [key, key])),
-      reconcile(_input, c) {
-        c.record(target, "synthetic-shared", {
-          name: "Synthetic shared batch Vendor",
+      reconcile(input, c) {
+        // Each pair fits alone, but the full batch exceeds the write budget.
+        for (let index = 0; index < 2600; index++)
+          c.decision("assignment", `synthetic:${input}:${index}`, "value");
+        const shared = input === "a" || input === "d";
+        c.record(target, shared ? "synthetic-shared" : input, {
+          name: shared
+            ? "Synthetic shared batch Vendor"
+            : `Synthetic Vendor ${input}`,
         });
         return c.done();
       },
@@ -903,9 +909,17 @@ describe("evidence-facts kernel", () => {
     const kernel = createKernel([
       defineModule({ name: "sharedCreation", reconcilers: [reconciler] }),
     ]);
-    const scopes = ["a", "b"].map((key) => ({ kind: reconciler.scope, key }));
-    const result = await kernel.reconcileNow(ctx.db, scopes);
-    expect(result.every((outcome) => outcome.status === "applied")).toBe(true);
+    const scopes = ["a", "d"].map((key) => ({ kind: reconciler.scope, key }));
+    await markDirty(repositoryQueries(ctx.db), kernel.registry, {
+      keys: [],
+      discovers: ["a", "b", "c", "d"].map((key) => ({
+        kind: reconciler.scope,
+        key,
+      })),
+      reason: "synthetic shared creation",
+    });
+    await settle(kernel);
+    expect(await dirtyCount(ctx.db)).toBe(0);
     const rows = await repositoryQueries(ctx.db)
       .select()
       .from(vendor)
@@ -915,7 +929,7 @@ describe("evidence-facts kernel", () => {
       scopeKey: string;
       entityId: string;
     }>(
-      sql`SELECT "scopeKey", "entityId" FROM "RecordKey" WHERE "scopeKind" = ${reconciler.scope} ORDER BY "scopeKey"`,
+      sql`SELECT "scopeKey", "entityId" FROM "RecordKey" WHERE "scopeKind" = ${reconciler.scope} AND "entityId" = ${rows[0]!.id}::uuid ORDER BY "scopeKey"`,
     );
     expect(metadata.rows).toEqual(
       scopes.map((scope) => ({ scopeKey: scope.key, entityId: rows[0]!.id })),
