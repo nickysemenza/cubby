@@ -106,6 +106,10 @@ import {
   rowIdentity,
 } from "./reads";
 import type { KernelRegistry } from "./registry";
+import {
+  scopeDependencyChanges,
+  scopeDependencyPages,
+} from "./scope-dependencies";
 import { wakeAfterCommit } from "./wake";
 
 type Q = Pick<
@@ -1204,16 +1208,6 @@ async function applyBatch(
       );
     }
     if (downstream || followups.length) await wakeAfterCommit(tx);
-    const stateWrite = insertRowsStatement(
-      scopeState,
-      states,
-      sql`ON CONFLICT ("scopeKind", "scopeKey") DO UPDATE SET
-      version = excluded.version, rules = excluded.rules, gaps = CASE WHEN "ScopeState"."mergedIntoKey" IS NOT NULL THEN '[]'::jsonb ELSE excluded.gaps END, inputs = excluded.inputs, stage = CASE WHEN "ScopeState"."mergedIntoKey" IS NOT NULL THEN ${kernelStage.enum.ended} ELSE excluded.stage END,
-      "nextActor" = CASE WHEN "ScopeState"."mergedIntoKey" IS NOT NULL THEN NULL ELSE excluded."nextActor" END, "firstGap" = CASE WHEN "ScopeState"."mergedIntoKey" IS NOT NULL THEN NULL ELSE excluded."firstGap" END, "inputsHash" = excluded."inputsHash", "durationMs" = excluded."durationMs",
-      "errorClass" = NULL, error = NULL, "reconciledAt" = excluded."reconciledAt", "inputsChangedAt" = excluded."inputsChangedAt"`,
-    );
-    if (!stateWrite)
-      throw new KernelContractError("An applied batch needs scope state");
     const metadata = plans.map((plan) => ({
       kind: plan.computed.scope.kind,
       key: plan.computed.scope.key,
@@ -1222,43 +1216,44 @@ async function applyBatch(
       keys: [...plan.computed.keys.keys()],
       clearDrift: !plan.heldBaseline,
     }));
-    // The dependency delete and insert touch disjoint key sets. All metadata
-    // remains in this fenced transaction; explicit follow-ups have already
-    // raised seq before the unchanged claim deletion/release conditions run.
-    await q.execute(sql`
-      WITH wanted AS MATERIALIZED (
-        SELECT * FROM jsonb_to_recordset(${JSON.stringify(metadata)}::jsonb)
-          AS w(kind text, key text, seq bigint, token uuid, keys jsonb, "clearDrift" boolean)
-      ), dependencies AS MATERIALIZED (
-        SELECT wanted.kind, wanted.key, dependency.value AS dependency
-        FROM wanted CROSS JOIN LATERAL jsonb_array_elements_text(wanted.keys) dependency(value)
-      ), removed_dependencies AS (
-        DELETE FROM "ScopeDep" d USING wanted
-        WHERE d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key
-          AND NOT EXISTS (SELECT 1 FROM dependencies k
-            WHERE k.kind = d."scopeKind" AND k.key = d."scopeKey" AND k.dependency = d.key)
-        RETURNING 1
-      ), added_dependencies AS (
-        INSERT INTO "ScopeDep" ("scopeKind", "scopeKey", key)
-        SELECT kind, key, dependency FROM dependencies
-        ON CONFLICT DO NOTHING RETURNING 1
-      ), written_state AS (
-        ${stateWrite} RETURNING 1
-      ), cleared_drift AS (
-        DELETE FROM "Drift" d USING wanted
-        WHERE wanted."clearDrift" AND d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key
-        RETURNING 1
-      ), done AS (
-        DELETE FROM "ScopeDirty" d USING wanted
-        WHERE d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key AND d.seq = wanted.seq AND d."claimToken" = wanted.token
-        RETURNING d."scopeKind", d."scopeKey"
-      ), released AS (
-        UPDATE "ScopeDirty" d SET "claimToken" = NULL, "claimDeadline" = NULL
-        FROM wanted
-        WHERE d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key AND d."claimToken" = wanted.token
-          AND NOT EXISTS (SELECT 1 FROM done WHERE done."scopeKind" = d."scopeKind" AND done."scopeKey" = d."scopeKey")
-        RETURNING 1
-      ) SELECT count(*) AS states FROM written_state`);
+    let start = 0;
+    for (const page of scopeDependencyPages(metadata)) {
+      const end = start + page.length;
+      const stateWrite = insertRowsStatement(
+        scopeState,
+        states.slice(start, end),
+        sql`ON CONFLICT ("scopeKind", "scopeKey") DO UPDATE SET
+        version = excluded.version, rules = excluded.rules, gaps = CASE WHEN "ScopeState"."mergedIntoKey" IS NOT NULL THEN '[]'::jsonb ELSE excluded.gaps END, inputs = excluded.inputs, stage = CASE WHEN "ScopeState"."mergedIntoKey" IS NOT NULL THEN ${kernelStage.enum.ended} ELSE excluded.stage END,
+        "nextActor" = CASE WHEN "ScopeState"."mergedIntoKey" IS NOT NULL THEN NULL ELSE excluded."nextActor" END, "firstGap" = CASE WHEN "ScopeState"."mergedIntoKey" IS NOT NULL THEN NULL ELSE excluded."firstGap" END, "inputsHash" = excluded."inputsHash", "durationMs" = excluded."durationMs",
+        "errorClass" = NULL, error = NULL, "reconciledAt" = excluded."reconciledAt", "inputsChangedAt" = excluded."inputsChangedAt"`,
+      );
+      if (!stateWrite)
+        throw new KernelContractError("An applied batch needs scope state");
+      // Updates and removals stay inside the same publication transaction and
+      // touch disjoint dependency rows. Follow-ups have already raised seq.
+      await q.execute(sql`
+        WITH wanted AS MATERIALIZED (
+          SELECT * FROM jsonb_to_recordset(${JSON.stringify(page)}::jsonb)
+            AS w(kind text, key text, seq bigint, token uuid, keys jsonb, "clearDrift" boolean)
+        ), ${scopeDependencyChanges("wanted")}, written_state AS (
+          ${stateWrite} RETURNING 1
+        ), cleared_drift AS (
+          DELETE FROM "Drift" d USING wanted
+          WHERE wanted."clearDrift" AND d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key
+          RETURNING 1
+        ), done AS (
+          DELETE FROM "ScopeDirty" d USING wanted
+          WHERE d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key AND d.seq = wanted.seq AND d."claimToken" = wanted.token
+          RETURNING d."scopeKind", d."scopeKey"
+        ), released AS (
+          UPDATE "ScopeDirty" d SET "claimToken" = NULL, "claimDeadline" = NULL
+          FROM wanted
+          WHERE d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key AND d."claimToken" = wanted.token
+            AND NOT EXISTS (SELECT 1 FROM done WHERE done."scopeKind" = d."scopeKind" AND done."scopeKey" = d."scopeKey")
+          RETURNING 1
+        ) SELECT count(*) AS states FROM written_state`);
+      start = end;
+    }
     if (entities.size)
       await recordChange(tx, { kind: "source", categories: [...entities] });
   });

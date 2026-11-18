@@ -43,6 +43,10 @@ import { householdWrite } from "./gate";
 import { heldBaselineGap } from "./held-gap";
 import { driftSubject, hashCanonical } from "./keys";
 import type { KernelRegistry } from "./registry";
+import {
+  scopeDependencyChanges,
+  scopeDependencyPages,
+} from "./scope-dependencies";
 import { fromIso, isoText } from "./sql-time";
 import { wakeAfterCommit, wakeClaimRecovery } from "./wake";
 
@@ -162,10 +166,10 @@ async function proposeOrAdvance(
   // A scope that went dirty keeps its version, dependencies and proposal.
   // Dependencies are replaced by difference so the delete and insert touch
   // disjoint rows within the one statement.
-  if (clean.length)
+  for (const page of scopeDependencyPages(clean))
     await q.execute(sql`
       WITH incoming AS (
-        SELECT * FROM jsonb_to_recordset(${JSON.stringify(clean)}::jsonb) AS incoming(
+        SELECT * FROM jsonb_to_recordset(${JSON.stringify(page)}::jsonb) AS incoming(
           kind text, key text, version int, rules text, gaps jsonb, inputs jsonb, stage text,
           "nextActor" text, "firstGap" text, "inputsHash" text, "durationMs" int, keys jsonb)
       ), advanced AS (
@@ -178,19 +182,7 @@ async function proposeOrAdvance(
         WHERE s."scopeKind" = incoming.kind AND s."scopeKey" = incoming.key
           AND NOT EXISTS (SELECT 1 FROM "ScopeDirty" d WHERE d."scopeKind" = s."scopeKind" AND d."scopeKey" = s."scopeKey")
         RETURNING s."scopeKind" AS kind, s."scopeKey" AS key, incoming.keys
-      ), dependency AS (
-        SELECT advanced.kind, advanced.key, read.key AS read
-        FROM advanced CROSS JOIN LATERAL jsonb_array_elements_text(advanced.keys) AS read(key)
-      ), removed AS (
-        DELETE FROM "ScopeDep" d USING advanced
-        WHERE d."scopeKind" = advanced.kind AND d."scopeKey" = advanced.key
-          AND NOT EXISTS (SELECT 1 FROM dependency
-            WHERE dependency.kind = d."scopeKind" AND dependency.key = d."scopeKey" AND dependency.read = d.key)
-      ), added AS (
-        INSERT INTO "ScopeDep" ("scopeKind", "scopeKey", key)
-        SELECT kind, key, read FROM dependency ORDER BY kind, key, read
-        ON CONFLICT DO NOTHING
-      )
+      ), ${scopeDependencyChanges("advanced")}
       DELETE FROM "Drift" p USING advanced
       WHERE p."scopeKind" = advanced.kind AND p."scopeKey" = advanced.key`);
   const fills = fenced.filter((plan) => !plan.clean && plan.fill);
