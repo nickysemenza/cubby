@@ -39,6 +39,7 @@ import { findPgError } from "~/server/errors/db-errors";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { classifyWorkFailure } from "~/server/kernel/failure";
 import { WorkTargetError } from "~/server/kernel/work-errors";
+import { withTrace } from "~/server/observability/tracing";
 
 import {
   askGapState,
@@ -1710,60 +1711,110 @@ async function runLocked(
     options,
   );
   try {
-    return await repositoryTransactionDatabase(db, async (tx) => {
-      const q = repositoryQueries(tx);
-      await enterWriteTransaction(q, {
-        lane: reconciler.lane,
-        mode: options.mode,
-        nonblockingGate: options.mode === "background",
-      });
-      const memberships = await relatedMemberships(
-        tx,
-        registry,
-        indexChanges([prepared!], options),
-      );
-      const lockedRevisions = await lockKeyRevs(
-        q,
-        [
-          ...new Set([
-            ...prepared!.keys.keys(),
-            ...plannedKeys([prepared!], options, registry),
-            ...membershipKeys(memberships, false),
-            ...(await mergeOutputKeys(q, [prepared!], options)),
-          ]),
-        ].sort(),
-      );
-      const [computed] = await computeBatch(q, registry, reconciler, [scope], {
-        db: tx,
-        locked: true,
-        lockedRevisions,
-        hideBaseline: options.hideBaseline ?? false,
-      });
-      if (computed!.error !== null) throw computed!.error;
-      const currentMemberships = await relatedMemberships(
-        tx,
-        registry,
-        indexChanges([computed!], options),
-      );
-      if (
-        [
-          ...plannedKeys([computed!], options, registry),
-          ...membershipKeys(currentMemberships, false),
-        ].some((key) => !lockedRevisions.has(key))
-      )
-        throw new LockedReadChangedError();
-      const current = await q.execute<{ seq: string }>(
-        sql`SELECT seq FROM "ScopeDirty" WHERE "scopeKind"=${scope.kind} AND "scopeKey"=${scope.key}`,
-      );
-      return applyOne(
-        tx,
-        registry,
-        computed!,
-        { ...claimed, seq: Number(current.rows[0]?.seq ?? claimed.seq) },
-        options,
-        proposals,
-      );
-    });
+    const traced = await withTrace(
+      "kernel.scope.locked_retry",
+      async (span) => {
+        span.setAttribute("kernel.scope.kind", scope.kind);
+        span.setAttribute("kernel.scope.mode", options.mode);
+        let phase = "begin";
+        let started = performance.now();
+        const advance = (next: string) => {
+          const now = performance.now();
+          span.setAttribute(`kernel.scope.phase.${phase}_ms`, now - started);
+          phase = next;
+          started = now;
+        };
+        try {
+          const result = await repositoryTransactionDatabase(db, async (tx) => {
+            const q = repositoryQueries(tx);
+            advance("gate");
+            await enterWriteTransaction(q, {
+              lane: reconciler.lane,
+              mode: options.mode,
+              nonblockingGate: options.mode === "background",
+            });
+            advance("revisions");
+            const memberships = await relatedMemberships(
+              tx,
+              registry,
+              indexChanges([prepared!], options),
+            );
+            const lockedRevisions = await lockKeyRevs(
+              q,
+              [
+                ...new Set([
+                  ...prepared!.keys.keys(),
+                  ...plannedKeys([prepared!], options, registry),
+                  ...membershipKeys(memberships, false),
+                  ...(await mergeOutputKeys(q, [prepared!], options)),
+                ]),
+              ].sort(),
+            );
+            advance("compute");
+            const [computed] = await computeBatch(
+              q,
+              registry,
+              reconciler,
+              [scope],
+              {
+                db: tx,
+                locked: true,
+                lockedRevisions,
+                hideBaseline: options.hideBaseline ?? false,
+              },
+            );
+            if (computed!.error !== null) throw computed!.error;
+            advance("verify");
+            const currentMemberships = await relatedMemberships(
+              tx,
+              registry,
+              indexChanges([computed!], options),
+            );
+            if (
+              [
+                ...plannedKeys([computed!], options, registry),
+                ...membershipKeys(currentMemberships, false),
+              ].some((key) => !lockedRevisions.has(key))
+            )
+              throw new LockedReadChangedError();
+            const current = await q.execute<{ seq: string }>(
+              sql`SELECT seq FROM "ScopeDirty" WHERE "scopeKind"=${scope.kind} AND "scopeKey"=${scope.key}`,
+            );
+            advance("publish");
+            const result = await applyOne(
+              tx,
+              registry,
+              computed!,
+              { ...claimed, seq: Number(current.rows[0]?.seq ?? claimed.seq) },
+              options,
+              proposals,
+            );
+            advance("commit");
+            return result;
+          });
+          span.setAttribute("kernel.scope.outcome", result.status);
+          return { result };
+        } catch (error) {
+          span.setAttribute("kernel.scope.failure_phase", phase);
+          span.setAttribute(
+            "kernel.scope.outcome",
+            error instanceof HouseholdWriteBusyError
+              ? "gate_busy"
+              : isConflict(error)
+                ? "conflict"
+                : "error",
+          );
+          const code = findPgError(error)?.code;
+          if (code) span.setAttribute("kernel.scope.sqlstate", code);
+          // Keep errors handled by the retry path out of the span's raw payload.
+          return { error };
+        } finally {
+          advance("finished");
+        }
+      },
+    );
+    if ("error" in traced) throw traced.error;
+    return traced.result;
   } catch (error) {
     if (isConflict(error) || error instanceof HouseholdWriteBusyError) {
       await releaseConflicts(repositoryQueries(db), [claimed]);
