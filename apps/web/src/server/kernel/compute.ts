@@ -57,6 +57,7 @@ import {
   LockedReadChangedError,
   KeyLedger,
   parseRevisions,
+  revisionsOnce,
   revisionsSource,
   type AnswerLoader,
   type ReadMode,
@@ -538,12 +539,15 @@ async function loadAnswers(
     // One statement for the revisions and the answers; see `selectWithRevisions`.
     const result = await q
       .select({
-        revs: sql<Record<string, number | string>>`revisions.revs`,
+        revs: revisionsOnce,
         ...fields,
       })
       .from(revisionsSource(keys))
       .leftJoin(answer, where);
-    revs = parseRevisions(keys, result[0]?.revs);
+    revs = parseRevisions(
+      keys,
+      result.find((entry) => entry.revs !== null)?.revs,
+    );
     rows = result;
   }
   revisions.observe(revs);
@@ -586,14 +590,18 @@ async function loadDecisions(
   type Row = Omit<DecisionRow, "at"> & { other: string | null; atText: string };
   // Unlocked, one statement reads the revisions and the decisions; see `selectWithRevisions`.
   const result = await q.execute<
-    Row & { revs?: Record<string, number | string> }
+    Row & { revs?: Record<string, number | string> | null }
   >(
     held
       ? inForce
-      : sql`SELECT revisions.revs, decided.* FROM ${revisionsSource(keys)} LEFT JOIN LATERAL (${inForce}) decided ON true`,
+      : sql`SELECT ${revisionsOnce} AS revs, decided.* FROM ${revisionsSource(keys)} LEFT JOIN LATERAL (${inForce}) decided ON true`,
   );
   const revs = revisions.observe(
-    held ?? parseRevisions(keys, result.rows[0]?.revs),
+    held ??
+      parseRevisions(
+        keys,
+        result.rows.find((entry) => entry.revs != null)?.revs,
+      ),
   );
   for (const subject of subjects) {
     loaded.add(subject);

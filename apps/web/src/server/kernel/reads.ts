@@ -61,6 +61,12 @@ export class KernelContractError extends Error {
 export const revisionsSource = (keys: readonly Key[]) =>
   sql`(SELECT coalesce(jsonb_object_agg(key, rev), '{}'::jsonb) AS revs FROM "KeyRev" WHERE key = ANY(${textArrayParam(keys)})) revisions`;
 
+/** Attach the shared revision map to one result row, including for an empty left join. */
+export const revisionsOnce = sql<Record<
+  string,
+  number | string
+> | null>`CASE WHEN row_number() OVER () = 1 THEN revisions.revs END`;
+
 /** Every key's revision from a `revisionsSource` value; an unstored key is 0. */
 export const parseRevisions = (
   keys: readonly Key[],
@@ -82,14 +88,20 @@ async function selectWithRevisions(
     return { rows: await q.select().from(table).where(where), revs: new Map() };
   const result = await q
     .select({
-      revs: sql<Record<string, number | string>>`revisions.revs`,
+      revs: revisionsOnce,
       row: table,
     })
     .from(revisionsSource(keys))
     .leftJoin(table, where);
   const rows: ColumnValues[] = [];
   for (const entry of result) if (entry.row) rows.push(entry.row);
-  return { rows, revs: parseRevisions(keys, result[0]?.revs) };
+  return {
+    rows,
+    revs: parseRevisions(
+      keys,
+      result.find((entry) => entry.revs !== null)?.revs,
+    ),
+  };
 }
 
 /** A reconciled or evidence table's `id` column. */
@@ -548,14 +560,20 @@ export function createReads(
             // One statement for the revisions and the facts; see `selectWithRevisions`.
             const result = await q
               .select({
-                revs: sql<Record<string, number | string>>`revisions.revs`,
+                revs: revisionsOnce,
                 key: factKey.key,
                 row: table,
               })
               .from(revisionsSource(unseen))
               .leftJoin(factKey, where)
               .leftJoin(table, join);
-            revs = observe(all, parseRevisions(unseen, result[0]?.revs));
+            revs = observe(
+              all,
+              parseRevisions(
+                unseen,
+                result.find((entry) => entry.revs !== null)?.revs,
+              ),
+            );
             for (const entry of result)
               if (entry.key && entry.row)
                 joined.push({ key: entry.key, row: entry.row });

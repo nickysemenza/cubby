@@ -348,7 +348,8 @@ Registration and mutation serialize per key through `KeyRev(key, rev)`. An
 input mutation raises `rev` for each of its keys with an upsert before it reads
 `ScopeDep`. A load records the `rev` it saw for every key it read, 0 for a key
 with no row, and reads it in the same statement as the rows, so both come from
-one snapshot. An apply takes the same rows with the same upsert form, which
+one snapshot. A read returns its shared revision map once, including when no
+data rows match. An apply takes the same rows with the same upsert form, which
 creates a row for an absent key, and compares each `rev` with the one its load
 saw. Because both sides lock the same row, either the apply sees the committed
 mutation and leaves the scope dirty, or the mutation sees the committed
