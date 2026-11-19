@@ -29,11 +29,37 @@ const purchaseReference = (identity: SQLWrapper, value: SQL) => sql`
 const emailLinkDecisionProjection = (
   correlateEventPointers: boolean,
   emailId?: SQL,
+  purchaseIds?: SQL,
 ) => sql`(
-  WITH current AS (
+  WITH ${
+    purchaseIds
+      ? sql`
+  link_subjects AS MATERIALIZED (
+    SELECT DISTINCT link.subject
+    FROM "Decision" link
+    LEFT JOIN "Entity" link_target ON link_target.id=CASE WHEN link.field LIKE 'link:%' THEN substring(link.field from 6)::uuid END
+    WHERE link.channel=${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)}
+      AND link.subject LIKE 'email:%' AND link.field LIKE 'link:%'
+      AND coalesce(link_target."mergedIntoId",link_target.id,
+        CASE WHEN link.field LIKE 'link:%' THEN substring(link.field from 6)::uuid END) IN (${purchaseIds})
+  ),
+  relevant_subjects AS MATERIALIZED (
+    SELECT subject FROM link_subjects
+    UNION
+    SELECT 'emailEvent:'||event.id FROM link_subjects link
+    JOIN "Email" email ON email.id=substring(link.subject from 7)::uuid
+    JOIN "OrderMailEvent" event ON event."orderMailId"=email."orderMailId"
+    UNION
+    SELECT 'emailEvent:'||(d.value->>'eventId') FROM "Decision" d
+    JOIN link_subjects link ON link.subject=d.subject
+    WHERE d.field LIKE 'link:%' AND d.value->>'eventId' IS NOT NULL
+  ),
+  `
+      : sql``
+  }current AS (
     SELECT DISTINCT ON (subject, slot) * FROM "Decision"
     WHERE channel=${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)}
-      AND (subject LIKE 'email:%' OR subject LIKE 'emailEvent:%')
+      AND ${purchaseIds ? sql`subject IN (SELECT subject FROM relevant_subjects)` : sql`(subject LIKE 'email:%' OR subject LIKE 'emailEvent:%')`}
     ORDER BY subject, slot, at DESC, id DESC
   ) SELECT DISTINCT ON (d.subject, coalesce(target."mergedIntoId",target.id,substring(d.field from 6)::uuid), coalesce(linked_event.id,(d.value->>'eventId')::uuid))
     d.id, coalesce(linked_event.id,(d.value->>'eventId')::uuid) AS "eventId",
@@ -71,6 +97,7 @@ const emailLinkDecisionProjection = (
   LEFT JOIN current review ON review.subject=d.subject AND review.field='review-status:' || d.id
   WHERE d.subject LIKE 'email:%' AND d.field LIKE 'link:%'
     ${emailId ? sql`AND substring(d.subject from 7)::uuid=${emailId}` : sql``}
+    ${purchaseIds ? sql`AND coalesce(target."mergedIntoId",target.id,substring(d.field from 6)::uuid) IN (${purchaseIds})` : sql``}
     AND d.kind=${sqlEnumConstant(decisionKind, decisionKind.enum.set)}
   ORDER BY d.subject, coalesce(target."mergedIntoId",target.id,substring(d.field from 6)::uuid), coalesce(linked_event.id,(d.value->>'eventId')::uuid), active DESC,
     (d.value->>${"decision"}=${sqlEnumConstant(emailLinkEvidenceKind, emailLinkEvidenceKind.enum.linked)}) DESC,
@@ -80,6 +107,8 @@ export const emailLinkDecisionsSql = emailLinkDecisionProjection(false);
 export const emailStateLinkDecisionsSql = emailLinkDecisionProjection(true);
 export const emailLinkDecisionsForEmailSql = (emailId: SQL) =>
   emailLinkDecisionProjection(true, emailId);
+export const emailLinkDecisionsForPurchasesSql = (purchaseIds: SQL) =>
+  emailLinkDecisionProjection(true, undefined, purchaseIds);
 const emailLinkDecisionsFrom = sql`${emailLinkDecisionsSql} "EmailPurchaseDecision"`;
 export const emailLinkDecisionsRead = new QueryBuilder()
   .select(decisionProjectionColumns(emailPurchaseDecision))

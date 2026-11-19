@@ -1,4 +1,5 @@
 import { emailPurchaseLinkState } from "@cubby/schemas/email-fields";
+import { entitySchema } from "@cubby/schemas/entity";
 import {
   mailboxClassificationStage,
   type MailboxClassification,
@@ -7,9 +8,10 @@ import { feedbackAuthority } from "@cubby/schemas/suggestion";
 import { sql, type SQL } from "drizzle-orm";
 
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { sqlEnumConstant } from "~/server/db/sql-enum";
 import {
   emailLinkDecisionsForEmailSql,
-  emailLinkDecisionsSql,
+  emailLinkDecisionsForPurchasesSql,
 } from "~/server/domains/email/repo/email-decision-sql";
 import { emailReviewsSql } from "~/server/domains/email/repo/email-decision-sql";
 
@@ -50,28 +52,55 @@ export const emailPurchaseAssociationsSql = (
  SELECT evidence."purchaseId" FROM (${emailAcceptedEvidenceSql(includeDeleted, accountOwnerScope)}) evidence
  UNION ${emailLinkedDecisionPurchasesSql(includeDeleted, accountOwnerScope)}
 `;
-/** Bound candidates before evaluating the canonical per-Email association policy. */
-export const purchaseAssociatedEmailsSql = (purchaseId: SQL): SQL => sql`
- WITH candidate_ids AS MATERIALIZED (
-   SELECT accepted."emailId" AS id FROM ${acceptedOrderPurchasesSql} accepted
-     WHERE accepted."boundPurchaseId"=${purchaseId} AND accepted."emailId" IS NOT NULL
+/** Current accepted sources and active lifecycle links for requested Purchases. */
+const purchaseEmailSourcesSql = (purchaseIds: SQL): SQL => sql`
+ WITH requested_purchases AS MATERIALIZED (${purchaseIds}),
+ purchase_owners AS MATERIALIZED (
+   SELECT owner."scopeKey" FROM "RecordKey" owner
+   JOIN requested_purchases requested ON requested.id=owner."entityId"
+   WHERE owner.entity=${sqlEnumConstant(entitySchema, entitySchema.enum.purchase)}
+     AND owner."scopeKind"='purchaseEvent' AND owner."mergedAt" IS NULL
+     AND owner."rejectedAt" IS NULL
+ ),
+ candidate_facts AS MATERIALIZED (
+   SELECT b."factId" FROM purchase_owners owner
+   JOIN "EvidenceBinding" b ON b."eventKey"=owner."scopeKey"
+   WHERE b."factKind"='orderObservation'
    UNION
-   SELECT decision."emailId" AS id FROM ${emailLinkDecisionsSql} decision
-     WHERE decision."purchaseId"=${purchaseId} AND decision.active
- ), eligible AS MATERIALIZED (
-   SELECT candidate.* FROM candidate_ids ids JOIN "Email" candidate ON candidate.id=ids.id AND ${notDeleted("candidate")}
+   SELECT b."factId" FROM purchase_owners owner
+   JOIN "EvidenceBinding" b ON b."scopeKind"='purchaseEvent' AND b."scopeKey"=owner."scopeKey"
+   WHERE b."factKind"='orderObservation'
  )
- SELECT "Email".* FROM eligible "Email"
- WHERE EXISTS (SELECT 1 FROM (${emailPurchaseAssociationsSql()}) association WHERE association."purchaseId"=${purchaseId})
+ SELECT accepted."boundPurchaseId" AS "purchaseId", e.id AS "emailId"
+ FROM ${acceptedOrderPurchasesSql} accepted
+ JOIN requested_purchases requested ON requested.id=accepted."boundPurchaseId"
+ JOIN "Email" e ON e.id=accepted."emailId" AND e."ledgerPartyId"=accepted."ledgerPartyId"
+ WHERE accepted.id IN (
+   SELECT CASE WHEN pg_input_is_valid("factId", pg_typeof(NULL::uuid)::text)
+     THEN "factId"::uuid END FROM candidate_facts
+ )
+ UNION
+ SELECT decision."purchaseId", decision."emailId"
+ FROM ${emailLinkDecisionsForPurchasesSql(sql`SELECT id FROM requested_purchases`)} decision
+ JOIN requested_purchases requested ON requested.id=decision."purchaseId"
+ WHERE decision.active AND decision.decision=${emailPurchaseLinkState.enum.linked}
 `;
+
+export const purchaseAssociatedEmailsSql = (purchaseId: SQL): SQL => sql`
+ SELECT "Email".* FROM (${purchaseEmailSourcesSql(sql`SELECT ${purchaseId} AS id`)}) source
+ JOIN "Email" ON "Email".id=source."emailId" AND ${notDeleted("Email")}
+ JOIN "Purchase" p ON p.id=source."purchaseId" AND ${notDeleted("p")}
+ LEFT JOIN "VendorAccount" account ON account.id=p."vendorAccountId" AND ${notDeleted("account")}
+ WHERE account."ledgerPartyId" IS NULL OR account."ledgerPartyId"="Email"."ledgerPartyId"
+`;
+
 export const emailSourceClaimCandidateSql = sql`EXISTS (
  SELECT 1 FROM "SourceOrderObservation" accepted WHERE accepted."emailId"="Email".id
 )`;
 export const purchaseMailPartiesSql = (purchases: SQL): SQL => sql`
- SELECT DISTINCT association."purchaseId", "Email"."ledgerPartyId"
- FROM "Email" CROSS JOIN LATERAL (${emailPurchaseAssociationsSql(false, "ignore")}) association
- JOIN (${purchases}) purchase ON purchase.id=association."purchaseId" AND ${notDeleted("purchase")}
- WHERE ${notDeleted("Email")}
+ SELECT DISTINCT source."purchaseId", "Email"."ledgerPartyId"
+ FROM (${purchaseEmailSourcesSql(sql`SELECT requested.id FROM (${purchases}) requested WHERE ${notDeleted("requested")}`)}) source
+ JOIN "Email" ON "Email".id=source."emailId" AND ${notDeleted("Email")}
 `;
 
 /**
