@@ -36,7 +36,10 @@ import {
   orderMail,
 } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
-import { emailLinkDecisionsRead } from "~/server/domains/email/repo/email-decision-sql";
+import {
+  emailLinkDecisionsRead,
+  emailStateLinkDecisionsSql,
+} from "~/server/domains/email/repo/email-decision-sql";
 import {
   foldScopedEmailPurchaseFacts,
   strongestLinkState,
@@ -395,9 +398,10 @@ export const emailState = defineReconciler<Input>({
           purchaseId: string;
           eventId: string;
         }>(sql`
+        WITH link_decisions AS MATERIALIZED ${emailStateLinkDecisionsSql}
         SELECT "Email".id AS "emailId", matched."purchaseId", matched."eventId"
-        FROM "Email" CROSS JOIN LATERAL (${emailSuggestedEvidenceSql()}) matched
-        WHERE "Email".id::text=ANY(${textArrayParam(keys)})`);
+        FROM "Email" CROSS JOIN LATERAL (${emailSuggestedEvidenceSql("respect", undefined, sql`link_decisions`)}) matched
+        WHERE "Email".id=ANY(${textArrayParam(keys)}::uuid[])`);
         const exact = await readExactOrderLinkCandidates(database, {
           emailIds: keys,
         });

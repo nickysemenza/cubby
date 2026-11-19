@@ -21,10 +21,12 @@ import { decisionProjectionColumns } from "~/server/domains/email/repo/decision-
 /** Decisions retain UUIDs or public codes; reads resolve the same identity as the kernel. */
 const purchaseReference = (identity: SQLWrapper, value: SQL) => sql`
   ${identity}.kind=${sqlEnumConstant(entitySchema, entitySchema.enum.purchase)}
-  AND (${identity}.id::text=lower(${value}) OR ${identity}.shortcode=upper(btrim(${value})))`;
+  AND ((${identity}.id=CASE WHEN pg_input_is_valid(lower(${value}), ${"uuid"})
+    THEN lower(${value})::uuid END AND ${identity}.id::text=lower(${value}))
+    OR ${identity}.shortcode=upper(btrim(${value})))`;
 
 /** Current member links projected from decision slots, including their original evidence. */
-export const emailLinkDecisionsSql = sql`(
+const emailLinkDecisionProjection = (correlateEventPointers: boolean) => sql`(
   WITH current AS (
     SELECT DISTINCT ON (subject, slot) * FROM "Decision"
     WHERE channel=${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)}
@@ -53,7 +55,10 @@ export const emailLinkDecisionsSql = sql`(
     AND d.value->>${"decision"}=${sqlEnumConstant(emailLinkEvidenceKind, emailLinkEvidenceKind.enum.linked)}
     AND EXISTS (SELECT 1 FROM current ep JOIN "Entity" ep_target ON ${purchaseReference(sql.identifier("ep_target"), sql`ep.value#>>'{}'`)}
       WHERE ep.subject='emailEvent:' || linked_event.id AND ep.field='purchaseId' AND ep.kind=${sqlEnumConstant(decisionKind, decisionKind.enum.set)}
-      AND coalesce(ep_target."mergedIntoId",ep_target.id)=coalesce(target."mergedIntoId",target.id))
+      AND coalesce(ep_target."mergedIntoId",ep_target.id)=coalesce(target."mergedIntoId",target.id)
+      -- Resolve pointers only for the candidate event. Flattening this subquery
+      -- makes PostgreSQL resolve every event pointer before filtering.
+      ${correlateEventPointers ? sql`OFFSET 0` : sql``})
   LEFT JOIN current event_pointer ON event_pointer.subject='emailEvent:' || coalesce(linked_event.id::text,d.value->>'eventId') AND event_pointer.field='purchaseId'
   LEFT JOIN "OrderMailEvent" active_event ON active_event.id=coalesce(linked_event.id,(d.value->>'eventId')::uuid)
     AND active_event."orderMailId"=live_email."orderMailId"
@@ -66,6 +71,8 @@ export const emailLinkDecisionsSql = sql`(
     (d.value->>${"decision"}=${sqlEnumConstant(emailLinkEvidenceKind, emailLinkEvidenceKind.enum.linked)}) DESC,
     (substring(d.field from 6)::uuid=coalesce(target."mergedIntoId",target.id)) DESC,d.id
  )`;
+export const emailLinkDecisionsSql = emailLinkDecisionProjection(false);
+export const emailStateLinkDecisionsSql = emailLinkDecisionProjection(true);
 const emailLinkDecisionsFrom = sql`${emailLinkDecisionsSql} "EmailPurchaseDecision"`;
 export const emailLinkDecisionsRead = new QueryBuilder()
   .select(decisionProjectionColumns(emailPurchaseDecision))
