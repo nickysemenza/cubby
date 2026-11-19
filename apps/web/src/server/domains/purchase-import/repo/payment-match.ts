@@ -704,9 +704,12 @@ export const paymentMatching: Pick<
       const event = orderEventKey(order);
       if (!eligibleEvents.has(event)) continue;
       const paymentHeads = headsByPaymentSet.get(paymentSetKey(order)) ?? [];
-      const amountKeys = [
+      const paymentKeys = [
         ...new Set(paymentHeads.flatMap(orderPaymentKeys)),
-      ].filter((key) => key.startsWith("payment:amount:"));
+      ].sort();
+      const amountKeys = paymentKeys.filter((key) =>
+        key.startsWith("payment:amount:"),
+      );
       if (!input.key.startsWith("payment:amount:") && amountKeys.length) {
         for (const key of amountKeys) c.emit({ kind: "purchaseEvent", key });
         continue;
@@ -854,11 +857,13 @@ export const paymentMatching: Pick<
         );
         continue;
       }
-      if (
-        !plan.payments.length ||
-        (plan.payments[0] &&
-          paymentAmountKey(plan.payments[0].amountMinor) === input.key)
-      )
+      // An Order observation has one binding per basis. Extracted amounts can
+      // route a legacy observation even when it has no retained payment rows.
+      const firstPayment = plan.payments[0];
+      const bindingOwner = firstPayment
+        ? paymentAmountKey(firstPayment.amountMinor)
+        : (amountKeys[0] ?? paymentKeys[0]);
+      if (input.key === bindingOwner)
         for (const head of paymentHeads)
           c.bind(
             { kind: orderEvidence.kind, id: head.id },
