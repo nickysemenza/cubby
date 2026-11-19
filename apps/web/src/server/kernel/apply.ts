@@ -1185,18 +1185,18 @@ async function applyBatch(
       excludes: plans.map((plan) => plan.computed.scope),
       reason: `output:${plans[0]!.computed.scope.kind}`,
     });
-    const followups = plans
-      .filter(
-        (plan) =>
-          !isEmptyDifference(plan.diff) &&
-          plan.computed.desired!.emits.some(
-            (scope) => scopeId(scope) === scopeId(plan.computed.scope),
-          ),
-      )
-      .map((plan) => plan.computed.scope);
+    const followups = plans.flatMap((plan) => {
+      if (isEmptyDifference(plan.diff)) return [];
+      const { emits, changeFollowups } = plan.computed.desired!;
+      const scope = plan.computed.scope;
+      const followsItself = emits.some(
+        (target) => scopeId(target) === scopeId(scope),
+      );
+      return followsItself ? [...changeFollowups, scope] : changeFollowups;
+    });
     if (followups.length) {
       // Explicit follow-ups follow a published change, not implicit output
-      // invalidation. A no-op or fully held proposal cannot repeat itself.
+      // invalidation. A no-op or fully held proposal schedules no follow-up.
       await withKernelApply(
         null,
         () =>

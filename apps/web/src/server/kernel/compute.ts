@@ -741,6 +741,7 @@ function createPure(
   const bindings: Desired["bindings"][number][] = [];
   const merges: Desired["merges"][number][] = [];
   const emits: ScopeRef[] = [];
+  const changeFollowups: ScopeRef[] = [];
   const gaps: KernelGap[] = [];
   const asks: Desired["asks"][number][] = [];
   const declaredAsks = new Set(reconciler.asks.map((kind) => kind.feature));
@@ -1114,9 +1115,10 @@ function createPure(
         keepId: options?.keepId,
       });
     },
-    emit(scope) {
+    emit(scope, options) {
       registry.laneOf(scope.kind);
-      emits.push(scope);
+      if (options?.when === "changed") changeFollowups.push(scope);
+      else emits.push(scope);
     },
     gap: {
       evidence: (input, actor, options) =>
@@ -1137,6 +1139,7 @@ function createPure(
       bindings,
       merges,
       emits,
+      changeFollowups,
       gaps,
       asks,
     }),

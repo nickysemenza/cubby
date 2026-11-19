@@ -468,8 +468,12 @@ export interface Pure {
     basis: "proof" | "decision",
     options?: { keepId?: string },
   ): void;
-  /** An own-scope follow-up is honored only after a nonempty difference is published. */
-  emit(scope: ScopeRef): void;
+  /**
+   * Discovers a downstream scope outside the applying batch.
+   * Own-scope and change-only emits follow a nonempty published difference,
+   * including when the target is in the applying batch.
+   */
+  emit(scope: ScopeRef, options?: { when: "changed" }): void;
   /** Accepted inputs disagree without a safe automatic replacement. Applies no records. */
   disagree(input: string): void;
   gap: {
@@ -516,6 +520,7 @@ export type Desired = {
     keepId?: string;
   }[];
   readonly emits: readonly ScopeRef[];
+  readonly changeFollowups: readonly ScopeRef[];
   readonly gaps: readonly KernelGap[];
   readonly asks: readonly { kind: AskKind; input: unknown }[];
 };
