@@ -66,15 +66,25 @@ const createdAt = () =>
   timestamp("createdAt", { mode: "date" }).notNull().defaultNow();
 
 /** A member-authored immutable observation; later edits are Decisions. */
-export const manualEntry = pgTable("ManualEntry", {
-  id: uuid("id")
-    .primaryKey()
-    .default(sql`gen_random_uuid()`),
-  entity: text("entity").notNull(),
-  userId: text("userId").notNull(),
-  payload: jsonb("payload").$type<KernelJson>().notNull(),
-  createdAt: createdAt(),
-});
+export const manualEntry = pgTable(
+  "ManualEntry",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    entity: text("entity").notNull(),
+    userId: text("userId").notNull(),
+    payload: jsonb("payload").$type<KernelJson>().notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index("ManualEntry_allocation_transaction_idx")
+      .on(sql`(${table.payload}->'values'->>'transactionId')`)
+      .where(
+        sql`${table.payload}#>>'{table}' = 'FinancialTransactionAllocation'`,
+      ),
+  ],
+);
 const updatedAt = () =>
   timestamp("updatedAt", { mode: "date" })
     .notNull()
@@ -136,6 +146,11 @@ export const decision = pgTable(
       table.id.desc(),
     ),
     index("Decision_other_idx").on(table.other),
+    index("Decision_allocation_transaction_idx")
+      .on(table.channel, sql`(${table.value}->'values'->>'transactionId')`)
+      .where(
+        sql`${table.value}#>>'{table}' = 'FinancialTransactionAllocation'`,
+      ),
     enumCheck("Decision_channel_check", table.channel, decisionChannel),
     enumCheck("Decision_kind_check", table.kind, decisionKind),
     enumCheck("Decision_actorKind_check", table.actorKind, decisionActorKind),

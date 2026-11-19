@@ -1,0 +1,107 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "1740be6f-e0a7-4402-b2af-47d463e4b6e0",
+  "prevIds": [
+    "54487af4-2207-4330-9539-945bea2e77a1"
+  ],
+  "footprints": [
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "Decision",
+        "Decision_allocation_transaction_idx"
+      ],
+      "writes": [
+        "s|idx|public.Decision_allocation_transaction_idx",
+        "n|idx|public.Decision_allocation_transaction_idx",
+        "e|idx|public.Decision_allocation_transaction_idx",
+        "n|rel|public.Decision_allocation_transaction_idx"
+      ],
+      "reads": [
+        "n|tbl|public.Decision",
+        "n|sch|public",
+        "n|col|public.Decision.channel"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "ManualEntry",
+        "ManualEntry_allocation_transaction_idx"
+      ],
+      "writes": [
+        "s|idx|public.ManualEntry_allocation_transaction_idx",
+        "n|idx|public.ManualEntry_allocation_transaction_idx",
+        "e|idx|public.ManualEntry_allocation_transaction_idx",
+        "n|rel|public.ManualEntry_allocation_transaction_idx"
+      ],
+      "reads": [
+        "n|tbl|public.ManualEntry",
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Decision",
+        "name": "Decision_allocation_transaction_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "channel",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "(\"value\"->'values'->>'transactionId')",
+            "isExpression": true,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": "\"value\"#>>'{table}' = 'FinancialTransactionAllocation'",
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ManualEntry",
+        "name": "ManualEntry_allocation_transaction_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "(\"payload\"->'values'->>'transactionId')",
+            "isExpression": true,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": "\"payload\"#>>'{table}' = 'FinancialTransactionAllocation'",
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    }
+  ]
+}
