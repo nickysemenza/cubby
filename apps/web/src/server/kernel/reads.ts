@@ -558,7 +558,17 @@ export function createReads(
             eq(factKey.factKind, evidence.kind),
             sql`${factKey.key} = ANY(${textArrayParam(all)})`,
           )!;
-          const join = eq(sql`${idColumn(table)}::text`, factKey.factId);
+          const id = idColumn(table);
+          const sameId = eq(sql`${id}::text`, factKey.factId);
+          // Match the indexed UUID before checking the exact stored text.
+          const join =
+            id.getSQLType() === "uuid"
+              ? and(
+                  sql`${id} = CASE WHEN pg_input_is_valid(${factKey.factId}, ${"uuid"})
+                  THEN ${factKey.factId}::uuid END`,
+                  sameId,
+                )!
+              : sameId;
           const unseen = all.filter((key) => !observedRevisions.has(key));
           let joined: { key: string; row: unknown }[] = [];
           let revs: ReadonlyMap<Key, number> = new Map();
