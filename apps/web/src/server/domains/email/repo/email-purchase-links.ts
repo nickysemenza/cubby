@@ -111,6 +111,7 @@ export const emailPurchaseEvidenceSql = (
 export const emailSuggestedEvidenceSql = (
   accountOwnerScope: "respect" | "ignore" = "respect",
   purchaseIds?: SQL,
+  linkDecisions = emailLinkDecisionsSql,
 ): SQL => sql`
   SELECT p."id" AS "purchaseId", event."id" AS "eventId", ${KIND.suggested}::text AS "kind", false AS "changed", ${PROPOSER.heuristic}::text AS "proposedBy"
   FROM "OrderMailEvent" event
@@ -136,7 +137,7 @@ export const emailSuggestedEvidenceSql = (
     AND event."supersededAt" IS NULL
     AND ${accountOwnerScope === "respect" ? sql`(account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")` : sql`true`}
     AND NOT EXISTS (
-      SELECT 1 FROM ${emailLinkDecisionsSql} decided
+      SELECT 1 FROM ${linkDecisions} decided
       WHERE decided."eventId" = event."id" AND decided."purchaseId" = p."id" AND decided.active
     )
 `;
