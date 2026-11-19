@@ -21,7 +21,7 @@ import { decisionProjectionColumns } from "~/server/domains/email/repo/decision-
 /** Decisions retain UUIDs or public codes; reads resolve the same identity as the kernel. */
 const purchaseReference = (identity: SQLWrapper, value: SQL) => sql`
   ${identity}.kind=${sqlEnumConstant(entitySchema, entitySchema.enum.purchase)}
-  AND ((${identity}.id=CASE WHEN pg_input_is_valid(lower(${value}), ${"uuid"})
+  AND ((${identity}.id=CASE WHEN pg_input_is_valid(lower(${value}), pg_typeof(NULL::uuid)::text)
     THEN lower(${value})::uuid END AND ${identity}.id::text=lower(${value}))
     OR ${identity}.shortcode=upper(btrim(${value})))`;
 
