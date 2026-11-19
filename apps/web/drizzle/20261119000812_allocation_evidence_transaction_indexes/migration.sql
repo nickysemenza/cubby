@@ -1,0 +1,2 @@
+CREATE INDEX "Decision_allocation_transaction_idx" ON "Decision" ("channel",("value"->'values'->>'transactionId')) WHERE "value"#>>'{table}' = 'FinancialTransactionAllocation';--> statement-breakpoint
+CREATE INDEX "ManualEntry_allocation_transaction_idx" ON "ManualEntry" (("payload"->'values'->>'transactionId')) WHERE "payload"#>>'{table}' = 'FinancialTransactionAllocation';

@@ -577,14 +577,14 @@ export const paymentMatching: Pick<
         reads.select(
           manualEntry,
           [],
-          sql`${manualEntry.payload}->>${"table"} = 'FinancialTransactionAllocation'
+          sql`${manualEntry.payload}#>>'{table}' = 'FinancialTransactionAllocation'
         AND ${manualEntry.payload}->'values'->>'transactionId' = ANY(${textArrayParam(transactionIds)})`,
         ),
         reads.select(
           decision,
           [],
           sql`${decision.channel} = ${decisionChannel.enum.assignment}
-        AND ${decision.value}->>${"table"} = 'FinancialTransactionAllocation'
+        AND ${decision.value}#>>'{table}' = 'FinancialTransactionAllocation'
         AND ${decision.value}->'values'->>'transactionId' = ANY(${textArrayParam(transactionIds)})`,
         ),
         reads.select(
