@@ -233,6 +233,15 @@ describe("settlement from retained order evidence", () => {
       const scopes = [orderScope, { kind: "purchaseEvent", key: bank.id }];
       await reconcileNow(ctx.db, scopes);
       await reconcileNow(ctx.db, scopes);
+      await reconcileNow(ctx.db, [matching]);
+      await reconcileNow(ctx.db, scopes);
+      await reconcileNow(ctx.db, [matching]);
+      expect(
+        await getDb(ctx.db)
+          .select({ key: scopeDirty.scopeKey })
+          .from(scopeDirty)
+          .where(eq(scopeDirty.scopeKey, orderScope.key)),
+      ).toHaveLength(0);
       expect(
         await getDb(ctx.db)
           .select({ id: purchase.id })

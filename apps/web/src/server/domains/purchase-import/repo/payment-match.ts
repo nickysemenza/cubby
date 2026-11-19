@@ -883,7 +883,10 @@ export const paymentMatching: Pick<
           decision?.kind === "same" ? "decision" : "proven",
         );
       }
-      c.emit({ kind: "purchaseEvent", key: resolvedScope });
+      c.emit(
+        { kind: "purchaseEvent", key: resolvedScope },
+        { when: "changed" },
+      );
     }
     return c.done();
   },

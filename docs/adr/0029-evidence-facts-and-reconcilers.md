@@ -359,10 +359,12 @@ the scope dirty, or the mutation sees the committed `ScopeDep` row and raises
 
 `ScopeDirty` can never hold more rows than there are scopes. Implicit output
 invalidations never dirty their applying scopes, including writes a delete
-policy, repoint or merge makes inside the apply. An explicit `emit` may request
-an own-scope follow-up after a nonempty difference is published; a no-op or
-fully held proposal cannot enqueue itself. This advances `seq` before claim
-settlement, retaining its queue age and releasing it for another fenced turn.
+policy, repoint or merge makes inside the apply. An own-scope `emit` or an
+`emit(scope, { when: "changed" })` schedules a follow-up when a nonempty
+difference is published. This includes targets in the applying batch. A
+no-op or fully held proposal schedules no such follow-up. Scheduling
+advances `seq` before claim settlement, retaining queue age and releasing
+applying targets for another fenced turn.
 A scope dirtied again by another writer during its run is also released still
 dirty.
 
