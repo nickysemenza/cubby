@@ -131,12 +131,12 @@ describe("settlement from retained order evidence", () => {
           ...observation.extraction,
           candidate: {
             ...candidate,
-            payments: [firstPayment, { ...firstPayment, amount: 31 }],
+            payments: [firstPayment, { ...firstPayment, amount: 13 }],
           },
         },
       })
       .where(eq(sourceOrderObservation.id, observation.id));
-    const secondary = { kind: "purchaseEvent", key: paymentAmountKey(3100n) };
+    const secondary = { kind: "purchaseEvent", key: paymentAmountKey(1300n) };
     await reconcileNow(ctx.db, [scope]);
     await reconcileNow(ctx.db, [secondary]);
     expect(
