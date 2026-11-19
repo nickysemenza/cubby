@@ -26,7 +26,10 @@ const purchaseReference = (identity: SQLWrapper, value: SQL) => sql`
     OR ${identity}.shortcode=upper(btrim(${value})))`;
 
 /** Current member links projected from decision slots, including their original evidence. */
-const emailLinkDecisionProjection = (correlateEventPointers: boolean) => sql`(
+const emailLinkDecisionProjection = (
+  correlateEventPointers: boolean,
+  emailId?: SQL,
+) => sql`(
   WITH current AS (
     SELECT DISTINCT ON (subject, slot) * FROM "Decision"
     WHERE channel=${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)}
@@ -66,13 +69,17 @@ const emailLinkDecisionProjection = (correlateEventPointers: boolean) => sql`(
   LEFT JOIN "Entity" event_target ON ${purchaseReference(sql.identifier("event_target"), sql`event_pointer.value#>>'{}'`)} AND event_pointer.kind=${sqlEnumConstant(decisionKind, decisionKind.enum.set)}
   LEFT JOIN "Purchase" live_purchase ON live_purchase.id=coalesce(target."mergedIntoId",target.id,substring(d.field from 6)::uuid) AND ${notDeleted("live_purchase")}
   LEFT JOIN current review ON review.subject=d.subject AND review.field='review-status:' || d.id
-  WHERE d.subject LIKE 'email:%' AND d.field LIKE 'link:%' AND d.kind=${sqlEnumConstant(decisionKind, decisionKind.enum.set)}
+  WHERE d.subject LIKE 'email:%' AND d.field LIKE 'link:%'
+    ${emailId ? sql`AND substring(d.subject from 7)::uuid=${emailId}` : sql``}
+    AND d.kind=${sqlEnumConstant(decisionKind, decisionKind.enum.set)}
   ORDER BY d.subject, coalesce(target."mergedIntoId",target.id,substring(d.field from 6)::uuid), coalesce(linked_event.id,(d.value->>'eventId')::uuid), active DESC,
     (d.value->>${"decision"}=${sqlEnumConstant(emailLinkEvidenceKind, emailLinkEvidenceKind.enum.linked)}) DESC,
     (substring(d.field from 6)::uuid=coalesce(target."mergedIntoId",target.id)) DESC,d.id
  )`;
 export const emailLinkDecisionsSql = emailLinkDecisionProjection(false);
 export const emailStateLinkDecisionsSql = emailLinkDecisionProjection(true);
+export const emailLinkDecisionsForEmailSql = (emailId: SQL) =>
+  emailLinkDecisionProjection(true, emailId);
 const emailLinkDecisionsFrom = sql`${emailLinkDecisionsSql} "EmailPurchaseDecision"`;
 export const emailLinkDecisionsRead = new QueryBuilder()
   .select(decisionProjectionColumns(emailPurchaseDecision))

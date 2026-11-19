@@ -7,7 +7,10 @@ import { feedbackAuthority } from "@cubby/schemas/suggestion";
 import { sql, type SQL } from "drizzle-orm";
 
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { emailLinkDecisionsSql } from "~/server/domains/email/repo/email-decision-sql";
+import {
+  emailLinkDecisionsForEmailSql,
+  emailLinkDecisionsSql,
+} from "~/server/domains/email/repo/email-decision-sql";
 import { emailReviewsSql } from "~/server/domains/email/repo/email-decision-sql";
 
 const { rule, decision, model, resolution } = mailboxClassificationStage.enum;
@@ -34,7 +37,7 @@ const emailLinkedDecisionPurchasesSql = (
   includeDeleted = false,
   accountOwnerScope: "respect" | "ignore" = "respect",
 ): SQL => sql`
- SELECT p.id AS "purchaseId" FROM ${emailLinkDecisionsSql} decision
+ SELECT p.id AS "purchaseId" FROM ${emailLinkDecisionsForEmailSql(sql`"Email".id`)} decision
  JOIN "Purchase" p ON p.id=decision."purchaseId" AND ${includeDeleted ? sql`true` : notDeleted("p")}
  LEFT JOIN "VendorAccount" account ON account.id=p."vendorAccountId" AND ${notDeleted("account")}
  WHERE decision."emailId"="Email".id AND decision.active AND decision.decision=${emailPurchaseLinkState.enum.linked}
