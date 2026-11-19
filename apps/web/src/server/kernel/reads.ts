@@ -436,16 +436,31 @@ export function createReads(
         ? [key.slice("binding:event:".length)]
         : [],
     );
-    const facts = keys.flatMap((key) =>
-      key.startsWith("binding:fact:")
-        ? [key.slice("binding:fact:".length)]
-        : [],
+    const factsByKind = new Map<string, string[]>();
+    for (const key of keys) {
+      if (!key.startsWith("binding:fact:")) continue;
+      const fact = key.slice("binding:fact:".length);
+      // Match the existing joined key even when a component contains a colon.
+      for (let i = fact.indexOf(":"); i !== -1; i = fact.indexOf(":", i + 1)) {
+        const kind = fact.slice(0, i);
+        const ids = factsByKind.get(kind) ?? [];
+        ids.push(fact.slice(i + 1));
+        factsByKind.set(kind, ids);
+      }
+    }
+    const predicates = [...factsByKind].map(
+      ([kind, ids]) =>
+        sql`(${evidenceBinding.factKind} = ${kind}
+          AND ${evidenceBinding.factId} = ANY(${textArrayParam(ids)}))`,
     );
+    if (events.length)
+      predicates.push(
+        sql`${evidenceBinding.eventKey} = ANY(${textArrayParam(events)})`,
+      );
     const { rows, revs } = await revised(
       evidenceBinding,
       and(
-        sql`(${events.length ? sql`${evidenceBinding.eventKey} = ANY(${textArrayParam(events)})` : sql`false`}
-            OR (${evidenceBinding.factKind} || ':' || ${evidenceBinding.factId}) = ANY(${textArrayParam(facts)}))`,
+        or(...predicates) ?? sql`false`,
         mode.hideBaseline
           ? sql`${evidenceBinding.basis} <> ${"baseline" satisfies BindingBasis}`
           : undefined,
