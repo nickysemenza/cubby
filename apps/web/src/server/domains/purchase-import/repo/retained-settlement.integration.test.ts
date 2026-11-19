@@ -10,6 +10,10 @@ import { getDb, notDeleted } from "~/server/db/helpers";
 import { scopeState, scopeDirty } from "~/server/db/kernel-schema";
 import { evidenceBinding } from "~/server/db/kernel-schema";
 import {
+  purchasePaymentEvidence,
+  sourceOrderObservation,
+} from "~/server/db/retained-tables";
+import {
   financialTransactionAllocation,
   purchase,
   expense,
@@ -112,6 +116,35 @@ describe("settlement from retained order evidence", () => {
         .from(evidenceBinding)
         .where(eq(evidenceBinding.factKind, "retainedPayment")),
     ).toEqual([{ event: `bank:${first.id}`, basis: "decision" }]);
+
+    // Legacy evidence can carry extracted payments without retained payment rows.
+    const database = getDb(ctx.db);
+    const candidate = observation.extraction.candidate!;
+    const firstPayment = candidate.payments[0]!;
+    await database
+      .delete(purchasePaymentEvidence)
+      .where(eq(purchasePaymentEvidence.orderObservationId, observation.id));
+    await database
+      .update(sourceOrderObservation)
+      .set({
+        extraction: {
+          ...observation.extraction,
+          candidate: {
+            ...candidate,
+            payments: [firstPayment, { ...firstPayment, amount: 13 }],
+          },
+        },
+      })
+      .where(eq(sourceOrderObservation.id, observation.id));
+    const secondary = { kind: "purchaseEvent", key: paymentAmountKey(1300n) };
+    await reconcileNow(ctx.db, [scope]);
+    await reconcileNow(ctx.db, [secondary]);
+    expect(
+      await database
+        .select({ owner: evidenceBinding.scopeKey })
+        .from(evidenceBinding)
+        .where(eq(evidenceBinding.factKind, "orderObservation")),
+    ).toEqual([{ owner: scope.key }]);
   });
 
   it.each(["charge-first", "order-first"])(

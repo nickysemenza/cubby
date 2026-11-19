@@ -113,6 +113,43 @@ const paymentSetKey = (order: Order) =>
   `${orderEventKey(order)}:${order.extraction.candidate?.sourceEvent === "refunded" ? "refund" : "charge"}`;
 type PaymentsFor = (order: Order) => Payment[];
 
+function orderPaymentRoutes(
+  heads: readonly Order[],
+  bindings: readonly Binding[],
+) {
+  const keysByEvent = new Map<string, Set<string>>();
+  for (const head of heads) {
+    const event = orderEventKey(head);
+    const keys = keysByEvent.get(event) ?? new Set<string>();
+    for (const key of orderPaymentKeys(head)) keys.add(key);
+    keysByEvent.set(event, keys);
+  }
+  const provenOwners = new Map(
+    bindings
+      .filter(
+        (binding) =>
+          binding.fact.kind === orderEvidence.kind &&
+          binding.basis === "proven" &&
+          binding.scope.kind === "purchaseEvent",
+      )
+      .map((binding) => [binding.fact.id, binding.scope.key]),
+  );
+  return { keysByEvent, provenOwners };
+}
+
+function orderBindingFallback(
+  paymentKeys: readonly string[],
+  amountKeys: readonly string[],
+  retainedPayments: readonly { amountMinor: bigint }[],
+) {
+  const retainedAmount = retainedPayments[0]?.amountMinor;
+  const retainedKey =
+    retainedAmount === undefined ? undefined : paymentAmountKey(retainedAmount);
+  return retainedKey && paymentKeys.includes(retainedKey)
+    ? retainedKey
+    : (amountKeys[0] ?? paymentKeys[0]);
+}
+
 function chosenOrderScope(input: PaymentMatchInput, order: Order, c: Pure) {
   const event = orderEventKey(order);
   const linked =
@@ -654,10 +691,11 @@ export const paymentMatching: Pick<
     const heads = acceptedOrderHeads(input.orders, c);
     const headsByPaymentSet = new Map<string, Order[]>();
     const events = new Map<string, Order>();
-    const eligibleEvents = new Set<string>();
+    const { keysByEvent, provenOwners } = orderPaymentRoutes(
+      heads,
+      input.bindings,
+    );
     for (const head of heads) {
-      if (orderPaymentKeys(head).includes(input.key))
-        eligibleEvents.add(orderEventKey(head));
       const key = paymentSetKey(head);
       const group = headsByPaymentSet.get(key) ?? [];
       group.push(head);
@@ -702,14 +740,21 @@ export const paymentMatching: Pick<
     const requiresContenderReview = contenderReview(input, c);
     for (const order of events.values()) {
       const event = orderEventKey(order);
-      if (!eligibleEvents.has(event)) continue;
+      const eventKeys = keysByEvent.get(event);
+      if (!eventKeys?.has(input.key)) continue;
       const paymentHeads = headsByPaymentSet.get(paymentSetKey(order)) ?? [];
-      const amountKeys = [
+      const paymentKeys = [
         ...new Set(paymentHeads.flatMap(orderPaymentKeys)),
-      ].filter((key) => key.startsWith("payment:amount:"));
+      ].sort();
+      const amountKeys = paymentKeys.filter((key) =>
+        key.startsWith("payment:amount:"),
+      );
       if (!input.key.startsWith("payment:amount:") && amountKeys.length) {
         for (const key of amountKeys) c.emit({ kind: "purchaseEvent", key });
-        continue;
+        if (
+          !paymentHeads.some((head) => provenOwners.get(head.id) === input.key)
+        )
+          continue;
       }
       const plan = planFor(order);
       if (plan.kind === "conflicting") {
@@ -854,17 +899,25 @@ export const paymentMatching: Pick<
         );
         continue;
       }
-      if (
-        !plan.payments.length ||
-        (plan.payments[0] &&
-          paymentAmountKey(plan.payments[0].amountMinor) === input.key)
-      )
-        for (const head of paymentHeads)
+      // An Order observation has one binding per basis. Extracted amounts can
+      // route a legacy observation even when it has no retained payment rows.
+      const fallbackOwner = orderBindingFallback(
+        paymentKeys,
+        amountKeys,
+        plan.payments,
+      );
+      for (const head of paymentHeads) {
+        const existingOwner = provenOwners.get(head.id);
+        const owner = eventKeys.has(existingOwner ?? "")
+          ? existingOwner
+          : fallbackOwner;
+        if (input.key === owner)
           c.bind(
             { kind: orderEvidence.kind, id: head.id },
             resolvedEvent,
             "proven",
           );
+      }
       for (const match of plan.matches ?? []) {
         const payment = plan.rows.find(
           (row) =>

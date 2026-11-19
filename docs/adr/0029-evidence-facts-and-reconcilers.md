@@ -950,7 +950,12 @@ suggestion. Current account-owner eligibility still gates both read paths.
 
 Order reads follow only the event's facts, bindings and stored money graph.
 Payment matching follows the connected set of payment amounts so all competing
-orders and each complete payment set participate. Email snapshots fetch only
+orders and each complete payment set participate. An Order observation keeps its existing
+proof owner while that scope can still route the event. A new proof uses the
+first retained payment's amount key when it routes the payment set, then the
+first extracted amount key in lexical order, then the payment order or source
+key.
+Email snapshots fetch only
 their originals, decisions, order records and operations. These bounded reads
 retain revision fences for empty results and current membership.
 
