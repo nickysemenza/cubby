@@ -8,11 +8,12 @@ import {
   type ConnectionProposal,
 } from "@cubby/schemas/entity-connections";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
+import { getDb, uuidArrayParam } from "~/server/db/helpers";
+import { requested } from "~/server/db/helpers/requested";
 import { connectionCandidateEvidence } from "~/server/db/retained-tables";
 import {
   lookupEntityLabels,
@@ -153,74 +154,134 @@ export async function publishPreparedEntityConnections(
       scopes.push({ kind: "connections", key: scopeKey });
     }
     await reconcileNow(tx, scopes);
-    return readStoredConnectionProposals(tx, ids);
+    return readStoredConnectionProposals(tx, { ids });
   });
 }
 
+type ConnectionReadScope = {
+  ids?: readonly string[];
+  entity?: string;
+  records?: readonly { entity: string; id: string }[];
+  labels?: boolean;
+};
+
 export async function readStoredConnectionProposals(
   db: Database,
-  ids?: readonly string[],
+  {
+    ids,
+    entity,
+    records,
+    labels: includeLabels = true,
+  }: ConnectionReadScope = {},
 ): Promise<ConnectionProposal[]> {
+  if (ids?.length === 0 || records?.length === 0) return [];
+  const evidence = connectionCandidateEvidence;
+  const requestedRecords = records ? requested(records) : undefined;
+  const endpoint = (
+    kind: typeof evidence.sourceEntity | typeof evidence.targetEntity,
+    id: typeof evidence.sourceId | typeof evidence.targetId,
+  ) =>
+    and(
+      entity ? eq(kind, entity) : undefined,
+      requestedRecords?.match({ entity: sql`${kind}`, id: sql`${id}` }),
+    );
   const selected = await getDb(db)
-    .select()
-    .from(connectionCandidateEvidence)
+    .select({
+      id: evidence.id,
+      candidate: evidence.candidate,
+      basis: evidence.basis,
+    })
+    .from(evidence)
     .where(
       and(
-        ids ? inArray(connectionCandidateEvidence.id, [...ids]) : undefined,
+        ids ? sql`${evidence.id} = ANY(${uuidArrayParam(ids)})` : undefined,
+        entity || records
+          ? or(
+              endpoint(evidence.sourceEntity, evidence.sourceId),
+              endpoint(evidence.targetEntity, evidence.targetId),
+            )
+          : undefined,
         sql`EXISTS (SELECT 1 FROM "ScopeState" state WHERE state."scopeKind"=${"connections"}
-      AND state."scopeKey"=${connectionCandidateEvidence.scopeKey} AND jsonb_array_length(state.gaps)>0
-      AND NOT EXISTS (SELECT 1 FROM "ConnectionCandidateEvidence" newer WHERE newer."scopeKey"=${connectionCandidateEvidence.scopeKey}
-        AND (newer."createdAt", newer.id)>(${connectionCandidateEvidence.createdAt}, ${connectionCandidateEvidence.id})))`,
+      AND state."scopeKey"=${evidence.scopeKey} AND jsonb_array_length(state.gaps)>0
+      AND NOT EXISTS (SELECT 1 FROM "ConnectionCandidateEvidence" newer WHERE newer."scopeKey"=${evidence.scopeKey}
+        AND (newer."createdAt", newer.id)>(${evidence.createdAt}, ${evidence.id})))`,
       ),
     );
+  if (!selected.length) return [];
+  const candidates = selected.map((row) => ({
+    ...row,
+    candidate: connectionCandidate.parse(row.candidate),
+  }));
+  const refs = await resolveShortcodes(
+    db,
+    candidates.flatMap(({ candidate }) => [
+      candidate.source.entityId,
+      candidate.target.entityId,
+    ]),
+  );
+  const current = candidates.filter(
+    ({ candidate }) =>
+      candidate.source.entityId !== candidate.target.entityId &&
+      refs.has(candidate.source.entityId) &&
+      refs.has(candidate.target.entityId),
+  );
+  const prepared = current.length
+    ? await prepareConnectionBases(
+        db,
+        current.map(({ candidate }) => candidate),
+      )
+    : undefined;
   const proposals = [];
-  for (const row of selected) {
-    const candidate = connectionCandidate.parse(row.candidate);
+  for (const row of current) {
+    const { candidate } = row;
     let basis;
     try {
-      basis = await captureConnectionBasis(db, candidate);
+      basis = await captureConnectionBasis(db, candidate, false, prepared);
     } catch {
       // SILENT: a removed endpoint cannot offer a current connection.
       continue;
     }
     if (canonicalJson(basis) !== canonicalJson(row.basis)) continue;
-    const refs = await resolveShortcodes(db, [
-      candidate.source.entityId,
-      candidate.target.entityId,
-    ]);
-    if (refs.size !== 2) continue;
-    const labels = await lookupEntityLabels(db, [...refs.values()]);
-    const label = (code: string) => {
-      const ref = refs.get(code);
-      return ref ? labels.get(`${ref.entity}:${ref.id}`) : undefined;
-    };
     proposals.push(
       connectionProposal.parse({
         ...candidate,
-        sourceName: label(candidate.source.entityId),
-        targetName: label(candidate.target.entityId),
         fingerprint: await connectionApplicationKeyFor(candidate, basis),
         review: { suggestionId: row.id, suppression: null },
         integration: { kind: "connection-review" },
       }),
     );
   }
-  return proposals;
+  if (!includeLabels || !proposals.length) return proposals;
+  const liveRefs = proposals.flatMap(({ source, target }) =>
+    [refs.get(source.entityId), refs.get(target.entityId)].flatMap((ref) =>
+      ref ? [ref] : [],
+    ),
+  );
+  const names = await lookupEntityLabels(db, liveRefs);
+  const label = (code: string) => {
+    const ref = refs.get(code);
+    return ref ? names.get(`${ref.entity}:${ref.id}`) : undefined;
+  };
+  return proposals.map((proposal) => ({
+    ...proposal,
+    sourceName: label(proposal.source.entityId),
+    targetName: label(proposal.target.entityId),
+  }));
 }
 
 export async function readEntityConnections(
   db: Database,
   source: EntityRef,
 ): Promise<ConnectionProposal[]> {
-  const proposals = await readStoredConnectionProposals(db);
+  const ref = (await resolveShortcodes(db, [source.entityId])).get(
+    source.entityId,
+  );
+  if (!ref || ref.entity !== source.entityKind) return [];
+  const proposals = await readStoredConnectionProposals(db, {
+    records: [{ entity: ref.entity, id: ref.id }],
+  });
   return [
-    ...proposals.filter((p) =>
-      [p.source, p.target].some(
-        (ref) =>
-          ref.entityKind === source.entityKind &&
-          ref.entityId === source.entityId,
-      ),
-    ),
+    ...proposals,
     ...((await readExistingConnectionSuggestions(db, [source]))[0] ?? []),
   ];
 }

@@ -8,6 +8,7 @@ import {
   unwrapDb,
 } from "~/server/db/helpers";
 import { textArrayParam } from "~/server/db/helpers/array-param";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { requested } from "~/server/db/helpers/requested";
 import { suggestionTable } from "~/server/db/schema";
 import { suggestionStateAdmission } from "~/server/generic/suggestions/repo/suggestion-touching";
@@ -57,14 +58,31 @@ export async function loadSuggestionRowCounts(
     count: number;
   }>(sql`
     WITH gaps AS (
-      SELECT split_part(s."scopeKey", ':', 1) AS entity, split_part(s."scopeKey", ':', 2) AS "recordId", s."scopeKey" || ':' || coalesce(gap->${"actions"}->0->>${"field"}, gap::text) AS key
-      FROM "ScopeState" s, jsonb_array_elements(s.gaps) gap WHERE s."scopeKind"=${"fields"} AND gap->>${"kind"}=${"decision"}
+      SELECT split_part(s."scopeKey", ':', 2) AS "recordId",
+        s."scopeKey" || ':' || coalesce(gap->'actions'->0->>${"field"}, gap::text) AS key
+      FROM "ScopeState" s
+      CROSS JOIN LATERAL jsonb_array_elements(s.gaps) gap
+      WHERE s."scopeKind"=${"fields"}
+        AND s."scopeKey"=ANY(${textArrayParam(ids.map((id) => `${entity}:${id}`))})
+        AND gap->>${"kind"}=${"decision"}
       UNION ALL
-      SELECT endpoints.entity, endpoints.id::text, s."scopeKey" FROM "ScopeState" s
-      JOIN LATERAL (SELECT e.* FROM "ConnectionCandidateEvidence" e WHERE e."scopeKey"=s."scopeKey" ORDER BY e."createdAt" DESC, e.id DESC LIMIT 1) e ON true
-      CROSS JOIN LATERAL (VALUES (e."sourceEntity",e."sourceId"),(e."targetEntity",e."targetId")) endpoints(entity,id)
-      WHERE s."scopeKind"=${"connections"} AND jsonb_array_length(s.gaps)>0
-    ) SELECT "recordId", count(DISTINCT key)::int AS count FROM gaps WHERE entity=${entity} AND "recordId"=ANY(${textArrayParam(ids)}) GROUP BY "recordId"`);
+      SELECT e."recordId"::text, e."scopeKey"
+      FROM (
+        SELECT "scopeKey", "sourceId" AS "recordId", "createdAt", id
+        FROM "ConnectionCandidateEvidence"
+        WHERE "sourceEntity"=${entity} AND "sourceId"=ANY(${uuidArrayParam(ids)})
+        UNION ALL
+        SELECT "scopeKey", "targetId" AS "recordId", "createdAt", id
+        FROM "ConnectionCandidateEvidence"
+        WHERE "targetEntity"=${entity} AND "targetId"=ANY(${uuidArrayParam(ids)})
+      ) e
+      JOIN "ScopeState" s ON s."scopeKind"=${"connections"} AND s."scopeKey"=e."scopeKey"
+      WHERE jsonb_array_length(s.gaps)>0
+        AND NOT EXISTS (
+          SELECT 1 FROM "ConnectionCandidateEvidence" newer
+          WHERE newer."scopeKey"=e."scopeKey" AND (newer."createdAt", newer.id)>(e."createdAt", e.id)
+        )
+    ) SELECT "recordId", count(DISTINCT key)::int AS count FROM gaps GROUP BY "recordId"`);
   for (const row of kernel.rows)
     counts.set(row.recordId, (counts.get(row.recordId) ?? 0) + row.count);
   return counts;

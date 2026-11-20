@@ -29,7 +29,8 @@ import {
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
+import { getDb, unwrapDb } from "~/server/db/helpers";
+import { sqlEnumConstant } from "~/server/db/sql-enum";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { compileDeclaredFilters } from "~/server/generic/list/repo/declared-filters";
 import { resolveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -224,7 +225,9 @@ function factNeeds(
     if (
       values.get(column) !== undefined ||
       values.get(`${column}Exclude`) !== undefined ||
-      values.get(`${column}Presence`) !== undefined
+      values.get(`${column}Presence`) !== undefined ||
+      values.get(`${column}From`) !== undefined ||
+      values.get(`${column}To`) !== undefined
     )
       needs.add(column);
   for (const name of order.flatMap((term) => sortColumns(term.by))) {
@@ -252,10 +255,10 @@ async function preparedFacts(
   db: Database,
   filters: SuggestionListFilters,
   needs: ReadonlySet<string>,
-  prepared?: Awaited<ReturnType<typeof scopedFamilyQuery>>,
+  cleanOnly = false,
 ) {
   const { families, touching, matchedFamilies, familyScope } =
-    prepared ?? (await scopedFamilyQuery(db, filters));
+    await scopedFamilyQuery(db, filters, cleanOnly);
   const selected = families.filter(
     (family) =>
       family === "field" ||
@@ -272,6 +275,7 @@ async function preparedFacts(
       if (query) parts.push(familyFactSelect(family, query, needs));
       continue;
     }
+    if (!presentation.keys) continue;
     keyed.push(
       ...(
         await presentation.keys(
@@ -279,7 +283,6 @@ async function preparedFacts(
           family === "field" || family === "recommendation"
             ? {
                 ...familyScope,
-                records: familyScope.records,
                 suggestionIds: undefined,
               }
             : familyScope,
@@ -298,10 +301,10 @@ async function preparedFacts(
   return { families, relation: factRelation(parts), familyScope };
 }
 
-async function selectFacts(
+function selectFacts(
   db: Database,
   relation: SQL,
-  filters: SuggestionListFilters,
+  filters: SuggestionListFilters | undefined,
   order: readonly SortTerm[],
   paging: {
     limit: number;
@@ -356,10 +359,10 @@ async function selectFacts(
       vector: sql<SuggestionColumnValue[]>`jsonb_build_array(${sql.join(
         terms.slice(0, -1).map((term) => term.value),
         sql`, `,
-      )})`,
+      )})`.as("vector"),
     })
     .from(relation)
-    .where(and(...predicates(filters), after, ...extra))
+    .where(and(...(filters ? predicates(filters) : []), after, ...extra))
     .orderBy(
       ...terms.map(
         (term) =>
@@ -382,10 +385,17 @@ async function pagedRows(
       ...(byFamily.get(entry.family) ?? []),
       entry.id,
     ]);
+  const pages = [];
+  for (const [family, ids] of byFamily) {
+    const pageRows = suggestionFamilies[family].pageRows;
+    if (!pageRows) continue;
+    pages.push(await pageRows(db, ids, filters));
+    byFamily.delete(family);
+  }
   const keys = (
     await Promise.all(
       [...byFamily].map(([family, suggestionIds]) =>
-        suggestionFamilies[family].keys(db, {
+        suggestionFamilies[family].keys?.(db, {
           filters: {
             ...filters,
             recordEntity: undefined,
@@ -396,11 +406,14 @@ async function pagedRows(
       ),
     )
   )
-    .flat()
+    .flatMap((group) => group ?? [])
     .filter(
       (key) => filters.status !== "pending" || key.automaticRule === null,
     );
-  return hydrate(db, keys);
+  return new Map([
+    ...pages.flatMap((page) => [...page]),
+    ...(await hydrate(db, keys)),
+  ]);
 }
 
 async function familyQuery(
@@ -422,29 +435,37 @@ async function familyQuery(
 const familiesOf = (filters: SuggestionListFilters) =>
   filters.family ? [filters.family] : suggestionListFamily.options;
 
-async function scopedFamilyQuery(db: Database, filters: SuggestionListFilters) {
-  const families = familiesOf(filters);
+async function scopedFamilyQuery(
+  db: Database,
+  filters: SuggestionListFilters,
+  cleanOnly = false,
+) {
+  const families = familiesOf(filters).filter(
+    (family) =>
+      !cleanOnly || (family !== "field" && family !== "recommendation"),
+  );
   const query = await familyQuery(db, filters);
-  const matched = await touchingSuggestionFamilies(db, {
-    entity: filters.recordEntity,
-    records: query.records,
-    eligibility: {
-      kind: "suggestions",
-      families,
-      status: filters.status,
-      runCode: filters.runId,
-    },
-  });
+  const storedFamilies = families.filter(
+    (family) => family !== "field" && family !== "recommendation",
+  );
+  const matched = storedFamilies.length
+    ? await touchingSuggestionFamilies(db, {
+        entity: filters.recordEntity,
+        records: query.records,
+        eligibility: {
+          kind: "suggestions",
+          families: storedFamilies,
+          status: filters.status,
+          runCode: filters.runId,
+        },
+      })
+    : null;
   const touching = matched ? new Set(matched.keys()) : null;
   const matchedFamilies = matched
     ? new Set([...matched.values()].flat())
     : null;
   const familyScope = {
-    filters: {
-      ...query.filters,
-      recordEntity: undefined,
-      recordIds: undefined,
-    },
+    filters: query.filters,
     records: query.records,
     suggestionIds: touching ? [...touching] : undefined,
   };
@@ -464,12 +485,14 @@ async function hydrate(
   const byFamily = new Map<SuggestionListFamily, SuggestionKey[]>();
   for (const key of keys)
     byFamily.set(key.family, [...(byFamily.get(key.family) ?? []), key]);
-  const maps: Map<string, SuggestionListRow>[] = await Promise.all(
+  const maps = await Promise.all(
     [...byFamily].map(([family, familyKeys]) =>
-      suggestionFamilies[family].rows(db, familyKeys),
+      suggestionFamilies[family].rows?.(db, familyKeys),
     ),
   );
-  return new Map(maps.flatMap((map) => [...map]));
+  return new Map<string, SuggestionListRow>(
+    maps.flatMap((map) => (map ? [...map] : [])),
+  );
 }
 
 /** One SQL-filtered, ordered page of pending family rows. */
@@ -494,22 +517,34 @@ export async function listSuggestionPage(
     );
   const needs = factNeeds(filters, order, ["clean"]);
   const { relation } = await preparedFacts(db, filters, needs);
-  const entries = await selectFacts(db, relation, filters, order, {
+  const pageQuery = selectFacts(db, sql`suggestion_facts`, undefined, order, {
     limit: input.limit + 1,
     offset: input.offset,
     cursor,
   });
+  const result = await unwrapDb(db).execute<{
+    entries: {
+      id: string;
+      family: SuggestionListFamily;
+      vector: SuggestionColumnValue[];
+    }[];
+    total: number;
+    clean: number;
+  }>(sql`
+    WITH suggestion_facts AS MATERIALIZED (
+      SELECT * FROM ${relation} WHERE ${and(...predicates(filters)) ?? sql`true`}
+    )
+    SELECT (SELECT coalesce(jsonb_agg(page), '[]'::jsonb) FROM (${pageQuery.getSQL()}) page) AS entries,
+      count(*)::int AS total,
+      count(*) FILTER (WHERE clean = 'true')::int AS clean
+    FROM suggestion_facts
+  `);
+  const totals = result.rows[0];
+  const entries = totals?.entries ?? [];
   const more = entries.length > input.limit;
   const page = entries.slice(0, input.limit);
   const last = page.at(-1);
   const rows = await pagedRows(db, page, filters);
-  const [totals] = await getDb(db)
-    .select({
-      total: sql<number>`count(*)::int`,
-      clean: sql<number>`count(*) FILTER (WHERE ${relationColumn("clean")} = 'true')::int`,
-    })
-    .from(relation)
-    .where(and(...predicates(filters)));
   return suggestionListOut.parse({
     items: page.flatMap((entry) => {
       const row = rows.get(entry.id);
@@ -541,64 +576,95 @@ export async function suggestionCountsByFamily(
     ...suggestionCountsInput.parse(raw),
     status: "pending" as const,
   };
-  const { families, relation } = await preparedFacts(
+  const { families, relation, familyScope } = await preparedFacts(
     db,
     filters,
-    factNeeds(filters, [], ["clean", "strength"]),
+    factNeeds(filters, [], ["clean", "strength", "entity", "field"]),
   );
   const familyColumn = relationColumn("family");
+  const fieldFamily = sqlEnumConstant(suggestionListFamily, "field");
+  const fieldEntity = sql<
+    string | null
+  >`CASE WHEN ${familyColumn} = ${fieldFamily} THEN ${relationColumn("entity")} END`;
+  const fieldName = sql<
+    string | null
+  >`CASE WHEN ${familyColumn} = ${fieldFamily} THEN ${relationColumn("field")} END`;
   const strengthCount = (strength: SuggestionStrength) =>
     sql<number>`count(*) FILTER (WHERE ${relationColumn("strength")} = ${strength})::int`;
-  const fieldFamily = families.find((family) => family === "field");
-  const [pendingRows, fieldRows] = [
-    await getDb(db)
-      .select({
-        family: sql<SuggestionListFamily>`${familyColumn}`,
-        pending: sql<number>`count(*)::int`,
-        clean: sql<number>`count(*) FILTER (WHERE ${relationColumn("clean")} = 'true')::int`,
-        strong: strengthCount("strong"),
-        medium: strengthCount("medium"),
-        weak: strengthCount("weak"),
-      })
-      .from(relation)
-      .where(and(...predicates(filters)))
-      .groupBy(familyColumn),
-    fieldFamily
-      ? await getDb(db)
-          .select({
-            entity: sql<string>`${relationColumn("entity")}`,
-            field: sql<string>`${relationColumn("field")}`,
-            pending: sql<number>`count(*)::int`,
-          })
-          .from(relation)
-          .where(
-            and(...predicates(filters), sql`${familyColumn} = ${fieldFamily}`),
-          )
-          .groupBy(relationColumn("entity"), relationColumn("field"))
-      : [],
-  ];
-  const pendingByFamily = new Map(pendingRows.map((row) => [row.family, row]));
+  const pendingRows = await getDb(db)
+    .select({
+      family: sql<SuggestionListFamily>`${familyColumn}`,
+      entity: fieldEntity,
+      field: fieldName,
+      pending: sql<number>`count(*)::int`,
+      clean: sql<number>`count(*) FILTER (WHERE ${relationColumn("clean")} = 'true')::int`,
+      strong: strengthCount("strong"),
+      medium: strengthCount("medium"),
+      weak: strengthCount("weak"),
+    })
+    .from(relation)
+    .where(and(...predicates(filters)))
+    .groupBy(familyColumn, fieldEntity, fieldName);
+  const pendingByFamily = new Map<
+    SuggestionListFamily,
+    ReturnType<typeof emptyPendingCounts>
+  >();
+  const fieldRows = new Map<
+    string,
+    { entity: string; field: string; pending: number }
+  >();
+  for (const row of pendingRows) {
+    const counts = pendingByFamily.get(row.family) ?? emptyPendingCounts();
+    counts.pending += row.pending;
+    counts.clean += row.clean;
+    counts.strong += row.strong;
+    counts.medium += row.medium;
+    counts.weak += row.weak;
+    pendingByFamily.set(row.family, counts);
+    if (row.family === "field" && row.entity && row.field)
+      fieldRows.set(`${row.entity}:${row.field}`, {
+        entity: row.entity,
+        field: row.field,
+        pending: row.pending,
+      });
+  }
   const counts = await Promise.all(
     families.map(async (family) => {
-      const outcomes = await suggestionFamilies[family].outcomes(db, filters);
-      const { family: _family, ...pending } = pendingByFamily.get(family) ?? {
-        family,
-        ...emptyPendingCounts(),
-      };
+      const outcomes = await suggestionFamilies[family].outcomes(
+        db,
+        filters,
+        familyScope.records,
+      );
+      const fields = new Map(
+        outcomes.fields.map((field) => [
+          `${field.entity}:${field.field}`,
+          field,
+        ]),
+      );
+      if (family === "field")
+        for (const [key, field] of fieldRows) {
+          const existing = fields.get(key);
+          fields.set(
+            key,
+            existing
+              ? { ...existing, pending: field.pending }
+              : {
+                  ...field,
+                  applied: 0,
+                  rejected: 0,
+                  superseded: 0,
+                  resolved: 0,
+                },
+          );
+        }
       return {
         family,
-        ...pending,
+        ...(pendingByFamily.get(family) ?? emptyPendingCounts()),
         ...outcomes,
-        fields: outcomes.fields.map((field) => ({
-          ...field,
-          pending:
-            family === "field"
-              ? (fieldRows.find(
-                  (row) =>
-                    row.entity === field.entity && row.field === field.field,
-                )?.pending ?? 0)
-              : 0,
-        })),
+        fields: [...fields.values()].sort(
+          (a, b) =>
+            a.entity.localeCompare(b.entity) || a.field.localeCompare(b.field),
+        ),
       };
     }),
   );
@@ -630,6 +696,7 @@ export async function acceptCleanSuggestions(
     db,
     filters,
     factNeeds(filters, order),
+    true,
   );
   const entries = await selectFacts(
     db,

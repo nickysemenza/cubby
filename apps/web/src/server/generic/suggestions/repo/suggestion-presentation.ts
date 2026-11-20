@@ -133,18 +133,25 @@ export type SuggestionFamilyPresentation<F extends SuggestionListFamily> = {
     query: SuggestionFamilyQuery,
     needs: ReadonlySet<string>,
   ) => SuggestionFactQuery | null;
-  keys: (
+  keys?: (
     db: Database,
     query: SuggestionFamilyQuery,
   ) => Promise<SuggestionKey[]>;
+  /** Families with SQL facts can hydrate their page without re-reading keys. */
+  pageRows?: (
+    db: Database,
+    ids: readonly string[],
+    filters: SuggestionListFilters,
+  ) => Promise<Map<string, RowOf<F>>>;
   /** Current rows by Suggestion id; a key whose evidence went stale is absent. */
-  rows: (
+  rows?: (
     db: Database,
     keys: readonly SuggestionKey[],
   ) => Promise<Map<string, RowOf<F>>>;
   outcomes: (
     db: Database,
     filters: SuggestionListFilters,
+    records?: SuggestionFamilyQuery["records"],
   ) => Promise<SuggestionOutcomes>;
   /** The review item that accepts a clean row exactly as recommended. */
   acceptAsIs: (row: RowOf<F>) => ReviewItem | null;

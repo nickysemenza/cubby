@@ -3599,7 +3599,10 @@ queue read is `suggestions_read.list`: filters use column names, `<column>Exclud
 fractions from 0 to 1, the unit rows carry; `recordEntity` scopes record kinds independently of the field family's `entity` filter.
 Exclusions keep rows with no matching value. Only `meta.cleanCount` remains, because it controls bulk
 acceptance. Current family facts are checked before filtering and pagination so stale evidence never
-inflates totals; family freshness and derived facts run through their eligibility reads.
+inflates totals. Field eligibility uses the resolved subject, the current scope inputs and
+all member-action gaps. SQL filters, counts and pages the field facts, then loads evidence
+and resolves reference labels in batches for the selected page. Accept Clean queries only
+families that can supply clean proposals.
 
 Every entity list batches the queue's pending counts and opens its inline review; detail pages show a
 scoped Suggestions section. Family declarations expand every affected record: both endpoints of
