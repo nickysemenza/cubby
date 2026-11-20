@@ -100,7 +100,10 @@ export function RecordPill({
         {mark}
       </span>
       {type ? (
-        <span className="shrink-0 font-mono text-muted-foreground">{type}</span>
+        // Visual only: a link's accessible name stays the record's own name.
+        <span aria-hidden className="shrink-0 font-mono text-muted-foreground">
+          {type}
+        </span>
       ) : null}
       {qualifier ? (
         <span
