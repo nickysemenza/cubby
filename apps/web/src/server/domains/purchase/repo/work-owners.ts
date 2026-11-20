@@ -12,6 +12,15 @@ import {
 } from "~/server/db/schema";
 import { acceptedOrderPurchasesSql } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import { workRunOwners } from "~/server/domains/run/repo/work-owners";
+import type { WorkCte } from "~/server/generic/work-queue/repo/work-source";
+
+/** Shared by Work sources that route accepted Purchase evidence. */
+export const workAcceptedOrderOwners = {
+  name: "work_accepted_order_owners",
+  sql: sql`SELECT DISTINCT "boundPurchaseId", "ledgerPartyId"
+    FROM ${acceptedOrderPurchasesSql} accepted
+    WHERE "boundPurchaseId" IS NOT NULL`,
+} satisfies WorkCte;
 
 /** Original item evidence follows current source accounts; a payment does not establish access. */
 export const workPurchaseSourceOwners = (id: SQL): SQL => sql`ARRAY(
@@ -26,7 +35,7 @@ export const workPurchaseSourceOwners = (id: SQL): SQL => sql`ARRAY(
     SELECT unnest(${workRunOwners(sql`p."runId"`)}) WHERE p."vendorAccountId" IS NULL
     UNION ALL
     SELECT accepted."ledgerPartyId"
-    FROM ${acceptedOrderPurchasesSql} accepted WHERE accepted."boundPurchaseId"::uuid=p.id
+    FROM ${sql.identifier(workAcceptedOrderOwners.name)} accepted WHERE accepted."boundPurchaseId"::uuid=p.id
   ) authority
   WHERE p.id = ${id} AND ${notDeleted(alias(purchase, "p"))}
 )`;

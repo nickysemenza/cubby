@@ -8,6 +8,7 @@ import { sql, type SQL } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { declaredStoredSourceSql } from "~/server/db/derived-source-sql";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { workAcceptedOrderOwners } from "~/server/domains/purchase/repo/work-owners";
 import { workTenderOwners } from "~/server/domains/work/repo/record-owners";
 import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-tables";
 import {
@@ -73,6 +74,7 @@ export const storedPrivateDiagnosticCandidates = (
       ELSE ARRAY[NULL::uuid] END) owner
   )`;
   return {
+    ctes: [workAcceptedOrderOwners],
     query: selectWorkCandidates(db, source, {
       entity: null,
       id: null,

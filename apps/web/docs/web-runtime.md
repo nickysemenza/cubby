@@ -660,8 +660,10 @@ The Work queue's household and MCP reads share one engine over the composed Work
 sources. Reason and record-scope filters prune sources before the union, the
 filtered population materializes once, and totals and view/group counts use the
 complete eligible population in the same pass; quality gaps and images load only
-for the selected page. A relation list's search schema derives from its
-declaration (`relationListSearch`), and row actions render through the
+for the selected page. Source-owner routing shares one projection of bound
+Purchase and ledger-party pairs from accepted order evidence per statement.
+A relation list's search schema derives from its declaration
+(`relationListSearch`), and row actions render through the
 `workActions` table; Problem handlers and their `<problem>:<verb>` wire ids are
 owned by `entity/problems/problem-actions.ts`, other sources by
 `WorkSourceActionId`.

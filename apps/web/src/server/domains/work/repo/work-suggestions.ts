@@ -5,6 +5,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { outer } from "~/server/db/helpers/related";
 import { entityIdentity } from "~/server/db/schema";
+import { workAcceptedOrderOwners } from "~/server/domains/purchase/repo/work-owners";
 import { workRecordFactsFor } from "~/server/domains/work/repo/record-facts";
 import { workSourceAuthority } from "~/server/domains/work/repo/record-owners";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
@@ -77,6 +78,7 @@ const source: WorkSource = {
         sql` UNION ALL `,
       ),
       ctes: [
+        workAcceptedOrderOwners,
         {
           name: "work_suggestion_refs",
           sql: sql`SELECT family, entity, token,
