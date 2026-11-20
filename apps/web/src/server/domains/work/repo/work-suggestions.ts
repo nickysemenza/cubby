@@ -94,13 +94,18 @@ const source: WorkSource = {
         },
         {
           name: "work_pending_records",
+          // Resolve UUID references through the identity key on broad reads.
           sql: sql`SELECT entity, record_id,
             array_agg(DISTINCT ('suggestions:' || family) ORDER BY ('suggestions:' || family)) AS reason_keys
           FROM (
             SELECT refs.family, work_identity.kind AS entity, work_identity.id AS record_id
             FROM work_suggestion_refs refs
-            JOIN "Entity" work_identity ON work_identity.kind = refs.entity AND work_identity.id = refs.record_uuid
-            WHERE ${liveIdentity}
+            JOIN LATERAL (
+              SELECT work_identity.kind, work_identity.id FROM "Entity" work_identity
+              WHERE work_identity.kind = refs.entity AND work_identity.id = refs.record_uuid
+                AND ${liveIdentity}
+              OFFSET 0
+            ) work_identity ON true
             UNION ALL
             SELECT refs.family, work_identity.kind, work_identity.id
             FROM work_suggestion_refs refs
