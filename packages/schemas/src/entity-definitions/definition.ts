@@ -1699,6 +1699,12 @@ const buildMetadataSchemas = () => {
       })
       .strict(),
     recordEmojiField: orNull(fieldKey),
+    /**
+     * A readable text field whose value this record's title usually repeats
+     * as a prefix (an expense's vendor). Record pills cut it from the title
+     * and draw it as the muted qualifier.
+     */
+    recordQualifierField: orNull(fieldKey),
     /** Read projection naming the entity whose standard glyph represents this record. */
     recordIconEntityField: orNull(fieldKey),
     /**

@@ -17,6 +17,7 @@ import type { DetailEntity } from "~/entity/model/detail-contracts";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Spinner } from "~/ui/primitives/spinner";
 
+import { recordFact, recordQualifier } from "../record-pill-identity";
 import { InlineRefLink } from "./inline";
 import { ChipRefLink } from "./leaf";
 import {
@@ -31,8 +32,18 @@ const isNamedEntity = (
   isBrowserRoutedEntity(entity) && isDetailEntity(entity);
 
 const namedRecordSchema = z.looseObject({
+  id: z.string().optional(),
   emoji: z.string().nullish(),
 });
+
+/**
+ * A detail read of a merged-away code answers with the surviving record. The
+ * link then leads to the survivor and shows the code it replaced.
+ */
+const survivorOf = (requested: string, record: unknown) => {
+  const id = namedRecordSchema.safeParse(record).data?.id;
+  return id && id !== requested ? id : null;
+};
 
 // These detail records retain their richer inline relationship presentation.
 const FETCHABLE = [
@@ -79,13 +90,6 @@ export function ByIdRefLink({
     isTitledReferenceEntity(entityKind)
       ? entityKind
       : null;
-  const queryOptions = useMemo(
-    () =>
-      isNamedEntity(entityKind) && !legacyReference && !name && !titled
-        ? entityPreviewQueryOptions(entityKind, entityId)
-        : { queryKey: ["invalid"] as const, queryFn: skipToken },
-    [entityKind, entityId, name, legacyReference, titled],
-  );
   const titleQueryOptions = useMemo(
     () =>
       titled && !legacyReference && !name
@@ -93,14 +97,28 @@ export function ByIdRefLink({
         : { queryKey: ["invalid"] as const, queryFn: skipToken },
     [titled, entityId, name, legacyReference],
   );
-
-  // SAFETY: the options union is narrowed by the named entity guard, but
-  // React Query's generic overload cannot express that correlation.
-  const query = useQuery(queryOptions as never);
   // SAFETY: the skipped placeholder never executes; a title query is typed.
   const titleQuery = useQuery<ReferenceTitle | null>(
     titleQueryOptions as never,
   );
+  // The title read has no row for a code that merged away or was deleted.
+  // Only then does the detail read run: it answers a merged code with its
+  // survivor, which tells the two apart.
+  const untitled = titled !== null && titleQuery.data === null;
+  const queryOptions = useMemo(
+    () =>
+      isNamedEntity(entityKind) &&
+      !legacyReference &&
+      !name &&
+      (!titled || untitled)
+        ? entityPreviewQueryOptions(entityKind, entityId)
+        : { queryKey: ["invalid"] as const, queryFn: skipToken },
+    [entityKind, entityId, name, legacyReference, titled, untitled],
+  );
+
+  // SAFETY: the options union is narrowed by the named entity guard, but
+  // React Query's generic overload cannot express that correlation.
+  const query = useQuery(queryOptions as never);
 
   if (entityKind === "inventory" && legacyReference) {
     return <span className="text-sm font-medium">Inventory Entry</span>;
@@ -122,7 +140,7 @@ export function ByIdRefLink({
 
   // The SSR query stream may settle before hydration. Both initial renders
   // must retain the loading label rather than disagree on the linked name.
-  const active = titled ? titleQuery : query;
+  const active = titled && !untitled ? titleQuery : query;
   if (isNamedEntity(entityKind) && (!hydrated || active.isPending)) {
     return (
       <output className="inline-flex items-center gap-1 text-muted-foreground">
@@ -130,10 +148,10 @@ export function ByIdRefLink({
       </output>
     );
   }
-  if (isNamedEntity(entityKind) && active.isError)
+  if (isNamedEntity(entityKind) && active.isError && !untitled)
     return <span className="text-destructive">{active.error.message}</span>;
 
-  if (titled) {
+  if (titled && !(untitled && survivorOf(entityId, query.data))) {
     // The title read answers `null` for a record that no longer exists.
     const label = titleQuery.data ?? null;
     return (
@@ -142,10 +160,14 @@ export function ByIdRefLink({
         id={entityId}
         bare={bare}
         emoji={label?.emoji ?? undefined}
+        qualifier={label?.qualifier}
+        fact={label?.fact}
+        deleted={label === null}
+        // A deleted record keeps its code: nothing else still names it.
         name={
           label
             ? label.title || `Untitled ${entityLabel(titled).toLowerCase()}`
-            : `Missing ${entityLabel(titled).toLowerCase()}`
+            : entityId
         }
       />
     );
@@ -155,12 +177,19 @@ export function ByIdRefLink({
     // Every other generated entity names itself through its manifest
     // `titleField`; a bare shortcode link (`PRJ-4UMD`) says nothing to a reader.
     const record = namedRecordSchema.safeParse(query.data);
+    const survivor = survivorOf(entityId, query.data);
     return (
       <ChipRefLink
         entity={entityKind}
-        id={entityId}
+        id={survivor ?? entityId}
+        replaced={survivor ? entityId : null}
         bare={bare}
         emoji={record.success ? record.data.emoji : undefined}
+        qualifier={
+          record.success ? recordQualifier(entityKind, record.data) : null
+        }
+        fact={record.success ? recordFact(entityKind, record.data) : null}
+        deleted={!record.success}
         name={
           record.success
             ? readRecordField(
@@ -168,7 +197,7 @@ export function ByIdRefLink({
                 entityRoster[entityKind].titleField,
                 z.string().catch(""),
               ) || `Untitled ${entityLabel(entityKind).toLowerCase()}`
-            : `Missing ${entityLabel(entityKind).toLowerCase()}`
+            : entityId
         }
         // Absent stays `undefined` so the chip falls back to the surrounding
         // display-image provider's cover.
@@ -198,17 +227,17 @@ export function ByIdRefLink({
         // SAFETY: the preview query options and this discriminant are selected
         // by the same fetchable entity guard above.
         data={query.data as never}
+        replaced={survivorOf(entityId, query.data) ? entityId : null}
         bare={bare}
       />
     );
   }
 
-  // A fetchable type with no data → the entity was deleted. Any other type
-  // (an audit row carrying an entityKind outside our union) → just label it.
-  return (
-    <span className="text-sm text-muted-foreground italic">
-      {entityKind}
-      {isFetchableEntity(entityKind) ? " (deleted)" : ""}
-    </span>
-  );
+  // A fetchable type with no data → the entity was deleted.
+  if (isFetchableEntity(entityKind))
+    return (
+      <ChipRefLink entity={entityKind} id={entityId} name={entityId} deleted />
+    );
+  // An audit row carrying an entityKind outside our union → just label it.
+  return <span className="text-sm text-muted-foreground">{entityKind}</span>;
 }

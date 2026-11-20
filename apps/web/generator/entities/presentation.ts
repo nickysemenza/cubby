@@ -1096,6 +1096,16 @@ export const compilePresentation = (
         `${context}.recordIconEntityField requires a readable text field.`,
       );
   }
+  if (presentation.recordQualifierField) {
+    const field = listLookup.read(
+      presentation.recordQualifierField,
+      "recordQualifierField",
+    );
+    if (field.kind !== "text")
+      throw new EntityDeclarationError(
+        `${context}.recordQualifierField requires a readable text list field.`,
+      );
+  }
   const edit = {
     ...presentation.edit,
     sections: compileEditSections(

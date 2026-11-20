@@ -343,6 +343,7 @@ export const { definition, readSchemas } = defineEntityModel({
   presentation: {
     searchFacts: ["date", "cost"],
     titleField: "name",
+    recordQualifierField: "vendor",
     domain: "finance",
     description: "The authoritative record of household spend.",
     emptyState: {

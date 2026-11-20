@@ -18,9 +18,10 @@ import { match } from "ts-pattern";
 import { z } from "zod";
 
 import { usdaRouteId } from "~/entity/entity-query";
-import { formatCurrency } from "~/lib/number-format";
+import { formatCalendarDay } from "~/lib/date-format";
 import { purchaseLabel, purchaseLabelUsedVendor } from "~/lib/purchase-label";
 
+import { recordFact, recordQualifier } from "../record-pill-identity";
 import { ChipRefLink } from "./leaf";
 
 // Minimal data shape - just id and name
@@ -37,8 +38,10 @@ export type InlineRefLinkProps = {
   className?: string;
   /** Text only; primary table names select this centrally. */
   bare?: boolean;
-  /** Muted context leading the metadata ("1 each" for a stocked location). */
+  /** Muted context leading the qualifier ("1 each" for a stocked location). */
   context?: string;
+  /** The merged-away code the caller asked for; `data` is the survivor. */
+  replaced?: string | null;
   /** Canonical backend-resolved cover; the shared context fills absent images. */
   displayImage?: ImageUrlSummary | null;
 } & (
@@ -123,7 +126,8 @@ export type InlineRefLinkProps = {
 type InlineSpec = {
   id: string;
   name: string;
-  metadata?: string;
+  /** Muted text after the title; a declared qualifier field replaces it. */
+  metadata?: string | null;
 };
 
 const inlineSpec = (props: InlineRefLinkProps): InlineSpec =>
@@ -146,7 +150,7 @@ const inlineSpec = (props: InlineRefLinkProps): InlineSpec =>
     .with({ entity: "meal" }, ({ data }) => ({
       id: data.id,
       name: data.name,
-      metadata: data.date ?? undefined,
+      metadata: data.date ? formatCalendarDay(data.date, "dateShort") : null,
     }))
     .with({ entity: "location" }, ({ data }) => {
       const type = fieldEnvelopeFor(data, "type");
@@ -194,10 +198,7 @@ const inlineSpec = (props: InlineRefLinkProps): InlineSpec =>
     .with({ entity: "expense" }, ({ data }) => ({
       id: data.id,
       name: data.name,
-      metadata:
-        data.cost != null
-          ? formatCurrency(data.cost)
-          : (data.projectName ?? undefined),
+      metadata: data.projectName ?? undefined,
     }))
     .with({ entity: "purchase" }, ({ data }) => ({
       id: data.id,
@@ -234,7 +235,22 @@ export function InlineRefLink(props: InlineRefLinkProps) {
       bare={props.bare}
       className={props.className}
       openInNewTab={props.openInNewTab}
-      context={[props.context, metadata].filter(Boolean).join(" · ")}
+      replaced={props.replaced}
+      qualifier={
+        [
+          props.context,
+          props.entity === "usda-food"
+            ? null
+            : (recordQualifier(props.entity, props.data) ?? metadata),
+        ]
+          .filter(Boolean)
+          .join(" · ") || null
+      }
+      fact={
+        props.entity === "usda-food"
+          ? null
+          : recordFact(props.entity, props.data)
+      }
     />
   );
 }

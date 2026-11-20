@@ -18,6 +18,7 @@ import { EmptyState } from "~/ui/feedback/empty-state";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { SidePanel, useTableRowStep } from "~/ui/overlays/side-panel";
 import { Button } from "~/ui/primitives/button";
+import { RecordPillHost } from "~/ui/records/record-pill";
 import { StateBadge } from "~/ui/records/state-badge";
 import { StatusText } from "~/ui/text/status-text";
 
@@ -65,11 +66,13 @@ function TargetStatus({ target }: { target: RunTarget }) {
 }
 function TargetLink({ target }: { target: RunTarget }) {
   return target.targetShortcode ? (
-    <EntityRefLink
-      entity={target.targetType}
-      id={target.targetShortcode}
-      name={targetName(target)}
-    />
+    <RecordPillHost host="mixed">
+      <EntityRefLink
+        entity={target.targetType}
+        id={target.targetShortcode}
+        name={targetName(target)}
+      />
+    </RecordPillHost>
   ) : (
     <span>{targetName(target)}</span>
   );

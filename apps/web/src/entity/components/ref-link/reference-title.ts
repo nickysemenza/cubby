@@ -5,10 +5,15 @@ import { z } from "zod";
 
 import { entityListFor } from "~/entity/entity-list";
 import { listEntities, type ListEntity } from "~/entity/model/list-contracts";
+import type { RecordPillFact } from "~/ui/records/record-pill";
+
+import { recordFact, recordQualifier } from "../record-pill-identity";
 
 export type ReferenceTitle = {
   title: string | null;
   emoji: string | null;
+  qualifier: string | null;
+  fact: RecordPillFact | null;
 };
 
 const REFERENCE_TITLE_CHUNK = 100;
@@ -33,12 +38,19 @@ const pending = new Map<ListEntity, Map<string, Waiter[]>>();
 let scheduled: ReturnType<typeof setTimeout> | undefined;
 
 function titlePlan(entity: ListEntity, ids: readonly string[]) {
-  const { titleField, recordEmojiField } = entityRoster[entity];
+  const { titleField, recordEmojiField, recordQualifierField, recordFact } =
+    entityRoster[entity];
   const params = {
     filters: { ids: [...ids] },
     pagination: { pageIndex: 0, pageSize: ids.length },
     includeCount: false,
-    fields: recordEmojiField ? [titleField, recordEmojiField] : [titleField],
+    // The pill's declared slots ride the one read its title already makes.
+    fields: [
+      titleField,
+      recordEmojiField,
+      recordQualifierField,
+      recordFact?.field,
+    ].filter((field) => field != null),
   };
   // SAFETY: the ids filter and selected fields are parsed by the target's own
   // list schema before the read executes.
@@ -71,6 +83,8 @@ async function readTitles(
             emoji: recordEmojiField
               ? (text.parse(row[recordEmojiField]) ?? null)
               : null,
+            qualifier: recordQualifier(entity, row),
+            fact: recordFact(entity, row),
           }
         : null;
       for (const waiter of waiters.get(id) ?? []) waiter.resolve(value);
@@ -105,8 +119,8 @@ function loadReferenceTitle(
 }
 
 /**
- * The label a by-id reference link needs: the record's title and mark, not its
- * whole detail projection. Cache tags follow the entity's list reads, so a
+ * The label a by-id reference link needs: the record's title, mark and
+ * declared pill slots, not its whole detail projection. Cache tags follow the entity's list reads, so a
  * change to the entity rereads its labels.
  */
 export function referenceTitleQueryOptions(entity: ListEntity, id: string) {

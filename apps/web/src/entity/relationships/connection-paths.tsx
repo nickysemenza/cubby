@@ -8,6 +8,7 @@ import { useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { isBrowserRoutedEntity } from "~/entity/entities";
+import { RecordPillHost } from "~/ui/records/record-pill";
 
 type ConnectedItem = ConnectedRecordsOutput["items"][number];
 
@@ -38,15 +39,17 @@ export function ConnectionRecordLink({
       </span>
     );
   return (
-    <EntityRefLink
-      entity={node.entityKind}
-      id={node.entityId}
-      name={disambiguate ? `${node.label} · ${node.entityId}` : node.label}
-      displayImage={node.image ?? null}
-      // A missing cover still joins the page batch. A per-chip emoji lookup
-      // would spend one request per path node.
-      emoji={null}
-    />
+    <RecordPillHost host="mixed">
+      <EntityRefLink
+        entity={node.entityKind}
+        id={node.entityId}
+        name={disambiguate ? `${node.label} · ${node.entityId}` : node.label}
+        displayImage={node.image ?? null}
+        // A missing cover still joins the page batch. A per-chip emoji lookup
+        // would spend one request per path node.
+        emoji={null}
+      />
+    </RecordPillHost>
   );
 }
 

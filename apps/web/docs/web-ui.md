@@ -234,8 +234,13 @@ and cookbook shortcodes keep their own detail destinations.
 ### Record link appearance
 
 `EntityRefLink` renders a record pill by default; table name columns use `bare`.
-The pill owns image size, text, fallback marks and wrapping; declarations own
-labels and identity data. Candidate filter rows reuse the noninteractive pill.
+The pill owns image size, text, fallback marks, wrapping and its slot order;
+declarations own labels, identity data, the qualifier and the fact
+([record pill slots](../../../docs/entities.md#record-pill-slots)). A surface
+declares which slots its pills draw by wrapping them in `RecordPillHost`
+(`prose`, `mixed` or `columns`); with no host a pill shows the qualifier and
+fact its reference carries. Callers that hold the referenced row pass it as
+`record`. Candidate filter rows reuse the noninteractive pill.
 Never start an image or record-mark query from a cell or option row; a missing
 mark falls back to the canonical entity mark.
 

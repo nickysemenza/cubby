@@ -3,22 +3,34 @@ import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo, type FC } from "react";
+import { z } from "zod";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { recordTypeCode } from "~/entity/components/record-pill-identity";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
+import { readRecordField } from "~/entity/entity-references";
 import { expense as expenseOperations } from "~/integrations/tanstack-query/generated/domains/expense.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
+import { RecordList, RecordRow, RecordTotal } from "~/ui/records/record-list";
+import { RecordPillHost } from "~/ui/records/record-pill";
 import { Description } from "~/ui/text/description";
 import { NoneValue } from "~/ui/text/none-value";
 import { DateDisplay } from "~/ui/values/date-display";
+
+const SIBLING_COLUMNS = [
+  { id: "date", label: "Date" },
+  { id: "amount", label: "Amount" },
+] as const;
+
+const EXPENSE_TYPE = recordTypeCode("expense");
 
 // Module-level so the fallback keeps a stable reference across renders.
 const NO_OTHER_EXPENSES: ExpenseOut[] = [];
@@ -168,9 +180,67 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
           <Description>{soloNote}</Description>
         ) : null
       ) : (
-        <Stack gap="tight">
-          {others.map((line) => (
-            <Row key={line.id} align="center" justify="between" gap="sm">
+        <SiblingExpenses
+          lines={others}
+          displayImages={displayImages}
+          summaryLine={summaryLine}
+        />
+      )}
+
+      {others.length === 0 && summaryLine ? (
+        <p className="border-t border-[var(--border)] pt-2 text-sm text-muted-foreground">
+          {summaryLine}
+        </p>
+      ) : null}
+    </Stack>
+  );
+};
+
+const beneficiaryPortions = z
+  .array(z.looseObject({ partyName: z.string().nullable() }))
+  .nullish()
+  .catch(null);
+
+/** Who the line is for, as the server resolved it; blank when nobody is named. */
+const beneficiaryNames = (line: ExpenseOut) =>
+  (readRecordField(line, "effectiveBeneficiaries", beneficiaryPortions) ?? [])
+    .flatMap((portion) => (portion.partyName ? [portion.partyName] : []))
+    .join(", ");
+
+/** The purchase's other lines as a column ledger. */
+function SiblingExpenses({
+  lines,
+  displayImages,
+  summaryLine,
+}: {
+  lines: readonly ExpenseOut[];
+  displayImages: ReturnType<typeof useEntityDisplayImages>;
+  summaryLine: string | null;
+}) {
+  return (
+    // The header names the vendor and the columns hold the facts, so each
+    // row's pill is only the part of its title that differs.
+    <RecordPillHost host="columns">
+      <RecordList
+        aria-label="Other expenses in this purchase"
+        columns={SIBLING_COLUMNS}
+      >
+        {lines.map((line) => (
+          <RecordRow
+            key={line.id}
+            // The person leads: sibling lines of one booking differ by who
+            // they are for long before their titles do.
+            leading={
+              <span className="flex items-center gap-2 text-xs">
+                <span className="font-mono text-muted-foreground">
+                  {EXPENSE_TYPE}
+                </span>
+                <span className="font-medium text-foreground">
+                  {beneficiaryNames(line)}
+                </span>
+              </span>
+            }
+            primary={
               <EntityRefLink
                 displayImage={
                   displayImages[
@@ -183,30 +253,35 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
                 entity="expense"
                 data={line}
               />
-              <Row
-                align="center"
-                gap="sm"
-                className="shrink-0 font-mono text-xs tabular-nums"
-              >
-                {line.date && (
-                  <span className="text-muted-foreground">
-                    <DateDisplay start={line.date} />
-                  </span>
-                )}
-                {line.cost != null ? formatCurrency(line.cost) : <NoneValue />}
-              </Row>
-            </Row>
-          ))}
-        </Stack>
-      )}
-
-      {summaryLine ? (
-        <p className="border-t border-[var(--border)] pt-2 text-sm text-muted-foreground">
-          {summaryLine}
-        </p>
-      ) : null}
-    </Stack>
+            }
+            facts={[
+              ...(line.date
+                ? [
+                    {
+                      id: "date",
+                      label: "Date",
+                      value: <DateDisplay start={line.date} />,
+                    },
+                  ]
+                : []),
+              {
+                id: "amount",
+                label: "Amount",
+                className: "text-right font-mono tabular-nums",
+                tone:
+                  line.cost != null && line.cost < 0
+                    ? ("destructive" as const)
+                    : undefined,
+                value:
+                  line.cost != null ? formatCurrency(line.cost) : <NoneValue />,
+              },
+            ]}
+          />
+        ))}
+        {summaryLine ? <RecordTotal>{summaryLine}</RecordTotal> : null}
+      </RecordList>
+    </RecordPillHost>
   );
-};
+}
 
 type ExpenseOut = DetailRecordOf<"expense">;

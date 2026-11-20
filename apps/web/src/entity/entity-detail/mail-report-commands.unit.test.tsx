@@ -43,6 +43,8 @@ it("imports a shipment without an order ID and links every server-created Run", 
     const label: ReferenceTitle = {
       title: `Synthetic import ${index + 1}`,
       emoji: null,
+      qualifier: null,
+      fact: null,
     };
     harness.queryClient.setQueryData(queryKey, label);
   }
