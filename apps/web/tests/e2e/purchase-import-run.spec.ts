@@ -8,6 +8,7 @@ import { eq, inArray } from "drizzle-orm";
 
 import * as schema from "~/server/db/schema";
 import { minorToDollarsSql } from "~/server/db/computed/money";
+import { acceptedOrders } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import {
   enableSyntheticMailImport,
   authorizePurchaseAgent,
@@ -182,23 +183,16 @@ async function vendorPurchases(
         .from(schema.expense)
         .where(inArray(schema.expense.purchaseId, ids))
     : [];
-  const claims = ids.length
+  const sources = ids.length
     ? await db
         .select({
-          purchaseId: schema.importSourceOrder.purchaseId,
-          externalKey: schema.importSourceClaim.externalKey,
+          purchaseId: acceptedOrders.purchaseId,
+          externalKey: acceptedOrders.sourceExternalKey,
         })
-        .from(schema.importSourceOrder)
-        .innerJoin(
-          schema.importSourceClaim,
-          eq(
-            schema.importSourceClaim.id,
-            schema.importSourceOrder.sourceClaimId,
-          ),
-        )
-        .where(inArray(schema.importSourceOrder.purchaseId, ids))
+        .from(acceptedOrders)
+        .where(inArray(acceptedOrders.purchaseId, ids))
     : [];
-  return { purchases, expenses, claims };
+  return { purchases, expenses, sources };
 }
 
 async function runByShortcode(shortcode: string) {
@@ -315,7 +309,7 @@ test("imports saved order mail from its Email page and follows the live Run to t
   const graph = await vendorPurchases(seed.vendor.id);
   expect(graph.purchases).toMatchObject([{ orderId: "SYN-CONFIRM-1" }]);
   expect(graph.expenses).toMatchObject([{ cost: 5, lineKind: "principal" }]);
-  expect(graph.claims).toEqual([
+  expect(graph.sources).toEqual([
     {
       purchaseId: graph.purchases[0]!.id,
       externalKey: `gmail:${source.mailboxId}:${source.messageId}`,
@@ -448,7 +442,7 @@ test("admits several retained confirmations as separate tasks in the same Run", 
   expect(new Set(graph.expenses.map(({ productId }) => productId)).size).toBe(
     1,
   );
-  expect(graph.claims).toHaveLength(2);
+  expect(graph.sources).toHaveLength(2);
   const owned = await db
     .select({
       orderMailId: schema.email.orderMailId,
