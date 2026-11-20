@@ -28,7 +28,7 @@ const publicEntity = alias(entityIdentity, "e");
 
 type Q = Pick<RepositoryQueryClient, "execute">;
 
-export type NeedsYouSupplement = Pick<
+type NeedsYouSupplement = Pick<
   NeedsYouPage["items"][number],
   "entity" | "shortcode" | "firstGap"
 >;

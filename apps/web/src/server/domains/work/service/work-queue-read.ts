@@ -1,5 +1,6 @@
 import type { Database } from "~/server/db";
 import {
+  readMemberWorkRecordsWith,
   readRecordWorkQueueWith,
   readWorkQueueWith,
 } from "~/server/generic/work-queue/repo/work-queue";
@@ -11,6 +12,12 @@ export const readWorkQueue = async (
   db: Database,
   read: Parameters<typeof readWorkQueueWith>[2],
 ) => readWorkQueueWith(db, await workQueueComposition(), read);
+
+/** Distinct human Work records and their first reasons in queue order. */
+export const readMemberWorkRecords = async (
+  db: Database,
+  memberPartyId: Parameters<typeof readMemberWorkRecordsWith>[2],
+) => readMemberWorkRecordsWith(db, await workQueueComposition(), memberPartyId);
 
 /** One record's rows of the same sources and routing, evaluated live. */
 export const readRecordWorkQueue = async (
