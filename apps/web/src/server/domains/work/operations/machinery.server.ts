@@ -1,5 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { entityRefKey, type Entity } from "@cubby/schemas/entity";
+import type { Entity } from "@cubby/schemas/entity";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { ENTITY_NOT_FOUND_REASON } from "@cubby/schemas/identifiers";
 import type { MachineryCapability } from "@cubby/schemas/kernel/capability";
@@ -14,11 +14,10 @@ import type { Database } from "~/server/db/database";
  * state badge; a decision is accepted only when the record's current read
  * offers it or when it addresses a field of the record itself.
  */
-import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
+import { readMemberWorkRecords } from "~/server/domains/work/service/work-queue-read";
 import { createAppError } from "~/server/errors/app-error";
 import { authoredFieldWriter } from "~/server/generic/machinery/repo/field-decisions";
 import { buildCrudServices } from "~/server/http/request-context";
-import type { NeedsYouSupplement } from "~/server/kernel/api";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
 const shortcodeEntity = z.enum(shortcodeEntities);
@@ -157,30 +156,15 @@ async function approveForRecord(
 export const machineryHandlers = implementOperationDomain(machineryContract, {
   needsYou: async (context, input) => {
     const kernel = await import("~/server/kernel/api");
-    const additional = new Map<string, NeedsYouSupplement>();
     const memberPartyId = (await context.currentParty())?.id ?? null;
-    for (let pageIndex = 0; ; pageIndex++) {
-      const page = await readWorkQueue(context.db, {
-        input: { view: "human", pageIndex, pageSize: 100 },
-        memberPartyId,
-        memberOnly: true,
-      });
-      for (const row of page.items) {
-        if (!row.entity || !row.id) continue;
-        const key = entityRefKey(row.entity, row.id);
-        if (additional.has(key)) continue;
-        additional.set(key, {
-          entity: row.entity,
-          shortcode: row.id,
-          firstGap: row.reason,
-        });
-      }
-      if ((pageIndex + 1) * 100 >= page.meta.totalCount || !page.items.length)
-        break;
-    }
+    const records = await readMemberWorkRecords(context.db, memberPartyId);
     return kernel.needsYou(context.db, {
       ...input,
-      additional: [...additional.values()],
+      additional: records.map(({ entity, id, reason }) => ({
+        entity,
+        shortcode: id,
+        firstGap: reason,
+      })),
     });
   },
   runWork: async (context, input) => {

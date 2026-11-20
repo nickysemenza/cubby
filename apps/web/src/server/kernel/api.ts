@@ -74,7 +74,6 @@ export {
   type SourceRef,
 } from "./define";
 export type { DecisionWriters, StoredDecision } from "./decide";
-export type { NeedsYouSupplement } from "./work";
 export type { Reads, ScopeReads } from "./reads";
 export { effectiveBindings } from "./reads";
 export { bindingWrites } from "./registry";

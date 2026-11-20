@@ -40,11 +40,17 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-import { readRecordWorkQueueWith, readWorkQueueWith } from "./work-queue";
+import {
+  readMemberWorkRecordsWith,
+  readRecordWorkQueueWith,
+  readWorkQueueWith,
+} from "./work-queue";
 import { selectWorkCandidates, type WorkSource } from "./work-source";
 
 type Row = {
   key: string;
+  recordId?: string;
+  reason?: string;
   name?: string;
   reasons: string[];
   owners?: (string | null)[];
@@ -83,11 +89,11 @@ const fakeSource = (
     ],
     candidates: vi.fn(async (db) => ({
       query: selectWorkCandidates(db, source, {
-        entity: null,
-        id: null,
+        entity: sql`CASE WHEN fixture."recordId" IS NOT NULL THEN ${options.entity ?? null}::text END`,
+        id: sql`fixture."recordId"`,
         key: sql`fixture.key`,
         name: sql`fixture.name`,
-        reason: "Synthetic reason",
+        reason: sql`coalesce(fixture.reason, ${"Synthetic reason"})`,
         reasonKeys: sql`fixture.reasons`,
         executor:
           source.executor === "dynamic" ? sql`fixture.executor` : undefined,
@@ -97,7 +103,7 @@ const fakeSource = (
         amount: sql`fixture.amount`,
         date: sql`fixture.date`,
       }).from(
-        sql`jsonb_to_recordset(${JSON.stringify(rows.map((row) => ({ name: row.key, owners: [], shared: false, amount: null, date: null, ...row })))}::jsonb) AS fixture(key text, name text, reasons text[], owners uuid[], "exclusiveOwner" uuid, shared boolean, executor text, amount double precision, date date)`,
+        sql`jsonb_to_recordset(${JSON.stringify(rows.map((row) => ({ name: row.key, owners: [], shared: false, amount: null, date: null, ...row })))}::jsonb) AS fixture(key text, name text, "recordId" text, reason text, reasons text[], owners uuid[], "exclusiveOwner" uuid, shared boolean, executor text, amount double precision, date date)`,
       ),
     })),
   };
@@ -458,6 +464,73 @@ describe("composed Work queue engine", () => {
       "missing",
       "theirs",
       "unresolved",
+    ]);
+
+    const records = fakeSource(
+      "member-records",
+      [
+        {
+          key: "a-first",
+          recordId: "PRD-AAAAA",
+          reason: "First reason",
+          reasons: ["a"],
+          owners: [first.id],
+          executor: "human",
+        },
+        {
+          key: "b-repeat",
+          recordId: "prd-aaaaa",
+          reason: "Second reason",
+          reasons: ["b"],
+          shared: true,
+          executor: "human",
+        },
+        {
+          key: "c-shared",
+          recordId: "PRD-BBBBB",
+          reasons: ["a"],
+          shared: true,
+          executor: "human",
+        },
+        {
+          key: "d-other",
+          recordId: "PRD-CCCCC",
+          reasons: ["a"],
+          owners: [second.id],
+          executor: "human",
+        },
+        {
+          key: "e-agent",
+          recordId: "PRD-DDDDD",
+          reasons: ["a"],
+          shared: true,
+          executor: "agent",
+        },
+        {
+          key: "f-deferred",
+          recordId: "PRD-EEEEE",
+          reasons: ["a"],
+          shared: true,
+          executor: "human",
+        },
+        {
+          key: "g-without-record",
+          reasons: ["a"],
+          shared: true,
+          executor: "human",
+        },
+      ],
+      { entity: "product", executor: "dynamic" },
+    );
+    expect(
+      await readMemberWorkRecordsWith(
+        ctx.db,
+        { sources: [records], deferrals: [sql`key = ${"f-deferred"}`] },
+        first.id,
+      ),
+    ).toEqual([
+      { entity: "product", id: "PRD-AAAAA", reason: "First reason" },
+      { entity: "product", id: "PRD-BBBBB", reason: "Synthetic reason" },
     ]);
   });
 

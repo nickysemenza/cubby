@@ -21,6 +21,7 @@ import {
   workQueueOutSchema,
   type WorkQueueGap,
   type WorkQueueInput,
+  type WorkQueueOut,
   type WorkQueueRow,
 } from "@cubby/schemas/work-queue";
 import { workQueueGapChecks } from "@cubby/schemas/work-queue-policy";
@@ -81,6 +82,16 @@ type RecordRead = {
   id: string;
   quality?: DataQuality;
 };
+
+const workQueueRowFields = workQueueOutSchema.shape.items.element.shape;
+const memberWorkRecords = z
+  .object({
+    entity: workQueueRowFields.entity.unwrap(),
+    id: workQueueRowFields.id.unwrap(),
+    reason: workQueueRowFields.reason,
+  })
+  .array();
+type MemberWorkRecord = z.output<typeof memberWorkRecords>[number];
 
 const column = (name: string): SQL => sql`${sql.identifier(name)}`;
 
@@ -169,6 +180,7 @@ async function candidateUnion(
   db: Database,
   admitted: readonly WorkSource[],
   scope: WorkScope,
+  includeIncomplete: boolean,
 ) {
   const prepared = (
     await boundedAll(admitted, async (source) => {
@@ -190,7 +202,7 @@ async function candidateUnion(
   const queries: SQLWrapper[] = relations.length
     ? relations.flatMap((candidates) => [
         sql`SELECT candidate.*, false AS input_incomplete FROM (${candidates.query}) candidate`,
-        ...(candidates.missingInputs
+        ...(includeIncomplete && candidates.missingInputs
           ? [
               sql`SELECT candidate.*, true AS input_incomplete FROM (${candidates.missingInputs}) candidate`,
             ]
@@ -241,6 +253,18 @@ async function queryWorkQueue(
   db: Database,
   composition: WorkQueueComposition,
   read: WorkQueueRead,
+): Promise<WorkQueueOut>;
+async function queryWorkQueue(
+  db: Database,
+  composition: WorkQueueComposition,
+  read: WorkQueueRead,
+  projection: "member-records",
+): Promise<MemberWorkRecord[]>;
+async function queryWorkQueue(
+  db: Database,
+  composition: WorkQueueComposition,
+  read: WorkQueueRead,
+  projection?: "member-records",
 ) {
   const input = workQueueInput.parse(read.input);
   const scope: WorkScope = {
@@ -266,6 +290,7 @@ async function queryWorkQueue(
     db,
     admitted,
     scope,
+    projection === undefined,
   ).then((live) => ({
     ...live,
     routed: sql`WITH work AS NOT MATERIALIZED (${live.union}) ${routedWork}`,
@@ -412,9 +437,7 @@ async function queryWorkQueue(
   // Counts and paging share the materialized filtered population below.
   // Under an any-of Reason filter, summarize only the selected reason keys:
   // drilling into another membership would otherwise widen that population.
-  const result = await getDb(db).execute(
-    // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- JSON property names below are the response contract, not vocabulary values.
-    sql`
+  const populationCtes = sql`
     WITH
     ${withCtes}
     ${membersCte},
@@ -424,15 +447,34 @@ async function queryWorkQueue(
     filtered AS MATERIALIZED (
       SELECT * FROM routed work WHERE NOT input_incomplete
       ${population ? sql`AND (${population})` : sql``}
-    ),
+    )`;
+  const eligible = sql`SELECT * FROM filtered ${selectedView ? sql`WHERE ${selectedView}` : sql``}`;
+
+  if (projection === "member-records") {
+    const rows = await getDb(db).execute(
+      sql`${populationCtes}
+        SELECT entity, id, reason FROM (${eligible}) records
+        WHERE entity IS NOT NULL OR id IS NOT NULL
+        ORDER BY ${orderBy}`,
+      "objects",
+    );
+    const distinct = new Map<string, MemberWorkRecord>();
+    for (const record of memberWorkRecords.parse(rows)) {
+      const key = entityRefKey(record.entity, record.id);
+      if (!distinct.has(key)) distinct.set(key, record);
+    }
+    return [...distinct.values()];
+  }
+
+  const result = await getDb(db).execute(
+    // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- JSON property names below are the response contract, not vocabulary values.
+    sql`${populationCtes},
     incomplete AS (
       SELECT * FROM routed work WHERE input_incomplete
       ${incompletePopulation ? sql`AND (${incompletePopulation})` : sql``}
       ${selectedView ? sql`AND (${selectedView})` : sql``}
     ),
-    eligible AS (
-      SELECT * FROM filtered ${selectedView ? sql`WHERE ${selectedView}` : sql``}
-    ),
+    eligible AS (${eligible}),
     page AS (
       SELECT *, row_number() OVER (ORDER BY ${orderBy}) AS position
       FROM eligible ORDER BY ${orderBy}
@@ -666,6 +708,19 @@ export const readWorkQueueWith = (
   composition: WorkQueueComposition,
   read: Omit<WorkQueueRead, "record">,
 ) => queryWorkQueue(db, composition, read);
+
+/** The first human Work reason for each distinct record, in queue order. */
+export const readMemberWorkRecordsWith = (
+  db: Database,
+  composition: WorkQueueComposition,
+  memberPartyId: LedgerPartyId | null,
+): Promise<MemberWorkRecord[]> =>
+  queryWorkQueue(
+    db,
+    composition,
+    { input: { view: "human" }, memberPartyId, memberOnly: true },
+    "member-records",
+  );
 
 /** One record's rows of the same projection; each source scopes itself to
  * the record, so this never plans the whole queue. */
