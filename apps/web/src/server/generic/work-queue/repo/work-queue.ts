@@ -407,7 +407,8 @@ async function queryWorkQueue(
     sql`, `,
   );
 
-  // Inline source and routing stages so common filters can reach their inputs.
+  // Share source routing between known work and incomplete inputs. Inlining
+  // routing into both consumers duplicates the candidate plan.
   // Counts and paging share the materialized filtered population below.
   // Under an any-of Reason filter, summarize only the selected reason keys:
   // drilling into another membership would otherwise widen that population.
@@ -417,7 +418,7 @@ async function queryWorkQueue(
     WITH
     ${withCtes}
     ${membersCte},
-    routed AS NOT MATERIALIZED (
+    routed AS MATERIALIZED (
       SELECT work.*, reason_keys[1] AS primary_reason FROM (${routed}) work
     ),
     filtered AS MATERIALIZED (

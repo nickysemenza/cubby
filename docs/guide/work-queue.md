@@ -26,7 +26,8 @@ The filtered browser `/work-queue` list discloses incomplete Project, diagnostic
 and quality inputs. Those records contribute completeness metadata rather than
 guessed gaps or actionable rows. Candidate filters, routing and planned-Purchase
 deferral apply before counts and paging. Counts cover known work while any
-admitted source has incomplete inputs.
+admitted source has incomplete inputs. Known work and incomplete inputs share
+one routed candidate relation.
 
 Suggestion candidates read pending `Suggestion` rows and current authority gates
 directly. Work does not capture suggestion evidence, enroll refreshes or
