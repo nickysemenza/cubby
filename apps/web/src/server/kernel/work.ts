@@ -28,6 +28,17 @@ const publicEntity = alias(entityIdentity, "e");
 
 type Q = Pick<RepositoryQueryClient, "execute">;
 
+export type NeedsYouSupplement = Pick<
+  NeedsYouPage["items"][number],
+  "entity" | "shortcode" | "firstGap"
+>;
+
+export type NeedsYouOptions = {
+  limit?: number;
+  offset?: number;
+  additional?: readonly NeedsYouSupplement[];
+};
+
 export async function loadRunPasses(q: Q, runId: string): Promise<PassWork[]> {
   const result = await q.execute<{
     name: string;
@@ -63,7 +74,7 @@ export async function loadRunPasses(q: Q, runId: string): Promise<PassWork[]> {
 export async function readNeedsYou(
   db: Database,
   registry: KernelRegistry,
-  options: { limit?: number; offset?: number } = {},
+  options: NeedsYouOptions = {},
 ): Promise<NeedsYouPage> {
   const consumers = [...registry.machinery.values()].flatMap((capability) =>
     (capability.scopes ?? []).map((kind) => ({
@@ -78,7 +89,8 @@ export async function readNeedsYou(
     count: number;
   }>(sql`
     WITH members AS (
-      SELECT s.*, jsonb_path_query_first(s.gaps, '$[*] ? (@.actor == "you")') AS gap
+      SELECT s."scopeKind", s."scopeKey", s.stage,
+        jsonb_path_query_first(s.gaps, '$[*] ? (@.actor == "you")') AS gap
       FROM "ScopeState" s WHERE s."mergedIntoKey" IS NULL
     ), records AS (
       SELECT DISTINCT m."scopeKind", m."scopeKey", e.kind AS entity, e.shortcode,
@@ -102,8 +114,15 @@ export async function readNeedsYou(
       UNION
       SELECT m."scopeKind",m."scopeKey",e.kind,e.shortcode,m.stage,m.gap->>${"input"},m.gap->'actions',m.gap->>'since'
       FROM members m CROSS JOIN LATERAL jsonb_array_elements(coalesce(m.gap->'actions','[]'::jsonb)) action
-      JOIN "Entity" e ON (action->>'subject'=e.kind || ':' || e.id::text OR action->>${"field"}=e.kind || ':' || e.id::text)
-      WHERE ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL
+      CROSS JOIN LATERAL (VALUES (action->>'subject'), (action->>${"field"})) ref(token)
+      CROSS JOIN LATERAL (
+        SELECT e.kind, e.shortcode FROM "Entity" e
+        WHERE e.id = CASE WHEN pg_input_is_valid(split_part(ref.token, ':', 2), ${"uuid"})
+                         THEN split_part(ref.token, ':', 2)::uuid END
+          AND ref.token = e.kind || ':' || e.id::text
+          AND ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL
+        OFFSET 0
+      ) e
     ), unique_scopes AS (
       SELECT DISTINCT ON ("scopeKind", "scopeKey") * FROM records
       ORDER BY "scopeKind", "scopeKey", (entity = 'sourceOccurrence'), entity, shortcode
@@ -118,11 +137,22 @@ export async function readNeedsYou(
         CASE severity WHEN 0 THEN ${STAGE.ended} WHEN 1 THEN ${STAGE.stuck} WHEN 2 THEN ${STAGE.working}
           WHEN 3 THEN ${STAGE.needsYou} WHEN 4 THEN ${STAGE.waiting} ELSE ${STAGE.done} END AS stage,
         "firstGap", actions, since FROM ranked WHERE rank = 1 AND shortcode IS NOT NULL AND "firstGap" IS NOT NULL
+    ), combined AS (
+      SELECT *, 0::bigint AS ordinal FROM eligible
+      UNION ALL
+      SELECT extra.item->>'entity', extra.item->>${"shortcode"}, ${STAGE.needsYou},
+        extra.item->>'firstGap', '[]'::jsonb, NULL::text, extra.ordinal
+      FROM jsonb_array_elements(${JSON.stringify(options.additional ?? [])}::jsonb)
+        WITH ORDINALITY AS extra(item, ordinal)
+      WHERE NOT EXISTS (
+        SELECT 1 FROM eligible
+        WHERE entity = extra.item->>'entity' AND shortcode = extra.item->>${"shortcode"}
+      )
     ), page AS (
-      SELECT * FROM eligible ORDER BY since NULLS LAST, entity, shortcode LIMIT ${limit} OFFSET ${offset}
+      SELECT * FROM combined ORDER BY ordinal, since NULLS LAST, entity, shortcode LIMIT ${limit} OFFSET ${offset}
     )
-    SELECT (SELECT count(*)::int FROM eligible) AS count,
-      coalesce((SELECT jsonb_agg(to_jsonb(page) ORDER BY since NULLS LAST, entity, shortcode) FROM page), '[]'::jsonb) AS items`);
+    SELECT (SELECT count(*)::int FROM combined) AS count,
+      coalesce((SELECT jsonb_agg(to_jsonb(page) - 'ordinal' ORDER BY ordinal, since NULLS LAST, entity, shortcode) FROM page), '[]'::jsonb) AS items`);
   return needsYouPage.parse(result.rows[0]);
 }
 

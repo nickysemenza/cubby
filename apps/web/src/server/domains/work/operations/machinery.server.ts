@@ -1,5 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { Entity } from "@cubby/schemas/entity";
+import { entityRefKey, type Entity } from "@cubby/schemas/entity";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { ENTITY_NOT_FOUND_REASON } from "@cubby/schemas/identifiers";
 import type { MachineryCapability } from "@cubby/schemas/kernel/capability";
@@ -18,6 +18,7 @@ import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { createAppError } from "~/server/errors/app-error";
 import { authoredFieldWriter } from "~/server/generic/machinery/repo/field-decisions";
 import { buildCrudServices } from "~/server/http/request-context";
+import type { NeedsYouSupplement } from "~/server/kernel/api";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
 const shortcodeEntity = z.enum(shortcodeEntities);
@@ -156,13 +157,7 @@ async function approveForRecord(
 export const machineryHandlers = implementOperationDomain(machineryContract, {
   needsYou: async (context, input) => {
     const kernel = await import("~/server/kernel/api");
-    const items: import("@cubby/schemas/kernel/work").NeedsYouPage["items"] =
-      [];
-    for (let offset = 0; ; offset += 100) {
-      const page = await kernel.needsYou(context.db, { limit: 100, offset });
-      items.push(...page.items);
-      if (offset + page.items.length >= page.count || !page.items.length) break;
-    }
+    const additional = new Map<string, NeedsYouSupplement>();
     const memberPartyId = (await context.currentParty())?.id ?? null;
     for (let pageIndex = 0; ; pageIndex++) {
       const page = await readWorkQueue(context.db, {
@@ -171,31 +166,22 @@ export const machineryHandlers = implementOperationDomain(machineryContract, {
         memberOnly: true,
       });
       for (const row of page.items) {
-        if (
-          !row.entity ||
-          !row.id ||
-          items.some(
-            (item) => item.entity === row.entity && item.shortcode === row.id,
-          )
-        )
-          continue;
-        items.push({
+        if (!row.entity || !row.id) continue;
+        const key = entityRefKey(row.entity, row.id);
+        if (additional.has(key)) continue;
+        additional.set(key, {
           entity: row.entity,
           shortcode: row.id,
-          stage: "needs_you",
           firstGap: row.reason,
-          actions: [],
-          since: null,
         });
       }
       if ((pageIndex + 1) * 100 >= page.meta.totalCount || !page.items.length)
         break;
     }
-    const offset = input.offset ?? 0;
-    return {
-      items: items.slice(offset, offset + (input.limit ?? 50)),
-      count: items.length,
-    };
+    return kernel.needsYou(context.db, {
+      ...input,
+      additional: [...additional.values()],
+    });
   },
   runWork: async (context, input) => {
     const record = await recordOf(context.db, "run", input.runId);
