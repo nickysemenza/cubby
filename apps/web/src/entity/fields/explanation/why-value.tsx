@@ -54,6 +54,7 @@ import {
 } from "~/ui/primitives/popover";
 import { Facts } from "~/ui/records/facts";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/records/ledger";
+import { RecordPillHost } from "~/ui/records/record-pill";
 import { Badge } from "~/ui/reui/badge";
 import { Description } from "~/ui/text/description";
 import { ExternalLinkText } from "~/ui/text/external-link";
@@ -282,16 +283,20 @@ export function ExplanationEntityLink({
   id: string;
   name?: string | null;
 }) {
-  if (name && isBrowserRoutedEntity(entity)) {
-    return <EntityRefLink entity={entity} id={id} name={name} />;
-  }
   const auditable = auditEntitySchema.safeParse(entity);
-  return auditable.success ? (
-    <EntityRefLink entity={auditable.data} id={id} name={name} />
-  ) : isBrowserRoutedEntity(entity) ? (
-    <EntityRefLink entity={entity} id={id} name={name ?? id} />
-  ) : (
-    <span className="font-mono text-xs">{id}</span>
+  // An explanation is a sentence; its records read as words in it.
+  return (
+    <RecordPillHost host="prose">
+      {name && isBrowserRoutedEntity(entity) ? (
+        <EntityRefLink entity={entity} id={id} name={name} />
+      ) : auditable.success ? (
+        <EntityRefLink entity={auditable.data} id={id} name={name} />
+      ) : isBrowserRoutedEntity(entity) ? (
+        <EntityRefLink entity={entity} id={id} name={name ?? id} />
+      ) : (
+        <span className="font-mono text-xs">{id}</span>
+      )}
+    </RecordPillHost>
   );
 }
 

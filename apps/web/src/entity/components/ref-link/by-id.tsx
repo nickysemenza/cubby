@@ -17,6 +17,7 @@ import type { DetailEntity } from "~/entity/model/detail-contracts";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Spinner } from "~/ui/primitives/spinner";
 
+import { recordFact, recordQualifier } from "../record-pill-identity";
 import { InlineRefLink } from "./inline";
 import { ChipRefLink } from "./leaf";
 import {
@@ -142,10 +143,14 @@ export function ByIdRefLink({
         id={entityId}
         bare={bare}
         emoji={label?.emoji ?? undefined}
+        qualifier={label?.qualifier}
+        fact={label?.fact}
+        deleted={label === null}
+        // A deleted record keeps its code: nothing else still names it.
         name={
           label
             ? label.title || `Untitled ${entityLabel(titled).toLowerCase()}`
-            : `Missing ${entityLabel(titled).toLowerCase()}`
+            : entityId
         }
       />
     );
@@ -161,6 +166,11 @@ export function ByIdRefLink({
         id={entityId}
         bare={bare}
         emoji={record.success ? record.data.emoji : undefined}
+        qualifier={
+          record.success ? recordQualifier(entityKind, record.data) : null
+        }
+        fact={record.success ? recordFact(entityKind, record.data) : null}
+        deleted={!record.success}
         name={
           record.success
             ? readRecordField(
@@ -168,7 +178,7 @@ export function ByIdRefLink({
                 entityRoster[entityKind].titleField,
                 z.string().catch(""),
               ) || `Untitled ${entityLabel(entityKind).toLowerCase()}`
-            : `Missing ${entityLabel(entityKind).toLowerCase()}`
+            : entityId
         }
         // Absent stays `undefined` so the chip falls back to the surrounding
         // display-image provider's cover.
@@ -203,12 +213,11 @@ export function ByIdRefLink({
     );
   }
 
-  // A fetchable type with no data → the entity was deleted. Any other type
-  // (an audit row carrying an entityKind outside our union) → just label it.
-  return (
-    <span className="text-sm text-muted-foreground italic">
-      {entityKind}
-      {isFetchableEntity(entityKind) ? " (deleted)" : ""}
-    </span>
-  );
+  // A fetchable type with no data → the entity was deleted.
+  if (isFetchableEntity(entityKind))
+    return (
+      <ChipRefLink entity={entityKind} id={entityId} name={entityId} deleted />
+    );
+  // An audit row carrying an entityKind outside our union → just label it.
+  return <span className="text-sm text-muted-foreground">{entityKind}</span>;
 }

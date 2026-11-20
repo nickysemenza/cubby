@@ -35,6 +35,15 @@ export type EntityRosterData = Record<
     titleField: string;
     recordIconEntityField: string | null;
     recordEmojiField: string | null;
+    recordQualifierField: string | null;
+    /**
+     * The one fact a record pill may carry: the first `list.rail` field when
+     * its value explains itself without a column header (money, a date).
+     */
+    recordFact: {
+      field: string;
+      format: "currency" | "date" | "timestamp";
+    } | null;
     recordGlyph: {
       field: string;
       glyphs: Readonly<Record<string, { phosphor: string; sfSymbol: string }>>;

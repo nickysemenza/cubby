@@ -4,6 +4,7 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
 import { formatCount } from "~/lib/number-format";
 import { RecordRow } from "~/ui/records/record-list";
+import { RecordPillHost } from "~/ui/records/record-pill";
 
 export function RelatedRecordRow({
   item,
@@ -17,12 +18,14 @@ export function RelatedRecordRow({
   return (
     <RecordRow
       primary={
-        <EntityRefLink
-          entity={item.entity}
-          id={item.shortcode}
-          name={item.title}
-          displayImage={displayImage}
-        />
+        <RecordPillHost host="mixed">
+          <EntityRefLink
+            entity={item.entity}
+            id={item.shortcode}
+            name={item.title}
+            displayImage={displayImage}
+          />
+        </RecordPillHost>
       }
       secondary={item.evidence
         .map((evidence) =>

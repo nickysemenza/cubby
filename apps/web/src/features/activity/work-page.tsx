@@ -26,6 +26,7 @@ import {
   TableHead,
   TableCell,
 } from "~/ui/primitives/table";
+import { RecordPillHost } from "~/ui/records/record-pill";
 
 /** Past this the list only counts the rest; a page of warnings stops being read. */
 const STUCK_ROW_CAP = 8;
@@ -97,7 +98,9 @@ function StuckRow({ item }: { item: WorkStuckItem }) {
         {item.record ? (
           <>
             {" "}
-            · <EntityRefLink entity={item.record.entity} id={item.record.id} />
+            <RecordPillHost host="prose">
+              <EntityRefLink entity={item.record.entity} id={item.record.id} />
+            </RecordPillHost>
           </>
         ) : null}
       </p>

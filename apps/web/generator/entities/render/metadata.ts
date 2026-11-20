@@ -44,6 +44,29 @@ const filterExpandRule = (name: string) => {
   return entry[1];
 };
 
+/**
+ * A pill fact has no column header to explain it, so only the first rail
+ * field whose value reads alone qualifies: money or a date. Counts and
+ * quantities stay in their columns.
+ */
+const recordFact = (entity: CompiledEntity) => {
+  const rail = entity.inspector.list.rail[0];
+  const field = entity.fieldModel.fields.find(({ key }) => key === rail?.field);
+  if (!field || field.display.readPath !== null) return null;
+  const format =
+    field.display.format === "currency" ||
+    field.display.format === "signedCurrency"
+      ? ("currency" as const)
+      : field.kind === "timestamp" || field.display.format === "timestamp"
+        ? ("timestamp" as const)
+        : field.kind === "date" ||
+            field.kind === "dateRange" ||
+            field.display.format === "plainDate"
+          ? ("date" as const)
+          : null;
+  return format ? { field: field.readKey, format } : null;
+};
+
 const browserFilterDescriptors = (entity: CompiledEntity) =>
   entity.filterDescriptors.map(
     ({ optionsRef, expandRef, brandRef, ...descriptor }) => {
@@ -522,6 +545,8 @@ export const renderEntityMetadataArtifacts = (
                 titleField: entity.inspector.titleField,
                 recordIconEntityField: entity.inspector.recordIconEntityField,
                 recordEmojiField: entity.inspector.recordEmojiField,
+                recordQualifierField: entity.inspector.recordQualifierField,
+                recordFact: recordFact(entity),
                 recordGlyph: entity.inspector.recordGlyph,
                 merge: entity.operationOwners.merge === "kernel",
                 mergeFlow: entity.mergeFlow,

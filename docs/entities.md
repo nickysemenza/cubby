@@ -597,6 +597,24 @@ Category's effective family). Aggregate buckets keyed by a marked record's short
 and columns, Sankey nodes, cash-flow baselines and envelopes) carry that record's `emoji`, read in
 one batch per axis; other buckets carry null.
 
+#### Record pill slots
+
+A record pill draws mark, type, title, qualifier, one fact and state
+([design](../apps/web/DESIGN.md)). Two of those are declared:
+
+- `presentation.recordQualifierField` names a list-readable text field whose
+  value the record's title usually repeats as a prefix (an expense's `vendor`).
+  The pill cuts that prefix from the title and draws the value as the muted
+  qualifier. Declare it only where titles repeat a shared prefix.
+- The fact is the first `list.rail` field when its value reads without a
+  column header: money or a date. A count, quantity or server-worded figure
+  has no pill fact and stays in its column.
+
+The generator publishes both as `recordQualifierField` and `recordFact` on the
+entity roster, so a pill formats them without loading entity metadata. A
+reference carries them when its caller holds the row; a by-id reference
+selects them in the batched title read it already makes.
+
 `presentation.recordIconEntityField` names a read-only projection holding an entity key. Generic web
 and Apple record surfaces resolve that entity's declared icon, falling back to the record's own
 icon for missing or unknown keys; record emoji and real media keep precedence, and navigation keeps

@@ -1,8 +1,10 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { entityRoster } from "@cubby/schemas/entity-roster";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
-import { Link, type LinkProps } from "@tanstack/react-router";
+import { skipToken, useQuery } from "@tanstack/react-query";
+import { Link, type LinkProps, useParams } from "@tanstack/react-router";
 import { cva } from "class-variance-authority";
 import { cn } from "cn";
 import type { ComponentProps } from "react";
@@ -38,8 +40,18 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
+import {
+  type RecordPillFact,
+  useRecordPillSlots,
+} from "~/ui/records/record-pill";
 import { ExternalLinkIcon } from "~/ui/text/external-link";
 import { useIdentityCell } from "~/ui/values/stacked-value";
+
+import {
+  isTitledReferenceEntity,
+  referenceTitleQueryOptions,
+  type ReferenceTitle,
+} from "./reference-title";
 
 const EntityPreviewContent = browserOnlyLazy<
   ComponentProps<typeof EntityPreviewContentComponent>
@@ -250,8 +262,12 @@ type ChipRefLinkProps = {
   displayImage?: ImageUrlSummary | null;
   className?: string;
   openInNewTab?: boolean;
-  /** Declared context remains outside the identity pill. */
-  context?: string;
+  /** The shared part of `name`, drawn muted after the title. */
+  qualifier?: string | null;
+  /** The record's declared fact, when the reference already carries it. */
+  fact?: RecordPillFact | null;
+  /** The record no longer exists; `name` is what it was last called. */
+  deleted?: boolean;
   fallback?: ReactNode;
 };
 
@@ -270,7 +286,9 @@ export function ChipRefLink({
   bare,
   className,
   openInNewTab,
-  context,
+  qualifier,
+  fact,
+  deleted,
   fallback,
   parent,
 }: ChipRefLinkProps) {
@@ -278,6 +296,10 @@ export function ChipRefLink({
   const identity = bare ?? identityCell;
   const leaf = name ?? id;
   const label = parent ? `${parent} / ${leaf}` : leaf;
+  // The page's own record is named, not linked: the hop would lead nowhere.
+  const current =
+    useParams({ strict: false, select: (params) => params.shortcode }) === id;
+  const state = deleted ? "deleted" : current ? "current" : undefined;
   const content = identity ? (
     <span className="min-w-0 truncate">{label}</span>
   ) : (
@@ -286,11 +308,24 @@ export function ChipRefLink({
       id={id}
       name={leaf}
       parent={parent}
+      qualifier={qualifier}
+      fact={fact}
+      state={state}
       displayImage={displayImage ?? null}
       emoji={emoji}
       fallback={fallback}
     />
   );
+  if (state && !identity)
+    return (
+      <span
+        className={cn("inline-flex max-w-full min-w-0 align-middle", className)}
+        title={deleted ? `Deleted ${entityLabel(entity).toLowerCase()}` : label}
+        aria-current={current && !deleted ? "page" : undefined}
+      >
+        {content}
+      </span>
+    );
   return isHoverPreviewEntity(entity) ? (
     <PreviewRefLink
       entity={entity}
@@ -305,22 +340,16 @@ export function ChipRefLink({
         ),
       })}
       openInNewTab={openInNewTab}
-      ariaLabel={!identity && parent ? label : undefined}
+      ariaLabel={!identity && (parent || qualifier) ? label : undefined}
     >
       {content}
-      {!identity && context && (
-        <span className="min-w-0 truncate text-2xs text-muted-foreground">
-          {" "}
-          · {context}
-        </span>
-      )}
     </PreviewRefLink>
   ) : (
     <TableRefLink
       to={entities[entity].routes.detail}
       params={entityDetailParams(id)}
       title={label}
-      ariaLabel={!identity && parent ? label : undefined}
+      ariaLabel={!identity && (parent || qualifier) ? label : undefined}
       tone={identity ? "identity" : undefined}
       className={cn(
         "inline-flex max-w-full min-w-0 items-center gap-1 align-middle",
@@ -368,6 +397,18 @@ export function AuditRefLink({
 }: AuditRefLinkProps) {
   const label = entityLabel(entityKind);
   const title = name ? `${name} · ${entityId}` : `${label} ${entityId}`;
+  // Audit rows carry a name only; the declared fact rides the batched title
+  // read that by-id links share, one request per entity for the whole feed.
+  const slots = useRecordPillSlots();
+  // SAFETY: the skipped placeholder never executes; a title query is typed.
+  const declared = useQuery<ReferenceTitle | null>(
+    (name &&
+    slots.fact &&
+    isTitledReferenceEntity(entityKind) &&
+    entityRoster[entityKind].recordFact
+      ? referenceTitleQueryOptions(entityKind, entityId)
+      : { queryKey: ["invalid"] as const, queryFn: skipToken }) as never,
+  ).data;
   const content = (
     <>
       {name ? (
@@ -376,6 +417,8 @@ export function AuditRefLink({
             entity={entityKind}
             id={entityId}
             name={name}
+            qualifier={declared?.qualifier}
+            fact={declared?.fact}
             displayImage={displayImage}
           />
           <span className="shrink-0 text-xs font-medium text-slate">

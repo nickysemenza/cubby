@@ -10,6 +10,7 @@ import { isBrowserRoutedEntity } from "~/entity/entities";
 import { useEntityMetadata } from "~/entity/metadata";
 import { QuerySection } from "~/ui/feedback/query-section";
 import { Image } from "~/ui/media/image";
+import { RecordPillHost } from "~/ui/records/record-pill";
 
 /** All graph links use already hydrated identity and cover; hover resolves detail on demand. */
 export function GraphRecordLink({
@@ -19,13 +20,16 @@ export function GraphRecordLink({
   compact?: boolean;
 }) {
   return isBrowserRoutedEntity(node.entityKind) ? (
-    <EntityRefLink
-      entity={node.entityKind}
-      id={node.entityId}
-      name={node.label}
-      displayImage={node.image ?? null}
-      emoji={null}
-    />
+    <RecordPillHost host="mixed">
+      <EntityRefLink
+        entity={node.entityKind}
+        id={node.entityId}
+        name={node.label}
+        record={node.preview}
+        displayImage={node.image ?? null}
+        emoji={null}
+      />
+    </RecordPillHost>
   ) : (
     <span>{node.label}</span>
   );
