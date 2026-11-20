@@ -90,13 +90,6 @@ export function ByIdRefLink({
     isTitledReferenceEntity(entityKind)
       ? entityKind
       : null;
-  const queryOptions = useMemo(
-    () =>
-      isNamedEntity(entityKind) && !legacyReference && !name && !titled
-        ? entityPreviewQueryOptions(entityKind, entityId)
-        : { queryKey: ["invalid"] as const, queryFn: skipToken },
-    [entityKind, entityId, name, legacyReference, titled],
-  );
   const titleQueryOptions = useMemo(
     () =>
       titled && !legacyReference && !name
@@ -104,14 +97,28 @@ export function ByIdRefLink({
         : { queryKey: ["invalid"] as const, queryFn: skipToken },
     [titled, entityId, name, legacyReference],
   );
-
-  // SAFETY: the options union is narrowed by the named entity guard, but
-  // React Query's generic overload cannot express that correlation.
-  const query = useQuery(queryOptions as never);
   // SAFETY: the skipped placeholder never executes; a title query is typed.
   const titleQuery = useQuery<ReferenceTitle | null>(
     titleQueryOptions as never,
   );
+  // The title read has no row for a code that merged away or was deleted.
+  // Only then does the detail read run: it answers a merged code with its
+  // survivor, which tells the two apart.
+  const untitled = titled !== null && titleQuery.data === null;
+  const queryOptions = useMemo(
+    () =>
+      isNamedEntity(entityKind) &&
+      !legacyReference &&
+      !name &&
+      (!titled || untitled)
+        ? entityPreviewQueryOptions(entityKind, entityId)
+        : { queryKey: ["invalid"] as const, queryFn: skipToken },
+    [entityKind, entityId, name, legacyReference, titled, untitled],
+  );
+
+  // SAFETY: the options union is narrowed by the named entity guard, but
+  // React Query's generic overload cannot express that correlation.
+  const query = useQuery(queryOptions as never);
 
   if (entityKind === "inventory" && legacyReference) {
     return <span className="text-sm font-medium">Inventory Entry</span>;
@@ -133,7 +140,7 @@ export function ByIdRefLink({
 
   // The SSR query stream may settle before hydration. Both initial renders
   // must retain the loading label rather than disagree on the linked name.
-  const active = titled ? titleQuery : query;
+  const active = titled && !untitled ? titleQuery : query;
   if (isNamedEntity(entityKind) && (!hydrated || active.isPending)) {
     return (
       <output className="inline-flex items-center gap-1 text-muted-foreground">
@@ -141,10 +148,10 @@ export function ByIdRefLink({
       </output>
     );
   }
-  if (isNamedEntity(entityKind) && active.isError)
+  if (isNamedEntity(entityKind) && active.isError && !untitled)
     return <span className="text-destructive">{active.error.message}</span>;
 
-  if (titled) {
+  if (titled && !(untitled && survivorOf(entityId, query.data))) {
     // The title read answers `null` for a record that no longer exists.
     const label = titleQuery.data ?? null;
     return (

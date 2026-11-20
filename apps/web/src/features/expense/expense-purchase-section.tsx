@@ -1,18 +1,18 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo, type FC } from "react";
+import { z } from "zod";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { recordTypeCode } from "~/entity/components/record-pill-identity";
-import { renderCompactFieldValue } from "~/entity/display/entity-display";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
-import { useEntityMetadata } from "~/entity/metadata";
+import { readRecordField } from "~/entity/entity-references";
 import { expense as expenseOperations } from "~/integrations/tanstack-query/generated/domains/expense.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { FieldRecordValue } from "~/ui/derived/record-value";
@@ -26,7 +26,6 @@ import { NoneValue } from "~/ui/text/none-value";
 import { DateDisplay } from "~/ui/values/date-display";
 
 const SIBLING_COLUMNS = [
-  { id: "for", label: "For" },
   { id: "date", label: "Date" },
   { id: "amount", label: "Amount" },
 ] as const;
@@ -197,10 +196,18 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
   );
 };
 
-/**
- * The purchase's other lines as a column ledger. Its own component so the
- * section's loading and error states never wait on expense metadata.
- */
+const beneficiaryPortions = z
+  .array(z.looseObject({ partyName: z.string().nullable() }))
+  .nullish()
+  .catch(null);
+
+/** Who the line is for, as the server resolved it; blank when nobody is named. */
+const beneficiaryNames = (line: ExpenseOut) =>
+  (readRecordField(line, "effectiveBeneficiaries", beneficiaryPortions) ?? [])
+    .flatMap((portion) => (portion.partyName ? [portion.partyName] : []))
+    .join(", ");
+
+/** The purchase's other lines as a column ledger. */
 function SiblingExpenses({
   lines,
   displayImages,
@@ -210,10 +217,6 @@ function SiblingExpenses({
   displayImages: ReturnType<typeof useEntityDisplayImages>;
   summaryLine: string | null;
 }) {
-  const queryClient = useQueryClient();
-  const beneficiaries = useEntityMetadata("expense").fields.fields.find(
-    (field) => field.key === "effectiveBeneficiaries",
-  );
   return (
     // The header names the vendor and the columns hold the facts, so each
     // row's pill is only the part of its title that differs.
@@ -225,9 +228,16 @@ function SiblingExpenses({
         {lines.map((line) => (
           <RecordRow
             key={line.id}
+            // The person leads: sibling lines of one booking differ by who
+            // they are for long before their titles do.
             leading={
-              <span className="font-mono text-xs text-muted-foreground">
-                {EXPENSE_TYPE}
+              <span className="flex items-center gap-2 text-xs">
+                <span className="font-mono text-muted-foreground">
+                  {EXPENSE_TYPE}
+                </span>
+                <span className="font-medium text-foreground">
+                  {beneficiaryNames(line)}
+                </span>
               </span>
             }
             primary={
@@ -245,21 +255,6 @@ function SiblingExpenses({
               />
             }
             facts={[
-              ...(beneficiaries
-                ? [
-                    {
-                      id: "for",
-                      label: "For",
-                      value: renderCompactFieldValue(
-                        queryClient,
-                        "expense",
-                        line,
-                        beneficiaries,
-                        { singleLine: true },
-                      ),
-                    },
-                  ]
-                : []),
               ...(line.date
                 ? [
                     {

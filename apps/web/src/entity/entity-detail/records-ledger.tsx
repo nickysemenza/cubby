@@ -24,6 +24,7 @@ import {
   RecordList,
   RecordRow,
 } from "~/ui/records/record-list";
+import { RecordPillHost } from "~/ui/records/record-pill";
 import { Badge } from "~/ui/reui/badge";
 import { DateDisplay } from "~/ui/values/date-display";
 
@@ -178,8 +179,13 @@ export function ReportRowText({ row }: { row: ReportRecordRow }) {
 /** A row's title, as the chip of the record it opens when it opens one. */
 function RowTitle({ row }: { row: ReportRecordRow }) {
   const entity = routedEntity(row.entity);
+  // A report lists whatever records its section found, so each names its type.
   if (entity !== null && row.id !== null)
-    return <EntityRefLink entity={entity} id={row.id} name={row.title} />;
+    return (
+      <RecordPillHost host="mixed">
+        <EntityRefLink entity={entity} id={row.id} name={row.title} />
+      </RecordPillHost>
+    );
   if (row.title === "") return null;
   return (
     <span className="font-medium whitespace-pre-line">
