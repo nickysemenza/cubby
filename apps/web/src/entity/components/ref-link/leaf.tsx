@@ -42,6 +42,7 @@ import {
 } from "~/ui/primitives/tooltip";
 import {
   type RecordPillFact,
+  RecordPillHost,
   useRecordPillSlots,
 } from "~/ui/records/record-pill";
 import { ExternalLinkIcon } from "~/ui/text/external-link";
@@ -413,14 +414,17 @@ export function AuditRefLink({
     <>
       {name ? (
         <>
-          <EntityPill
-            entity={entityKind}
-            id={entityId}
-            name={name}
-            qualifier={declared?.qualifier}
-            fact={declared?.fact}
-            displayImage={displayImage}
-          />
+          {/* A feed mixes record types, so each pill names its own. */}
+          <RecordPillHost host="mixed">
+            <EntityPill
+              entity={entityKind}
+              id={entityId}
+              name={name}
+              qualifier={declared?.qualifier}
+              fact={declared?.fact}
+              displayImage={displayImage}
+            />
+          </RecordPillHost>
           <span className="shrink-0 text-xs font-medium text-slate">
             {entityId}
           </span>

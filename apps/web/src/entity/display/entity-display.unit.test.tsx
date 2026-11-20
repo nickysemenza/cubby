@@ -159,6 +159,8 @@ it("renders proposed multiple references without borrowing current nested record
     const label: ReferenceTitle = {
       title: `Synthetic dependency ${index + 1}`,
       emoji: null,
+      qualifier: null,
+      fact: null,
     };
     queryClient.setQueryData(
       referenceTitleQueryOptions("task", id).queryKey,

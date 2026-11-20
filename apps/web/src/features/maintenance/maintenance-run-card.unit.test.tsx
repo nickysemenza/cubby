@@ -93,6 +93,8 @@ describe("MaintenanceRunCard", () => {
     const label: ReferenceTitle = {
       title: "Synthetic maintenance pass",
       emoji: null,
+      qualifier: null,
+      fact: null,
     };
     harness.queryClient.setQueryData(queryKey, label);
   });
