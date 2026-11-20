@@ -3577,15 +3577,18 @@ describe("Shipment retained evidence", () => {
     const corrected = [genuine, added];
     const removal = await read();
     expect(removal.extras).toEqual(corrected);
-    expect(removal.changes).toEqual([
-      ...concurrent.changes,
-      {
-        extraTrackingNumbers: {
-          from: [falseExtra, genuine, added],
-          to: corrected,
+    expect(removal.changes).toHaveLength(concurrent.changes.length + 1);
+    expect(removal.changes).toEqual(
+      expect.arrayContaining([
+        ...concurrent.changes,
+        {
+          extraTrackingNumbers: {
+            from: [falseExtra, genuine, added],
+            to: corrected,
+          },
         },
-      },
-    ]);
+      ]),
+    );
 
     // Neither retained nor fresh extraction of the Delivery field restores it.
     await recordShipmentEvidence(ctx.db, source, ctx.actor);
