@@ -98,12 +98,14 @@ export function settledAiRunPredicate(input: {
   status: SQL;
   failureCode: SQL;
 }): SQL<boolean> {
+  // Keep Ask roster checks correlated by Run so the planner can probe the
+  // scope index on broad queue reads.
   return sql<boolean>`(${input.purpose} = ${runPurpose.enum.ai_refresh}
     AND ${input.status} = ${RUN.failed}
     AND ${input.failureCode} IS NOT DISTINCT FROM ${"ai_work_failed"}
-    AND EXISTS (SELECT 1 FROM "AskScope" s WHERE s."runId" = ${input.id})
+    AND EXISTS (SELECT 1 FROM "AskScope" s WHERE s."runId" = ${input.id} OFFSET 0)
     AND NOT EXISTS (SELECT 1 FROM "AskScope" s JOIN "Ask" a ON a.id = s."askId"
-      WHERE s."runId" = ${input.id} AND s."cancelledAt" IS NULL AND a.state <> ${"answered"})
+      WHERE s."runId" = ${input.id} AND s."cancelledAt" IS NULL AND a.state <> ${"answered"} OFFSET 0)
     AND NOT ${runHasLiveWork(input.id)}
     AND NOT ${unresolvedImageWorkExists(input.id)})`;
 }
