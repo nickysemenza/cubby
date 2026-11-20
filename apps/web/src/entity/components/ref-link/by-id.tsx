@@ -32,8 +32,18 @@ const isNamedEntity = (
   isBrowserRoutedEntity(entity) && isDetailEntity(entity);
 
 const namedRecordSchema = z.looseObject({
+  id: z.string().optional(),
   emoji: z.string().nullish(),
 });
+
+/**
+ * A detail read of a merged-away code answers with the surviving record. The
+ * link then leads to the survivor and shows the code it replaced.
+ */
+const survivorOf = (requested: string, record: unknown) => {
+  const id = namedRecordSchema.safeParse(record).data?.id;
+  return id && id !== requested ? id : null;
+};
 
 // These detail records retain their richer inline relationship presentation.
 const FETCHABLE = [
@@ -160,10 +170,12 @@ export function ByIdRefLink({
     // Every other generated entity names itself through its manifest
     // `titleField`; a bare shortcode link (`PRJ-4UMD`) says nothing to a reader.
     const record = namedRecordSchema.safeParse(query.data);
+    const survivor = survivorOf(entityId, query.data);
     return (
       <ChipRefLink
         entity={entityKind}
-        id={entityId}
+        id={survivor ?? entityId}
+        replaced={survivor ? entityId : null}
         bare={bare}
         emoji={record.success ? record.data.emoji : undefined}
         qualifier={
@@ -208,6 +220,7 @@ export function ByIdRefLink({
         // SAFETY: the preview query options and this discriminant are selected
         // by the same fetchable entity guard above.
         data={query.data as never}
+        replaced={survivorOf(entityId, query.data) ? entityId : null}
         bare={bare}
       />
     );

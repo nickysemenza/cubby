@@ -19,7 +19,7 @@ import { FieldRecordValue } from "~/ui/derived/record-value";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { RecordList, RecordRow } from "~/ui/records/record-list";
+import { RecordList, RecordRow, RecordTotal } from "~/ui/records/record-list";
 import { RecordPillHost } from "~/ui/records/record-pill";
 import { Description } from "~/ui/text/description";
 import { NoneValue } from "~/ui/text/none-value";
@@ -221,11 +221,6 @@ function SiblingExpenses({
       <RecordList
         aria-label="Other expenses in this purchase"
         columns={SIBLING_COLUMNS}
-        footer={
-          summaryLine ? (
-            <p className="text-xs/5 text-muted-foreground">{summaryLine}</p>
-          ) : null
-        }
       >
         {lines.map((line) => (
           <RecordRow
@@ -288,6 +283,7 @@ function SiblingExpenses({
             ]}
           />
         ))}
+        {summaryLine ? <RecordTotal>{summaryLine}</RecordTotal> : null}
       </RecordList>
     </RecordPillHost>
   );

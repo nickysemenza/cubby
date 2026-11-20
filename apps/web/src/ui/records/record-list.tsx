@@ -302,6 +302,21 @@ export function RecordHeading({
   );
 }
 
+/** The closing row of a ledger of figures: the total, spanning every column. */
+export function RecordTotal({ children }: { children: ReactNode }) {
+  return (
+    <LedgerRow data-record-more>
+      <LedgerCell
+        slot="group"
+        as="div"
+        className="text-xs/5 font-medium text-foreground"
+      >
+        {children}
+      </LedgerCell>
+    </LedgerRow>
+  );
+}
+
 /** The "+N more" row closing a truncated group: a route link or an in-place reveal. */
 export function RecordMore({
   label,

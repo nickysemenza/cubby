@@ -40,6 +40,8 @@ export type InlineRefLinkProps = {
   bare?: boolean;
   /** Muted context leading the qualifier ("1 each" for a stocked location). */
   context?: string;
+  /** The merged-away code the caller asked for; `data` is the survivor. */
+  replaced?: string | null;
   /** Canonical backend-resolved cover; the shared context fills absent images. */
   displayImage?: ImageUrlSummary | null;
 } & (
@@ -233,6 +235,7 @@ export function InlineRefLink(props: InlineRefLinkProps) {
       bare={props.bare}
       className={props.className}
       openInNewTab={props.openInNewTab}
+      replaced={props.replaced}
       qualifier={
         [
           props.context,

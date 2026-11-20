@@ -1237,7 +1237,6 @@ function PurchaseLineRow({ line }: { line: PurchaseLine }) {
     <Row gap="xs" wrap align="center" className="min-w-0">
       <span className="text-muted-foreground">{line.dateLabel ?? "Paid"}</span>
       {line.date ? <DateDisplay start={line.date} /> : <span>Undated</span>}
-      <span className="text-muted-foreground">·</span>
       {line.purchaseId ? (
         <EntityRefLink
           entity="purchase"
@@ -1254,7 +1253,6 @@ function PurchaseLineRow({ line }: { line: PurchaseLine }) {
       ) : line.vendor && !line.purchaseId ? (
         <span>{line.vendor}</span>
       ) : null}
-      <span className="text-muted-foreground">·</span>
       <EntityRefLink
         entity="expense"
         data={{

@@ -33,6 +33,8 @@ type RecordLinkProps = {
    * reads the entity's declared qualifier and fact off it; nothing is fetched.
    */
   record?: ReferenceRecord | null;
+  /** Muted text after the title, when the caller composes it itself. */
+  qualifier?: string | null;
   displayImage?: ImageUrlSummary | null;
   emoji?: string | null;
   /** The mark shown when the record has no emoji or image. */
@@ -47,7 +49,8 @@ export function EntityRefLink(props: RecordLinkProps): React.ReactElement;
 export function EntityRefLink(props: InlineRefLinkProps | RecordLinkProps) {
   if ("data" in props) return <InlineRefLink {...props} />;
   const { record, ...link } = props;
-  const qualifier = record ? recordQualifier(props.entity, record) : null;
+  const qualifier =
+    props.qualifier ?? (record ? recordQualifier(props.entity, record) : null);
   const fact = record ? recordFact(props.entity, record) : null;
   if (
     isBrowserRoutedEntity(props.entity) &&

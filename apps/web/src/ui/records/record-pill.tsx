@@ -74,6 +74,7 @@ export function RecordPill({
   qualifier,
   fact,
   state,
+  replaced,
 }: {
   name: string;
   mark: ReactNode;
@@ -84,6 +85,8 @@ export function RecordPill({
   fact?: RecordPillFact | null;
   /** `deleted`: the record is gone. `current`: the page already shows it. */
   state?: "deleted" | "current";
+  /** The code this reference named before its record merged into this one. */
+  replaced?: string | null;
 }) {
   const dense = useDenseCell();
   return (
@@ -103,6 +106,12 @@ export function RecordPill({
         // Visual only: a link's accessible name stays the record's own name.
         <span aria-hidden className="shrink-0 font-mono text-muted-foreground">
           {type}
+        </span>
+      ) : null}
+      {replaced ? (
+        <span className="shrink-0 text-muted-foreground">
+          <span className="font-mono line-through">{replaced}</span>{" "}
+          <span aria-hidden>→</span>
         </span>
       ) : null}
       {qualifier ? (

@@ -269,6 +269,8 @@ type ChipRefLinkProps = {
   fact?: RecordPillFact | null;
   /** The record no longer exists; `name` is what it was last called. */
   deleted?: boolean;
+  /** The merged-away code the caller held; `id` is the surviving record. */
+  replaced?: string | null;
   fallback?: ReactNode;
 };
 
@@ -290,6 +292,7 @@ export function ChipRefLink({
   qualifier,
   fact,
   deleted,
+  replaced,
   fallback,
   parent,
 }: ChipRefLinkProps) {
@@ -312,6 +315,7 @@ export function ChipRefLink({
       qualifier={qualifier}
       fact={fact}
       state={state}
+      replaced={replaced}
       displayImage={displayImage ?? null}
       emoji={emoji}
       fallback={fallback}

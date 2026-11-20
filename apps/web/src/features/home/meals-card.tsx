@@ -116,9 +116,8 @@ function TodayMealsContent({
                     <EntityRefLink
                       entity="meal"
                       id={item.id}
-                      name={
-                        slot && slot !== label ? `${slot} · ${label}` : label
-                      }
+                      name={label}
+                      qualifier={slot && slot !== label ? slot : null}
                       className="max-w-full min-w-0"
                     />
                     <FieldValueMark envelope={item.fields.mealType}>

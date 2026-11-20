@@ -28,6 +28,7 @@ export function EntityPill({
   qualifier,
   fact,
   state,
+  replaced,
 }: {
   entity: Entity;
   id: string;
@@ -38,6 +39,8 @@ export function EntityPill({
   qualifier?: string | null;
   fact?: RecordPillFact | null;
   state?: "deleted" | "current";
+  /** The merged-away code this reference still holds; `id` is the survivor. */
+  replaced?: string | null;
   displayImage: ImageUrlSummary | null;
   emoji?: string | null;
   fallback?: ReactNode;
@@ -55,6 +58,7 @@ export function EntityPill({
       qualifier={parent ?? (slots.qualifier ? qualifier : null)}
       fact={slots.fact ? fact : null}
       state={state}
+      replaced={replaced}
       mark={
         <EntityIdentityMark
           entity={entity}
