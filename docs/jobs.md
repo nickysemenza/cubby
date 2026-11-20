@@ -64,7 +64,7 @@ Funding waits are `funding` waits on Asks and Passes. Resetting funding makes wa
 
 Queue permits contain no work identity: the consumer invokes the kernel runner directly and schedules the next durable deadline. Claim admission arranges a recovery wake at the deadline. The hourly cron starts scheduled Passes, invokes the runner and sends a backstop permit. Lost or duplicate permits do not lose or duplicate persisted work.
 
-`machinery` reads a record's scopes, gaps, inputs and Passes. `runWork` reads a Run's scopes, requesting Asks and Passes with stages and costs; Run waiting summaries read those claims. Pass rows keep bounded page-duration samples for pace and ETA. `needsYou` reports records requiring member input and serves the Work page, Home, navigation and MCP. The browser's filtered `/work-queue` list evaluates its sources live.
+`machinery` reads a record's scopes, gaps, inputs and Passes. `runWork` reads a Run's scopes, requesting Asks and Passes with stages and costs; Run waiting summaries read those claims. Pass rows keep bounded page-duration samples for pace and ETA. `needsYou` reports records requiring member input and serves the Work page, Home, navigation and MCP. The browser combines kernel gaps with distinct records from the member's human Work queue. Kernel rows come first, with their actions and ordering preserved. One kernel statement returns the requested page and exact combined count. The browser's filtered `/work-queue` list evaluates its sources live.
 
 The derived snapshot Pass walks views and typed snapshots in one scheduled bulk cycle. Source writes stay quick; reads may lag by up to an hour. The cursor lives in Pass; current snapshot state is the derived progress read.
 

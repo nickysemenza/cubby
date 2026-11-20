@@ -58,15 +58,12 @@ import { buildRegistry, ownedColumns, type KernelRegistry } from "./registry";
 import { repointOwnedReference, type OwnedReferenceRepoint } from "./repoint";
 import { reconcileNow, runKernel } from "./runner";
 import { wakeAfterCommit } from "./wake";
-import { readNeedsYou, readRunWork } from "./work";
+import { readNeedsYou, readRunWork, type NeedsYouOptions } from "./work";
 
 export type Kernel = {
   readonly registry: KernelRegistry;
   machineryCapability(entity: string): MachineryCapability | null;
-  needsYou(
-    db: Database,
-    options?: { limit?: number; offset?: number },
-  ): Promise<NeedsYouPage>;
+  needsYou(db: Database, options?: NeedsYouOptions): Promise<NeedsYouPage>;
   runWork(db: Database, runId: string): Promise<RunWork>;
   append(
     db: Database,

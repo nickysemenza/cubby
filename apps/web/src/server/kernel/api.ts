@@ -32,6 +32,7 @@ import type { MergeVerdict } from "./identity";
 import { productionKernel } from "./kernel";
 import type { MachineryListRow } from "./projection";
 import type { OwnedReferenceRepoint } from "./repoint";
+import type { NeedsYouOptions } from "./work";
 
 export {
   defineAsk,
@@ -73,6 +74,7 @@ export {
   type SourceRef,
 } from "./define";
 export type { DecisionWriters, StoredDecision } from "./decide";
+export type { NeedsYouSupplement } from "./work";
 export type { Reads, ScopeReads } from "./reads";
 export { effectiveBindings } from "./reads";
 export { bindingWrites } from "./registry";
@@ -309,7 +311,7 @@ export async function machineryCapability(
 /** Public records awaiting a member's input, oldest first. */
 export async function needsYou(
   db: Database,
-  options?: { limit?: number; offset?: number },
+  options?: NeedsYouOptions,
 ): Promise<NeedsYouPage> {
   return (await productionKernel()).needsYou(db, options);
 }

@@ -872,6 +872,29 @@ describe("evidence-facts kernel", () => {
       (await kernel.listRows(ctx.db, capability, [seller.id])).get(seller.id),
     ).toMatchObject({ stage: "needs_you" });
     expect((await kernel.needsYou(ctx.db)).items).toHaveLength(1);
+
+    const otherSeller = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic queue seller",
+    });
+    const additional = [
+      { entity: "vendor", shortcode: seller.shortcode, firstGap: "Duplicate" },
+      {
+        entity: "vendor",
+        shortcode: otherSeller.shortcode,
+        firstGap: "Synthetic queue gap",
+      },
+    ];
+    const combined = await kernel.needsYou(ctx.db, { additional });
+    expect(combined.count).toBe(2);
+    expect(
+      combined.items.map(({ shortcode, firstGap }) => [shortcode, firstGap]),
+    ).toEqual([
+      [seller.shortcode, "a reviewed identity"],
+      [otherSeller.shortcode, "Synthetic queue gap"],
+    ]);
+    expect(
+      await kernel.needsYou(ctx.db, { additional, limit: 1, offset: 1 }),
+    ).toEqual({ count: 2, items: combined.items.slice(1) });
   });
 
   it("coalesces declared Catalog creation across scopes and keeps each record's audit provenance", async () => {
