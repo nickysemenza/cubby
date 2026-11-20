@@ -4,6 +4,7 @@ import {
   type ConnectionProposal,
   type ConnectionRelation,
 } from "@cubby/schemas/entity-connections";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 
 import type { Database } from "~/server/db";
 import { resolveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -31,11 +32,23 @@ export async function readExistingConnectionSuggestions(
 ): Promise<ConnectionProposal[][]> {
   if (!sources.length) return [];
   const proposals: ConnectionProposal[] = [];
-  if (sources.some((source) => source.entityKind === "product")) {
+  const products = sources.filter((source) => source.entityKind === "product");
+  if (products.length) {
     const { getProductMatchQueue } =
       await import("~/server/domains/product/repo/match/product-match-review");
-    const queue = await getProductMatchQueue(db, {});
-    for (const row of queue.items) {
+    const queues = await Promise.all(
+      products.map((source) =>
+        getProductMatchQueue(db, {
+          productId: parseShortcodeFor("product", source.entityId),
+        }),
+      ),
+    );
+    const rows = new Map(
+      queues.flatMap((queue) =>
+        queue.items.map((row) => [row.suggestionId, row]),
+      ),
+    );
+    for (const row of rows.values()) {
       const parsed = connectionProposal.safeParse({
         relation: "product-identity",
         source: { entityKind: "product", entityId: row.keeper.id },
@@ -60,7 +73,17 @@ export async function readExistingConnectionSuggestions(
     }
   }
   const fresh = new Set(proposals);
-  const fields = await readFieldSuggestions(db);
+  const endpoints = await resolveShortcodes(
+    db,
+    sources.map((source) => source.entityId),
+  );
+  const fields = await readFieldSuggestions(db, {
+    endpoints: sources.flatMap((source) => {
+      const ref = endpoints.get(source.entityId);
+      return ref?.entity === source.entityKind ? [ref] : [];
+    }),
+    relations: fieldRelations,
+  });
   const refs = await resolveShortcodes(
     db,
     fields.flatMap((row) =>

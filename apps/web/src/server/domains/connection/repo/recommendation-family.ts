@@ -19,41 +19,35 @@ export const recommendationFamily: SuggestionFamilyDeclaration<"recommendation">
     ...suggestionReviewFamilies.recommendation,
     keys: async (db, query) => {
       if (query.filters.status !== "pending" || query.filters.runId) return [];
-      const rows = await readStoredConnectionProposals(db, query.suggestionIds);
-      return rows
-        .filter(
-          (row) =>
-            !query.records ||
-            query.records.some((record) =>
-              [row.source, row.target].some(
-                (ref) => ref.entityId === record.code,
-              ),
-            ),
-        )
-        .map((row) => ({
-          family: "recommendation",
-          suggestionId: row.review.suggestionId,
-          status: "pending",
-          fingerprint: row.fingerprint,
-          strength: connectionStrength(row.evidence),
-          clean: false,
-          impact: connectionImpact[row.relation],
-          createdAt: new Date(0),
-          matchedRules: [],
-          automaticRule: null,
-          columns: {
-            relation: row.relation,
-            source: row.source.entityId,
-            target: row.target.entityId,
-            entityKind: [row.source.entityKind, row.target.entityKind],
-          },
-        }));
+      const rows = await readStoredConnectionProposals(db, {
+        ids: query.suggestionIds,
+        entity: query.filters.recordEntity,
+        records: query.records,
+        labels: false,
+      });
+      return rows.map((row) => ({
+        family: "recommendation",
+        suggestionId: row.review.suggestionId,
+        status: "pending",
+        fingerprint: row.fingerprint,
+        strength: connectionStrength(row.evidence),
+        clean: false,
+        impact: connectionImpact[row.relation],
+        createdAt: new Date(0),
+        matchedRules: [],
+        automaticRule: null,
+        columns: {
+          relation: row.relation,
+          source: row.source.entityId,
+          target: row.target.entityId,
+          entityKind: [row.source.entityKind, row.target.entityKind],
+        },
+      }));
     },
     rows: async (db, keys) => {
-      const rows = await readStoredConnectionProposals(
-        db,
-        keys.map((key) => key.suggestionId),
-      );
+      const rows = await readStoredConnectionProposals(db, {
+        ids: keys.map((key) => key.suggestionId),
+      });
       return new Map(
         rows.flatMap((row) => {
           const key = keys.find(
