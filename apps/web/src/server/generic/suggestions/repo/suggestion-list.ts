@@ -30,6 +30,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb, unwrapDb } from "~/server/db/helpers";
+import { sqlEnumConstant } from "~/server/db/sql-enum";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { compileDeclaredFilters } from "~/server/generic/list/repo/declared-filters";
 import { resolveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -581,12 +582,13 @@ export async function suggestionCountsByFamily(
     factNeeds(filters, [], ["clean", "strength", "entity", "field"]),
   );
   const familyColumn = relationColumn("family");
+  const fieldFamily = sqlEnumConstant(suggestionListFamily, "field");
   const fieldEntity = sql<
     string | null
-  >`CASE WHEN ${familyColumn} = ${suggestionListFamily.enum.field} THEN ${relationColumn("entity")} END`;
+  >`CASE WHEN ${familyColumn} = ${fieldFamily} THEN ${relationColumn("entity")} END`;
   const fieldName = sql<
     string | null
-  >`CASE WHEN ${familyColumn} = ${suggestionListFamily.enum.field} THEN ${relationColumn("field")} END`;
+  >`CASE WHEN ${familyColumn} = ${fieldFamily} THEN ${relationColumn("field")} END`;
   const strengthCount = (strength: SuggestionStrength) =>
     sql<number>`count(*) FILTER (WHERE ${relationColumn("strength")} = ${strength})::int`;
   const pendingRows = await getDb(db)
