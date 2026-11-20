@@ -3468,7 +3468,8 @@ describe("Shipment retained evidence", () => {
       const entries = await getDb(ctx.db)
         .select({ changes: auditLog.changes })
         .from(auditLog)
-        .where(eq(auditLog.entityId, row!.id));
+        .where(eq(auditLog.entityId, row!.id))
+        .orderBy(auditLog.createdAt, auditLog.id);
       return { ...row!, changes: entries.map(({ changes }) => changes) };
     };
     const update = (data: ShipmentUpdateData) =>

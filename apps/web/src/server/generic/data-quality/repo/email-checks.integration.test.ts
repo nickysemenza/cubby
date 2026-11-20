@@ -1,4 +1,4 @@
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { workQueueInput } from "@cubby/schemas/work-queue";
 import { eq, sql } from "drizzle-orm";
 import { createRepoIdentity } from "tooling/factories/repo";
@@ -24,6 +24,14 @@ import {
 } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
+import {
+  readMemberWorkRecordsWith,
+  readWorkQueueWith,
+} from "~/server/generic/work-queue/repo/work-queue";
+import {
+  selectWorkCandidates,
+  type WorkSource,
+} from "~/server/generic/work-queue/repo/work-source";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   storedQuality,
@@ -214,6 +222,43 @@ describe("Email data quality", () => {
     // agent owns them.
     expect(queue.items.map((item) => item.executor)).toEqual(
       Array(4).fill("agent"),
+    );
+
+    const target = parseShortcodeFor("email", queue.items[0]!.id!);
+    const humanImportGap: WorkSource = {
+      id: "synthetic-human-import-gap",
+      family: "email",
+      executor: "human",
+      entity: "email",
+      link: { kind: "record" },
+      reasons: [
+        { key: "synthetic-import-gap", label: "Unresolved mail import" },
+      ],
+      candidates: async (db) => ({
+        query: selectWorkCandidates(db, humanImportGap, {
+          entity: "email",
+          id: sql`${email.shortcode}`,
+          name: sql`'Synthetic import gap'`,
+          owners: sql`ARRAY[${email.ledgerPartyId}]`,
+          reason: "Unresolved mail import",
+          reasonKeys: ["synthetic-import-gap"],
+        })
+          .from(email)
+          .where(eq(email.shortcode, target)),
+      }),
+    };
+    const composition = { sources: [humanImportGap], deferrals: [] };
+    const paged = await readWorkQueueWith(ctx.db, composition, {
+      input: { view: "human", pageSize: 100 },
+      memberPartyId: party.id,
+      memberOnly: true,
+    });
+    expect(paged.items).toHaveLength(1);
+    expect(paged.items[0]?.reason).not.toBe("Unresolved mail import");
+    expect(
+      await readMemberWorkRecordsWith(ctx.db, composition, party.id),
+    ).toEqual(
+      paged.items.map(({ entity, id, reason }) => ({ entity, id, reason })),
     );
   });
 

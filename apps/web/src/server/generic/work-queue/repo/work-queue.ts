@@ -89,9 +89,23 @@ const memberWorkRecords = z
     entity: workQueueRowFields.entity.unwrap(),
     id: workQueueRowFields.id.unwrap(),
     reason: workQueueRowFields.reason,
+    family: workQueueRowFields.family,
   })
   .array();
-type MemberWorkRecord = z.output<typeof memberWorkRecords>[number];
+type MemberWorkRecord = Omit<
+  z.output<typeof memberWorkRecords>[number],
+  "family"
+>;
+type WorkQualityRow = Pick<WorkQueueRow, "entity" | "id" | "family" | "reason">;
+type SetRowQuality<Row> = (
+  row: Row,
+  quality: DataQuality,
+  gaps: WorkQueueGap[] | undefined,
+) => void;
+const rowGapView = (row: WorkQualityRow) =>
+  workQueueGapViews.find(
+    (view) => view.entity === row.entity && view.family === row.family,
+  );
 
 const column = (name: string): SQL => sql`${sql.identifier(name)}`;
 
@@ -453,17 +467,22 @@ async function queryWorkQueue(
   if (projection === "member-records") {
     const rows = await getDb(db).execute(
       sql`${populationCtes}
-        SELECT entity, id, reason FROM (${eligible}) records
+        SELECT entity, id, reason, family FROM (${eligible}) records
         WHERE entity IS NOT NULL OR id IS NOT NULL
         ORDER BY ${orderBy}`,
       "objects",
     );
-    const distinct = new Map<string, MemberWorkRecord>();
+    const distinct = new Map<
+      string,
+      z.output<typeof memberWorkRecords>[number]
+    >();
     for (const record of memberWorkRecords.parse(rows)) {
       const key = entityRefKey(record.entity, record.id);
       if (!distinct.has(key)) distinct.set(key, record);
     }
-    return [...distinct.values()];
+    const records = [...distinct.values()];
+    await stateRowQualities(db, records.filter(rowGapView));
+    return records.map(({ entity, id, reason }) => ({ entity, id, reason }));
   }
 
   const result = await getDb(db).execute(
@@ -583,7 +602,17 @@ async function queryWorkQueue(
       ),
     });
   });
-  await stateRowQualities(db, items, read.record);
+  await stateRowQualities(db, items, read.record, (item, quality, gaps) => {
+    item.dataQuality = {
+      status: quality.status,
+      score: null,
+      gaps: quality.gaps,
+    };
+    if (gaps) {
+      item.gaps = gaps;
+      if (gaps.length) item.reasonKeys = gaps.map((gap) => gap.check);
+    }
+  });
   // Member routing fences rows, not imagery borrowed through linked records,
   // so member reads carry none; neither does the record's own strip.
   if (!read.memberOnly && !read.record) await attachDisplayImages(db, items);
@@ -625,11 +654,15 @@ async function queryWorkQueue(
 
 /** Each row carries its record's quality score, and a gap row states its own
  * gaps (an Email's missing original) as check ids with messages. */
-async function stateRowQuality<E extends ScoredEntity & ShortcodeEntity>(
+async function stateRowQuality<
+  E extends ScoredEntity & ShortcodeEntity,
+  Row extends WorkQualityRow,
+>(
   db: Database,
   entity: E,
-  rows: WorkQueueRow[],
+  rows: Row[],
   record?: WorkScope["record"],
+  setQuality?: SetRowQuality<Row>,
 ) {
   const ids = await resolveLiveShortcodes(
     db,
@@ -651,15 +684,11 @@ async function stateRowQuality<E extends ScoredEntity & ShortcodeEntity>(
     const id = item.id ? ids.get(item.id) : undefined;
     const quality = id ? qualities.get(id) : undefined;
     if (!quality) continue;
-    item.dataQuality = {
-      status: quality.status,
-      score: null,
-      gaps: quality.gaps,
-    };
-    const gapView = workQueueGapViews.find(
-      (view) => view.entity === entity && view.family === item.family,
-    );
-    if (!gapView) continue;
+    const gapView = rowGapView(item);
+    if (!gapView) {
+      setQuality?.(item, quality, undefined);
+      continue;
+    }
     const relevantChecks = new Set(workQueueGapChecks(gapView));
     const gaps = new Map<string, WorkQueueGap>();
     for (const gap of [...quality.gaps, ...quality.relatedGaps]) {
@@ -667,23 +696,25 @@ async function stateRowQuality<E extends ScoredEntity & ShortcodeEntity>(
       if (check && relevantChecks.has(check) && !gaps.has(check))
         gaps.set(check, { check, message: gap.message });
     }
-    item.gaps = [...gaps.values()];
-    if (item.gaps.length) {
-      item.reasonKeys = item.gaps.map((gap) => gap.check);
+    const rowGaps = [...gaps.values()];
+    if (rowGaps.length) {
       // Messages are sentences, so the plain-text reason reads as prose.
-      item.reason = [...new Set(item.gaps.map((gap) => gap.message))].join(" ");
+      item.reason = [...new Set(rowGaps.map((gap) => gap.message))].join(" ");
     }
+    setQuality?.(item, quality, rowGaps);
   }
 }
 
-async function stateRowQualities(
+async function stateRowQualities<Row extends WorkQualityRow>(
   db: Database,
-  items: WorkQueueRow[],
+  items: Row[],
   record?: WorkScope["record"],
+  setQuality?: SetRowQuality<Row>,
 ) {
   for (const entity of scoredEntities) {
     const rows = items.filter((item) => item.entity === entity);
-    if (rows.length > 0) await stateRowQuality(db, entity, rows, record);
+    if (rows.length > 0)
+      await stateRowQuality(db, entity, rows, record, setQuality);
   }
 }
 
