@@ -9,6 +9,7 @@ import {
   workExpenseOwners,
   workExpenseSourceOwners,
 } from "~/server/domains/expense/repo/work-owners";
+import { workAcceptedOrderOwners } from "~/server/domains/purchase/repo/work-owners";
 import {
   entityProblemSources,
   gapDeclaration,
@@ -50,13 +51,18 @@ const gapSource: WorkSource = {
             recordScope(scope, sql`${table.shortcode}`),
           ),
         );
-    return { query: candidates(false), missingInputs: candidates(true) };
+    return {
+      query: candidates(false),
+      missingInputs: candidates(true),
+      ctes: [workAcceptedOrderOwners],
+    };
   },
 };
 export const expenseWorkSources = (): WorkSource[] => [
   gapSource,
   ...entityProblemSources("expense", {
     table,
+    ctes: [workAcceptedOrderOwners],
     columns: {
       name: sql`"Expense".name`,
       owners: workExpenseOwners(outer(table.id)),

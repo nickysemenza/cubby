@@ -222,6 +222,7 @@ export const entityProblemSources = (
   entity: ShortcodeEntity,
   read: {
     table: PgTable & { shortcode: AnyColumn };
+    ctes?: WorkCandidates["ctes"];
     columns:
       | Omit<WorkCandidateColumns, "entity" | "id" | "reason" | "reasonKeys">
       | ((source: WorkSource) => Omit<WorkCandidateColumns, "entity" | "id">);
@@ -382,6 +383,7 @@ export const entityProblemSources = (
             ),
           );
         return [
+          ...(read.ctes ?? []),
           { name: factName, sql: sql`${factQuery}` },
           { name: baseName, sql: sql`${root}` },
         ];

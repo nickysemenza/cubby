@@ -8,6 +8,7 @@ import {
   workImageOwners,
   workImageIsShared,
 } from "~/server/domains/image/repo/work-owners";
+import { workAcceptedOrderOwners } from "~/server/domains/purchase/repo/work-owners";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { entityProblemSources } from "~/server/generic/work-queue/repo/work-declarations";
 import { type WorkSource } from "~/server/generic/work-queue/repo/work-source";
@@ -15,6 +16,7 @@ import { type WorkSource } from "~/server/generic/work-queue/repo/work-source";
 export const imageWorkSources = async (): Promise<WorkSource[]> => [
   ...entityProblemSources("image", {
     table,
+    ctes: [workAcceptedOrderOwners],
     columns: {
       name: await labelSql("image", `"${getTableName(table)}"`),
       owners: workImageOwners(outer(table.id)),

@@ -11,6 +11,7 @@ import {
 } from "~/server/domains/purchase/repo/settlement-grace";
 import { purchaseWorkFacts } from "~/server/domains/purchase/repo/work-facts";
 import {
+  workAcceptedOrderOwners,
   workPurchaseOwners,
   workPurchaseSourceOwners,
 } from "~/server/domains/purchase/repo/work-owners";
@@ -55,7 +56,11 @@ const gapSource: WorkSource = {
             recordScope(scope, sql`${table.shortcode}`),
           ),
         );
-    return { query: candidates(false), missingInputs: candidates(true) };
+    return {
+      query: candidates(false),
+      missingInputs: candidates(true),
+      ctes: [workAcceptedOrderOwners],
+    };
   },
 };
 export const purchaseWorkSources = (): WorkSource[] =>
@@ -63,6 +68,7 @@ export const purchaseWorkSources = (): WorkSource[] =>
     gapSource,
     ...entityProblemSources("purchase", {
       table,
+      ctes: [workAcceptedOrderOwners],
       columns: (source: WorkSource) => {
         const deferred =
           source.id === "purchaseFinancialSettlementMismatches"

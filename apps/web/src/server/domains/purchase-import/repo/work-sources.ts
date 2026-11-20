@@ -16,7 +16,10 @@ import {
   workExpenseOwners,
 } from "~/server/domains/expense/repo/work-owners";
 import { obsoleteExecutionFindingSql } from "~/server/domains/purchase-import/repo/run-retirement";
-import { workPurchaseOwners } from "~/server/domains/purchase/repo/work-owners";
+import {
+  workAcceptedOrderOwners,
+  workPurchaseOwners,
+} from "~/server/domains/purchase/repo/work-owners";
 import { activeFindingSql } from "~/server/domains/run/repo/finding-expiry";
 import { workRunReviewOwners } from "~/server/domains/run/repo/work-owners";
 import { workRecordFacts } from "~/server/domains/work/repo/record-facts";
@@ -82,6 +85,7 @@ const source: WorkSource = {
     label: RUN_FINDING_ROUTING[kind].label,
   })),
   candidates: async (db, scope) => ({
+    ctes: [workAcceptedOrderOwners],
     query: selectWorkCandidates(db, source, {
       entity: sql`identity.kind`,
       id: sql`identity.shortcode`,
