@@ -82,6 +82,48 @@ function usePaneMode(workspace: RefObject<HTMLElement | null>) {
   return mode;
 }
 
+/**
+ * Whether Activity is too short to hold a column of its own. A short Activity
+ * joins the body's columns, so no empty column runs beside a long body; it
+ * returns to its column once it outgrows the threshold. Loading never decides.
+ */
+function useShortActivity(
+  workspace: RefObject<HTMLElement | null>,
+  enabled: boolean,
+) {
+  const [short, setShort] = useState(false);
+  useEffect(() => {
+    const root = workspace.current;
+    if (!enabled || !root || typeof ResizeObserver === "undefined") return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const decide = () => {
+      const section = root.querySelector<HTMLElement>("[data-record-activity]");
+      if (!section || section.querySelector('[data-slot="skeleton"]')) return;
+      const height = section.getBoundingClientRect().height;
+      const body = root.querySelector(".record-body");
+      const tall =
+        (body?.getBoundingClientRect().height ?? 0) > window.innerHeight;
+      setShort((previous) =>
+        previous
+          ? height < window.innerHeight * 0.6
+          : tall && height < window.innerHeight * 0.4,
+      );
+    };
+    // Settle before deciding: a section that is still filling must not move.
+    const observer = new ResizeObserver(() => {
+      clearTimeout(timer);
+      timer = setTimeout(decide, 400);
+    });
+    const target = root.querySelector(".record-main-grid");
+    if (target) observer.observe(target);
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [workspace, enabled]);
+  return enabled && short;
+}
+
 /** The ids of the sections some part of which is on screen. */
 function useOnScreen(
   workspace: RefObject<HTMLElement | null>,
@@ -566,6 +608,7 @@ export function RecordWorkspace({
     sections: group.sections.filter((section) => section !== activity),
   }));
   const bodySections = bodyGroups.flatMap((group) => group.sections);
+  const activityInBody = useShortActivity(workspaceRef, mode.columns);
   const onScreen = useOnScreen(
     workspaceRef,
     hydrated && mode.rail,
@@ -649,7 +692,7 @@ export function RecordWorkspace({
                   // Scroll tracking reads the sections of both columns.
                   ref={bodyRef}
                   className="record-main-grid"
-                  data-activity={activity ? "" : undefined}
+                  data-activity={activity && !activityInBody ? "" : undefined}
                 >
                   <div className="record-body text-sm">
                     {bodyGroups.map((group) => (
@@ -657,6 +700,9 @@ export function RecordWorkspace({
                         {stack(group.sections)}
                       </GroupAnchor>
                     ))}
+                    {activity && activityInBody ? (
+                      <div data-record-activity>{stack([activity])}</div>
+                    ) : null}
                     <FoldedSectionsLine
                       sections={bodySections.filter(isFolded)}
                       pending={bodySections.filter(isPending).length}
@@ -664,8 +710,11 @@ export function RecordWorkspace({
                     />
                     {footer}
                   </div>
-                  {activity ? (
-                    <div className="record-activity text-sm">
+                  {activity && !activityInBody ? (
+                    <div
+                      data-record-activity
+                      className="record-activity text-sm"
+                    >
                       {stack([activity])}
                     </div>
                   ) : null}
