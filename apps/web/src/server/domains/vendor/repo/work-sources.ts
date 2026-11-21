@@ -9,11 +9,9 @@ import {
   gapDeclaration,
   gapPublicationRead,
   recordScope,
+  selectWorkGapCandidates,
 } from "~/server/generic/work-queue/repo/work-declarations";
-import {
-  selectWorkCandidates,
-  type WorkSource,
-} from "~/server/generic/work-queue/repo/work-source";
+import type { WorkSource } from "~/server/generic/work-queue/repo/work-source";
 
 const gaps = gapDeclaration("vendor");
 const gapSource: WorkSource = {
@@ -25,26 +23,18 @@ const gapSource: WorkSource = {
       db,
       vendorFiltersSchema.parse(readGap.filters),
     );
-    const candidates = (missingInputs: boolean) =>
-      selectWorkCandidates(db, gaps, {
+    return selectWorkGapCandidates(db, gaps, {
+      table,
+      readGap,
+      where: and(baseWhere, recordScope(scope, sql`${table.shortcode}`)),
+      columns: {
         entity: "vendor",
         id: sql`${table.shortcode}`,
         name: sql`"Vendor".name`,
         owners: sql`ARRAY[]::uuid[]`,
         shared: true,
-        ...readGap.columns,
-        ...(missingInputs ? readGap.missingColumns : {}),
-      })
-        .from(table)
-        .leftJoin(readGap.publication, readGap.match)
-        .where(
-          and(
-            baseWhere,
-            missingInputs ? readGap.missingInputs : readGap.admission,
-            recordScope(scope, sql`${table.shortcode}`),
-          ),
-        );
-    return { query: candidates(false), missingInputs: candidates(true) };
+      },
+    });
   },
 };
 export const vendorWorkSources = async (): Promise<WorkSource[]> => [

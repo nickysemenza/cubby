@@ -15,11 +15,9 @@ import {
   gapDeclaration,
   gapPublicationRead,
   recordScope,
+  selectWorkGapCandidates,
 } from "~/server/generic/work-queue/repo/work-declarations";
-import {
-  selectWorkCandidates,
-  type WorkSource,
-} from "~/server/generic/work-queue/repo/work-source";
+import type { WorkSource } from "~/server/generic/work-queue/repo/work-source";
 
 const gaps = gapDeclaration("expense");
 const gapSource: WorkSource = {
@@ -31,31 +29,20 @@ const gapSource: WorkSource = {
       db,
       expenseFiltersSchema.parse(readGap.filters),
     );
-    const candidates = (missingInputs: boolean) =>
-      selectWorkCandidates(db, gaps, {
+    return selectWorkGapCandidates(db, gaps, {
+      table,
+      readGap,
+      where: and(baseWhere, recordScope(scope, sql`${table.shortcode}`)),
+      ctes: [workAcceptedOrderOwners],
+      columns: {
         entity: "expense",
         id: sql`${table.shortcode}`,
         name: sql`"Expense".name`,
         owners: workExpenseSourceOwners(outer(table.id)),
         shared: false,
-        ...readGap.columns,
-        ...(missingInputs ? readGap.missingColumns : {}),
         ...expenseWorkFacts(),
-      })
-        .from(table)
-        .leftJoin(readGap.publication, readGap.match)
-        .where(
-          and(
-            baseWhere,
-            missingInputs ? readGap.missingInputs : readGap.admission,
-            recordScope(scope, sql`${table.shortcode}`),
-          ),
-        );
-    return {
-      query: candidates(false),
-      missingInputs: candidates(true),
-      ctes: [workAcceptedOrderOwners],
-    };
+      },
+    });
   },
 };
 export const expenseWorkSources = (): WorkSource[] => [

@@ -51,6 +51,8 @@ export interface WorkCandidates {
   readonly relationKey?: string;
   /** Potential records whose published inputs are absent; never actionable rows. */
   readonly missingInputs?: SQLWrapper;
+  /** Known and missing-input candidates in a single relation with input_incomplete. */
+  readonly queryWithMissingInputs?: SQLWrapper;
   /** Global non-count coverage warnings; the relation returns a message column. */
   readonly inputCoverage?: SQLWrapper;
   readonly ctes?: readonly WorkCte[];
@@ -177,7 +179,14 @@ export const selectWorkCandidates = (
   db: Database,
   source: Pick<WorkSource, "id" | "family" | "executor">,
   columns: WorkCandidateColumns,
-) => getDb(db).select(workCandidateColumns(source, columns));
+  inputIncomplete?: SQL<boolean>,
+) =>
+  getDb(db).select({
+    ...workCandidateColumns(source, columns),
+    ...(inputIncomplete && {
+      input_incomplete: inputIncomplete.as("input_incomplete"),
+    }),
+  });
 
 /** A typed, empty relation for a scope that admits no source. */
 export const emptyWorkCandidates = (db: Database) =>

@@ -659,10 +659,11 @@ explicit evaluation and editor flows keep their decision path. Ordinary
 The Work queue's household and MCP reads share one engine over the composed Work
 sources. Reason and record-scope filters prune sources before the union, the
 filtered population materializes once, and totals and view/group counts use the
-complete eligible population in the same pass; quality gaps and images load only
-for the selected page. The single-consumer Needs You record projection inlines
-routing and filtering so the human-executor predicate reaches the candidate
-queries. Source-owner routing shares one projection of bound
+complete eligible population in the same pass. Work gap sources share the
+snapshot join for known gaps and missing inputs. Quality gap and image details
+load only for the selected page. The single-consumer Needs You record projection
+inlines routing and filtering so the human-executor predicate reaches the
+candidate queries. Source-owner routing shares one projection of bound
 Purchase and ledger-party pairs from accepted order evidence per statement.
 Settled AI Run attention checks probe the Run's indexed Ask roster.
 Pending suggestions resolve UUID references through the live Entity identity.
