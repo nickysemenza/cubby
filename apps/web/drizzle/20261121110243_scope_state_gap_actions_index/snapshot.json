@@ -1,0 +1,56 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "06ba9074-3df8-44d7-95c5-3d9ac014a003",
+  "prevIds": [
+    "1740be6f-e0a7-4402-b2af-47d463e4b6e0"
+  ],
+  "footprints": [
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "ScopeState",
+        "ScopeState_gaps_idx"
+      ],
+      "writes": [
+        "s|idx|public.ScopeState_gaps_idx",
+        "n|idx|public.ScopeState_gaps_idx",
+        "e|idx|public.ScopeState_gaps_idx",
+        "n|rel|public.ScopeState_gaps_idx"
+      ],
+      "reads": [
+        "n|tbl|public.ScopeState",
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ScopeState",
+        "name": "ScopeState_gaps_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "\"gaps\" jsonb_path_ops",
+            "isExpression": true,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "fastupdate=false",
+        "method": "gin",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    }
+  ]
+}

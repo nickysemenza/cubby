@@ -13,7 +13,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers/core";
 
 import type { compileEvidenceMetrics } from "./evidence-metrics";
-import type { ListGroupSql } from "./field-compiler";
+import { groupOptionPosition, type ListGroupSql } from "./field-compiler";
 
 const resultSchema = z.object({
   ids: z.array(z.string()),
@@ -29,6 +29,51 @@ const resultSchema = z.object({
 const marginDimensions = (depth: number): number[][] =>
   depth === 3 ? [[1], [0, 2]] : depth === 2 ? [[1]] : [];
 
+/** A section's ORDER BY: each part ascends with NULLS LAST. */
+export const groupOrderBy = (group: ListGroupSql): SQL[] =>
+  group.order.map((part) => {
+    const value =
+      part === "key"
+        ? group.key
+        : part === "label"
+          ? group.label
+          : groupOptionPosition(group.choice, group.key);
+    if (value === null) throw new Error("A group orders by an absent label");
+    return sql`${value} asc nulls last`;
+  });
+
+const GROUP_VALUES = sql.identifier("list_group_values");
+const groupValue = (name: string) =>
+  sql`${GROUP_VALUES}.${sql.identifier(name)}`;
+
+/**
+ * Each dimension's key, label and subtree, evaluated once per row by a fenced
+ * lateral. Path, label and order otherwise repeat the key, and a derived key
+ * (machinery stage, a correlated state) would run several times.
+ */
+function fenceGroups(groups: readonly ListGroupSql[]) {
+  const columns: SQL[] = [];
+  const fenced = groups.map((group, index): ListGroupSql => {
+    const column = (name: string, value: SQL) => {
+      columns.push(sql`${value} AS ${sql.identifier(name)}`);
+      return groupValue(name);
+    };
+    return {
+      ...group,
+      key: column(`k${index}`, group.key),
+      label: group.label === null ? null : column(`l${index}`, group.label),
+      subtree:
+        group.subtree === null ? null : column(`s${index}`, group.subtree),
+    };
+  });
+  return {
+    groups: fenced,
+    join: columns.length
+      ? sql`LATERAL (SELECT ${sql.join(columns, sql`, `)} OFFSET 0) ${GROUP_VALUES}`
+      : null,
+  };
+}
+
 /** Page expanded SQL memberships, then hydrate each selected canonical root once. */
 export async function readGroupedQuery(input: {
   db: Database | DrizzleTransaction;
@@ -40,11 +85,14 @@ export async function readGroupedQuery(input: {
   groups: readonly ListGroupSql[];
   metrics: readonly { key: string; value: SQL }[];
   evidence?: ReturnType<typeof compileEvidenceMetrics>;
+  /** The record order within sections; sections lead it. */
   order: readonly SQL[];
   limit: number;
   offset: number;
 }) {
-  const { db, groups, metrics } = input;
+  const { db, metrics } = input;
+  const fence = fenceGroups(input.groups);
+  const { groups } = fence;
   const marginSets = marginDimensions(groups.length);
   const evidence = input.evidence?.([
     [],
@@ -85,7 +133,7 @@ export async function readGroupedQuery(input: {
       groups.map((group) => group.subtree ?? sql`false`),
       sql`, `,
     )}]::boolean[]`,
-    ordinal: sql`row_number() OVER (ORDER BY ${sql.join([...input.order], sql`, `)})`,
+    ordinal: sql`row_number() OVER (ORDER BY ${sql.join([...groups.flatMap(groupOrderBy), ...input.order], sql`, `)})`,
     ...Object.fromEntries(
       metrics.map((metric, index) => [`m${index}`, metric.value]),
     ),
@@ -101,6 +149,7 @@ export async function readGroupedQuery(input: {
           : sql`true`,
       );
   }
+  if (fence.join) query = query.leftJoin(fence.join, sql`true`);
   const expanded = query.where(input.where);
   const metricColumns = metrics.map((_, index) => sql.identifier(`m${index}`));
   const extraColumns = metricColumns.length

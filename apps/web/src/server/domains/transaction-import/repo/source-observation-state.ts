@@ -33,8 +33,41 @@ import { uuidArrayParam } from "~/server/db/helpers/query";
 import { sourceTransactionRecord } from "~/server/db/retained-tables";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 
+/**
+ * Current assignment decisions per subject. A point read probes one subject;
+ * a whole-population read hash-joins every `prefix` subject once rather than
+ * probing `Decision_slot_idx` twice per observation.
+ */
+const assignmentChoices = (
+  scope: "point" | "population",
+  prefix: string,
+  owner: SQL,
+  alias: string,
+): SQL => {
+  const assignment = sqlEnumConstant(
+    decisionChannel,
+    decisionChannel.enum.assignment,
+  );
+  const name = sql.identifier(alias);
+  return scope === "point"
+    ? sql`LEFT JOIN LATERAL (
+    SELECT jsonb_object_agg(field,value) AS values, max(at) AS "updatedAt" FROM (
+      SELECT DISTINCT ON (slot) field,value,at FROM "Decision"
+      WHERE subject=${prefix}::text || ${owner} AND channel=${assignment}
+      ORDER BY slot,at DESC,id DESC
+    ) choices
+  ) ${name} ON true`
+    : sql`LEFT JOIN (
+    SELECT subject, jsonb_object_agg(field,value) AS values, max(at) AS "updatedAt" FROM (
+      SELECT DISTINCT ON (subject,slot) subject,field,value,at FROM "Decision"
+      WHERE starts_with(subject, ${prefix}::text) AND channel=${assignment}
+      ORDER BY subject,slot,at DESC,id DESC
+    ) choices GROUP BY subject
+  ) ${name} ON ${name}.subject=${prefix}::text || ${owner}`;
+};
+
 /** Read projection only. Observation facts never inherit another observation's decisions. */
-export const sourceObservationFacts = sql`(
+const observationFacts = (scope: "point" | "population") => sql`(
   -- includes-deleted: immutable observations and original aliases retain tombstone evidence.
   SELECT r.id, r.shortcode, r."batchId", r.source, r."occurrenceId", r."factFingerprint",
     r."rowPosition", r."providerTransactionId", r."providerAccountId", r."providerData",
@@ -59,29 +92,22 @@ export const sourceObservationFacts = sql`(
     ft.shortcode AS "transactionShortcode"
   FROM "SourceTransactionRecord" r
   JOIN "SourceOccurrence" o ON o.id = r."occurrenceId"
-  LEFT JOIN LATERAL (
-    SELECT jsonb_object_agg(field,value) AS values, max(at) AS "updatedAt" FROM (
-      SELECT DISTINCT ON (slot) field,value,at FROM "Decision"
-      WHERE subject='sourceObservation:' || r.id AND channel=${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)}
-      ORDER BY slot,at DESC,id DESC
-    ) choices
-  ) annotations ON true
+  ${assignmentChoices(scope, "sourceObservation:", sql`r.id`, "annotations")}
   LEFT JOIN LATERAL (SELECT (annotations.values->>'supersededByObservationId')::uuid AS "supersededByObservationId",
     annotations.values->>'notes' AS notes, annotations."updatedAt") a ON true
-  LEFT JOIN LATERAL (
-    SELECT jsonb_object_agg(field,value) AS values, max(at) AS "updatedAt" FROM (
-      SELECT DISTINCT ON (slot) field,value,at FROM "Decision" WHERE subject='bank:' || o.id AND channel=${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)}
-      ORDER BY slot,at DESC,id DESC
-    ) choices
-  ) judgments ON true
+  ${assignmentChoices(scope, "bank:", sql`o.id`, "judgments")}
+  -- Both arms stay index probes; an id::text comparison alone scans Entity per row.
   LEFT JOIN "Entity" account_choice ON account_choice.kind=${sqlEnumConstant(entitySchema, entitySchema.enum.financialAccount)}
-    AND (account_choice.id::text=judgments.values->>'accountId'
+    AND ((account_choice.id=CASE WHEN pg_input_is_valid(judgments.values->>'accountId', ${"uuid"}) THEN (judgments.values->>'accountId')::uuid END
+        AND account_choice.id::text=judgments.values->>'accountId')
       OR account_choice.shortcode=upper(btrim(judgments.values->>'accountId')))
   LEFT JOIN "FinancialTransaction" ft ON ft.id = o."acceptedTransactionId" AND ${notDeleted("ft")}
   LEFT JOIN "FinancialEvidenceAlias" own ON own."observationId" = r.id AND own.kind = 'externalId'
   LEFT JOIN "FinancialEvidenceAlias" legacy ON legacy."observationId" = r.id AND legacy.kind = 'legacyExternalId'
   LEFT JOIN "FinancialEvidenceAlias" reference ON reference."observationId" = r.id AND reference.kind = 'legacyReference'
 )`;
+
+export const sourceObservationFacts = observationFacts("point");
 
 /** Identity and immutable facts only: no annotation, alias-history or accepted-money projection. */
 export const sourceObservationIdentities = sql`(
@@ -111,7 +137,7 @@ const sourceObservationRead = (
       CASE WHEN facts."storedReviewState"=${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)} AND unresolved.id IS NOT NULL
         THEN ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ownership_conflict)} ELSE facts."storedReviewState" END AS "reviewState",
       coalesce(history.codes, ARRAY[]::text[]) AS "historicalTransactionIds"
-    FROM ${sourceObservationFacts} facts
+    FROM ${observationIds === undefined ? observationFacts("population") : sourceObservationFacts} facts
     LEFT JOIN ${history.unresolved} unresolved ON unresolved.id=facts."occurrenceId"
     LEFT JOIN ${history.links} history ON history."observationId"=facts.id
     ${observationIds === undefined ? sql`` : sql`WHERE facts.id=ANY(${uuidArrayParam(observationIds)})`}
@@ -220,11 +246,11 @@ export const sourceObservationField = (
       FROM ${sourceObservationFacts} facts WHERE facts.id=${id})`;
   }
   if (key === "reviewState") {
-    // The point helper owns an inner "owner" alias; keep its root distinct.
-    return sql`(SELECT CASE WHEN point_owner."reviewState"=${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}
-      AND ${sourceOccurrenceHasUnresolvedHistory(sql`point_owner.id`, sql`point_owner."acceptedTransactionId"`)}
-      THEN ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ownership_conflict)} ELSE point_owner."reviewState" END
-      FROM "SourceOccurrence" point_owner JOIN "SourceTransactionRecord" record ON record."occurrenceId"=point_owner.id WHERE record.id=${id})`;
+    // Same effective state as the projection: a bank judgment applies before the fence.
+    return sql`(SELECT CASE WHEN facts."storedReviewState"=${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}
+      AND ${sourceOccurrenceHasUnresolvedHistory(sql`facts."occurrenceId"`, sql`facts."acceptedTransactionId"`)}
+      THEN ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ownership_conflict)} ELSE facts."storedReviewState" END
+      FROM ${sourceObservationFacts} facts WHERE facts.id=${id})`;
   }
   if (key === "historicalTransactionIds") {
     // Same sibling hop as matchState. A point read must not fold every observation.

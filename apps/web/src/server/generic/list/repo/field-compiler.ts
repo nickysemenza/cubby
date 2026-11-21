@@ -190,8 +190,9 @@ export const listReadValue = (
  * A value whose filters read a whole-list relation instead of the per-row
  * scalar: `set` selects `("id", "value")` for every row that has one, and a
  * filter matches `id IN (SELECT "id" FROM set WHERE …)`, so one set-based
- * walk serves the filter. Sort and group read `value`, which must agree with
- * `set` row for row; a page binding supplies the projected value.
+ * walk serves the filter and group sections join it by owner. Sort reads
+ * `value`, which must agree with `set` row for row; a page binding supplies
+ * the projected value.
  */
 interface SetValue {
   readonly value: SQL;
@@ -1006,7 +1007,8 @@ export const derivedOrderBy = (
  * when the key is not already readable (a related record's title), and the
  * order that ranks sections. Each `order` part ascends with NULLS LAST, so
  * the no-value section is always last; `"key"`/`"label"` stand for those
- * expressions, letting the summary query order by its selected columns.
+ * expressions, letting the summary query order by its selected columns, and
+ * `"option"` for the key's position among the choice's declared options.
  * `subtree`, on a level-grouped hierarchy, is true for a row grouped under
  * an ancestor rather than its own value.
  */
@@ -1014,7 +1016,7 @@ export interface ListGroupSql {
   readonly choice: GeneratedGroupChoice;
   readonly key: SQL;
   readonly label: SQL | null;
-  readonly order: readonly (SQL | "key" | "label")[];
+  readonly order: readonly ("option" | "key" | "label")[];
   readonly subtree: SQL | null;
   /** Expansion joined once per dimension; owner-keyed relations need no lateral evaluation. */
   readonly members?: SQL;
@@ -1061,18 +1063,23 @@ const recordMemberships = (
 };
 
 const optionOrder = (
-  value: SQL,
   options: readonly { readonly value: string }[] | null,
-): readonly (SQL | "key")[] =>
-  options === null
-    ? ["key"]
-    : [
-        sql`array_position(ARRAY[${sql.join(
-          options.map((option) => sql`${option.value}`),
-          sql`, `,
-        )}]::text[], ${value})`,
-        "key",
-      ];
+): ListGroupSql["order"] => (options === null ? ["key"] : ["option", "key"]);
+
+/** The key's position among its choice's declared options, or NULL. */
+export const groupOptionPosition = (
+  choice: GeneratedGroupChoice,
+  key: SQL,
+): SQL => {
+  const value = choice.value;
+  const options = value !== null && "options" in value ? value.options : null;
+  if (options === null)
+    throw new Error(`${choice.key} orders by options it does not declare`);
+  return sql`array_position(ARRAY[${sql.join(
+    options.map((option) => sql`${option.value}`),
+    sql`, `,
+  )}]::text[], ${key})`;
+};
 
 /**
  * Compiles a `model.grouping` choice for `table`. A choice the declaration
@@ -1351,31 +1358,63 @@ export const groupSql = (
           subtree: null,
           members: sql`SELECT DISTINCT v AS "key", null::text AS "label", false AS "subtree" FROM unnest(${nonEmptyTextValuesSql(raw)}) AS v`,
         };
-      if (choice.dateKind !== null) {
-        const day =
-          choice.dateKind === "timestamp"
-            ? householdDaySql(raw)
-            : sql`${raw}::date`;
-        const date = sql`date_trunc(${bucket ?? "day"}::text, ${day}::timestamp)::date::text`;
-        return {
-          choice,
-          key: date,
-          label: null,
-          order: ["key"],
-          subtree: null,
-        };
-      }
-      // Blank text reads as no value, like an absent one.
-      const text = sql`NULLIF(${trimTextSql(sql`${raw}::text`)}, '')`;
-      return {
-        choice,
-        key: text,
-        label: null,
-        order: optionOrder(text, value.options),
-        subtree: null,
-      };
+      return scalarGroupSql(choice, value.options, raw, bucket);
     }
   }
+};
+
+/** A single-valued dimension over `raw`: its date bucket, else its trimmed text. */
+function scalarGroupSql(
+  choice: GeneratedGroupChoice,
+  options: readonly { readonly value: string }[] | null,
+  raw: SQL,
+  bucket: ListGroupBy["bucket"],
+): ListGroupSql {
+  if (choice.dateKind !== null) {
+    const day =
+      choice.dateKind === "timestamp"
+        ? householdDaySql(raw)
+        : sql`${raw}::date`;
+    const date = sql`date_trunc(${bucket ?? "day"}::text, ${day}::timestamp)::date::text`;
+    return { choice, key: date, label: null, order: ["key"], subtree: null };
+  }
+  // Blank text reads as no value, like an absent one.
+  const text = sql`NULLIF(${trimTextSql(sql`${raw}::text`)}, '')`;
+  return {
+    choice,
+    key: text,
+    label: null,
+    order: optionOrder(options),
+    subtree: null,
+  };
+}
+
+/**
+ * A derived scalar dimension whose value declares a whole-list `set`: its
+ * sections join that relation by owner once, instead of evaluating the
+ * per-row value for every grouped row. Null when the dimension has no set.
+ */
+export const derivedSetGroupSql = (
+  entity: Entity,
+  dimension: ListGroupBy,
+  derived: AnyDerivedSql,
+): ListGroupSql | null => {
+  const set = derivedValueSet(derived, dimension.key);
+  if (set === null) return null;
+  const { choice, value } = requireGroupChoice(entity, dimension);
+  if (value.kind !== "derived" || choice.multiple) return null;
+  const group = scalarGroupSql(
+    choice,
+    value.options,
+    sql`list_group_set.value`,
+    dimension.bucket,
+  );
+  return {
+    ...group,
+    key: sql`null::text`,
+    memberScope: "owners",
+    members: sql`SELECT list_group_set.id AS "owner", ${group.key} AS "key", null::text AS "label", false AS "subtree" FROM (${set}) list_group_set`,
+  };
 };
 
 /** Only explicitly admitted scalar numeric fields can contribute a metric. */

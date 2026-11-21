@@ -142,6 +142,7 @@ import {
   derivedSelectSql,
   derivedProjectedByBinding,
   derivedValueSql,
+  derivedSetGroupSql,
   groupSql,
   type ListGroupSql,
   listComposedValue,
@@ -160,7 +161,7 @@ import {
   rowsPrepare,
   type RowsSqlArg,
 } from "./field-compiler";
-import { readGroupedQuery } from "./grouped-query";
+import { groupOrderBy, readGroupedQuery } from "./grouped-query";
 import {
   listReadPlan,
   selectedListProjection,
@@ -388,14 +389,6 @@ const searchQueryFromFilters = <Filters extends object>(
 ) => listSearchSchema.parse(filters ?? {}).searchQuery;
 
 /** A group order part as page ORDER BY: ascending, no-value last. */
-const groupOrderBy = (group: ListGroupSql): SQL[] =>
-  group.order.map((part) => {
-    const value =
-      part === "key" ? group.key : part === "label" ? group.label : part;
-    if (value === null) throw new Error("A group orders by an absent label");
-    return sql`${value} asc nulls last`;
-  });
-
 /**
  * The list a related scope (`presentation.list.scopes`) nests: its prepared
  * data for the nested filter record, and the live records that record
@@ -1486,17 +1479,19 @@ export function listScaffold<
       context: ListContext = ListContext.empty,
     ): ListGroupSql[] {
       return listGroupByFromFilters(filters).map((dimension, index) => {
-        const group = groupSql(
-          entity,
-          dimension,
-          derivedSql,
-          table,
-          context,
-          context.has(groupTitlesPrepare)
-            ? context.get(groupTitlesPrepare)
-            : undefined,
-          rowsSql,
-        );
+        const group =
+          derivedSetGroupSql(entity, dimension, derivedSql) ??
+          groupSql(
+            entity,
+            dimension,
+            derivedSql,
+            table,
+            context,
+            context.has(groupTitlesPrepare)
+              ? context.get(groupTitlesPrepare)
+              : undefined,
+            rowsSql,
+          );
         if (!group.members) return group;
         const at = (column: string) =>
           sql`${sql.identifier(`list_group_${index}`)}.${sql.identifier(column)}`;
@@ -1510,13 +1505,7 @@ export function listScaffold<
           value?.kind === "relatedRecord"
             ? ["label", "key"]
             : options?.length
-              ? [
-                  sql`array_position(ARRAY[${sql.join(
-                    options.map((option) => sql`${option.value}`),
-                    sql`, `,
-                  )}]::text[], ${at("key")})`,
-                  "key",
-                ]
+              ? ["option", "key"]
               : ["key"];
         return {
           ...group,
@@ -2110,19 +2099,17 @@ export function listScaffold<
         throw new Error(
           `${entity} counts its own FROM; pass its joins to group the list`,
         );
+      // A count never orders, and skipped the prepares a derived sort reads.
+      const recordOrder =
+        readIntent === "count"
+          ? []
+          : (spec.orderBy ??
+            filterPlan.order(request.sorts, {
+              tieBreaker: spec.tieBreaker,
+            }));
       const page: ListPage = {
         where,
-        // A count never orders, and skipped the prepares a derived sort reads.
-        orderBy:
-          readIntent === "count"
-            ? []
-            : [
-                ...group.flatMap(groupOrderBy),
-                ...(spec.orderBy ??
-                  filterPlan.order(request.sorts, {
-                    tieBreaker: spec.tieBreaker,
-                  })),
-              ],
+        orderBy: [...group.flatMap(groupOrderBy), ...recordOrder],
         limit: take,
         offset: skip,
       };
@@ -2274,7 +2261,7 @@ export function listScaffold<
                         context,
                       ),
                     })),
-                  order: page.orderBy,
+                  order: recordOrder,
                   limit: take,
                   offset: skip,
                 })
