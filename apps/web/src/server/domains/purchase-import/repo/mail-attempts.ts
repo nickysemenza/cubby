@@ -288,6 +288,7 @@ export async function readMailAttemptRecovery(
   tool: typeof EXTRACT_ORDER_TOOL;
   arguments: NonNullable<z.infer<typeof mailAttemptInput.shape.proposal>>;
 } | null> {
+  const messageHash = sql`md5(${input.source.messageId}::text)`;
   const [attempt] = await getDb(db)
     .select({ result: runOperation.result })
     .from(runOperation)
@@ -302,7 +303,9 @@ export async function readMailAttemptRecovery(
           inArray(run.status, fencedOwnerStatuses),
         ),
         sql`${run.input}->'sources' @> ${JSON.stringify([{ orderMailId: input.orderMailId, checksum: input.source.checksum }])}::jsonb`,
-        eq(runOperation.kind, "mail_extraction_attempt"),
+        // The literal kind lets generic plans use the partial lookup index.
+        sql`${runOperation.kind} = 'mail_extraction_attempt'`,
+        sql`md5(${runOperation.result} #>> '{source,messageId}') = ${messageHash}`,
         sql`${runOperation.result}->${"source"} = ${JSON.stringify(input.source)}::jsonb`,
         sql`${runOperation.result}->>${"pending"} = 'true'`,
         sql`${runOperation.result}->>${"charged"} = 'true'`,
@@ -312,6 +315,7 @@ export async function readMailAttemptRecovery(
         JOIN "Run" known_owner ON known_owner.id = known."runId"
         WHERE known_owner."ledgerPartyId" = ${input.ledgerPartyId}
           AND known.kind = 'mail_extraction_attempt'
+          AND md5(known.result #>> '{source,messageId}') = ${messageHash}
           AND known.result->${"source"} = ${runOperation.result}->${"source"}
           AND known.result->>${"identity"} = ${runOperation.result}->>${"identity"}
           AND known.result->>${"charged"} = 'true'

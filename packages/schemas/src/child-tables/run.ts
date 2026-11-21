@@ -334,6 +334,12 @@ export const runChildren = [
         where: "{kind} = 'claim_next_work' AND {state} = 'completed'",
       },
       {
+        // Bound the index key while recovery checks the exact source separately.
+        name: "RunOperation_mail_attempt_message_idx",
+        on: [{ sql: "md5({result} #>> '{source,messageId}')" }],
+        where: "{kind} = 'mail_extraction_attempt'",
+      },
+      {
         name: "RunOperation_mail_outcome_id_key",
         unique: true,
         on: [{ sql: "({result} #>> '{mailOutcome,id}')" }],
