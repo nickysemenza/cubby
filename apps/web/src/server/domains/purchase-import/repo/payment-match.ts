@@ -7,6 +7,7 @@ import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { textArrayParam } from "~/server/db/helpers/array-param";
+import { requestedRows } from "~/server/db/helpers/requested";
 import { decision, manualEntry, recordKey } from "~/server/db/kernel-schema";
 import {
   financialAccount,
@@ -112,6 +113,8 @@ export function acceptedOrderHeads(orders: readonly Order[], c: Pure) {
 const paymentSetKey = (order: Order) =>
   `${orderEventKey(order)}:${order.extraction.candidate?.sourceEvent === "refunded" ? "refund" : "charge"}`;
 type PaymentsFor = (order: Order) => Payment[];
+const paymentAmount = (key: string) =>
+  /^payment:amount:USD:(-?\d+)$/u.exec(key)?.[1];
 
 function orderPaymentRoutes(
   heads: readonly Order[],
@@ -135,6 +138,36 @@ function orderPaymentRoutes(
       .map((binding) => [binding.fact.id, binding.scope.key]),
   );
   return { keysByEvent, provenOwners };
+}
+
+function planPaymentRoutes(
+  key: string,
+  heads: readonly Order[],
+  paymentsFor: PaymentsFor,
+  eventKeys: ReadonlySet<string> | undefined,
+  provenOwners: ReadonlyMap<string, string>,
+  c: Pure,
+) {
+  const retainedKeys = new Set(
+    heads.flatMap((head) =>
+      paymentsFor(head).map((row) => paymentAmountKey(row.amountMinor)),
+    ),
+  );
+  if (!eventKeys?.has(key) && !retainedKeys.has(key)) return;
+  const paymentKeys = [...new Set(heads.flatMap(orderPaymentKeys))].sort();
+  const amountKeys = paymentKeys.filter((route) =>
+    route.startsWith("payment:amount:"),
+  );
+  if (!key.startsWith("payment:amount:")) {
+    for (const route of new Set([...amountKeys, ...retainedKeys]))
+      c.emit({ kind: "purchaseEvent", key: route });
+    if (
+      amountKeys.length &&
+      !heads.some((head) => provenOwners.get(head.id) === key)
+    )
+      return;
+  }
+  return { paymentKeys, amountKeys };
 }
 
 function orderBindingFallback(
@@ -498,6 +531,7 @@ export const paymentMatching: Pick<
       "extraction",
       "sourceKind",
       "sourceExternalKey",
+      "sourceClaimId",
       "purchaseId",
       "createdAt",
     ]),
@@ -555,9 +589,46 @@ export const paymentMatching: Pick<
     let payments: Payment[] = [];
     while (pending.length) {
       for (const key of pending) visited.add(key);
-      const facts = await reads.facts(orderEvidence, pending);
+      const amounts = pending
+        .map(paymentAmount)
+        .filter((value) => value !== undefined);
+      const [facts, byAmount] = await Promise.all([
+        reads.facts(orderEvidence, pending),
+        reads.lookup(purchasePaymentEvidence, amountPayments, amounts),
+      ]);
+      // Legacy payments may lead to an Order whose extraction omitted their
+      // amount. Use both link shapes to find event keys, then read their facts.
+      const legacy = byAmount.flatMap((row) =>
+        !row.orderObservationId && row.sourceClaimId && row.purchaseId
+          ? [{ claim: row.sourceClaimId, purchase: row.purchaseId }]
+          : [],
+      );
+      const legacyLinks = requestedRows(
+        legacy,
+        { claim: "uuid", purchase: "uuid" },
+        "payment_order_links",
+      );
+      const [directOrders, legacyOrders] = await Promise.all([
+        reads.rows(
+          sourceOrderObservation,
+          byAmount.flatMap((row) =>
+            row.orderObservationId ? [row.orderObservationId] : [],
+          ),
+        ),
+        legacy.length
+          ? reads.select(
+              sourceOrderObservation,
+              [],
+              sql`EXISTS (
+              SELECT 1 FROM ${legacyLinks.from}
+              WHERE ${sourceOrderObservation.sourceClaimId} = ${legacyLinks.col("claim")}
+                AND ${sourceOrderObservation.purchaseId} = ${legacyLinks.col("purchase")}
+            )`,
+            )
+          : [],
+      ]);
       orders = unique([...orders, ...[...facts.values()].flat()]);
-      const [observed, legacy] = await Promise.all([
+      const [observed, retained] = await Promise.all([
         reads.lookup(
           purchasePaymentEvidence,
           orderPayments,
@@ -569,9 +640,10 @@ export const paymentMatching: Pick<
           orders.flatMap((row) => (row.purchaseId ? [row.purchaseId] : [])),
         ),
       ]);
-      payments = unique([...payments, ...observed, ...legacy]);
+      payments = unique([...payments, ...observed, ...retained]);
       pending = [
         ...new Set([
+          ...[...directOrders.values(), ...legacyOrders].map(orderEventKey),
           ...orders.flatMap((row) => [
             orderEventKey(row),
             ...orderPaymentKeys(row),
@@ -583,9 +655,7 @@ export const paymentMatching: Pick<
     const amounts = [
       ...new Set([
         ...payments.map((row) => String(row.amountMinor)),
-        ...keys
-          .filter((key) => /^payment:amount:USD:-?\d+$/u.test(key))
-          .map((key) => key.slice("payment:amount:USD:".length)),
+        ...keys.map(paymentAmount).filter((value) => value !== undefined),
       ]),
     ];
     const transactions = await reads.select(
@@ -741,21 +811,16 @@ export const paymentMatching: Pick<
     for (const order of events.values()) {
       const event = orderEventKey(order);
       const eventKeys = keysByEvent.get(event);
-      if (!eventKeys?.has(input.key)) continue;
       const paymentHeads = headsByPaymentSet.get(paymentSetKey(order)) ?? [];
-      const paymentKeys = [
-        ...new Set(paymentHeads.flatMap(orderPaymentKeys)),
-      ].sort();
-      const amountKeys = paymentKeys.filter((key) =>
-        key.startsWith("payment:amount:"),
+      const routes = planPaymentRoutes(
+        input.key,
+        paymentHeads,
+        paymentsFor,
+        eventKeys,
+        provenOwners,
+        c,
       );
-      if (!input.key.startsWith("payment:amount:") && amountKeys.length) {
-        for (const key of amountKeys) c.emit({ kind: "purchaseEvent", key });
-        if (
-          !paymentHeads.some((head) => provenOwners.get(head.id) === input.key)
-        )
-          continue;
-      }
+      if (!routes) continue;
       const plan = planFor(order);
       if (plan.kind === "conflicting") {
         c.gap.decision(
@@ -902,13 +967,13 @@ export const paymentMatching: Pick<
       // An Order observation has one binding per basis. Extracted amounts can
       // route a legacy observation even when it has no retained payment rows.
       const fallbackOwner = orderBindingFallback(
-        paymentKeys,
-        amountKeys,
+        routes.paymentKeys,
+        routes.amountKeys,
         plan.payments,
       );
       for (const head of paymentHeads) {
         const existingOwner = provenOwners.get(head.id);
-        const owner = eventKeys.has(existingOwner ?? "")
+        const owner = eventKeys?.has(existingOwner ?? "")
           ? existingOwner
           : fallbackOwner;
         if (input.key === owner)
