@@ -1,6 +1,7 @@
 import { parseOperationOutput, OperationError } from "~/lib/operation-error";
 import {
   isOperationEntity,
+  operationDefinition,
   registeredOperationKind,
   type OperationId,
 } from "~/lib/operation-observability";
@@ -49,9 +50,8 @@ export function unwrapOperationResult<T>(
 type ObservedOutcome = Parameters<typeof finishObservedOperation>[1];
 
 /**
- * Observe one call and fence this member's reads around a write: a mutation
- * or workflow stream begins a member write before it starts, and again when
- * it fails or is abandoned, so no read settles on data from before it.
+ * Fence this member's reads around a household mutation or workflow stream,
+ * including failures and abandoned calls that may already have committed.
  */
 export function beginOperationCall(options: {
   operation: OperationId;
@@ -60,7 +60,9 @@ export function beginOperationCall(options: {
   speculative?: boolean;
   input: OperationWireValue;
 }) {
-  const writes = registeredOperationKind(options.operation) !== "query";
+  const definition = operationDefinition(options.operation);
+  const writes =
+    definition.kind !== "query" && definition.changesHouseholdData !== false;
   const observed = beginObservedOperation({ ...options, transport: "start" });
   if (writes) beginMemberWrite();
   return {

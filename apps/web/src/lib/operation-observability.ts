@@ -32,6 +32,7 @@ export type OperationDefinition<Id extends OperationId = OperationId> = {
   readonly id: Id;
   readonly kind: RegisteredOperationKind<Id>;
   readonly exposure?: "capability" | "view" | "internal";
+  readonly changesHouseholdData?: false;
   readonly entities: readonly string[];
   readonly productPhases: readonly ProductDetailPhase[];
 };
@@ -79,6 +80,9 @@ export const operationDefinition = <Id extends OperationId>(
     id: operation,
     kind: registeredOperationKind(operation),
     ...("exposure" in registered ? { exposure: registered.exposure } : {}),
+    ...("changesHouseholdData" in registered
+      ? { changesHouseholdData: registered.changesHouseholdData }
+      : {}),
     entities: "entities" in registered ? registered.entities : [],
     productPhases:
       "productPhases" in registered ? registered.productPhases : [],

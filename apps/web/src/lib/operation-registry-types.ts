@@ -17,6 +17,7 @@ export type OperationRegistry = Readonly<
     {
       kind: "query" | "mutation" | "subscription";
       exposure?: "capability" | "view" | "internal";
+      changesHouseholdData?: false;
       entities?: readonly string[];
       productPhases?: readonly string[];
       command?: WorkflowCommandMetadata;
