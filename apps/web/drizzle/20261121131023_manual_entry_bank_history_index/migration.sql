@@ -1,0 +1,1 @@
+CREATE INDEX "ManualEntry_financial_history_lookup_idx" ON "ManualEntry" ((md5("payload"->>'accountId')),(md5(lower(trim("payload"->>'merchant'))))) WHERE "entity" = 'financialTransaction';

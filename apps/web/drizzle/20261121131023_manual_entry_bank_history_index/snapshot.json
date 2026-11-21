@@ -1,0 +1,63 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "8d26abc9-b35f-44aa-8fb0-9b92a90b392d",
+  "prevIds": [
+    "1740be6f-e0a7-4402-b2af-47d463e4b6e0"
+  ],
+  "footprints": [
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "ManualEntry",
+        "ManualEntry_financial_history_lookup_idx"
+      ],
+      "writes": [
+        "s|idx|public.ManualEntry_financial_history_lookup_idx",
+        "n|idx|public.ManualEntry_financial_history_lookup_idx",
+        "e|idx|public.ManualEntry_financial_history_lookup_idx",
+        "n|rel|public.ManualEntry_financial_history_lookup_idx"
+      ],
+      "reads": [
+        "n|tbl|public.ManualEntry",
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ManualEntry",
+        "name": "ManualEntry_financial_history_lookup_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "(md5(\"payload\"->>'accountId'))",
+            "isExpression": true,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "(md5(lower(trim(\"payload\"->>'merchant'))))",
+            "isExpression": true,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": "\"entity\" = 'financialTransaction'",
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    }
+  ]
+}

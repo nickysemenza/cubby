@@ -5,6 +5,7 @@
  * refs, fact refs), so they hold no foreign keys into entity tables; the
  * kernel's writers own their integrity.
  */
+import { entitySchema } from "@cubby/schemas/entity-core";
 import {
   askProducer,
   askState,
@@ -78,6 +79,14 @@ export const manualEntry = pgTable(
     createdAt: createdAt(),
   },
   (table) => [
+    index("ManualEntry_financial_history_lookup_idx")
+      .on(
+        sql`(md5(${table.payload}->>'accountId'))`,
+        sql`(md5(lower(trim(${table.payload}->>'merchant'))))`,
+      )
+      .where(
+        sql`${table.entity} = ${sqlEnumConstant(entitySchema, "financialTransaction")}`,
+      ),
     index("ManualEntry_allocation_transaction_idx")
       .on(sql`(${table.payload}->'values'->>'transactionId')`)
       .where(
