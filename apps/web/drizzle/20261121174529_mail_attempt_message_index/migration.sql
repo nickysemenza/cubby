@@ -1,0 +1,1 @@
+CREATE INDEX "RunOperation_mail_attempt_message_idx" ON "RunOperation" (md5("result" #>> '{source,messageId}')) WHERE "kind" = 'mail_extraction_attempt';
