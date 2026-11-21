@@ -922,6 +922,8 @@ reservation whose transaction was deleted. Summary splits `heldHistorical` from
 `heldNeverMatched`; a hold without a historical link may still be unbooked
 spending. `historicalTransactionIds` lists those retained links explicitly; it
 never supplies accepted ownership.
+Grouped Match State reads use the presence of those same historical links.
+Selected observation rows load the complete link list.
 
 SourceRecord updates accept `identityResolution` only as an explicit reviewed
 judgment, with `expectedDisposition`, the observation fingerprint, expected

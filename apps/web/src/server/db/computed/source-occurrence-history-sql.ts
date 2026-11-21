@@ -73,41 +73,52 @@ export const sourceOccurrencesWithUnresolvedHistory = unresolvedFrom(
   directHistoricalEvidence,
 );
 
-/** Whole-list history retains all roots and all sibling evidence. */
-export const sourceObservationHistoricalLinks = sql`(
-  WITH evidence_history AS MATERIALIZED (${directHistoricalEvidence}),
-  key_history AS MATERIALIZED (
-    SELECT sibling.source, sibling.value, evidence."historicalTransactionId", evidence.code
+const siblingHistoryKeys = (columns: SQL) => sql`
+    SELECT sibling.source, sibling.value${columns}
     FROM "FinancialEvidenceAlias" sibling
     JOIN evidence_history evidence ON evidence."observationId"=sibling."observationId"
     WHERE sibling."observationId" IS NOT NULL
     UNION
-    SELECT sibling.source, sibling.value, evidence."historicalTransactionId", evidence.code
+    SELECT sibling.source, sibling.value${columns}
     FROM "FinancialEvidenceAlias" sibling
     JOIN evidence_history evidence ON evidence."occurrenceId"=sibling."occurrenceId"
     WHERE sibling."observationId" IS NOT NULL AND sibling."occurrenceId" IS NOT NULL
-  ),
-  history_keys AS MATERIALIZED (
-    SELECT DISTINCT source, value FROM key_history
-  ),
-  observation_keys AS MATERIALIZED (
+`;
+
+const observationsForHistoryKeys = (columns: SQL) => sql`
     -- includes-deleted: retained alias tombstones stay in presentation history; map keys before expansion.
-    SELECT observed."observationId", observed.source, observed.value
+    SELECT observed."observationId"${columns}
     FROM "FinancialEvidenceAlias" observed
     JOIN history_keys keys ON keys.source=observed.source AND keys.value=observed.value
     WHERE observed."observationId" IS NOT NULL
     UNION
-    SELECT record.id, observed.source, observed.value
+    SELECT record.id${columns}
     FROM "SourceTransactionRecord" record
     JOIN "FinancialEvidenceAlias" observed ON observed."occurrenceId"=record."occurrenceId"
     JOIN history_keys keys ON keys.source=observed.source AND keys.value=observed.value
+`;
+
+/** Whole-list history retains all roots and all sibling evidence. */
+export const sourceObservationHistoricalLinks = sql`(
+  WITH evidence_history AS MATERIALIZED (${directHistoricalEvidence}),
+  key_history AS MATERIALIZED (${siblingHistoryKeys(sql`, evidence."historicalTransactionId", evidence.code`)}),
+  history_keys AS MATERIALIZED (
+    SELECT DISTINCT source, value FROM key_history
   ),
+  observation_keys AS MATERIALIZED (${observationsForHistoryKeys(sql`, observed.source, observed.value`)}),
   history AS MATERIALIZED (
     SELECT DISTINCT observed."observationId", history."historicalTransactionId", history.code
     FROM observation_keys observed JOIN key_history history ON history.source=observed.source AND history.value=observed.value
   )
   SELECT "observationId", array_agg(code ORDER BY code) AS codes
   FROM history GROUP BY "observationId"
+)`;
+
+/** Match-state grouping needs the same sibling reachability, without link arrays. */
+export const sourceObservationsWithHistoricalLinks = sql`(
+  WITH evidence_history AS MATERIALIZED (${directHistoricalEvidence}),
+  history_keys AS MATERIALIZED (${siblingHistoryKeys(sql``)})
+  ${observationsForHistoryKeys(sql``)}
 )`;
 
 /** The fragments share CTE scope and must be emitted in one statement. */

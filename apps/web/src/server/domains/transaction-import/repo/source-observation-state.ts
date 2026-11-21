@@ -26,6 +26,7 @@ import {
   sourceHistoricalTransactionRows,
   sourceOccurrencesWithUnresolvedHistory,
   sourceObservationHistoricalLinks,
+  sourceObservationsWithHistoricalLinks,
   sourcePageHistory,
 } from "~/server/db/computed/source-occurrence-history-sql";
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -117,26 +118,36 @@ export const sourceObservationIdentities = sql`(
 )`;
 
 const sourceObservationRead = (
-  observationIds?: readonly SourceTransactionRecordId[],
+  scope: "population" | "matchState" | readonly SourceTransactionRecordId[],
 ) => {
+  const observationIds = typeof scope === "string" ? undefined : scope;
+  const matchStateOnly = scope === "matchState";
   const history =
     observationIds === undefined
       ? {
           relations: sql``,
           unresolved: sourceOccurrencesWithUnresolvedHistory,
-          links: sourceObservationHistoricalLinks,
+          links: matchStateOnly
+            ? sourceObservationsWithHistoricalLinks
+            : sourceObservationHistoricalLinks,
         }
       : sourcePageHistory(observationIds);
-  return sql`(${history.relations} SELECT observation.*,
+  const evidence = matchStateOnly
+    ? sql`history."observationId" IS NOT NULL AS "hasHistory"`
+    : sql`coalesce(history.codes, ARRAY[]::text[]) AS "historicalTransactionIds"`;
+  const hasHistory = matchStateOnly
+    ? sql`observation."hasHistory"`
+    : sql`cardinality(observation."historicalTransactionIds") > 0`;
+  return sql`(${history.relations} SELECT ${matchStateOnly ? sql`observation.id` : sql`observation.*`},
   CASE WHEN observation.disposition = ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)} THEN ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)}
     WHEN observation."supersededByRowId" IS NOT NULL THEN ${sqlEnumConstant(sourceTransactionRecordMatchState, sourceTransactionRecordMatchState.enum.superseded)}
-    WHEN observation."transactionShortcode" IS NULL AND (observation."reviewState" <> ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)} OR cardinality(observation."historicalTransactionIds") > 0 OR observation."acceptedTransactionId" IS NOT NULL) THEN ${sqlEnumConstant(sourceTransactionRecordMatchState, sourceTransactionRecordMatchState.enum.held)}
+    WHEN observation."transactionShortcode" IS NULL AND (observation."reviewState" <> ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)} OR ${hasHistory} OR observation."acceptedTransactionId" IS NOT NULL) THEN ${sqlEnumConstant(sourceTransactionRecordMatchState, sourceTransactionRecordMatchState.enum.held)}
     WHEN observation."transactionShortcode" IS NOT NULL THEN ${sqlEnumConstant(sourceTransactionRecordMatchState, sourceTransactionRecordMatchState.enum.matched)} ELSE ${sqlEnumConstant(sourceTransactionRecordMatchState, sourceTransactionRecordMatchState.enum.unmatched)} END AS "matchState"
   FROM (
     SELECT facts.*,
       CASE WHEN facts."storedReviewState"=${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)} AND unresolved.id IS NOT NULL
         THEN ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ownership_conflict)} ELSE facts."storedReviewState" END AS "reviewState",
-      coalesce(history.codes, ARRAY[]::text[]) AS "historicalTransactionIds"
+      ${evidence}
     FROM ${observationIds === undefined ? observationFacts("population") : sourceObservationFacts} facts
     LEFT JOIN ${history.unresolved} unresolved ON unresolved.id=facts."occurrenceId"
     LEFT JOIN ${history.links} history ON history."observationId"=facts.id
@@ -144,7 +155,10 @@ const sourceObservationRead = (
   ) observation)`;
 };
 
-export const sourceObservations = sourceObservationRead();
+export const sourceObservations = sourceObservationRead("population");
+
+/** Group membership needs classification, while rows still load complete history. */
+export const sourceObservationMatchStates = sourceObservationRead("matchState");
 
 /** Page states share the global policy but expand history only for their roots. */
 export const sourceObservationsForPage = (

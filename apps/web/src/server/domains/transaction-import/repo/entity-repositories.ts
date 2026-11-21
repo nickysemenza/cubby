@@ -18,7 +18,7 @@ import { unwrapDb, withTransactionOn } from "~/server/db/helpers";
 import { sourceTransactionRecord } from "~/server/db/schema";
 import { sourceTransactionRecordSearch } from "~/server/domains/transaction-import/repo/search-read-source-transaction-record";
 import {
-  sourceObservations,
+  sourceObservationMatchStates,
   sourceObservationFacts,
   sourceObservationsForPage,
   sourceObservationField,
@@ -204,7 +204,7 @@ export const sourceTransactionRecordScaffold = listScaffold<
       // Fence the complete state set before filters or import membership
       // can turn its history join into a parameterized nested loop.
       set: sql`WITH match_states AS MATERIALIZED (
-          SELECT observed.id, observed."matchState" AS value FROM ${sourceObservations} observed
+          SELECT observed.id, observed."matchState" AS value FROM ${sourceObservationMatchStates} observed
         ) SELECT id, value FROM match_states`,
     },
     externalId: sourceObservationField("externalId"),
