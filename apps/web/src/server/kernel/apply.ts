@@ -674,10 +674,15 @@ async function fenceBatch(
 }
 
 /** One retry mutation for a batch; a conflict spends no attempt. */
-async function releaseConflicts(q: Q, claims: readonly ClaimedScope[]) {
+async function releaseConflicts(
+  q: Q,
+  claims: readonly ClaimedScope[],
+  delayMs = 0,
+) {
   if (!claims.length) return;
   await q.execute(sql`
     UPDATE "ScopeDirty" d SET "claimToken" = NULL, "claimDeadline" = NULL, conflicts = d.conflicts + 1
+      ${delayMs > 0 ? sql`, "availableAt" = greatest(d."availableAt", now() + make_interval(secs => ${delayMs / 1000}))` : sql``}
     FROM unnest(${orderedTextArrayParam(claims.map((item) => item.kind))}, ${orderedTextArrayParam(claims.map((item) => item.key))}, ${orderedTextArrayParam(claims.map((item) => item.token))}) AS wanted(kind, key, token)
     WHERE d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key AND d."claimToken" = wanted.token::uuid`);
 }
@@ -1506,6 +1511,9 @@ async function runHeldScopes(
   ];
 }
 
+/** A locked background run that found the gate busy waits this long before its next claim. */
+const LOCKED_GATE_BUSY_DELAY_MS = 5_000;
+
 // Leave room under the background deadline for fences, output writes and gate admission.
 const BACKGROUND_PUBLICATION_WEIGHT = 10_000;
 
@@ -1683,10 +1691,10 @@ export async function applyComputed(
 }
 
 /**
- * The fallback after three conflicts: take the gate (money), then load with
- * each key's revision row held, lock the dirty row, compute and apply, all in
- * one bounded transaction. Producer calls never happen here: a missing answer
- * is filed as an ask.
+ * The fallback after three conflicts: take the gate (money), hold each key's
+ * revision row, then apply the pre-gate computation if none of them moved, or
+ * recompute under those locks, all in one bounded transaction. Producer calls
+ * never happen here: a missing answer is filed as an ask.
  */
 async function runLocked(
   db: Database,
@@ -1751,18 +1759,29 @@ async function runLocked(
               ].sort(),
             );
             advance("compute");
-            const [computed] = await computeBatch(
-              q,
-              registry,
-              reconciler,
-              [scope],
-              {
-                db: tx,
-                locked: true,
-                lockedRevisions,
-                hideBaseline: options.hideBaseline ?? false,
-              },
+            const current = await q.execute<{ seq: string }>(
+              sql`SELECT seq FROM "ScopeDirty" WHERE "scopeKind"=${scope.kind} AND "scopeKey"=${scope.key}`,
             );
+            const seq = Number(current.rows[0]?.seq ?? claimed.seq);
+            // The pre-gate computation stands when no input it read and no
+            // dirtying moved since: its revisions are now held. Recomputing
+            // under the gate is only for inputs that changed, so a heavy load
+            // does not spend the gate's transaction budget.
+            const unchanged =
+              prepared!.error === null &&
+              seq === claimed.seq &&
+              [...prepared!.keys].every(
+                ([key, seen]) => lockedRevisions.get(key) === seen,
+              );
+            if (unchanged) span.setAttribute("kernel.scope.reused", true);
+            const [computed] = unchanged
+              ? [prepared!]
+              : await computeBatch(q, registry, reconciler, [scope], {
+                  db: tx,
+                  locked: true,
+                  lockedRevisions,
+                  hideBaseline: options.hideBaseline ?? false,
+                });
             if (computed!.error !== null) throw computed!.error;
             advance("verify");
             const currentMemberships = await relatedMemberships(
@@ -1777,15 +1796,12 @@ async function runLocked(
               ].some((key) => !lockedRevisions.has(key))
             )
               throw new LockedReadChangedError();
-            const current = await q.execute<{ seq: string }>(
-              sql`SELECT seq FROM "ScopeDirty" WHERE "scopeKind"=${scope.kind} AND "scopeKey"=${scope.key}`,
-            );
             advance("publish");
             const result = await applyOne(
               tx,
               registry,
               computed!,
-              { ...claimed, seq: Number(current.rows[0]?.seq ?? claimed.seq) },
+              { ...claimed, seq },
               options,
               proposals,
             );
@@ -1817,7 +1833,14 @@ async function runLocked(
     return traced.result;
   } catch (error) {
     if (isConflict(error) || error instanceof HouseholdWriteBusyError) {
-      await releaseConflicts(repositoryQueries(db), [claimed]);
+      // A busy gate retries after other applies, not in a recompute loop.
+      await releaseConflicts(
+        repositoryQueries(db),
+        [claimed],
+        error instanceof HouseholdWriteBusyError
+          ? LOCKED_GATE_BUSY_DELAY_MS
+          : 0,
+      );
       return outcome(scope, "conflict");
     }
     const [failed] = await settleBatchFailure(
