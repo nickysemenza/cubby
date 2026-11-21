@@ -12,6 +12,7 @@ import { uniq, uniqBy } from "es-toolkit";
 
 import { sourceOccurrenceHasUnresolvedHistory } from "~/server/db/computed/source-occurrence-history-sql";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { requestedRows } from "~/server/db/helpers/requested";
 import {
   repositoryQueries,
@@ -67,28 +68,30 @@ export async function financialSourceRefsFor(
   const ids = transactionIds.map((id) =>
     parseEntityId("financialTransaction", id),
   );
-  const acceptedId =
-    sql`coalesce(${sourceOccurrence.acceptedTransactionId}, ${recordKey.entityId})`.mapWith(
-      (id) => parseEntityId("financialTransaction", id),
-    );
-  const occurrences = await repositoryQueries(db)
-    .select({
-      transactionId: acceptedId,
-      source: sourceOccurrence.source,
-      externalId: sourceOccurrence.shortcode,
-    })
-    .from(sourceOccurrence)
-    .leftJoin(
-      recordKey,
-      and(
-        eq(recordKey.scopeKind, "bankEvent"),
-        eq(recordKey.scopeKey, sql`${sourceOccurrence.id}::text`),
-        eq(recordKey.entity, "financialTransaction"),
-        isNull(recordKey.rejectedAt),
-        isNull(recordKey.mergedAt),
-      ),
-    )
-    .where(inArray(acceptedId, ids));
+  // Accepted owners and reserved bank keys are read through their own
+  // indexes; a coalesce over the join would scan every occurrence.
+  const occurrences = (
+    await repositoryQueries(db).execute<{
+      transactionId: string;
+      source: string;
+      externalId: string;
+    }>(sql`
+      SELECT occurrence."acceptedTransactionId" AS "transactionId", occurrence.source, occurrence.shortcode AS "externalId"
+      FROM ${sourceOccurrence} occurrence
+      WHERE occurrence."acceptedTransactionId" = ANY(${uuidArrayParam(ids)})
+      UNION ALL
+      SELECT bank."entityId", occurrence.source, occurrence.shortcode
+      FROM ${recordKey} bank
+      JOIN ${sourceOccurrence} occurrence
+        ON occurrence.id = CASE WHEN pg_input_is_valid(bank."scopeKey", ${"uuid"}) THEN bank."scopeKey"::uuid END
+        AND occurrence.id::text = bank."scopeKey" AND occurrence."acceptedTransactionId" IS NULL
+      WHERE bank.entity = ${sqlEnumConstant(entitySchema, entitySchema.enum.financialTransaction)}
+        AND bank."entityId" = ANY(${uuidArrayParam(ids)}) AND bank."scopeKind" = 'bankEvent'
+        AND bank."rejectedAt" IS NULL AND bank."mergedAt" IS NULL`)
+  ).rows.map((row) => ({
+    ...row,
+    transactionId: parseEntityId("financialTransaction", row.transactionId),
+  }));
   const aliases = await repositoryQueries(db)
     .select({
       transactionId: financialEvidenceAlias.historicalTransactionId,
