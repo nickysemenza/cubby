@@ -1,4 +1,3 @@
-import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import {
@@ -103,13 +102,6 @@ describe("statement spending review and re-import", () => {
         name: "Synthetic grocery spend",
       },
     );
-    const advice = financialSpendingAdvice.parse({
-      spendingCategoryId: category.id,
-      categoryConfidence: "high",
-      vendorName: "Synthetic Orchard",
-      vendorConfidence: "high",
-      counterparty: "business",
-    });
     const input = recordSourceTransactionRecordsInput.parse({
       import: {
         source: "monarch",
@@ -148,7 +140,12 @@ describe("statement spending review and re-import", () => {
       input,
       ctx.actor,
     );
-    return { input, recorded, account, advice };
+    return {
+      input,
+      recorded,
+      account,
+      categoryId: parseShortcodeFor("spendingCategory", category.id),
+    };
   }
   it("matches statement lumps in cents and reports work amounts in dollars", async () => {
     const setup = await fixture("money-unit-boundary", "member", 19.99);
@@ -198,6 +195,13 @@ describe("statement spending review and re-import", () => {
 
   it("books a statement charge with stable linked records through the kernel", async () => {
     const setup = await fixture("kernel-charge-one");
+    // A retired Vendor default is no category: the charge books Uncategorized.
+    await getDb(ctx.db).execute(
+      sql`UPDATE "SpendingCategory" SET "deletedAt"=now() WHERE shortcode=${setup.categoryId}`,
+    );
+    await getDb(ctx.db).execute(
+      sql`UPDATE "Vendor" SET "defaultSpendingCategoryId"=(SELECT id FROM "SpendingCategory" WHERE shortcode=${setup.categoryId}) WHERE name='Synthetic Orchard'`,
+    );
     const [observation] = await getDb(ctx.db)
       .select()
       .from(sourceTransactionRecord);
@@ -233,6 +237,11 @@ describe("statement spending review and re-import", () => {
       costMinor: "4250",
       amountMinor: "4250",
     });
+    expect(
+      await getDb(ctx.db)
+        .select({ spendingCategoryId: expense.spendingCategoryId })
+        .from(expense),
+    ).toEqual([{ spendingCategoryId: null }]);
     const ledgerBeforeReplay = await ledgerRows();
     await recordSourceTransactionRecords(ctx.db, setup.input, ctx.actor);
     await reconcileNow(ctx.db, [scope]);
@@ -770,7 +779,7 @@ describe("statement spending review and re-import", () => {
     await updateExpense(
       ctx.db,
       parseShortcodeFor("expense", before.expenses[0]!.shortcode),
-      { spendingCategoryId: setup.advice.spendingCategoryId },
+      { spendingCategoryId: setup.categoryId },
       ctx.actor,
     );
     const saved = (await ledgerRows()).expenses[0]!;
@@ -856,7 +865,7 @@ describe("statement spending review and re-import", () => {
     await updateExpense(
       ctx.db,
       parseShortcodeFor("expense", line.shortcode),
-      { cost: 110, spendingCategoryId: setup.advice.spendingCategoryId },
+      { cost: 110, spendingCategoryId: setup.categoryId },
       ctx.actor,
     );
     const saved = (await ledgerRows()).expenses[0]!;
@@ -1209,7 +1218,7 @@ describe("statement spending review and re-import", () => {
     await updateExpense(
       ctx.db,
       parseShortcodeFor("expense", lump!.shortcode),
-      { spendingCategoryId: setup.advice.spendingCategoryId },
+      { spendingCategoryId: setup.categoryId },
       ctx.actor,
     );
     await reconcileNow(ctx.db, [scope]);
@@ -1275,7 +1284,7 @@ describe("statement spending review and re-import", () => {
         application: {
           action: "book",
           kindOverride: "purchase",
-          booking: { spendingCategoryId: setup.advice.spendingCategoryId },
+          booking: { spendingCategoryId: setup.categoryId },
         },
       }),
     );

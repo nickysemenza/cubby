@@ -27,14 +27,11 @@ import { publicFieldResolutionSchema } from "./field-resolution";
 export const financialSpendingAdvice = z.object({
   /** High-confidence classification of an escrow disbursement on a loan. */
   escrowDisbursement: z.boolean().optional(),
-  spendingCategoryId: spendingCategoryShortcode.nullable().default(null),
-  categoryConfidence: z.enum(["low", "medium", "high"]).default("low"),
   vendorName: z.string().trim().min(1).nullable().default(null),
   vendorConfidence: z.enum(["low", "medium", "high"]).default("low"),
   counterparty: z
     .enum(["business", "person", "payment_processor", "unknown"])
     .default("unknown"),
-  historyConflict: z.boolean().default(false),
 });
 export type FinancialSpendingAdvice = z.infer<typeof financialSpendingAdvice>;
 
@@ -63,7 +60,6 @@ export const financialSpendingRequest = z.object({
   costType: z.enum(["materials", "tools", "services"]).optional(),
   /** Creation-only reviewed intent; empty resets to defaults, null-party means unknown. */
   beneficiaries: ledgerAttributions.optional(),
-  categoryHistoryReviewed: z.boolean().optional(),
   rejectedPurchaseIds: z.array(purchaseShortcode).default([]),
 });
 export const financialBookingInput = z.object({

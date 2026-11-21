@@ -25,6 +25,9 @@ machinery shows unresolved inputs, decisions and baseline drift.
    and an allocation. Recorded splits and Expense or purchaser overrides are
    durable decisions. `application.booking` carries reviewed booking choices;
    a Purchase waiting for order details requires its explicit booking decision.
+   An absent or uncertain spending category never holds a booking: the Expense
+   books Uncategorized and is categorized later. Pass
+   `booking.spendingCategoryId` only for a confidently known category.
    Read existing money and attribution before changing either. Baseline drift
    writes nothing until reviewed; never restore Expense values or attribution
    merely to make a derivation fit.

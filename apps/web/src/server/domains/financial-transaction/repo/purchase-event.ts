@@ -120,7 +120,6 @@ const tableReads = [
     "postedDate",
     "merchant",
     "rawDescription",
-    "spendingCategoryId",
     "itemizationExpectation",
     "deletedAt",
   ]),
@@ -165,14 +164,7 @@ const tableReads = [
   ),
   source.table(
     vendor,
-    [
-      "name",
-      "aliases",
-      "defaultSpendingCategoryId",
-      "itemizationExpectation",
-      "orderEvidence",
-      "deletedAt",
-    ],
+    ["name", "aliases", "itemizationExpectation", "orderEvidence", "deletedAt"],
     [vendorNames],
   ),
   source.table(spendingCategory, ["deletedAt"]),
@@ -820,17 +812,10 @@ export function createPurchaseEvent({
                 row.ledgerPartyId ? [row.ledgerPartyId] : [],
               ),
             ]),
-            scoped.rows(spendingCategory, [
-              ...referenceIdsOf(key, "spendingCategory"),
-              ...allTransactions.flatMap((row) =>
-                row.spendingCategoryId ? [row.spendingCategoryId] : [],
-              ),
-              ...allVendors.flatMap((row) =>
-                row.defaultSpendingCategoryId
-                  ? [row.defaultSpendingCategoryId]
-                  : [],
-              ),
-            ]),
+            scoped.rows(
+              spendingCategory,
+              referenceIdsOf(key, "spendingCategory"),
+            ),
           ]);
           return [
             key,
@@ -1664,18 +1649,21 @@ export function createPurchaseEvent({
         retained(c);
         return c.done();
       }
-      const selectedCategory =
-        typeof value("spendingCategoryId") === "string"
-          ? c.reference("spendingCategory", String(value("spendingCategoryId")))
-          : (transaction.spendingCategoryId ??
-            resolved?.defaultSpendingCategoryId ??
-            null);
+      // Only a member's explicit category is stored and must be live. Absent,
+      // weak or retired derived categories never hold booking: the Expense
+      // books Uncategorized and its resolver reads Vendor defaults live.
+      // A member choice whose category no longer resolves holds the booking:
+      // booking without it would record their decision as no category.
+      const categoryChosen = typeof value("spendingCategoryId") === "string";
+      const selectedCategory = categoryChosen
+        ? c.reference("spendingCategory", String(value("spendingCategoryId")))
+        : null;
       const category = selectedCategory
         ? spendingCategoryForDiscovery(input.categories, {
             id: selectedCategory,
           })
         : undefined;
-      if (selectedCategory && !category) {
+      if (categoryChosen && !category) {
         c.gap.decision("a live spending category");
         retained(c);
         return c.done();

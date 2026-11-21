@@ -70,7 +70,7 @@ missing lookup rows remain inputs to the decisions.
 | `replacementLineFields`, `replacementAttributions`                          | Replaced Expense notes, date, future, costType, trade, projectId, spendingCategoryId and bookingTransactionCode; accepted line title, seller, minor cost and role; resolved per-role allocation party, key and cents. Only principal lines inherit Project/category; every line retains the other aggregate fields.                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `duplicateSourceOrderReplay`, `duplicateSourceOrderRefusal`, `pairLines`    | EntityIdentity id/mergedIntoId and the survivor AuditLog convergence receipt; both live Purchases' vendorId, vendorAccountId, orderId, normalized order key and date; linked Email mailbox/thread identities; accepted duplicate source-order existence; financial source-claim existence; complete Expense id, title, costMinor, lineKind, Product, Project, quantity, economicRole, attribution and carried booking/category/trade fields on both Purchases.                                                                                                                                                                                                                                                              |
 | `convergenceAccountAvailable`, `financialConvergenceRefusal`                | Live transaction status, kind, amountMinor and ledgerTransferId; resolved dated funding party, account owner, actor member, primary holder, authorized-user periods and payment window; source refs; complete live allocations; accepted Purchase/Vendor identities; settlement conflicts; exact stored/current booking and lineage fingerprints. Load stages precede their corresponding decisions and preserve the existing write/lock sequence.                                                                                                                                                                                                                                                                          |
-| `spendingCategoryForDiscovery`                                              | Live SpendingCategory id, shortcode and deletedAt; explicit category and history-review intent; advice confidence/conflict; every Vendor category-history result; refund original's live Expense id, costMinor, lineKind, future and economicRole plus each effective category.                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `spendingCategoryForDiscovery`                                              | Live SpendingCategory id, shortcode and deletedAt of the member's explicit category choice, including a miss; refund original's live Expense id, costMinor, lineKind, future and economicRole plus each effective category.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 ## Statement booking
 
@@ -205,14 +205,18 @@ purchase-event evidence or decisions and the reconciler.
 ### Categories and Vendors
 
 Clean new spending keeps the transaction-kind agreement, identity, ownership and
-money checks. Missing, uncertain or conflicting category advice does not block
-otherwise-supported booking: the aggregate Expense stays Uncategorized and its
-missing effective category enters the shared Work queue. A booking's category
-comes from a member's reviewed choice, a refund's identified original Purchase,
-or the resolved Vendor's default category; otherwise the Expense is
-Uncategorized. The model proposes no category per charge. Explicit reviewed
-category choices still refuse deleted categories or unacknowledged conflicts.
-Category history is optional and there is no amount cap.
+money checks. A spending category never holds otherwise-supported booking: a
+charge whose category is absent, uncertain or a retired default books its
+aggregate Expense with no category override. It reports under its Vendor's
+live default category when one resolves; otherwise it reports as Uncategorized
+and its missing effective category stays in the shared Work queue until a
+member categorizes it. No confidence level makes a guessed category trusted: the model
+proposes no category per charge and a guess is never stored. The effective
+category comes from a member's reviewed choice, a refund's identified original
+Purchase, or the resolved Vendor's live default category; otherwise the Expense
+is Uncategorized. Only the member's reviewed choice is stored, and a deleted one
+refuses. Every other hold still blocks on its own. Category history is optional
+and there is no amount cap.
 
 The provider category stays verbatim evidence. Vendor name/alias resolution
 runs first; an unresolved merchant may propose a supported cleaned business
@@ -231,8 +235,8 @@ string as an alias through the Vendor entity update, appending to member
 aliases. This is the bar that creates a new Vendor, and the same vetoes apply:
 person, P2P and processor judgments, competing names, historical Vendors,
 ambiguity and a merchant-history contradiction for that raw string. A new
-Vendor is created only at its first booking. A member may explicitly choose an existing Vendor
-and acknowledge conflicting category history while correcting a held booking.
+Vendor is created only at its first booking. A member may explicitly choose an
+existing Vendor while correcting a held booking.
 Reviewed category and new business-name choices are kept separately from model
 advice. Booking corrections use the server's retained advice and explicit
 reviewed fields; clients cannot submit replacement model evidence.
@@ -1422,8 +1426,9 @@ Choose cost type from what was purchased: a membership service uses `services`,
 even when the Vendor usually sells goods. Vendor-default spending categories
 are suggestions, not evidence of the purchase's purpose. Resolve category IDs
 against live records before previewing; a merged category's successor need not
-fit the purchase. When category is uncertain, preserve supported booking under
-the member's uncategorized-booking policy rather than inventing a category.
+fit the purchase. When category is uncertain, book without one so the Expense
+reports as Uncategorized and is categorized later; never pass a low-confidence
+category.
 
 Keep issuer benefit credits separate from purchase charges. Equal amounts,
 nearby dates and a membership benefit do not alone prove a credit allocation or
