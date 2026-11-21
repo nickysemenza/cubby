@@ -25,8 +25,7 @@ import {
   sourceOccurrenceHasUnresolvedHistory,
   sourceHistoricalTransactionRows,
   sourceOccurrencesWithUnresolvedHistory,
-  sourceObservationHistoricalLinks,
-  sourceObservationsWithHistoricalLinks,
+  sourcePopulationHistory,
   sourcePageHistory,
 } from "~/server/db/computed/source-occurrence-history-sql";
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -124,13 +123,7 @@ const sourceObservationRead = (
   const matchStateOnly = scope === "matchState";
   const history =
     observationIds === undefined
-      ? {
-          relations: sql``,
-          unresolved: sourceOccurrencesWithUnresolvedHistory,
-          links: matchStateOnly
-            ? sourceObservationsWithHistoricalLinks
-            : sourceObservationHistoricalLinks,
-        }
+      ? sourcePopulationHistory(matchStateOnly)
       : sourcePageHistory(observationIds);
   const evidence = matchStateOnly
     ? sql`history."observationId" IS NOT NULL AS "hasHistory"`

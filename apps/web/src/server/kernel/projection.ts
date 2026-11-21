@@ -73,6 +73,16 @@ function recordScopes(capability: MachineryCapability, id: SQL): SQL {
   return sql.join(parts, sql` UNION ALL `);
 }
 
+/**
+ * One scope's ScopeState row, fenced like the ScopeDirty lookup: the keys are
+ * known, and an unfenced join lets a correlated read hash all of ScopeState.
+ */
+const scopeState = (columns: SQL) => sql`LEFT JOIN LATERAL (
+        SELECT ${columns} FROM "ScopeState" state
+        WHERE state."scopeKind" = scopes.kind AND state."scopeKey" = scopes.key
+        OFFSET 0
+      ) s ON true`;
+
 /** The record's stage as SQL text, for list filters and sorts. `id` is the row's id column. */
 export function machineryStageSql(
   capability: MachineryCapability,
@@ -86,7 +96,7 @@ export function machineryStageSql(
         (d."claimToken" IS NOT NULL AND d."claimDeadline" > now()) AS live,
         d."scopeKind" IS NOT NULL AS dirty
       FROM scopes
-      LEFT JOIN "ScopeState" s ON s."scopeKind" = scopes.kind AND s."scopeKey" = scopes.key
+      ${scopeState(sql`state.stage`)}
       -- The scope keys are already known. Fence the lookup so a correlated
       -- stage read cannot scan and hash the whole dirty queue for each record.
       LEFT JOIN LATERAL (
@@ -116,7 +126,7 @@ export function machineryActorSql(
   return sql`(
     WITH scopes AS (${scopes})
     SELECT s."nextActor" FROM scopes
-    JOIN "ScopeState" s ON s."scopeKind" = scopes.kind AND s."scopeKey" = scopes.key
+    ${scopeState(sql`state."nextActor"`)}
     WHERE s."nextActor" IS NOT NULL ORDER BY ${SCOPE_ORDER} LIMIT 1)`;
 }
 
@@ -196,13 +206,13 @@ export async function loadMachineryRows(
       SELECT "scopeKind" AS kind,
         percentile_cont(0.5) WITHIN GROUP (ORDER BY "durationMs") AS median, count(*) AS n
       FROM "ScopeState" WHERE "durationMs" IS NOT NULL
-        AND "scopeKind" IN (SELECT DISTINCT kind FROM scopes)
+        AND "scopeKind" IN (SELECT DISTINCT scopes.kind FROM scopes JOIN queue ON queue.kind = scopes.kind AND queue.key = scopes.key)
       GROUP BY "scopeKind"
     ), joined AS (
       SELECT scopes.*, s.stage, s."nextActor", s."firstGap", s.inputs, queue.position, queue.attempts,
         coalesce(queue.live, false) AS live, medians.median, medians.n
       FROM scopes
-      LEFT JOIN "ScopeState" s ON s."scopeKind" = scopes.kind AND s."scopeKey" = scopes.key
+      ${scopeState(sql`state.stage, state."nextActor", state."firstGap", state.inputs`)}
       LEFT JOIN queue ON queue.kind = scopes.kind AND queue.key = scopes.key
       LEFT JOIN medians ON medians.kind = scopes.kind
     )

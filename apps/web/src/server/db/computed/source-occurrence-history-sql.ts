@@ -48,12 +48,14 @@ export const sourceHistoricalTransactionRows = (
 
 /* oxlint-enable anti-slop/no-unsafe-sql-array-interpolation */
 
+const ALIASES = sql`"FinancialEvidenceAlias"`;
+
 /** Live binding edges, materialized before sibling expansion by the read projection. */
-const directHistoricalEvidence = sql`
+const directHistoricalEvidence = (aliases: SQL) => sql`
   SELECT DISTINCT evidence."observationId", evidence."occurrenceId",
     binding."historicalTransactionId", historical.shortcode AS code
-  FROM "FinancialEvidenceAlias" evidence
-  JOIN "FinancialEvidenceAlias" binding ON binding.source=evidence.source AND binding.value=evidence.value AND ${notDeleted("binding")}
+  FROM ${aliases} evidence
+  JOIN ${aliases} binding ON binding.source=evidence.source AND binding.value=evidence.value AND ${notDeleted("binding")}
   JOIN "FinancialTransaction" historical ON historical.id=binding."historicalTransactionId" AND ${notDeleted("historical")}`;
 
 /**
@@ -70,38 +72,37 @@ const unresolvedFrom = (evidence: SQL): SQL => sql`(
 
 /** Same negative ownership fence as the point check, evaluated once for a read. */
 export const sourceOccurrencesWithUnresolvedHistory = unresolvedFrom(
-  directHistoricalEvidence,
+  directHistoricalEvidence(ALIASES),
 );
 
 const siblingHistoryKeys = (columns: SQL) => sql`
     SELECT sibling.source, sibling.value${columns}
-    FROM "FinancialEvidenceAlias" sibling
-    JOIN evidence_history evidence ON evidence."observationId"=sibling."observationId"
+    FROM source_aliases sibling
+    JOIN source_evidence_history evidence ON evidence."observationId"=sibling."observationId"
     WHERE sibling."observationId" IS NOT NULL
     UNION
     SELECT sibling.source, sibling.value${columns}
-    FROM "FinancialEvidenceAlias" sibling
-    JOIN evidence_history evidence ON evidence."occurrenceId"=sibling."occurrenceId"
+    FROM source_aliases sibling
+    JOIN source_evidence_history evidence ON evidence."occurrenceId"=sibling."occurrenceId"
     WHERE sibling."observationId" IS NOT NULL AND sibling."occurrenceId" IS NOT NULL
 `;
 
 const observationsForHistoryKeys = (columns: SQL) => sql`
     -- includes-deleted: retained alias tombstones stay in presentation history; map keys before expansion.
     SELECT observed."observationId"${columns}
-    FROM "FinancialEvidenceAlias" observed
+    FROM source_aliases observed
     JOIN history_keys keys ON keys.source=observed.source AND keys.value=observed.value
     WHERE observed."observationId" IS NOT NULL
     UNION
     SELECT record.id${columns}
-    FROM "SourceTransactionRecord" record
-    JOIN "FinancialEvidenceAlias" observed ON observed."occurrenceId"=record."occurrenceId"
+    FROM source_records record
+    JOIN source_aliases observed ON observed."occurrenceId"=record."occurrenceId"
     JOIN history_keys keys ON keys.source=observed.source AND keys.value=observed.value
 `;
 
 /** Whole-list history retains all roots and all sibling evidence. */
-export const sourceObservationHistoricalLinks = sql`(
-  WITH evidence_history AS MATERIALIZED (${directHistoricalEvidence}),
-  key_history AS MATERIALIZED (${siblingHistoryKeys(sql`, evidence."historicalTransactionId", evidence.code`)}),
+const historicalLinks = sql`(
+  WITH key_history AS MATERIALIZED (${siblingHistoryKeys(sql`, evidence."historicalTransactionId", evidence.code`)}),
   history_keys AS MATERIALIZED (
     SELECT DISTINCT source, value FROM key_history
   ),
@@ -115,11 +116,32 @@ export const sourceObservationHistoricalLinks = sql`(
 )`;
 
 /** Match-state grouping needs the same sibling reachability, without link arrays. */
-export const sourceObservationsWithHistoricalLinks = sql`(
-  WITH evidence_history AS MATERIALIZED (${directHistoricalEvidence}),
-  history_keys AS MATERIALIZED (${siblingHistoryKeys(sql``)})
+const historicalLinkPresence = sql`(
+  WITH history_keys AS MATERIALIZED (${siblingHistoryKeys(sql``)})
   ${observationsForHistoryKeys(sql``)}
 )`;
+
+/**
+ * Whole-list history for every observation. It reads the evidence aliases and
+ * observation owners once, narrowed to the columns history joins on, and joins
+ * them by hash: probing the wide alias heap or the observation index per
+ * binding and per key is random I/O the household's alias volume cannot
+ * afford. `presence` returns observation ids with history instead of codes.
+ */
+export const sourcePopulationHistory = (
+  presence: boolean,
+): SourcePageHistory => ({
+  relations: sql`WITH source_aliases AS MATERIALIZED (
+    -- includes-deleted: tombstoned aliases stay presentation bridges; bindings filter their own.
+    SELECT source, value, "observationId", "occurrenceId", "historicalTransactionId", "deletedAt"
+    FROM "FinancialEvidenceAlias"
+  ), source_records AS MATERIALIZED (
+    -- includes-deleted: tombstoned observations keep their occurrence keys in presentation history.
+    SELECT id, "occurrenceId" FROM "SourceTransactionRecord"
+  ), source_evidence_history AS MATERIALIZED (${directHistoricalEvidence(sql`source_aliases`)})`,
+  unresolved: unresolvedFrom(sql`SELECT * FROM source_evidence_history`),
+  links: presence ? historicalLinkPresence : historicalLinks,
+});
 
 /** The fragments share CTE scope and must be emitted in one statement. */
 interface SourcePageHistory {
