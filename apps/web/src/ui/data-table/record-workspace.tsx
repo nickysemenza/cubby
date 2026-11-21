@@ -223,8 +223,8 @@ interface Cursor {
 
 /**
  * The record page's keys: J/K move a row cursor through the body's rows, Enter
- * opens the row, H/L fold and unfold its section, W widens it, 1-9 reach the
- * Needs you items and [ ] step to the neighbouring record. A key that belongs
+ * opens the row, H/L fold and unfold its section, W widens it, E edits the
+ * record, 1-9 reach the Needs you items and [ ] step to the neighbouring record. A key that belongs
  * to a field, a menu or a dialog is left alone.
  */
 function useRecordKeys(
@@ -348,6 +348,14 @@ function useRecordKeys(
           target.focus();
           return true;
         }
+        if (key === "e") {
+          const edit = root.querySelector<HTMLElement>(
+            '[data-record-commands] [aria-keyshortcuts="E"]',
+          );
+          if (!edit) return false;
+          edit.click();
+          return true;
+        }
         if (key === "[" || key === "]") {
           const steps = root.querySelectorAll<HTMLButtonElement>(
             "[data-record-stepper] button",
@@ -423,6 +431,9 @@ function HintLine({
         ) : null}
         <span>
           <Key>↵</Key> open
+        </span>
+        <span>
+          <Key>E</Key> edit
         </span>
         {needs ? (
           <span>

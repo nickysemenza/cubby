@@ -881,6 +881,8 @@ function FullEntityDetail<E extends GenericDetailEntity>({
     primary: editable ? (
       <DetailEditAction
         aria-label={`Edit ${singular}`}
+        aria-keyshortcuts="E"
+        title="Edit (E)"
         onClick={() => setEditing(true)}
       />
     ) : undefined,
