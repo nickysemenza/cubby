@@ -107,10 +107,17 @@ const manualHistory = defineReadIndex(manualEntry, {
       ? [`${p.accountId}:${p.merchant.trim().toLowerCase()}`]
       : [];
   },
-  where: (
-    values,
-  ) => sql`EXISTS (SELECT 1 FROM jsonb_to_recordset(${JSON.stringify(values.map((value) => ({ account: value.split(":")[0], merchant: value.slice(value.indexOf(":") + 1) })))}::jsonb) wanted(account text,merchant text)
-    WHERE ${manualEntry.entity}=${"financialTransaction"} AND ${manualEntry.payload}->>'accountId'=wanted.account AND lower(trim(${manualEntry.payload}->>'merchant'))=wanted.merchant)`,
+  where: (values) => {
+    const account = sql`${manualEntry.payload}->>'accountId'`;
+    const merchant = sql`lower(trim(${manualEntry.payload}->>'merchant'))`;
+    // Fixed-width index keys narrow the lookup. Equality still checks the original values.
+    return sql`EXISTS (
+      SELECT 1 FROM jsonb_to_recordset(${JSON.stringify(values.map((value) => ({ account: value.split(":")[0], merchant: value.slice(value.indexOf(":") + 1) })))}::jsonb) wanted(account text,merchant text)
+      WHERE ${manualEntry.entity}=${"financialTransaction"}
+        AND md5(${account})=md5(wanted.account) AND md5(${merchant})=md5(wanted.merchant)
+        AND ${account}=wanted.account AND ${merchant}=wanted.merchant
+    )`;
+  },
 });
 
 type Account = typeof financialAccount.$inferSelect & {

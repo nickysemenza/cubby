@@ -1173,7 +1173,10 @@ cleared is never superseded automatically. Any other group keeps its
 
 Evidence mutations dirty their keyed statement scopes in the same transaction.
 The kernel reconciles each scope against retained Answers and independent member
-Decisions. Every charge shows its stage, gaps and provenance; Work exposes due,
+Decisions. Bank-event history reads use a fixed-width index on account and
+normalized merchant, then check both exact values on financial ManualEntry
+observations under the kernel revision fence. Every charge shows its stage,
+gaps and provenance. Work exposes due,
 claimed and exhausted scopes and Asks with Retry and raw failures. Statement
 reconciliation uses no member-started Sweep or label-page booking path. The
 member-started field Sweep evaluates declared fields over its selected population.
