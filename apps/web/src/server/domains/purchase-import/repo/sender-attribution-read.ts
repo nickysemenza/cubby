@@ -1,4 +1,3 @@
-import { emailLinkEvidenceKind } from "@cubby/schemas/email-fields";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { SenderAttribution } from "@cubby/schemas/mail-coverage";
 import {
@@ -14,8 +13,10 @@ import { textArrayParam } from "~/server/db/helpers/query";
 import type { RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { email, purchase, vendor } from "~/server/db/retained-tables";
-import { emailPurchaseEvidenceSql } from "~/server/domains/email/repo/email-purchase-links";
-import { emailSourceClaimCandidateSql } from "~/server/domains/email/repo/email-sql";
+import {
+  emailAcceptedEvidenceSql,
+  emailSourceClaimCandidateSql,
+} from "~/server/domains/email/repo/email-sql";
 type Db = Database | DrizzleTransaction;
 const normalizedSender = sql<
   string | null
@@ -72,8 +73,8 @@ export async function readSenderAttributions(
       })
       .from(email)
       .innerJoin(
-        sql`LATERAL (${emailPurchaseEvidenceSql()}) proof`,
-        sql`proof.kind = ${emailLinkEvidenceKind.enum.accepted} AND NOT proof.changed`,
+        sql`LATERAL (${emailAcceptedEvidenceSql()}) proof`,
+        sql`NOT proof.changed`,
       )
       .innerJoin(
         purchase,
