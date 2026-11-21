@@ -50,6 +50,8 @@ export async function renewScopeClaims(
     WHERE d."scopeKind" = r.kind AND d."scopeKey" = r.key AND d."claimToken" = r.token
       AND d."claimDeadline" > now()`);
 }
+/** The `lastError` prefix of a dirty scope no reconciler in its Worker could run. */
+export const UNREGISTERED_RECONCILER = "Unregistered reconciler: ";
 /** Non-transient failures before a dirty scope is Stuck. */
 export const MAX_SCOPE_ATTEMPTS = 5;
 /** Consecutive `seq`/`rev` conflicts before a scope runs locked. */
@@ -696,16 +698,24 @@ export const nextWakeSql = (registry?: KernelRegistry): SQL => sql`(
         ${registry ? sql`AND name = ANY(${textArrayParam([...registry.passes.keys()])})` : sql``})
   )::timestamp)`;
 
-/** Retain orphaned work for inspection without spinning the queue on unclaimable rows. */
+/**
+ * Retain orphaned work for inspection without spinning the queue on
+ * unclaimable rows. A dirty scope of a kind this runtime has no reconciler for
+ * is reported Stuck once, through ScopeState, without spending attempts:
+ * during a deploy the previous Worker meets scopes queued for the next one's
+ * reconcilers, which must stay claimable once that Worker runs. Claims and the
+ * next wake already skip unregistered kinds.
+ */
 export async function stopUnregisteredWork(
   db: Database,
   registry: KernelRegistry,
 ): Promise<void> {
   await repositoryQueries(db).execute(sql`
     WITH scopes AS (
-      UPDATE "ScopeDirty" SET attempts = ${MAX_SCOPE_ATTEMPTS}, "claimToken" = NULL, "claimDeadline" = NULL,
-        "lastError" = 'Unregistered reconciler: ' || "scopeKind"
+      UPDATE "ScopeDirty" SET "claimToken" = NULL, "claimDeadline" = NULL,
+        "lastError" = ${UNREGISTERED_RECONCILER} || "scopeKind"
       WHERE NOT ("scopeKind" = ANY(${textArrayParam([...registry.reconcilers.keys()])})) AND attempts < ${MAX_SCOPE_ATTEMPTS}
+        AND "lastError" IS DISTINCT FROM ${UNREGISTERED_RECONCILER} || "scopeKind"
         AND ("claimToken" IS NULL OR "claimDeadline" <= now()) RETURNING "scopeKind", "scopeKey", "lastError"
     ), asks AS (
       UPDATE "Ask" SET attempts = "maxAttempts", "lastError" = 'Unregistered Ask kind: ' || feature,

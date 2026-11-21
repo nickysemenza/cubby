@@ -1,0 +1,56 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "4a825429-90fd-4d49-be3d-d06d860134c4",
+  "prevIds": [
+    "02ea6523-a02e-4d80-9508-14b45cee408b"
+  ],
+  "footprints": [
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "Decision",
+        "Decision_link_event_idx"
+      ],
+      "writes": [
+        "s|idx|public.Decision_link_event_idx",
+        "n|idx|public.Decision_link_event_idx",
+        "e|idx|public.Decision_link_event_idx",
+        "n|rel|public.Decision_link_event_idx"
+      ],
+      "reads": [
+        "n|tbl|public.Decision",
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Decision",
+        "name": "Decision_link_event_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "(\"value\"->>'eventId')",
+            "isExpression": true,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": "\"field\" LIKE 'link:%'",
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    }
+  ]
+}

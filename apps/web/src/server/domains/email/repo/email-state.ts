@@ -18,6 +18,7 @@ import { z } from "zod";
 
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { textArrayParam } from "~/server/db/helpers/array-param";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { decision } from "~/server/db/kernel-schema";
 import { recordKey } from "~/server/db/kernel-schema";
 import { emailReadSnapshot } from "~/server/db/read-snapshot-schema";
@@ -37,8 +38,8 @@ import {
 } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import {
-  emailLinkDecisionsRead,
-  emailStateLinkDecisionsSql,
+  emailLinkDecisionsForEmailsSql,
+  emailLinkDecisionsReadForEmails,
 } from "~/server/domains/email/repo/email-decision-sql";
 import {
   foldScopedEmailPurchaseFacts,
@@ -312,27 +313,29 @@ export const emailState = defineReconciler<Input>({
         reads.select(
           emailClassificationObservation,
           [],
-          sql`${emailClassificationObservation.emailId}::text = ANY(${textArrayParam(keys)})`,
+          sql`${emailClassificationObservation.emailId} = ANY(${uuidArrayParam(keys)})`,
         ),
         reads.select(
           sourceOrderObservation,
           [],
-          sql`${sourceOrderObservation.emailId}::text = ANY(${textArrayParam(keys)})`,
+          sql`${sourceOrderObservation.emailId} = ANY(${uuidArrayParam(keys)})`,
         ),
         reads.select(
           orderMailEvent,
           [],
-          sql`${orderMailEvent.orderMailId}::text = ANY(${textArrayParam(originals)})`,
+          sql`${orderMailEvent.orderMailId} = ANY(${uuidArrayParam(originals)})`,
         ),
         reads.select(
           emailReadSnapshot,
           [],
-          sql`${emailReadSnapshot.entityId}::text = ANY(${textArrayParam(keys)})`,
+          sql`${emailReadSnapshot.entityId} = ANY(${uuidArrayParam(keys)})`,
         ),
+        // Matches RunOperation_mail_outcome_email_idx; outcomeFor reads only these rows.
         reads.select(
           runOperation,
           [],
-          sql`${runOperation.result}->${"target"}->>'entityId' = ANY(${textArrayParam(keys)})`,
+          sql`${runOperation.kind} = 'target_outcome' AND ${runOperation.result}->'mailOutcome' IS NOT NULL
+            AND ${runOperation.result} #>> '{target,entityId}' = ANY(${textArrayParam(keys)})`,
         ),
         reads.rows(
           run,
@@ -398,7 +401,7 @@ export const emailState = defineReconciler<Input>({
           purchaseId: string;
           eventId: string;
         }>(sql`
-        WITH link_decisions AS MATERIALIZED ${emailStateLinkDecisionsSql}
+        WITH link_decisions AS MATERIALIZED ${emailLinkDecisionsForEmailsSql(uuidArrayParam(keys))}
         SELECT "Email".id AS "emailId", matched."purchaseId", matched."eventId"
         FROM "Email" CROSS JOIN LATERAL (${emailSuggestedEvidenceSql("respect", undefined, sql`link_decisions`)}) matched
         WHERE "Email".id=ANY(${textArrayParam(keys)}::uuid[])`);
@@ -446,12 +449,13 @@ export const emailState = defineReconciler<Input>({
     ];
     // Email rows, Purchase roster, subject decisions and redirect rows were
     // fenced before this shared projection. It adds no untracked authority.
+    const scopedLinks = emailLinkDecisionsReadForEmails(uuidArrayParam(keys));
     const links = await reads.prepare([], (database) =>
       repositoryQueries(database)
         .select()
-        .from(emailLinkDecisionsRead)
+        .from(scopedLinks)
         .where(
-          sql`${emailLinkDecisionsRead.emailId}=ANY(${textArrayParam(keys)}::uuid[])`,
+          sql`${scopedLinks.emailId}=ANY(${textArrayParam(keys)}::uuid[])`,
         ),
     );
     const at = new Date();

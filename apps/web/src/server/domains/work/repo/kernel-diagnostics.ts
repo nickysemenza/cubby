@@ -9,7 +9,10 @@ import type { z } from "zod";
 import type { Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
-import { MAX_SCOPE_ATTEMPTS } from "~/server/kernel/claim";
+import {
+  MAX_SCOPE_ATTEMPTS,
+  UNREGISTERED_RECONCILER,
+} from "~/server/kernel/claim";
 import { machineryErrorText } from "~/server/kernel/error-presentation";
 import { productionKernel } from "~/server/kernel/kernel";
 import { isoText } from "~/server/kernel/sql-time";
@@ -21,9 +24,12 @@ export async function readKernelDiagnostics(
   viewer: ActorContext,
 ) {
   const q = repositoryQueries(db);
+  // A scope a Worker reported unregistered keeps its attempts so the next
+  // Worker can claim it; until one does, it is Stuck with that report.
   const rows = sql`SELECT ${"scope"}::text AS type, "scopeKind" AS kind, "scopeKey" AS key,
       NULL::uuid AS id, "availableAt", "createdAt", "updatedAt", "claimToken", "claimDeadline", attempts,
-      ${MAX_SCOPE_ATTEMPTS}::int AS max, "lastError", false AS unknown
+      CASE WHEN "lastError" = ${UNREGISTERED_RECONCILER} || "scopeKind" THEN 0 ELSE ${MAX_SCOPE_ATTEMPTS} END::int AS max,
+      "lastError", false AS unknown
     FROM "ScopeDirty"
     UNION ALL SELECT ${"ask"}, feature, "inputHash", id, "availableAt", "createdAt", "updatedAt", "claimToken", "claimDeadline", attempts, "maxAttempts", "lastError", state=${ASK.unknown}
     FROM "Ask" WHERE state<>${ASK.answered} AND "cancelledAt" IS NULL
