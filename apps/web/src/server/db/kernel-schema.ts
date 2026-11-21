@@ -362,6 +362,11 @@ export const scopeState = pgTable(
     }),
     index("ScopeState_stage_idx").on(table.stage, table.nextActor),
     index("ScopeState_rules_idx").on(table.scopeKind, table.rules),
+    // List rows probe gap containment per record (`memberActionScopes`); a
+    // pending list would be rescanned by every probe.
+    index("ScopeState_gaps_idx")
+      .using("gin", sql`${table.gaps} jsonb_path_ops`)
+      .with({ fastupdate: false }),
     enumCheck("ScopeState_stage_check", table.stage, kernelStage),
   ],
 );

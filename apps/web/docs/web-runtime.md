@@ -521,7 +521,7 @@ field-readiness tracking, enrichment patching or separate summary request.
 
 ### Machinery summaries
 
-The canonical projection requests `machinery` with every roster page. A `bind.ids` loader resolves the capability once and calls `loadMachineryRows` once for the selected IDs. Count reads and empty pages load no binding. Cells render that summary without record queries. `machineryStage` and `machineryActor` are declared derived list fields; the scaffold prepares their capability and compiles their filters and sorts with `machineryStageSql` and `machineryActorSql`.
+The canonical projection requests `machinery` with every roster page. A `bind.ids` loader resolves the capability once and calls `loadMachineryRows` once for the selected IDs. Count reads and empty pages load no binding. Cells render that summary without record queries. `machineryStage` and `machineryActor` are declared derived list fields; the scaffold prepares their capability and compiles their filters and sorts with `machineryStageSql` and `machineryActorSql`. A record's member-gap scopes come from `memberActionScopes`, a containment probe on `ScopeState_gaps_idx`; a list row never walks every scope's gaps.
 
 ### Scope, paging and virtualization
 

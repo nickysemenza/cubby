@@ -48,6 +48,7 @@ import type { ColumnValues, Json, ScopeRef } from "./define";
 import { machineryErrorText as rawText } from "./error-presentation";
 import { resolveForRead } from "./identity";
 import { recordSubject } from "./keys";
+import { memberActionScopes } from "./projection";
 import { idColumn, KernelContractError } from "./reads";
 import type { KernelRegistry } from "./registry";
 import { isoText } from "./sql-time";
@@ -93,11 +94,7 @@ async function recordScopes(
     FROM "RecordKey" WHERE entity = ${entity} AND "entityId" = ${id}::uuid
       AND "mergedAt" IS NULL
     UNION
-    SELECT DISTINCT s."scopeKind",s."scopeKey",false FROM "ScopeState" s
-    CROSS JOIN LATERAL jsonb_array_elements(s.gaps) gap
-    CROSS JOIN LATERAL jsonb_array_elements(coalesce(gap->'actions','[]'::jsonb)) action
-    WHERE s."mergedIntoKey" IS NULL AND gap->>'actor'='you'
-      AND (action->>'subject'=${entity} || ':' || ${id}::text OR action->>${"field"}=${entity} || ':' || ${id}::text)
+    SELECT member.kind, member.key, false FROM (${memberActionScopes(entity, sql`${id}`)}) member
     ORDER BY kind, key`);
   const scopes: ScopeRef[] = [];
   if (!field)

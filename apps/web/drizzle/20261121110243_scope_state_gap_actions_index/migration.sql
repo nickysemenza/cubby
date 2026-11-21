@@ -1,0 +1,1 @@
+CREATE INDEX "ScopeState_gaps_idx" ON "ScopeState" USING gin ("gaps" jsonb_path_ops) WITH (fastupdate=false);

@@ -1008,7 +1008,7 @@ describe("grouped SQL metric coverage and calendar boundaries", () => {
           value: sql`CASE WHEN ${productTable.stockTracked} THEN 0 ELSE null END`,
         },
       ],
-      order: [sql`${group.key} asc nulls last`, sql`${productTable.id} asc`],
+      order: [sql`${productTable.id} asc`],
       limit: 1,
       offset: 0,
     });

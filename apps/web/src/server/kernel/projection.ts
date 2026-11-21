@@ -26,17 +26,31 @@ import { STAGE } from "./vocab";
 
 const ETA_MIN_OBSERVATIONS = 5;
 
+/**
+ * `(kind, key)` of live scopes whose member gap offers an action naming the
+ * record as subject or field. The containment tests probe `ScopeState_gaps_idx`
+ * per record; the element walk keeps the exact match on the few rows found.
+ */
+export function memberActionScopes(entity: string, id: SQL): SQL {
+  const ref = sql`${entity}::text || ':' || ${id}::text`;
+  const naming = (key: "subject" | "field") =>
+    sql`s.gaps @> jsonb_build_array(jsonb_build_object('actions', jsonb_build_array(jsonb_build_object(${key}::text, ${ref}))))`;
+  return sql`SELECT s."scopeKind" AS kind, s."scopeKey" AS key FROM "ScopeState" s
+    WHERE s."mergedIntoKey" IS NULL AND (${naming("subject")} OR ${naming("field")})
+      AND EXISTS (SELECT 1 FROM jsonb_array_elements(s.gaps) gap
+        CROSS JOIN LATERAL jsonb_array_elements(coalesce(gap->'actions','[]'::jsonb)) action
+        WHERE gap->>'actor'='you' AND (action->>'subject'=${ref} OR action->>${"field"}=${ref}))`;
+}
+
 /** `(kind, key, ord)` rows of one record's scopes, in owning, fields, quality order. */
 function recordScopes(capability: MachineryCapability, id: SQL): SQL {
   const parts: SQL[] = [
     sql`SELECT rk."scopeKind" AS kind, rk."scopeKey" AS key, 0 AS ord FROM "RecordKey" rk
       WHERE rk.entity = ${capability.entity} AND rk."entityId" = ${id} AND rk."mergedAt" IS NULL`,
   ];
-  parts.push(sql`SELECT DISTINCT s."scopeKind",s."scopeKey",1 AS ord FROM "ScopeState" s
-    CROSS JOIN LATERAL jsonb_array_elements(s.gaps) gap
-    CROSS JOIN LATERAL jsonb_array_elements(coalesce(gap->'actions','[]'::jsonb)) action
-    WHERE s."mergedIntoKey" IS NULL AND gap->>'actor'='you'
-      AND (action->>'subject'=${capability.entity} || ':' || ${id}::text OR action->>${"field"}=${capability.entity} || ':' || ${id}::text)`);
+  parts.push(
+    sql`SELECT member.kind, member.key, 1 AS ord FROM (${memberActionScopes(capability.entity, id)}) member`,
+  );
   for (const [index, kind] of (capability.scopes ?? []).entries())
     parts.push(sql`SELECT ${kind}::text, ${id}::text, ${index + 1}`);
   if (capability.fields)

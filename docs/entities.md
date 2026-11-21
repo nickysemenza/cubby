@@ -2125,9 +2125,9 @@ Each key takes one shape:
   whose CASE yields nothing outside them (inventory `valuationStatus`, purchase `reconciliation`,
   product `quantityVarianceState`); a filter meaning several states picks them together. A value may
   be `{ value, set }`: `set` selects `("id", "value")` for the whole list and filters match `id IN
-  (SELECT "id" FROM set WHERE …)`, while sort and group read the per-row `value`, which must agree
-  row for row; a read binding supplies the projected value, and set-valued keys must be covered by
-  one. A filter's `value IN (…)` pushes into a set whose branches expose `value` from an indexed
+  (SELECT "id" FROM set WHERE …)` and group sections join `set` by owner once, while sort reads the
+  per-row `value`, which must agree row for row; a read binding supplies the projected value, and
+  set-valued keys must be covered by one. A filter's `value IN (…)` pushes into a set whose branches expose `value` from an indexed
   column (purchase `effectivePurchaser` reads only requested parties' candidates). A `text` value
   holding a shortcode backs a branded `idMulti` filter.
 - `{ predicate, reason }` is filter-only SQL passed the same way; `reason` says why it is not one row
