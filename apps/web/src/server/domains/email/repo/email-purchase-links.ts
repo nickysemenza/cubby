@@ -35,7 +35,10 @@ import { notDeleted } from "~/server/db/helpers/predicates";
 import { householdDaySqlText, uuidArrayParam } from "~/server/db/helpers/query";
 import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
-import { emailLinkDecisionsSql } from "~/server/domains/email/repo/email-decision-sql";
+import {
+  emailLinkDecisionsForEmailsSql,
+  emailLinkDecisionsSql,
+} from "~/server/domains/email/repo/email-decision-sql";
 import { emailAcceptedEvidenceSql } from "~/server/domains/email/repo/email-sql";
 import type { PageStoredMeta } from "~/server/generic/derived/repo/read-context";
 
@@ -175,6 +178,11 @@ export async function readExactOrderLinkCandidates(
             WHERE scoped."id" = ANY(${uuidArrayParam(scope.purchaseIds)}) AND scoped."orderId" IS NOT NULL)`
         : null;
   if (!scoped) return [];
+  // An Email scope's decisions all sit on its own subjects and events.
+  const decisions =
+    "emailIds" in scope
+      ? emailLinkDecisionsForEmailsSql(uuidArrayParam(scope.emailIds))
+      : emailLinkDecisionsSql;
   const result = await unwrapDb(db).execute(
     sql`
     SELECT "Email"."id" AS "emailId", original."id" AS "originalId", event."id" AS "eventId",
@@ -192,7 +200,7 @@ export async function readExactOrderLinkCandidates(
     LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND ${notDeleted(liveAccount)}
     -- A member's dismissal of this Email for the Purchase, on any of its events, wins.
     LEFT JOIN LATERAL (
-      SELECT 1 AS "found" FROM ${emailLinkDecisionsSql} decided
+      SELECT 1 AS "found" FROM ${decisions} decided
       INNER JOIN "OrderMailEvent" decided_event ON decided_event."id" = decided."eventId"
       WHERE decided_event."orderMailId" = original."id" AND decided."purchaseId" = p."id"
         AND decided."decision" = ${KIND.dismissed} AND decided.active
@@ -200,7 +208,7 @@ export async function readExactOrderLinkCandidates(
     ) dismissed ON true
     WHERE ${notDeleted("Email")} AND ${scoped}
       AND NOT EXISTS (
-        SELECT 1 FROM ${emailLinkDecisionsSql} decided
+        SELECT 1 FROM ${decisions} decided
         WHERE decided."eventId" = event."id" AND decided.active
       )
       AND NOT EXISTS (${emailAcceptedEvidenceSql()})

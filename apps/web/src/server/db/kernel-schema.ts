@@ -160,6 +160,10 @@ export const decision = pgTable(
       .where(
         sql`${table.value}#>>'{table}' = 'FinancialTransactionAllocation'`,
       ),
+    // An Email link decision's event pointer; Email-scoped link projections read by event.
+    index("Decision_link_event_idx")
+      .on(sql`(${table.value}->>'eventId')`)
+      .where(sql`${table.field} LIKE 'link:%'`),
     enumCheck("Decision_channel_check", table.channel, decisionChannel),
     enumCheck("Decision_kind_check", table.kind, decisionKind),
     enumCheck("Decision_actorKind_check", table.actorKind, decisionActorKind),
