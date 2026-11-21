@@ -50,6 +50,8 @@ export async function renewScopeClaims(
     WHERE d."scopeKind" = r.kind AND d."scopeKey" = r.key AND d."claimToken" = r.token
       AND d."claimDeadline" > now()`);
 }
+/** The `lastError` prefix of a dirty scope no reconciler in its Worker could run. */
+export const UNREGISTERED_RECONCILER = "Unregistered reconciler: ";
 /** Non-transient failures before a dirty scope is Stuck. */
 export const MAX_SCOPE_ATTEMPTS = 5;
 /** Consecutive `seq`/`rev` conflicts before a scope runs locked. */
@@ -711,9 +713,9 @@ export async function stopUnregisteredWork(
   await repositoryQueries(db).execute(sql`
     WITH scopes AS (
       UPDATE "ScopeDirty" SET "claimToken" = NULL, "claimDeadline" = NULL,
-        "lastError" = 'Unregistered reconciler: ' || "scopeKind"
+        "lastError" = ${UNREGISTERED_RECONCILER} || "scopeKind"
       WHERE NOT ("scopeKind" = ANY(${textArrayParam([...registry.reconcilers.keys()])})) AND attempts < ${MAX_SCOPE_ATTEMPTS}
-        AND "lastError" IS DISTINCT FROM 'Unregistered reconciler: ' || "scopeKind"
+        AND "lastError" IS DISTINCT FROM ${UNREGISTERED_RECONCILER} || "scopeKind"
         AND ("claimToken" IS NULL OR "claimDeadline" <= now()) RETURNING "scopeKind", "scopeKey", "lastError"
     ), asks AS (
       UPDATE "Ask" SET attempts = "maxAttempts", "lastError" = 'Unregistered Ask kind: ' || feature,

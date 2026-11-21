@@ -40,6 +40,7 @@ import { manualTransactionEvidence } from "~/server/domains/financial-transactio
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { cancelRunWork } from "~/server/domains/run/repo/run-execution";
+import { readWorkStatus } from "~/server/domains/work/service/work-status";
 import { findPgError } from "~/server/errors/db-errors";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { refusedBeforeSending } from "~/server/kernel/produce-ledger";
@@ -171,6 +172,14 @@ describe("evidence-facts kernel", () => {
         )
       ).rows,
     ).toEqual([{ attempts: 0 }]);
+    const status = await readWorkStatus(ctx.db, new Date(), ctx.actor);
+    expect(status.stuckCount).toBe(3);
+    expect(
+      status.stuck.find((entry) => entry.key === "synthetic.removed:scope"),
+    ).toMatchObject({
+      title: "Record reconciliation",
+      diagnostic: "Unregistered reconciler: synthetic.removed",
+    });
     expect(
       (
         await q.execute<{ attempts: number; lastError: string }>(
