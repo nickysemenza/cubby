@@ -15,17 +15,24 @@ type RecordPillSlots = {
   qualifier: boolean;
   /** The record's one declared fact. */
   fact: boolean;
+  /** Hold one line and truncate the title, for rows of aligned columns. */
+  oneLine: boolean;
 };
 
 const HOSTS = {
   /** Detail values and anything undeclared: what the reference already carries. */
-  default: { type: false, qualifier: true, fact: true },
+  default: { type: false, qualifier: true, fact: true, oneLine: false },
   /** A sentence or note: the pill must not outweigh the words around it. */
-  prose: { type: false, qualifier: false, fact: false },
-  /** Activity and lists that mix record types. */
-  mixed: { type: true, qualifier: true, fact: true },
+  prose: { type: false, qualifier: false, fact: false, oneLine: false },
+  /** Lists that mix record types. */
+  mixed: { type: true, qualifier: true, fact: true, oneLine: false },
+  /**
+   * Activity rows: the aligned shortcode column names the type and the mark
+   * carries the qualifier, so the pill adds only the fact.
+   */
+  feed: { type: false, qualifier: false, fact: true, oneLine: true },
   /** Rows whose columns or header already state the type and the facts. */
-  columns: { type: false, qualifier: false, fact: false },
+  columns: { type: false, qualifier: false, fact: false, oneLine: false },
 } as const satisfies Record<string, RecordPillSlots>;
 
 type RecordPillHostKind = keyof typeof HOSTS;
@@ -75,9 +82,12 @@ export function RecordPill({
   fact,
   state,
   replaced,
+  oneLine,
 }: {
   name: string;
   mark: ReactNode;
+  /** The host's rows align in columns, so the title truncates. */
+  oneLine?: boolean;
   /** The record type's shortcode prefix ("EXP"). */
   type?: string | null;
   /** A hierarchy path or the shared part of a title. */
@@ -88,7 +98,9 @@ export function RecordPill({
   /** The code this reference named before its record merged into this one. */
   replaced?: string | null;
 }) {
-  const dense = useDenseCell();
+  // A pill that carries a type or a fact is a row of slots: it holds one line
+  // and its title truncates, or the fact would stretch beside wrapped text.
+  const dense = useDenseCell() || Boolean(oneLine || type || fact);
   return (
     <span
       data-entity-pill=""
