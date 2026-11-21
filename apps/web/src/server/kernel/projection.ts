@@ -87,7 +87,14 @@ export function machineryStageSql(
         d."scopeKind" IS NOT NULL AS dirty
       FROM scopes
       LEFT JOIN "ScopeState" s ON s."scopeKind" = scopes.kind AND s."scopeKey" = scopes.key
-      LEFT JOIN "ScopeDirty" d ON d."scopeKind" = scopes.kind AND d."scopeKey" = scopes.key
+      -- The scope keys are already known. Fence the lookup so a correlated
+      -- stage read cannot scan and hash the whole dirty queue for each record.
+      LEFT JOIN LATERAL (
+        SELECT dirty."scopeKind", dirty.attempts, dirty."claimToken", dirty."claimDeadline"
+        FROM "ScopeDirty" dirty
+        WHERE dirty."scopeKind" = scopes.kind AND dirty."scopeKey" = scopes.key
+        OFFSET 0
+      ) d ON true
     )
     SELECT CASE
       WHEN EXISTS (SELECT 1 FROM "RecordKey" rk WHERE rk.entity = ${capability.entity}
