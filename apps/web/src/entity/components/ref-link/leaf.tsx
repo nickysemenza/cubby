@@ -418,8 +418,7 @@ export function AuditRefLink({
     <>
       {name ? (
         <>
-          {/* A feed mixes record types, so each pill names its own. */}
-          <RecordPillHost host="mixed">
+          <RecordPillHost host="feed">
             <EntityPill
               entity={entityKind}
               id={entityId}
@@ -447,7 +446,7 @@ export function AuditRefLink({
     "inline-flex min-h-11 min-w-0 items-center gap-2 text-sm font-medium text-primary sm:min-h-0",
     compact && "max-w-48 sm:max-w-72",
     layout === "row" &&
-      "grid w-full max-w-full grid-cols-1 justify-items-start gap-x-3 sm:grid-cols-[minmax(0,1fr)_7rem] sm:[&_[data-entity-pill]>span:last-child]:truncate",
+      "grid w-full max-w-full grid-cols-1 justify-items-start gap-x-3 sm:grid-cols-[minmax(0,1fr)_7rem]",
     classNameProp,
   );
 

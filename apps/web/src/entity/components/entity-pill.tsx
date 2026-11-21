@@ -59,6 +59,7 @@ export function EntityPill({
       fact={slots.fact ? fact : null}
       state={state}
       replaced={replaced}
+      oneLine={slots.oneLine}
       mark={
         <EntityIdentityMark
           entity={entity}
