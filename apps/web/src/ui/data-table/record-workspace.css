@@ -58,6 +58,28 @@
   box-shadow: inset 2px 0 0 var(--link);
 }
 
+/* A hosted native workspace leads with the record's sections (a Run's report
+   and timeline): identity first, then the sections, then the facts. */
+:root[data-hosted-workspace] .record-frame {
+  display: flex;
+  flex-direction: column;
+}
+:root[data-hosted-workspace]
+  :is(.record-rail, .record-rail-scroll, .record-rail-content) {
+  display: contents;
+}
+:root[data-hosted-workspace] [data-slot="record-identity"] {
+  padding: 0.5rem;
+}
+:root[data-hosted-workspace] .record-main {
+  order: 1;
+}
+:root[data-hosted-workspace] [data-record-facts] {
+  order: 2;
+  border-top: 1px solid var(--border);
+  padding: 0.5rem;
+}
+
 @media (min-width: 48rem) and (hover: hover) and (pointer: fine) {
   @container record (min-width: 50rem) {
     :root:not([data-hosted-workspace]) .record-frame {

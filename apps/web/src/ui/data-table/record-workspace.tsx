@@ -235,6 +235,8 @@ function useRecordKeys(
 ) {
   const [cursor, setCursor] = useState<Cursor | null>(null);
   const row = useRef<HTMLElement | null>(null);
+  // The section the cursor last sat in: H folds it away, and L needs it back.
+  const lastSection = useRef<string | undefined>(undefined);
   const latest = useRef({ controls, activeId });
   latest.current = { controls, activeId };
   useEffect(() => {
@@ -258,6 +260,7 @@ function useRecordKeys(
       next.setAttribute("data-row-cursor", "");
       next.scrollIntoView({ block: "nearest" });
       const section = next.closest<HTMLElement>("[data-detail-section]");
+      lastSection.current = section?.id;
       const peers = all.filter(
         (candidate) => candidate.closest("[data-detail-section]") === section,
       );
@@ -270,9 +273,23 @@ function useRecordKeys(
         total: peers.length,
       });
     };
-    const currentSection = () =>
-      row.current?.closest<HTMLElement>("[data-detail-section]")?.id ??
-      latest.current.activeId;
+    const currentSection = () => {
+      const id =
+        row.current?.closest<HTMLElement>("[data-detail-section]")?.id ??
+        lastSection.current ??
+        latest.current.activeId;
+      const target = id
+        ? root.querySelector<HTMLElement>(`.record-main #${CSS.escape(id)}`)
+        : null;
+      // The current index entry may be a group: act on its first section.
+      const section = target?.matches("[data-detail-section]")
+        ? target
+        : target?.querySelector<HTMLElement>(
+            "[data-detail-section]:not([hidden])",
+          );
+      lastSection.current = section?.id;
+      return section?.id;
+    };
     const onKeyDown = (event: KeyboardEvent) => {
       if (
         event.defaultPrevented ||
@@ -280,10 +297,8 @@ function useRecordKeys(
         event.ctrlKey ||
         event.altKey ||
         isEditableTarget(event.target) ||
-        // A dialog, menu or popover on top owns its keys.
-        document.querySelector(
-          "[role=dialog], [role=alertdialog], [role=menu], [role=listbox]",
-        )
+        // A modal on top owns its keys; a docked, non-modal panel does not.
+        document.querySelector('[aria-modal="true"], [role=alertdialog]')
       )
         return;
       const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
@@ -343,9 +358,8 @@ function useRecordKeys(
             root.querySelectorAll<HTMLElement>("[data-needs-item]")[
               Number(key) - 1
             ];
-          const target = item?.querySelector<HTMLElement>("a, button");
-          if (!target) return false;
-          target.focus();
+          if (!item) return false;
+          (item.querySelector<HTMLElement>("a, button") ?? item).focus();
           return true;
         }
         if (key === "e") {

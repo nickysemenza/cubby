@@ -82,7 +82,9 @@ function NeedsChip({
   return (
     <li
       data-needs-item
-      className="flex min-h-(--record-pill-height) max-w-full min-w-0 items-center gap-1.5 border border-border px-1.5 text-xs [&_a]:text-link [&_a]:hover:underline"
+      // The page's number keys land here when the item has no control.
+      tabIndex={-1}
+      className="flex min-h-(--record-pill-height) max-w-full min-w-0 items-center gap-1.5 border border-border px-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring [&_a]:text-link [&_a]:hover:underline"
     >
       {index < 9 ? (
         <span

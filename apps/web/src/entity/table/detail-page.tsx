@@ -244,7 +244,7 @@ export const DetailSections: FC<DetailSectionsProps> = ({
       groups={indexed}
       activityId={ACTIVITY_SECTION_ID}
       rail={
-        <div className="space-y-3">
+        <div className="record-rail-content space-y-3">
           {pageDetail?.identity}
           {facts}
         </div>
