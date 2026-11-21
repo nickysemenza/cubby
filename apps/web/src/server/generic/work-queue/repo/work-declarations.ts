@@ -203,6 +203,67 @@ export const gapPublicationRead = ({
   };
 };
 
+/** Share the publication join while allowing one record to meet both conditions. */
+export const selectWorkGapCandidates = (
+  db: Database,
+  source: Pick<WorkSource, "id" | "family" | "executor">,
+  {
+    table,
+    readGap,
+    where,
+    columns,
+    ctes,
+  }: {
+    table: PgTable;
+    readGap: NonNullable<ReturnType<typeof gapPublicationRead>>;
+    where: SQL | undefined;
+    columns: Omit<WorkCandidateColumns, "reason" | "reasonKeys">;
+    ctes?: WorkCandidates["ctes"];
+  },
+): WorkCandidates => {
+  const {
+    admission,
+    columns: gaps,
+    match,
+    missingColumns,
+    missingInputs,
+    publication,
+  } = readGap;
+  const incomplete = sql<boolean>`gap_input.input_incomplete`;
+  return {
+    ctes,
+    query: selectWorkCandidates(db, source, { ...columns, ...gaps })
+      .from(table)
+      .leftJoin(publication, match)
+      .where(and(where, admission)),
+    queryWithMissingInputs: selectWorkCandidates(
+      db,
+      source,
+      {
+        ...columns,
+        reason: sql`CASE WHEN ${incomplete} THEN ${missingColumns.reason}::text ELSE ${gaps.reason} END`,
+        reasonKeys: sql`CASE WHEN ${incomplete} THEN ARRAY[${sql.join(
+          missingColumns.reasonKeys.map((key) => sql`${key}`),
+          sql`, `,
+        )}]::text[] ELSE ${gaps.reasonKeys} END`,
+      },
+      incomplete,
+    )
+      .from(table)
+      .leftJoin(publication, match)
+      .innerJoin(
+        sql`LATERAL (
+          SELECT input_incomplete
+          FROM (VALUES (false, (${admission ?? sql`true`})), (true, (${missingInputs})))
+            gap_case(input_incomplete, eligible)
+          WHERE eligible
+        ) gap_input`,
+        sql`true`,
+      )
+      .where(where),
+  };
+};
+
 export const recordScope = (
   scope: WorkScope,
   shortcode: SQL,

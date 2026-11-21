@@ -16,6 +16,7 @@ import {
   gapDeclaration,
   gapPublicationRead,
   recordScope,
+  selectWorkGapCandidates,
 } from "~/server/generic/work-queue/repo/work-declarations";
 import {
   selectWorkCandidates,
@@ -77,8 +78,11 @@ export const emailWorkSources: WorkSource[] = [
         db,
         emailFiltersSchema.parse(readGap.filters),
       );
-      const candidates = (missingInputs: boolean) =>
-        selectWorkCandidates(db, declaration, {
+      return selectWorkGapCandidates(db, declaration, {
+        table: email,
+        readGap,
+        where: and(baseWhere, recordScope(scope, sql`${email.shortcode}`)),
+        columns: {
           entity: "email",
           id: sql`${email.shortcode}`,
           name: sql`coalesce("Email".subject, 'Email')`,
@@ -93,19 +97,8 @@ export const emailWorkSources: WorkSource[] = [
             WHEN ${readGap.failed("email_relevance_undecided")} THEN ${agent}
             WHEN ${readGap.failed("email_original_missing")} THEN ${agent}
             ELSE ${automatic} END`,
-          ...readGap.columns,
-          ...(missingInputs ? readGap.missingColumns : {}),
-        })
-          .from(email)
-          .leftJoin(readGap.publication, readGap.match)
-          .where(
-            and(
-              baseWhere,
-              missingInputs ? readGap.missingInputs : readGap.admission,
-              recordScope(scope, sql`${email.shortcode}`),
-            ),
-          );
-      return { query: candidates(false), missingInputs: candidates(true) };
+        },
+      });
     },
   },
   importGap,

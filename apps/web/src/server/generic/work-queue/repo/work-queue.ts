@@ -214,14 +214,18 @@ async function candidateUnion(
     ).values(),
   ];
   const queries: SQLWrapper[] = relations.length
-    ? relations.flatMap((candidates) => [
-        sql`SELECT candidate.*, false AS input_incomplete FROM (${candidates.query}) candidate`,
-        ...(includeIncomplete && candidates.missingInputs
-          ? [
-              sql`SELECT candidate.*, true AS input_incomplete FROM (${candidates.missingInputs}) candidate`,
-            ]
-          : []),
-      ])
+    ? relations.flatMap((candidates) =>
+        includeIncomplete && candidates.queryWithMissingInputs
+          ? [sql`${candidates.queryWithMissingInputs}`]
+          : [
+              sql`SELECT candidate.*, false AS input_incomplete FROM (${candidates.query}) candidate`,
+              ...(includeIncomplete && candidates.missingInputs
+                ? [
+                    sql`SELECT candidate.*, true AS input_incomplete FROM (${candidates.missingInputs}) candidate`,
+                  ]
+                : []),
+            ],
+      )
     : [
         sql`SELECT candidate.*, false AS input_incomplete FROM (${emptyWorkCandidates(db)}) candidate`,
       ];
