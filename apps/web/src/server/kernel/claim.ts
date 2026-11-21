@@ -697,10 +697,12 @@ export const nextWakeSql = (registry?: KernelRegistry): SQL => sql`(
   )::timestamp)`;
 
 /**
- * Report work this runtime has no definition for as Stuck. Claims and the next
- * wake already skip it, so it spends no attempts: during a deploy the previous
- * Worker meets work queued for the next one's definitions, which must stay
- * claimable once that Worker runs. A row is reported once.
+ * Retain orphaned work for inspection without spinning the queue on
+ * unclaimable rows. A dirty scope of a kind this runtime has no reconciler for
+ * is reported Stuck once, through ScopeState, without spending attempts:
+ * during a deploy the previous Worker meets scopes queued for the next one's
+ * reconcilers, which must stay claimable once that Worker runs. Claims and the
+ * next wake already skip unregistered kinds.
  */
 export async function stopUnregisteredWork(
   db: Database,
@@ -714,16 +716,14 @@ export async function stopUnregisteredWork(
         AND "lastError" IS DISTINCT FROM 'Unregistered reconciler: ' || "scopeKind"
         AND ("claimToken" IS NULL OR "claimDeadline" <= now()) RETURNING "scopeKind", "scopeKey", "lastError"
     ), asks AS (
-      UPDATE "Ask" SET "lastError" = 'Unregistered Ask kind: ' || feature,
+      UPDATE "Ask" SET attempts = "maxAttempts", "lastError" = 'Unregistered Ask kind: ' || feature,
         "claimToken" = NULL, "claimDeadline" = NULL
       WHERE NOT (feature = ANY(${textArrayParam([...registry.asks.keys()])})) AND attempts < "maxAttempts"
-        AND "lastError" IS DISTINCT FROM 'Unregistered Ask kind: ' || feature
         AND state IN (${ASK.queued}, ${ASK.sent}) AND ("claimToken" IS NULL OR "claimDeadline" <= now())
     ), passes AS (
-      UPDATE "Pass" SET "lastError" = 'Unregistered Pass: ' || name,
+      UPDATE "Pass" SET attempts = "maxAttempts", "lastError" = 'Unregistered Pass: ' || name,
         "claimToken" = NULL, "claimDeadline" = NULL
       WHERE NOT (name = ANY(${textArrayParam([...registry.passes.keys()])})) AND attempts < "maxAttempts"
-        AND "lastError" IS DISTINCT FROM 'Unregistered Pass: ' || name
         AND "doneAt" IS NULL AND "cancelledAt" IS NULL AND ("claimToken" IS NULL OR "claimDeadline" <= now())
     ) INSERT INTO "ScopeState" ("scopeKind", "scopeKey", version, rules, stage, "errorClass", error)
       SELECT "scopeKind", "scopeKey", 0, 'unregistered', ${"stuck"}, ${"failed"}, "lastError" FROM scopes

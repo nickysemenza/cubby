@@ -25,9 +25,14 @@ const purchaseReference = (identity: SQLWrapper, value: SQL) => sql`
     THEN lower(${value})::uuid END AND ${identity}.id::text=lower(${value}))
     OR ${identity}.shortcode=upper(btrim(${value})))`;
 
-/** Current member links projected from decision slots, including their original evidence. */
-// A subject-scoped projection reads only the scoped Emails' slots and their
-// event pointers; the unscoped one sorts and self-joins every Email decision.
+/**
+ * Current member links projected from decision slots, including their original
+ * evidence. A subject-scoped projection reads only the scoped subjects' slots
+ * and their event pointers; the unscoped one sorts and self-joins every Email
+ * decision. An Email scope also reads every Email decision that names one of
+ * the scoped Emails' order events, so an event's decisions do not depend on
+ * which Emails share a batch.
+ */
 const emailLinkDecisionProjection = (
   correlateEventPointers: boolean,
   emailId?: SQL,
@@ -39,7 +44,14 @@ const emailLinkDecisionProjection = (
   link_subjects AS MATERIALIZED (${
     "emailIds" in subjects
       ? sql`
-    SELECT 'email:'||scoped.id AS subject FROM unnest(${subjects.emailIds}) AS scoped(id)`
+    SELECT 'email:'||scoped.id AS subject FROM unnest(${subjects.emailIds}) AS scoped(id)
+    UNION
+    SELECT link.subject FROM "Email" scoped
+    JOIN "OrderMailEvent" event ON event."orderMailId"=scoped."orderMailId"
+    JOIN "Decision" link ON link.field LIKE 'link:%' AND link.value->>'eventId'=event.id::text
+    WHERE scoped.id IN (SELECT ids.id FROM unnest(${subjects.emailIds}) AS ids(id))
+      AND link.channel=${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)}
+      AND link.subject LIKE 'email:%'`
       : sql`
     SELECT DISTINCT link.subject
     FROM "Decision" link

@@ -23,7 +23,7 @@ it("reopens adoption scopes parked as unregistered and keeps every other parked 
         [kind, `synthetic-${index}`, error],
       );
     await migrateDatabase(db, {
-      through: "20261121150842_reopen_unregistered_scope_work",
+      through: "20261121151915_reopen_unregistered_scope_work",
     });
     const after = await client.query<{
       scopeKey: string;

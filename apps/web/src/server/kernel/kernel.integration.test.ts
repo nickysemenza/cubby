@@ -135,7 +135,7 @@ describe("evidence-facts kernel", () => {
     registerOwnedColumns(ownedColumns(kernel.registry));
     return { kernel, fixture };
   };
-  it("reports unregistered work as Stuck without spending attempts and excludes it from the next wake", async () => {
+  it("parks unregistered work as Stuck, keeps a dirty scope claimable, and excludes it from the next wake", async () => {
     const { kernel } = kernelWith();
     const q = repositoryQueries(ctx.db);
     await q.execute(
@@ -166,12 +166,19 @@ describe("evidence-facts kernel", () => {
     ]);
     expect(
       (
+        await q.execute<{ attempts: number }>(
+          sql`SELECT attempts FROM "ScopeDirty" WHERE "scopeKind"='synthetic.removed'`,
+        )
+      ).rows,
+    ).toEqual([{ attempts: 0 }]);
+    expect(
+      (
         await q.execute<{ attempts: number; lastError: string }>(
           sql`SELECT attempts,"lastError" FROM "Ask" WHERE feature='synthetic.removed'`,
         )
       ).rows[0],
     ).toMatchObject({
-      attempts: 0,
+      attempts: 3,
       lastError: "Unregistered Ask kind: synthetic.removed",
     });
     expect(
@@ -181,7 +188,7 @@ describe("evidence-facts kernel", () => {
         )
       ).rows[0],
     ).toMatchObject({
-      attempts: 0,
+      attempts: 5,
       lastError: "Unregistered Pass: synthetic.removed",
     });
   });

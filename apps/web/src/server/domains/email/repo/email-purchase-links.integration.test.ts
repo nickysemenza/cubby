@@ -182,6 +182,47 @@ describe("Email Purchase link decisions", () => {
       linkState: "dismissed",
     });
   });
+  it("keeps a dismissal on its event when another Email now holds the original, alone or batched", async () => {
+    const f = await fixture();
+    await decideEmailPurchase(ctx.db, command(f, "dismissed"), ctx.actor);
+    const other = await syntheticRetainedMail(ctx.db, {
+      ledgerPartyId: f.party.id,
+      vendorId: f.vendor.id,
+      mailboxId: "synthetic-mailbox",
+      messageId: "synthetic-holder-message",
+      threadId: "synthetic-holder-thread",
+      sender: "orders@example.test",
+      subject: "Synthetic order copy",
+      receivedAt: new Date("2026-10-01T12:00:00Z"),
+      rawChecksum: "d".repeat(64),
+      content: { bodyText: "Synthetic copy", bodyHtml: null, snippet: null },
+    });
+    const [holder] = await getDb(ctx.db)
+      .select()
+      .from(email)
+      .where(eq(email.orderMailId, other.id));
+    await getDb(ctx.db)
+      .update(email)
+      .set({ orderMailId: null })
+      .where(eq(email.id, f.mail.id));
+    await getDb(ctx.db)
+      .update(email)
+      .set({ orderMailId: f.original.id })
+      .where(eq(email.id, holder!.id));
+    for (const keys of [[holder!.id], [f.mail.id, holder!.id]]) {
+      await reconcileNow(
+        ctx.db,
+        keys.map((key) => ({ kind: "emailState", key })),
+      );
+      const [row] = await getDb(ctx.db)
+        .select()
+        .from(emailReadSnapshot)
+        .where(eq(emailReadSnapshot.entityId, holder!.id));
+      expect(
+        emailRelationshipResult.parse(row?.relationshipFacts).purchaseLinks,
+      ).toEqual([]);
+    }
+  });
   it("replays the same link publication without another decision", async () => {
     const f = await fixture();
     const input = {
