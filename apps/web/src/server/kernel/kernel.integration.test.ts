@@ -135,7 +135,7 @@ describe("evidence-facts kernel", () => {
     registerOwnedColumns(ownedColumns(kernel.registry));
     return { kernel, fixture };
   };
-  it("parks unregistered work as Stuck and excludes it from the next wake", async () => {
+  it("reports unregistered work as Stuck without spending attempts and excludes it from the next wake", async () => {
     const { kernel } = kernelWith();
     const q = repositoryQueries(ctx.db);
     await q.execute(
@@ -171,7 +171,7 @@ describe("evidence-facts kernel", () => {
         )
       ).rows[0],
     ).toMatchObject({
-      attempts: 3,
+      attempts: 0,
       lastError: "Unregistered Ask kind: synthetic.removed",
     });
     expect(
@@ -181,7 +181,7 @@ describe("evidence-facts kernel", () => {
         )
       ).rows[0],
     ).toMatchObject({
-      attempts: 5,
+      attempts: 0,
       lastError: "Unregistered Pass: synthetic.removed",
     });
   });
