@@ -2822,10 +2822,17 @@ describe("evidence-facts kernel", () => {
         );
         expect(outcomes.map((item) => item.status)).toEqual(["conflict"]);
       });
-      const dirty = await q.execute<{ attempts: number; conflicts: number }>(
-        sql`SELECT attempts, conflicts FROM "ScopeDirty" WHERE "scopeKind"=${scope.kind}`,
+      const dirty = await q.execute<{
+        attempts: number;
+        conflicts: number;
+        delayed: boolean;
+      }>(
+        sql`SELECT attempts, conflicts, "availableAt" > now() AS delayed FROM "ScopeDirty" WHERE "scopeKind"=${scope.kind}`,
       );
-      expect(dirty.rows).toEqual([{ attempts: 0, conflicts: conflicts + 1 }]);
+      // A locked run that found the gate busy waits instead of recomputing at once.
+      expect(dirty.rows).toEqual([
+        { attempts: 0, conflicts: conflicts + 1, delayed: conflicts === 3 },
+      ]);
     },
   );
 

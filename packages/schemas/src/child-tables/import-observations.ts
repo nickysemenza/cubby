@@ -121,6 +121,8 @@ export const importObservationChildren = [
         where: "{purchaseId} IS NULL",
       },
       { name: "SourceOrderObservation_order_key_idx", on: ["orderKey"] },
+      // Per-Email accepted-source checks correlate on the observation's Email.
+      { name: "SourceOrderObservation_email_idx", on: ["emailId"] },
     ],
     checks: [
       {
