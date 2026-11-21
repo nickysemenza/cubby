@@ -41,6 +41,7 @@ export type ContractMember = {
   destructive?: true;
   openWorld?: true;
   modelBacked?: true;
+  changesHouseholdData?: false;
   command?: import("../../src/contracts/define").MutationContract["command"];
   input?: z.ZodType;
   output?: z.ZodType;
@@ -74,6 +75,7 @@ export type LoadedContract = {
 type DeclaredOperation = {
   kind: Kind;
   exposure?: "capability" | "view" | "internal";
+  changesHouseholdData?: false;
   observability: OperationObservability;
   exportName: string;
   member: string;
@@ -331,6 +333,9 @@ const collectDeclaredOperations = (): Promise<
         byOperation.set(operation, {
           kind: definition.kind,
           ...(exposure === undefined ? {} : { exposure }),
+          ...(definition.changesHouseholdData === false
+            ? { changesHouseholdData: false }
+            : {}),
           observability: {
             entities: [...(definition.observability?.entities ?? [])],
             productPhases: [...(definition.observability?.productPhases ?? [])],
@@ -521,6 +526,7 @@ export const collectOperations = async (): Promise<
     {
       kind: Kind;
       exposure?: "capability" | "view" | "internal";
+      changesHouseholdData?: false;
       observability: OperationObservability;
     }
   >
@@ -548,6 +554,9 @@ export const collectOperations = async (): Promise<
         ...(declared.exposure === undefined
           ? {}
           : { exposure: declared.exposure }),
+        ...(declared.changesHouseholdData === false
+          ? { changesHouseholdData: false as const }
+          : {}),
         observability: declared.observability,
       },
     ]),

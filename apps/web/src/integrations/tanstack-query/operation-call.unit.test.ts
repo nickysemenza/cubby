@@ -6,6 +6,7 @@ import type { OperationResult } from "~/lib/operation-result";
 import { reset, snapshot } from "~/lib/perf/perf-store";
 
 import {
+  beginOperationCall,
   overrideOperationDispatch,
   operationCall,
   unwrapOperationResult,
@@ -18,6 +19,34 @@ afterEach(() => restore());
 const ok = <T>(data: T): OperationResult<T> => ({ ok: true, data });
 
 describe("operation call", () => {
+  it("preserves member freshness during bookkeeping without weakening household writes", () => {
+    const document = { cookie: "cubby.last_write=synthetic-signed-marker" };
+    vi.stubGlobal("document", document);
+    vi.stubGlobal("location", { protocol: "https:" });
+    try {
+      const catchUp = beginOperationCall({
+        operation: "maintenance.requestCatchUp",
+        kind: "mutation",
+        input: undefined,
+      });
+      expect(document.cookie).toBe("cubby.last_write=synthetic-signed-marker");
+      catchUp.finish({ error: new Error("abandoned") }, true);
+      expect(document.cookie).toBe("cubby.last_write=synthetic-signed-marker");
+
+      const write = beginOperationCall({
+        operation: "suggestion.review",
+        kind: "mutation",
+        input: {},
+      });
+      expect(document.cookie).toMatch(/^cubby\.last_write=pending;/u);
+      document.cookie = "cubby.last_write=synthetic-signed-marker";
+      write.finish({ error: new Error("abandoned") }, true);
+      expect(document.cookie).toMatch(/^cubby\.last_write=pending;/u);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("dispatches through the shared seam and observes the bound entity", async () => {
     const dispatch = vi.fn(async () => ok({ items: ["one"] }));
     restore = overrideOperationDispatch(dispatch);

@@ -54,20 +54,28 @@ const renderOperationRegistry = async (): Promise<string> => {
       {
         name: "OPERATIONS",
         value: Object.fromEntries(
-          operations.map(([operation, { kind, exposure, observability }]) => [
-            operation,
-            {
-              kind,
-              ...(exposure === undefined ? {} : { exposure }),
-              ...(observability.entities.length
-                ? { entities: observability.entities }
-                : {}),
-              ...(observability.productPhases.length
-                ? { productPhases: observability.productPhases }
-                : {}),
-              ...commands.get(operation),
-            },
-          ]),
+          operations.map(
+            ([
+              operation,
+              { kind, exposure, observability, changesHouseholdData },
+            ]) => [
+              operation,
+              {
+                kind,
+                ...(exposure === undefined ? {} : { exposure }),
+                ...(changesHouseholdData === false
+                  ? { changesHouseholdData }
+                  : {}),
+                ...(observability.entities.length
+                  ? { entities: observability.entities }
+                  : {}),
+                ...(observability.productPhases.length
+                  ? { productPhases: observability.productPhases }
+                  : {}),
+                ...commands.get(operation),
+              },
+            ],
+          ),
         ),
         satisfies: "OperationRegistry",
       },

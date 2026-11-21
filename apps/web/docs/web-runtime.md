@@ -394,8 +394,9 @@ return a signed `cubby.last_write` cookie carrying member, session and write
 time; reads stay strong for 90 seconds, beyond the cache window. The marker uses
 the current Better Auth secret and cookie helpers, `SameSite=Lax`, `Path=/`, and
 `Secure` in production, and is script-readable so stream envelopes can renew it.
-The transport sets a short-lived pending claim before a mutation or stream;
-invalid claims fail closed. The marker grants no authentication authority:
+The transport sets a short-lived pending claim before a household mutation or
+stream. Bookkeeping-only mutations preserve the current marker. Invalid claims
+fail closed. The marker grants no authentication authority:
 tampered, mismatched, future or expired markers select strong reads. A browser
 without a marker is cache-eligible; API-key, MCP and native callers stay strong
 without a valid marker (`x-cubby-read-marker` can carry it, verifiable for one
