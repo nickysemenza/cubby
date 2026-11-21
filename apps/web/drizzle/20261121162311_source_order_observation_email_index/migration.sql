@@ -1,0 +1,1 @@
+CREATE INDEX "SourceOrderObservation_email_idx" ON "SourceOrderObservation" ("emailId");
