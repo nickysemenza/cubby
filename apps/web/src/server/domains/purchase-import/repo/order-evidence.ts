@@ -128,6 +128,9 @@ export const mailOriginalEvidence = defineEvidence({
   resolveOwners: resolveMailOwners,
 });
 
+export const orderClaimPurchaseKey = (claim: string, purchase: string) =>
+  `order-claim-purchase:${claim}:${purchase}`;
+
 /** The accepted extraction is the order fact; the raw original is only its source. */
 export const orderEvidence = defineEvidence({
   kind: "orderObservation",
@@ -136,6 +139,9 @@ export const orderEvidence = defineEvidence({
     rowKey("SourceOrderObservation", row.id),
     `order:${row.orderKey}`,
     orderEventKey(row),
+    ...(row.sourceClaimId && row.purchaseId
+      ? [orderClaimPurchaseKey(row.sourceClaimId, row.purchaseId)]
+      : []),
     ...(row.emailId ? [rowKey("Email", row.emailId)] : []),
     ...orderPaymentKeys(row),
   ],
