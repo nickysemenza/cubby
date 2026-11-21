@@ -84,35 +84,36 @@ export async function readNeedsYou(
   );
   const limit = Math.max(1, Math.min(100, Math.floor(options.limit ?? 50)));
   const offset = Math.max(0, Math.floor(options.offset ?? 0));
+  const memberGap = sql`jsonb_path_query_first(s.gaps, '$[*] ? (@.actor == "you")')`;
+  const gapOrder = sql`(m.gap->>${"input"} IS NOT NULL) AS "hasInput", m.gap->>'since' AS since`;
   const result = await repositoryQueries(db).execute<{
     items: unknown;
     count: number;
   }>(sql`
     WITH members AS (
-      SELECT s."scopeKind", s."scopeKey", s.stage,
-        jsonb_path_query_first(s.gaps, '$[*] ? (@.actor == "you")') AS gap
+      SELECT s."scopeKind", s."scopeKey", s.stage, ${memberGap} AS gap
       FROM "ScopeState" s WHERE s."mergedIntoKey" IS NULL
     ), records AS (
-      SELECT DISTINCT m."scopeKind", m."scopeKey", e.kind AS entity, e.shortcode,
-        m.stage, m.gap->>${"input"} AS "firstGap", m.gap->'actions' AS actions, m.gap->>'since' AS since
+      SELECT m."scopeKind", m."scopeKey", e.kind AS entity, e.shortcode,
+        m.stage, ${gapOrder}
       FROM members m JOIN "RecordKey" k
         ON k."scopeKind" = m."scopeKind" AND k."scopeKey" = m."scopeKey"
         AND k."mergedAt" IS NULL AND k."rejectedAt" IS NULL
       JOIN "Entity" e ON e.id = k."entityId" AND e.kind = k.entity
       WHERE ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL
-      UNION
+      UNION ALL
       SELECT m."scopeKind", m."scopeKey", e.kind, e.shortcode, m.stage,
-        m.gap->>${"input"}, m.gap->'actions', m.gap->>'since'
+        ${gapOrder}
       FROM members m JOIN "Entity" e ON m."scopeKey" = e.kind || ':' || e.id::text
       WHERE m."scopeKind" IN ('fields', 'quality')
         AND ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL
-      UNION
-      SELECT m."scopeKind", m."scopeKey", e.kind, e.shortcode, m.stage, m.gap->>${"input"}, m.gap->'actions', m.gap->>'since'
+      UNION ALL
+      SELECT m."scopeKind", m."scopeKey", e.kind, e.shortcode, m.stage, ${gapOrder}
       FROM members m JOIN jsonb_to_recordset(${JSON.stringify(consumers)}::jsonb) consumer(entity text, kind text) ON consumer.kind = m."scopeKind"
       JOIN "Entity" e ON e.kind = consumer.entity AND e.id::text = m."scopeKey"
       WHERE ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL
-      UNION
-      SELECT m."scopeKind",m."scopeKey",e.kind,e.shortcode,m.stage,m.gap->>${"input"},m.gap->'actions',m.gap->>'since'
+      UNION ALL
+      SELECT m."scopeKind", m."scopeKey", e.kind, e.shortcode, m.stage, ${gapOrder}
       FROM members m CROSS JOIN LATERAL jsonb_array_elements(coalesce(m.gap->'actions','[]'::jsonb)) action
       CROSS JOIN LATERAL (VALUES (action->>'subject'), (action->>${"field"})) ref(token)
       CROSS JOIN LATERAL (
@@ -127,7 +128,7 @@ export async function readNeedsYou(
       SELECT DISTINCT ON ("scopeKind", "scopeKey") * FROM records
       ORDER BY "scopeKind", "scopeKey", (entity = 'sourceOccurrence'), entity, shortcode
     ), ranked AS (
-      SELECT *, row_number() OVER (PARTITION BY entity, shortcode ORDER BY ("firstGap" IS NULL), since NULLS LAST, "scopeKind", "scopeKey") AS rank,
+      SELECT *, row_number() OVER (PARTITION BY entity, shortcode ORDER BY NOT "hasInput", since NULLS LAST, "scopeKind", "scopeKey") AS rank,
         min(CASE stage WHEN ${STAGE.ended} THEN 0 WHEN ${STAGE.stuck} THEN 1
           WHEN ${STAGE.working} THEN 2 WHEN ${STAGE.needsYou} THEN 3 WHEN ${STAGE.waiting} THEN 4 ELSE 5 END)
           OVER (PARTITION BY entity, shortcode) AS severity
@@ -136,12 +137,12 @@ export async function readNeedsYou(
       SELECT entity, shortcode,
         CASE severity WHEN 0 THEN ${STAGE.ended} WHEN 1 THEN ${STAGE.stuck} WHEN 2 THEN ${STAGE.working}
           WHEN 3 THEN ${STAGE.needsYou} WHEN 4 THEN ${STAGE.waiting} ELSE ${STAGE.done} END AS stage,
-        "firstGap", actions, since FROM ranked WHERE rank = 1 AND shortcode IS NOT NULL AND "firstGap" IS NOT NULL
+        "scopeKind", "scopeKey", since FROM ranked WHERE rank = 1 AND shortcode IS NOT NULL AND "hasInput"
     ), combined AS (
-      SELECT *, 0::bigint AS ordinal FROM eligible
+      SELECT *, NULL::text AS "firstGap", 0::bigint AS ordinal FROM eligible
       UNION ALL
       SELECT extra.item->>'entity', extra.item->>${"shortcode"}, ${STAGE.needsYou},
-        extra.item->>'firstGap', '[]'::jsonb, NULL::text, extra.ordinal
+        NULL::text, NULL::text, NULL::text, extra.item->>'firstGap', extra.ordinal
       FROM jsonb_array_elements(${JSON.stringify(options.additional ?? [])}::jsonb)
         WITH ORDINALITY AS extra(item, ordinal)
       WHERE NOT EXISTS (
@@ -152,7 +153,18 @@ export async function readNeedsYou(
       SELECT * FROM combined ORDER BY ordinal, since NULLS LAST, entity, shortcode LIMIT ${limit} OFFSET ${offset}
     )
     SELECT (SELECT count(*)::int FROM combined) AS count,
-      coalesce((SELECT jsonb_agg(to_jsonb(page) - 'ordinal' ORDER BY ordinal, since NULLS LAST, entity, shortcode) FROM page), '[]'::jsonb) AS items`);
+      coalesce((
+        SELECT jsonb_agg(jsonb_build_object(
+          'entity', page.entity, ${"shortcode"}::text, page.shortcode, 'stage', page.stage, 'since', page.since,
+          'firstGap', CASE WHEN page.ordinal = 0 THEN detail.gap->>${"input"} ELSE page."firstGap" END,
+          'actions', CASE WHEN page.ordinal = 0 THEN detail.gap->'actions' ELSE '[]'::jsonb END
+        ) ORDER BY page.ordinal, page.since NULLS LAST, page.entity, page.shortcode)
+        FROM page LEFT JOIN LATERAL (
+          SELECT ${memberGap} AS gap
+          FROM "ScopeState" s WHERE page.ordinal = 0
+            AND s."scopeKind" = page."scopeKind" AND s."scopeKey" = page."scopeKey"
+        ) detail ON true
+      ), '[]'::jsonb) AS items`);
   return needsYouPage.parse(result.rows[0]);
 }
 

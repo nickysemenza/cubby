@@ -2862,9 +2862,11 @@ The Work page, Home, navigation and MCP share `machinery.needsYou`: the union of
 public records with a kernel member gap and the member's human-executor Work
 sources. The human Work projection reads record identities in one pass and keeps
 the first reason in queue order, including published gap messages.
-Shared scope gaps and records count once. Kernel gaps carry their stage,
-first gap and offered actions; other member work links to its owning record. `machinery.needsYou` pages this population with `limit` and `offset`; the MCP
-adapter exposes `pageSize` and an opaque continuation `cursor`.
+Shared scope gaps and records count once. The kernel ranks scopes before paging
+and loads gap text and offered actions for the winning scopes on the page.
+Other member work links to its owning record. `machinery.needsYou` pages this
+population with `limit` and `offset`; the MCP adapter exposes `pageSize` and an
+opaque continuation `cursor`.
 Record machinery holds the complete inputs and actions. A record with no scope
 memberships reads null and retains its declared state badge. Declared needs, header
 facts and open quality checks remain visible alongside machinery.
