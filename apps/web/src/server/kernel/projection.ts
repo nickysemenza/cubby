@@ -35,14 +35,16 @@ const SCOPE_ORDER = sql.raw("ord, kind, key");
  * per record; the element walk keeps the exact match on the few rows found.
  */
 export function memberActionScopes(entity: string, id: SQL): SQL {
-  const ref = sql`${entity}::text || ':' || ${id}::text`;
-  const naming = (key: "subject" | "field") =>
-    sql`s.gaps @> jsonb_build_array(jsonb_build_object('actions', jsonb_build_array(jsonb_build_object(${key}::text, ${ref}))))`;
-  return sql`SELECT s."scopeKind" AS kind, s."scopeKey" AS key FROM "ScopeState" s
-    WHERE s."mergedIntoKey" IS NULL AND (${naming("subject")} OR ${naming("field")})
-      AND EXISTS (SELECT 1 FROM jsonb_array_elements(s.gaps) gap
-        CROSS JOIN LATERAL jsonb_array_elements(coalesce(gap->'actions','[]'::jsonb)) action
-        WHERE gap->>'actor'='you' AND (action->>'subject'=${ref} OR action->>${"field"}=${ref}))`;
+  // One bound reference: list rows and page summaries share a parameter budget.
+  const naming = (key: SQL) =>
+    sql`s.gaps @> jsonb_build_array(jsonb_build_object('actions', jsonb_build_array(jsonb_build_object(${key}, member_ref.value))))`;
+  return sql`SELECT s."scopeKind" AS kind, s."scopeKey" AS key
+    FROM (SELECT ${entity}::text || ':' || ${id}::text AS value, ${"field"}::text AS field) member_ref
+    JOIN "ScopeState" s ON s."mergedIntoKey" IS NULL
+      AND (${naming(sql`'subject'`)} OR ${naming(sql`member_ref.field`)})
+    WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(s.gaps) gap
+      CROSS JOIN LATERAL jsonb_array_elements(coalesce(gap->'actions','[]'::jsonb)) action
+      WHERE gap->>'actor'='you' AND (action->>'subject'=member_ref.value OR action->>member_ref.field=member_ref.value))`;
 }
 
 /**
