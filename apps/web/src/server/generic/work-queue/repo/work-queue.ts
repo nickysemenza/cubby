@@ -451,14 +451,16 @@ async function queryWorkQueue(
   // Counts and paging share the materialized filtered population below.
   // Under an any-of Reason filter, summarize only the selected reason keys:
   // drilling into another membership would otherwise widen that population.
+  const materialization =
+    projection === "member-records" ? sql`NOT MATERIALIZED` : sql`MATERIALIZED`;
   const populationCtes = sql`
     WITH
     ${withCtes}
     ${membersCte},
-    routed AS MATERIALIZED (
+    routed AS ${materialization} (
       SELECT work.*, reason_keys[1] AS primary_reason FROM (${routed}) work
     ),
-    filtered AS MATERIALIZED (
+    filtered AS ${materialization} (
       SELECT * FROM routed work WHERE NOT input_incomplete
       ${population ? sql`AND (${population})` : sql``}
     )`;
