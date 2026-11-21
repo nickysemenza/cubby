@@ -952,10 +952,11 @@ Order reads follow only the event's facts, bindings and stored money graph.
 Payment matching follows the connected set of payment amounts so all competing
 orders and each complete payment set participate. An amount scope discovers
 Order events through extracted keys and through retained payments linked to an
-observation or to its source claim and Purchase. The event's accepted facts
+observation or to the latest capture for its source claim and Purchase. The
+claim/Purchase lookup carries that pair's revision even when empty. The event's accepted facts
 determine its payment set. Each retained payment binds on its amount scope.
-Retained payment review publishes through the amount scopes, which the older
-Order proof owner emits when it plans the same payment set.
+Charge and Order payment review publishes through amount scopes when they
+exist. Every planning scope holds its own output during a baseline disagreement.
 An Order observation keeps its existing proof owner while that scope can still
 route the event through the extracted keys. A new Order proof uses the first
 retained payment's amount key when present among those keys, then the first

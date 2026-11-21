@@ -39,6 +39,7 @@ import {
 } from "~/server/domains/purchase-import/policy/retained-payments";
 import {
   orderEvidence,
+  orderClaimPurchaseKey,
   orderEventKey,
   orderPaymentKeys,
   paymentAmountKey,
@@ -71,19 +72,18 @@ export type PaymentMatchInput = {
   totals: Map<string, bigint | null>;
 };
 
+const newerOrder = (candidate: Order, existing: Order) =>
+  candidate.createdAt > existing.createdAt ||
+  (candidate.createdAt.getTime() === existing.createdAt.getTime() &&
+    candidate.id > existing.id);
+
 /** One accepted head per original; later raw retrievals cannot change these facts. */
 export function acceptedOrderHeads(orders: readonly Order[], c: Pure) {
   const heads = new Map<string, Order>();
   for (const row of orders) {
     const identity = `${orderEventKey(row)}\0${row.sourceKind}\0${row.sourceExternalKey || row.sourceClaimId}`;
     const current = heads.get(identity);
-    if (
-      !current ||
-      current.createdAt < row.createdAt ||
-      (current.createdAt.getTime() === row.createdAt.getTime() &&
-        current.id < row.id)
-    )
-      heads.set(identity, row);
+    if (!current || newerOrder(row, current)) heads.set(identity, row);
   }
   const selected = [...heads.values()];
   const byId = new Map(selected.map((row) => [row.id, row]));
@@ -171,7 +171,8 @@ function planPaymentRoutes(
   return {
     paymentKeys,
     amountKeys,
-    publishesReview: amountScope || retainedKeys.size === 0,
+    publishesReview:
+      amountScope || (amountKeys.length === 0 && retainedKeys.size === 0),
   };
 }
 
@@ -623,7 +624,9 @@ export const paymentMatching: Pick<
         legacy.length
           ? reads.select(
               sourceOrderObservation,
-              [],
+              legacy.map(({ claim, purchase }) =>
+                orderClaimPurchaseKey(claim, purchase),
+              ),
               sql`EXISTS (
               SELECT 1 FROM ${legacyLinks.from}
               WHERE ${sourceOrderObservation.sourceClaimId} = ${legacyLinks.col("claim")}
@@ -632,6 +635,14 @@ export const paymentMatching: Pick<
             )
           : [],
       ]);
+      const latestLegacyOrders = new Map<string, Order>();
+      for (const row of legacyOrders) {
+        if (!row.sourceClaimId || !row.purchaseId) continue;
+        const link = orderClaimPurchaseKey(row.sourceClaimId, row.purchaseId);
+        const current = latestLegacyOrders.get(link);
+        if (!current || newerOrder(row, current))
+          latestLegacyOrders.set(link, row);
+      }
       orders = unique([...orders, ...[...facts.values()].flat()]);
       const [observed, retained] = await Promise.all([
         reads.lookup(
@@ -648,7 +659,9 @@ export const paymentMatching: Pick<
       payments = unique([...payments, ...observed, ...retained]);
       pending = [
         ...new Set([
-          ...[...directOrders.values(), ...legacyOrders].map(orderEventKey),
+          ...[...directOrders.values(), ...latestLegacyOrders.values()].map(
+            orderEventKey,
+          ),
           ...orders.flatMap((row) => [
             orderEventKey(row),
             ...orderPaymentKeys(row),
@@ -981,10 +994,10 @@ export const paymentMatching: Pick<
         );
       });
       if (changedBaseline) {
-        publishPaymentReview(() =>
-          c.disagree(
-            "the accepted baseline payment binding disagrees with the current movement",
-          ),
+        // Disagreement holds existing output on this scope, including an older
+        // Order proof. It is independent of which scope publishes review actions.
+        c.disagree(
+          "the accepted baseline payment binding disagrees with the current movement",
         );
         continue;
       }
