@@ -79,6 +79,10 @@ export interface IndexedSection {
   digest?: ReactNode;
   /** Record pages: a table that can span every body column. */
   wideable?: boolean;
+  /** Record pages: a workspace that always spans every body column. */
+  span?: boolean;
+  /** Record pages: a workspace that always spans every body column. */
+  span?: boolean;
 }
 
 /**
@@ -154,7 +158,9 @@ function SectionCard({
   const controls = useContext(RecordSectionControlsContext);
   const foldable = controls !== null && !section.bare;
   const closed = foldable && controls.folded.has(section.id);
-  const wide = controls?.wide.has(section.id) === true;
+  const wide =
+    controls !== null &&
+    (section.span === true || controls.wide.has(section.id));
   const count = section.count ?? reportedCount ?? section.knownCount;
   const empty =
     section.empty === true ||
@@ -237,7 +243,10 @@ function SectionCard({
           }
           caption={section.description}
           actions={
-            controls?.columns && section.wideable && !closed ? (
+            controls?.columns &&
+            section.wideable &&
+            !section.span &&
+            !closed ? (
               <>
                 {section.headerAction}
                 <button

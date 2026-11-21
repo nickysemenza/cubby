@@ -106,7 +106,18 @@ function groupSections(
       .filter((entry) => entry.group === tab.id)
       .map((entry) => entry.section);
     return members.length > 0
-      ? [{ id: `detail-group-${tab.id}`, title: tab.title, sections: members }]
+      ? [
+          {
+            id: `detail-group-${tab.id}`,
+            title: tab.title,
+            // A `full` section is a workspace: it spans every body column.
+            sections: members.map((section) =>
+              section.placement === "full"
+                ? { ...section, span: true }
+                : section,
+            ),
+          },
+        ]
       : [];
   });
 }
