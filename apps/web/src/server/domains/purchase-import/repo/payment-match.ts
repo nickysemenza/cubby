@@ -158,7 +158,8 @@ function planPaymentRoutes(
   const amountKeys = paymentKeys.filter((route) =>
     route.startsWith("payment:amount:"),
   );
-  if (!key.startsWith("payment:amount:")) {
+  const amountScope = key.startsWith("payment:amount:");
+  if (!amountScope) {
     for (const route of new Set([...amountKeys, ...retainedKeys]))
       c.emit({ kind: "purchaseEvent", key: route });
     if (
@@ -167,7 +168,11 @@ function planPaymentRoutes(
     )
       return;
   }
-  return { paymentKeys, amountKeys };
+  return {
+    paymentKeys,
+    amountKeys,
+    publishesReview: amountScope || retainedKeys.size === 0,
+  };
 }
 
 function orderBindingFallback(
@@ -821,10 +826,17 @@ export const paymentMatching: Pick<
         c,
       );
       if (!routes) continue;
+      // The older Order proof owner can still plan without duplicating the
+      // review published by the amount scopes it just emitted.
+      const publishPaymentReview = (publish: () => void) => {
+        if (routes.publishesReview) publish();
+      };
       const plan = planFor(order);
       if (plan.kind === "conflicting") {
-        c.gap.decision(
-          "how the conflicting source payment evidence corresponds to recorded money",
+        publishPaymentReview(() =>
+          c.gap.decision(
+            "how the conflicting source payment evidence corresponds to recorded money",
+          ),
         );
         continue;
       }
@@ -837,27 +849,29 @@ export const paymentMatching: Pick<
           ),
         );
       if (ambiguous) {
-        c.gap.decision("which bank charge pays this order", {
-          actions: (plan.partial
-            ? plan.candidates
-            : choicesFor(order).eligible
-          ).flatMap((candidate) => [
-            {
-              channel: "identity" as const,
-              kind: "same" as const,
-              subject: event,
-              field: recordSubject("financialTransaction", candidate.id),
-              label: "Same payment",
-            },
-            {
-              channel: "identity" as const,
-              kind: "distinct" as const,
-              subject: event,
-              field: recordSubject("financialTransaction", candidate.id),
-              label: "Different payment",
-            },
-          ]),
-        });
+        publishPaymentReview(() =>
+          c.gap.decision("which bank charge pays this order", {
+            actions: (plan.partial
+              ? plan.candidates
+              : choicesFor(order).eligible
+            ).flatMap((candidate) => [
+              {
+                channel: "identity" as const,
+                kind: "same" as const,
+                subject: event,
+                field: recordSubject("financialTransaction", candidate.id),
+                label: "Same payment",
+              },
+              {
+                channel: "identity" as const,
+                kind: "distinct" as const,
+                subject: event,
+                field: recordSubject("financialTransaction", candidate.id),
+                label: "Different payment",
+              },
+            ]),
+          }),
+        );
         continue;
       }
       let competing = false;
@@ -883,24 +897,32 @@ export const paymentMatching: Pick<
           competing = true;
       }
       if (competing) {
-        c.gap.decision("which order owns this payment", {
-          actions: (plan.matches ?? []).flatMap((match) => [
-            {
-              channel: "identity" as const,
-              kind: "same" as const,
-              subject: event,
-              field: recordSubject("financialTransaction", match.transactionId),
-              label: "Same payment",
-            },
-            {
-              channel: "identity" as const,
-              kind: "distinct" as const,
-              subject: event,
-              field: recordSubject("financialTransaction", match.transactionId),
-              label: "Different payment",
-            },
-          ]),
-        });
+        publishPaymentReview(() =>
+          c.gap.decision("which order owns this payment", {
+            actions: (plan.matches ?? []).flatMap((match) => [
+              {
+                channel: "identity" as const,
+                kind: "same" as const,
+                subject: event,
+                field: recordSubject(
+                  "financialTransaction",
+                  match.transactionId,
+                ),
+                label: "Same payment",
+              },
+              {
+                channel: "identity" as const,
+                kind: "distinct" as const,
+                subject: event,
+                field: recordSubject(
+                  "financialTransaction",
+                  match.transactionId,
+                ),
+                label: "Different payment",
+              },
+            ]),
+          }),
+        );
         continue;
       }
       const accepted =
@@ -959,8 +981,10 @@ export const paymentMatching: Pick<
         );
       });
       if (changedBaseline) {
-        c.disagree(
-          "the accepted baseline payment binding disagrees with the current movement",
+        publishPaymentReview(() =>
+          c.disagree(
+            "the accepted baseline payment binding disagrees with the current movement",
+          ),
         );
         continue;
       }
