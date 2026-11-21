@@ -1,5 +1,4 @@
 import type { SourceTransactionRecordId } from "@cubby/schemas/identifiers";
-import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import { sql, type SQL } from "drizzle-orm";
 
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -57,13 +56,16 @@ const directHistoricalEvidence = sql`
   JOIN "FinancialEvidenceAlias" binding ON binding.source=evidence.source AND binding.value=evidence.value AND ${notDeleted("binding")}
   JOIN "FinancialTransaction" historical ON historical.id=binding."historicalTransactionId" AND ${notDeleted("historical")}`;
 
-/** Global and page reads apply the same negative ownership predicate. */
+/**
+ * Global and page reads apply the same negative ownership predicate. Like the
+ * point check it ignores review state: each reader gates on its own effective
+ * state, which a bank judgment can make ready over a stored hold.
+ */
 const unresolvedFrom = (evidence: SQL): SQL => sql`(
   SELECT DISTINCT owner.id
   FROM (${evidence}) evidence
   JOIN "SourceOccurrence" owner ON owner.id=evidence."occurrenceId"
-  WHERE owner."reviewState"=${sourceOccurrenceReviewState.enum.ready}
-    AND ${unresolvedOwnership(sql`evidence."historicalTransactionId"`, sql`owner."acceptedTransactionId"`, sql`owner."identityProof"`)}
+  WHERE ${unresolvedOwnership(sql`evidence."historicalTransactionId"`, sql`owner."acceptedTransactionId"`, sql`owner."identityProof"`)}
 )`;
 
 /** Same negative ownership fence as the point check, evaluated once for a read. */

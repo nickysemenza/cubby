@@ -97,6 +97,7 @@ import { markDirty } from "./dirty";
 import { enterWriteTransaction, householdWrite } from "./gate";
 import { runOnePass } from "./pass";
 import { claimPassFixture, seedPass } from "./pass.fixtures";
+import { machineryActorSql, machineryStageSql } from "./projection";
 import { publishTransaction } from "./publication";
 import { ownedColumns } from "./registry";
 import {
@@ -783,7 +784,11 @@ describe("evidence-facts kernel", () => {
     const seller = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic consumer seller",
     });
-    const consumer = defineReconciler<null>({
+    const timerScope = {
+      kind: "fixture.vendorConsumer",
+      key: "00000000-synthetic-timer",
+    };
+    const consumer = defineReconciler<string>({
       scope: "fixture.vendorConsumer",
       lane: "money",
       version: 1,
@@ -791,9 +796,12 @@ describe("evidence-facts kernel", () => {
       writes: [],
       async load(reads, keys) {
         await reads.select(vendor, [], sql`true`);
-        return new Map(keys.map((key) => [key, null]));
+        return new Map(keys.map((key) => [key, key]));
       },
-      reconcile(_input, c) {
+      reconcile(key, c) {
+        // A timer before the member action: this scope reads Waiting.
+        if (key === timerScope.key)
+          c.gap.time("a synthetic timer", new Date("2999-01-01T00:00:00Z"));
         expect(c.reference("vendor", seller.shortcode)).toBe(seller.id);
         expect(c.reference("vendor", seller.id, { format: "shortcode" })).toBe(
           seller.shortcode,
@@ -872,6 +880,28 @@ describe("evidence-facts kernel", () => {
       (await kernel.listRows(ctx.db, capability, [seller.id])).get(seller.id),
     ).toMatchObject({ stage: "needs_you" });
     expect((await kernel.needsYou(ctx.db)).items).toHaveLength(1);
+    // Member scopes tie on priority: every reader takes the first by (kind,
+    // key), here the timer scope that sorts before the record's own scope.
+    await kernel.reconcileNow(ctx.db, [timerScope]);
+    const tied = await kernel.machinery(ctx.db, ctx.actor, {
+      entity: "vendor",
+      id: seller.id,
+    });
+    expect(tied).toMatchObject({ stage: "waiting", nextActor: "time" });
+    expect(
+      (await kernel.listRows(ctx.db, capability, [seller.id])).get(seller.id),
+    ).toMatchObject({ stage: "waiting", nextActor: "time" });
+    expect(
+      (
+        await repositoryQueries(ctx.db).execute<{
+          stage: string;
+          actor: string;
+        }>(
+          sql`SELECT ${machineryStageSql(capability, sql`${seller.id}::uuid`)} AS stage,
+            ${machineryActorSql(capability, sql`${seller.id}::uuid`)} AS actor`,
+        )
+      ).rows,
+    ).toEqual([{ stage: "waiting", actor: "time" }]);
 
     const otherSeller = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic queue seller",
@@ -2790,7 +2820,10 @@ describe("evidence-facts kernel", () => {
         calls += 1;
         if (calls > 1) return "Groceries";
         // The Worker stalls past its claim: expiry finds the sent ask first.
-        await repositoryQueries(ctx.db).execute(
+        await repositoryQueries(ctx.db).execute<{
+          stage: string;
+          actor: string;
+        }>(
           sql`UPDATE "Ask" SET "claimDeadline" = now() - interval '1 second' WHERE state = ${ASK.sent}`,
         );
         await expireAsks(ctx.db, kernel.registry);

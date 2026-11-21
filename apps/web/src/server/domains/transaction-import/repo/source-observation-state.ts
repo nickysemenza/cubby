@@ -246,11 +246,11 @@ export const sourceObservationField = (
       FROM ${sourceObservationFacts} facts WHERE facts.id=${id})`;
   }
   if (key === "reviewState") {
-    // The point helper owns an inner "owner" alias; keep its root distinct.
-    return sql`(SELECT CASE WHEN point_owner."reviewState"=${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}
-      AND ${sourceOccurrenceHasUnresolvedHistory(sql`point_owner.id`, sql`point_owner."acceptedTransactionId"`)}
-      THEN ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ownership_conflict)} ELSE point_owner."reviewState" END
-      FROM "SourceOccurrence" point_owner JOIN "SourceTransactionRecord" record ON record."occurrenceId"=point_owner.id WHERE record.id=${id})`;
+    // Same effective state as the projection: a bank judgment applies before the fence.
+    return sql`(SELECT CASE WHEN facts."storedReviewState"=${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}
+      AND ${sourceOccurrenceHasUnresolvedHistory(sql`facts."occurrenceId"`, sql`facts."acceptedTransactionId"`)}
+      THEN ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ownership_conflict)} ELSE facts."storedReviewState" END
+      FROM ${sourceObservationFacts} facts WHERE facts.id=${id})`;
   }
   if (key === "historicalTransactionIds") {
     // Same sibling hop as matchState. A point read must not fold every observation.

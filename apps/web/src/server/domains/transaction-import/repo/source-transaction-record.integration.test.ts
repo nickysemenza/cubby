@@ -1,7 +1,6 @@
 import type { sourceTransactionRecordRawOut } from "@cubby/schemas/entity-contracts/sourceTransactionRecord";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
-  sourceOccurrenceReviewState,
   sourceIdentityResolution,
   sourceOccurrenceClosure,
   type SourceIdentityResolution,
@@ -24,10 +23,7 @@ import type { z } from "zod";
 
 import { createPostgresPool } from "#web/tooling/postgres-pool.ts";
 import { sourceTransactionRecordRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.sourceTransactionRecord.gen";
-import {
-  sourceHistoricalTransactionRows,
-  sourceOccurrenceHasUnresolvedHistory,
-} from "~/server/db/computed/source-occurrence-history-sql";
+import { sourceHistoricalTransactionRows } from "~/server/db/computed/source-occurrence-history-sql";
 import type { Database } from "~/server/db/database";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 import {
@@ -35,6 +31,7 @@ import {
   getDb,
   withTransaction,
 } from "~/server/db/helpers";
+import { decision } from "~/server/db/kernel-schema";
 import {
   sourceOccurrence,
   financialAccount,
@@ -513,14 +510,11 @@ describe("statement row ledger", () => {
       const rows = await getDb(ctx.db).execute(
         sql`
         SELECT count(*)::int AS differences
-        FROM "SourceTransactionRecord" r LEFT JOIN "SourceOccurrence" o ON o.id=r."occurrenceId"
+        FROM "SourceTransactionRecord" r
         JOIN ${sourceObservations} projection ON projection.id=r.id
         WHERE projection."historicalTransactionIds" IS DISTINCT FROM ARRAY(
           SELECT history.code FROM (${sourceHistoricalTransactionRows(sql`r.id`, sql`ARRAY[r."occurrenceId"]::uuid[]`)}) history ORDER BY history.code
-        ) OR projection."reviewState" IS DISTINCT FROM CASE
-          WHEN o."reviewState"=${sourceOccurrenceReviewState.enum.ready} AND ${sourceOccurrenceHasUnresolvedHistory(sql`o.id`, sql`o."acceptedTransactionId"`)}
-          THEN ${sourceOccurrenceReviewState.enum.ownership_conflict} ELSE o."reviewState" END
-          OR projection."matchState" IS DISTINCT FROM ${sourceObservationField("matchState", "r")}
+        ) OR projection."matchState" IS DISTINCT FROM ${sourceObservationField("matchState", "r")}
           OR projection."reviewState" IS DISTINCT FROM ${sourceObservationField("reviewState", "r")}`,
         "objects",
       );
@@ -890,6 +884,30 @@ describe("statement row ledger", () => {
         ].sort(),
       },
     ]);
+    await assertReadProjection();
+    // A bank judgment makes a stored hold ready; the occurrence-only binding
+    // still fences it, in the whole-list relation as in the point read.
+    await getDb(ctx.db)
+      .update(sourceOccurrence)
+      .set({ reviewState: "revision_order_unknown" })
+      .where(eq(sourceOccurrence.id, fenceOnly.occurrenceId));
+    await getDb(ctx.db)
+      .insert(decision)
+      .values({
+        channel: "assignment",
+        subject: `bank:${fenceOnly.occurrenceId}`,
+        slot: "reviewState",
+        field: "reviewState",
+        kind: "set",
+        value: "ready",
+        actorKind: "member",
+      });
+    expect(
+      await getDb(ctx.db).execute(
+        sql`SELECT "reviewState", "matchState" FROM ${sourceObservations} whole WHERE id=${fenceOnly.id}`,
+        "objects",
+      ),
+    ).toEqual([{ reviewState: "ownership_conflict", matchState: "held" }]);
     await assertReadProjection();
     await getDb(ctx.db)
       .update(financialTransaction)

@@ -26,6 +26,9 @@ import { STAGE } from "./vocab";
 
 const ETA_MIN_OBSERVATIONS = 5;
 
+/** Equal-priority scopes order by kind, then key, like the single-record read. */
+const SCOPE_ORDER = sql.raw("ord, kind, key");
+
 /**
  * `(kind, key)` of live scopes whose member gap offers an action naming the
  * record as subject or field. The containment tests probe `ScopeState_gaps_idx`
@@ -42,14 +45,18 @@ export function memberActionScopes(entity: string, id: SQL): SQL {
         WHERE gap->>'actor'='you' AND (action->>'subject'=${ref} OR action->>${"field"}=${ref}))`;
 }
 
-/** `(kind, key, ord)` rows of one record's scopes, in owning, fields, quality order. */
+/**
+ * `(kind, key, ord)` rows of one record's scopes: owned and member-action
+ * scopes share ord 0, then declared, fields and quality scopes. Readers order
+ * by `SCOPE_ORDER`, as the single-record read concatenates their gaps.
+ */
 function recordScopes(capability: MachineryCapability, id: SQL): SQL {
   const parts: SQL[] = [
     sql`SELECT rk."scopeKind" AS kind, rk."scopeKey" AS key, 0 AS ord FROM "RecordKey" rk
       WHERE rk.entity = ${capability.entity} AND rk."entityId" = ${id} AND rk."mergedAt" IS NULL`,
   ];
   parts.push(
-    sql`SELECT member.kind, member.key, 1 AS ord FROM (${memberActionScopes(capability.entity, id)}) member`,
+    sql`SELECT member.kind, member.key, 0 AS ord FROM (${memberActionScopes(capability.entity, id)}) member`,
   );
   for (const [index, kind] of (capability.scopes ?? []).entries())
     parts.push(sql`SELECT ${kind}::text, ${id}::text, ${index + 1}`);
@@ -73,7 +80,7 @@ export function machineryStageSql(
   return sql`(
     WITH scopes AS (${scopes}),
     joined AS (
-      SELECT scopes.ord, s.stage, d.attempts,
+      SELECT scopes.ord, scopes.kind, scopes.key, s.stage, d.attempts,
         (d."claimToken" IS NOT NULL AND d."claimDeadline" > now()) AS live,
         d."scopeKind" IS NOT NULL AS dirty
       FROM scopes
@@ -86,7 +93,7 @@ export function machineryStageSql(
       WHEN EXISTS (SELECT 1 FROM joined WHERE stage = ${STAGE.stuck} OR attempts >= ${MAX_SCOPE_ATTEMPTS}) THEN ${STAGE.stuck}
       WHEN EXISTS (SELECT 1 FROM joined WHERE live) THEN ${STAGE.working}
       ELSE coalesce(
-        (SELECT stage FROM joined WHERE stage IN (${STAGE.needsYou}, ${STAGE.waiting}) ORDER BY ord LIMIT 1),
+        (SELECT stage FROM joined WHERE stage IN (${STAGE.needsYou}, ${STAGE.waiting}) ORDER BY ${SCOPE_ORDER} LIMIT 1),
         CASE WHEN EXISTS (SELECT 1 FROM joined WHERE dirty) THEN ${STAGE.waiting} ELSE ${STAGE.done} END)
     END)`;
 }
@@ -101,7 +108,7 @@ export function machineryActorSql(
     WITH scopes AS (${scopes})
     SELECT s."nextActor" FROM scopes
     JOIN "ScopeState" s ON s."scopeKind" = scopes.kind AND s."scopeKey" = scopes.key
-    WHERE s."nextActor" IS NOT NULL ORDER BY scopes.ord LIMIT 1)`;
+    WHERE s."nextActor" IS NOT NULL ORDER BY ${SCOPE_ORDER} LIMIT 1)`;
 }
 
 /** The fields the list binding adds to each row. */
@@ -143,6 +150,8 @@ export async function loadMachineryRows(
       rk."rejectedAt" IS NOT NULL AS rejected
       FROM page JOIN "RecordKey" rk ON rk.entity = ${capability.entity} AND rk."entityId" = page.id
         AND rk."mergedAt" IS NULL`,
+    sql`SELECT page.id, member.kind, member.key, 0, false
+      FROM page CROSS JOIN LATERAL (${memberActionScopes(capability.entity, sql`page.id`)}) member`,
   ];
   for (const [index, kind] of (capability.scopes ?? []).entries())
     parts.push(
@@ -198,11 +207,11 @@ export async function loadMachineryRows(
         WHEN bool_or(stage = ${STAGE.stuck} OR attempts >= ${MAX_SCOPE_ATTEMPTS}) THEN ${STAGE.stuck}
         WHEN bool_or(live) THEN ${STAGE.working}
         ELSE coalesce(
-          (array_agg(stage ORDER BY ord) FILTER (WHERE stage IN (${STAGE.needsYou}, ${STAGE.waiting})))[1],
+          (array_agg(stage ORDER BY ${SCOPE_ORDER}) FILTER (WHERE stage IN (${STAGE.needsYou}, ${STAGE.waiting})))[1],
           CASE WHEN bool_or(position IS NOT NULL) THEN ${STAGE.waiting} ELSE ${STAGE.done} END)
       END AS stage,
-      (array_agg("nextActor" ORDER BY ord) FILTER (WHERE "nextActor" IS NOT NULL))[1] AS actor,
-      (array_agg("firstGap" ORDER BY ord) FILTER (WHERE "firstGap" IS NOT NULL))[1] AS "firstGap",
+      (array_agg("nextActor" ORDER BY ${SCOPE_ORDER}) FILTER (WHERE "nextActor" IS NOT NULL))[1] AS actor,
+      (array_agg("firstGap" ORDER BY ${SCOPE_ORDER}) FILTER (WHERE "firstGap" IS NOT NULL))[1] AS "firstGap",
       ${isoText(sql`min(CASE WHEN position IS NOT NULL AND n >= ${ETA_MIN_OBSERVATIONS}
         THEN (now() + make_interval(secs => position * median / 1000))::timestamp END)`)} AS eta
     FROM joined GROUP BY id`);
