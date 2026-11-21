@@ -4,7 +4,6 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import { page } from "vitest/browser";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-import { Button } from "~/ui/primitives/button";
 
 import { DetailSections } from "./detail-page";
 
@@ -15,55 +14,6 @@ beforeEach(() => {
 afterEach(() => {
   harness.dispose();
 });
-
-for (const width of [560, 900, 1100, 1400]) {
-  it(`stacks every section at full width on a ${width}px work surface`, async () => {
-    await page.viewport(1280, 900);
-    render(
-      <div style={{ width }}>
-        <DetailSections
-          rawData={{}}
-          sections={[
-            {
-              id: "facts",
-              title: "Important descriptive record facts",
-              icon: CircleIcon,
-              placement: "primary",
-              overflowVisible: true,
-              headerAction: <Button size="sm">Add related record</Button>,
-              content: <p>Primary facts</p>,
-            },
-            {
-              id: "support",
-              title: "Supporting facts",
-              icon: CircleIcon,
-              placement: "primary",
-              content: <p>Supporting evidence</p>,
-            },
-          ]}
-        />
-      </div>,
-      { wrapper: harness.wrapper },
-    );
-    // Without a side column, sections share one full-width column in
-    // declaration order.
-    expect(document.querySelector("aside")).toBeNull();
-    const facts = document.getElementById("facts")!.getBoundingClientRect();
-    const support = document.getElementById("support")!.getBoundingClientRect();
-    const body = document
-      .getElementById("detail-group-overview")!
-      .getBoundingClientRect();
-    expect(support.top).toBeGreaterThan(facts.top);
-    for (const rect of [facts, support]) {
-      // Only the section plane's hairline border may separate them.
-      expect(rect.left - body.left).toBeLessThanOrEqual(1);
-      expect(rect.width).toBeGreaterThanOrEqual(body.width - 2);
-    }
-    const section = document.getElementById("facts")!;
-    expect(section.scrollWidth).toBeLessThanOrEqual(section.clientWidth);
-    expect(getComputedStyle(section.parentElement!).overflow).toBe("visible");
-  });
-}
 
 // Every group is on the page: a jump must never cost a draft or hide content.
 it("shows every group, keeps drafts, and follows section links", async () => {

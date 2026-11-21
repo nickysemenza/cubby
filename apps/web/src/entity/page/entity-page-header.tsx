@@ -270,6 +270,112 @@ export function DetailPageHeader({
   );
 }
 
+/**
+ * A record's identity at the top of its rail: breadcrumb, cover beside the
+ * title, then code, kind and state, the commands, and the record's summary
+ * (machinery lines, AI-written summary). Stacked pages read the same block.
+ */
+export function RecordIdentity({
+  entity,
+  wayfinding,
+  title,
+  rawData,
+  heroNo,
+  status,
+  summary,
+  heroActions,
+  heroImages,
+  heroDisplayImage,
+}: DetailPageHeaderProps) {
+  const queryClient = useQueryClient();
+  useEntityMetadata(entity);
+  const parsed = detailRawDataSchema.safeParse(rawData);
+  const createdAt = parsed.success ? parsed.data.createdAt : undefined;
+  const validCreatedAt =
+    createdAt !== undefined && !Number.isNaN(new Date(createdAt).getTime());
+  const when = parsed.success
+    ? entityHeroWhen(queryClient, entity, parsed.data)
+    : null;
+  const cover = heroImages?.[0];
+  return (
+    <header
+      data-slot="record-identity"
+      data-testid="detail-spec-plate"
+      className="min-w-0 space-y-2"
+    >
+      {wayfinding !== false ? (
+        <div className="text-xs/4 text-muted-foreground">
+          <DetailBreadcrumb
+            entity={entity}
+            wayfinding={wayfinding}
+            crumbs={(parsed.success && parsed.data.breadcrumb) || []}
+          />
+        </div>
+      ) : null}
+      <div className="flex min-w-0 items-start gap-2.5">
+        {heroNo && (cover || heroDisplayImage) ? (
+          <ImageChainPopover entity={entity} id={heroNo}>
+            <EntityCover
+              images={
+                heroImages?.length
+                  ? heroImages
+                  : heroDisplayImage
+                    ? [heroDisplayImage]
+                    : []
+              }
+              entity={entity}
+              alt="Record cover"
+              size={56}
+            />
+          </ImageChainPopover>
+        ) : null}
+        <h1 className="min-w-0 flex-1 text-lg/5 font-semibold break-words text-foreground-strong">
+          {title}
+        </h1>
+      </div>
+      {heroNo || status ? (
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+          {heroNo ? (
+            <CopyableShortcode
+              code={heroNo}
+              className="min-h-11 font-mono text-foreground md:min-h-0"
+            />
+          ) : null}
+          {status}
+        </div>
+      ) : null}
+      {when || validCreatedAt ? (
+        <p className="flex min-w-0 flex-wrap gap-x-1 text-xs/4 text-muted-foreground">
+          {when ? (
+            <span className="min-w-0 truncate">
+              {when.label}{" "}
+              <strong className="font-semibold text-foreground">
+                {when.value}
+              </strong>
+            </span>
+          ) : null}
+          {validCreatedAt ? (
+            <span className="min-w-0 truncate">
+              {when ? "· added " : "Added "}
+              <DateDisplay timestamp={createdAt} />
+            </span>
+          ) : null}
+        </p>
+      ) : null}
+      {heroActions?.primary || heroActions?.secondary ? (
+        <div
+          data-record-commands
+          className="flex max-w-full flex-wrap items-center gap-1 print:hidden"
+        >
+          {heroActions.primary}
+          {heroActions.secondary}
+        </div>
+      ) : null}
+      {summary}
+    </header>
+  );
+}
+
 interface ListPageHeaderProps {
   title: ReactNode;
   /** The page's parent (domain or owning list), as a breadcrumb leaf. */

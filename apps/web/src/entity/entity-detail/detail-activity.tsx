@@ -115,11 +115,16 @@ function DetailActivityContent({ entity, id }: { entity: Entity; id: string }) {
               : [],
           )}
         >
-          <div className="space-y-1.5" aria-label="Recent changes and spend">
+          <div
+            // The Activity column is narrow: there each day leads its entries
+            // as a line, and the date gutter returns from 26rem.
+            className="@container/activity space-y-1.5"
+            aria-label="Recent changes and spend"
+          >
             {groups.map(({ day, events: dayEvents }) => (
               <div
                 key={day}
-                className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-start max-sm:grid-cols-1"
+                className="grid grid-cols-1 items-start @min-[26rem]/activity:grid-cols-[6.5rem_minmax(0,1fr)]"
               >
                 <div className="flex flex-wrap items-baseline gap-x-1.5 pt-0.5">
                   <time
@@ -225,7 +230,7 @@ function DetailActivityContent({ entity, id }: { entity: Entity; id: string }) {
               </div>
             ))}
             {activity.hasNextPage ? (
-              <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] max-sm:grid-cols-1">
+              <div className="grid grid-cols-1 @min-[26rem]/activity:grid-cols-[6.5rem_minmax(0,1fr)]">
                 <span aria-hidden />
                 <RecordList aria-label="Older activity">
                   <RecordMore

@@ -319,8 +319,8 @@ Columns without a typed clipboard declaration copy as read-only text.
 
 `RTable` rows have one fixed height per table (`--table-row-height`, written on
 the table container and read by `rowDensity({lines, embedded})` in
-`ui/data-table/density.ts`): on a fine-pointer desktop 28px single and 54px in
-two-line mode with a 30px header; on coarse pointers and hosted native
+`ui/data-table/density.ts`): on a fine-pointer desktop 22px single and 54px in
+two-line mode with a 22px header; on coarse pointers and hosted native
 workspaces 32px single and 54px double. Embedded tables are always single. The
 virtualizer places rows at that height, so a taller painted row makes scrolling
 jump; section headers match it. `DesktopDataRow` clips every cell to the height.
@@ -511,17 +511,16 @@ props are a discriminated union: `variant="detail"` requires `entity`. Pages
 never call `PageWrapper` directly. Detail bodies use `DetailSections`
 (`~/entity/table/detail-page`) as children.
 
-- The detail header draws breadcrumb, title, `KindTag`, `StateBadge`, commands,
-  then up to three declared `detail.lines` (64px label column) beside the
-  labelled AI summary from 1120px of pane width. For an entity with a
-  machinery capability the three machinery lines replace the `StateBadge` and
-  lead the summary; they wrap rather than truncate.
-- The workspace is a 272px side column (236px at 1000px or narrower) beside
-  declared section groups as 44px tabs with counts. Without `detail.groups` an
-  entity gets Overview, Work, Evidence, Relations and Activity. Every panel
-  stays mounted; inactive panels are `hidden="until-found"` and `beforematch`
-  selects the tab. The tab is the `#<group>` fragment and a section anchor
-  selects its group.
+- A record page passes `workspace` to `Page`: its identity (breadcrumb, cover,
+  title, code, `KindTag`, `StateBadge` or the machinery lines, commands and the
+  AI summary) draws at the top of the record rail instead of a header block. A
+  detail page whose body is one form omits `workspace` and keeps the header.
+- `DetailSections` renders `RecordWorkspace`: the 248px rail with the page's
+  `facts` and the contents index, the pinned `signals` bar, the column body of
+  the section groups and the Activity column. Without `detail.groups` an entity
+  gets Overview, Work, Evidence, Relations and Activity. Every section stays
+  mounted; a group or section is a URL fragment, and a fragment naming a folded
+  section opens it. [DESIGN.md](../DESIGN.md#layout) owns the widths and keys.
 - A fact appears once: header lines, state, kind, the AI summary, the side
   column's needs field and its summary cells leave the field sections, and an
   embedded table omits the parent-reference column.

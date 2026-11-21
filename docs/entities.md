@@ -670,9 +670,9 @@ under readable ids:
 - `slot`: the one per-platform hand-written fill, rendered only where a registry provides it
   (`DetailSlotId<E>` / `ListSlotId<E>` in `entity-manifest.ts` type those registries).
 
-Sections are authored for reading; nothing derives from edit groups. Web detail is one scrolling page:
-the side content (Needs you, key facts) above the section groups, with a
-sticky contents index beside them. `detail.groups: [{ id, title }]` declares the groups in order,
+Sections are authored for reading; nothing derives from edit groups. Web detail is one record workspace:
+every `fields` section's fields in the left rail, the signals (Needs you, summary cells) pinned
+above the section groups, and a contents index at the rail's foot. `detail.groups: [{ id, title }]` declares the groups in order,
 and each section's `group` names its group. An entity without `groups` gets
 `DEFAULT_DETAIL_GROUPS` (Overview, Work, Evidence, Relations, Activity), and a section without
 `group` joins one from its kind and position: relations join Work, timelines and sections that set
@@ -774,13 +774,13 @@ keeps one order. Entries have stable `id` and `title` and one of four kinds:
 Three more header declarations sit between the summary and the tabs on web. Each names a readable
 field placed once, so it leaves later field sections:
 
-- `detail.lines: [{ label, field }]`, at most `MAX_DETAIL_LINES` (3), are labelled lines under the
-  title. A field is text, a `labelField` or a `displayItem`; references stay links. Runs declare
+- `detail.lines: [{ label, field }]`, at most `MAX_DETAIL_LINES` (3), are labelled lines that lead the
+  rail's facts. A field is text, a `labelField` or a `displayItem`; references stay links. Runs declare
   Why, What and Outcome.
-- `detail.aiSummary` names a stored AI-written summary drawn under the lines, absent until written.
-- `detail.side: { needs? }` fills the side column. `needs` is a `displayItems` field listing what
-  waits on a member and shows only when non-empty, followed by the `fields` summary cells as key
-  facts.
+- `detail.aiSummary` names a stored AI-written summary drawn in the rail under the commands, absent until written.
+- `detail.side: { needs? }` fills the signals bar's Needs you. `needs` is a `displayItems` field
+  listing what waits on a member and shows only when non-empty. The `fields` summary cells join
+  the rail's facts.
 
 Do not maintain per-entity header maps, a second chart registry or client arithmetic. Empty optional
 relationships may disappear; meaningful unknown values, pending reads and failed reads stay

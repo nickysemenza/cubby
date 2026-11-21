@@ -28,11 +28,14 @@ export function MonthlySpendChart({
   id,
   viewKey,
   compact = false,
+  spark = false,
 }: {
   entity: Entity;
   id: string;
   viewKey?: string;
   compact?: boolean;
+  /** One line: the total beside bare bars, for the record's signals bar. */
+  spark?: boolean;
 }) {
   const spend = useSuspenseQuery(
     entityGraph.monthlyExpenseSpend.queryOptions({
@@ -57,8 +60,8 @@ export function MonthlySpendChart({
   const trough = Math.max(0, ...months.map((month) => -month.cents));
   const range = Math.max(1, peak + trough);
   // Leave room for month labels and the average caption below the baseline.
-  const chartTop = 8;
-  const chartBottom = trough === 0 ? 75 : 82;
+  const chartTop = spark ? 0 : 8;
+  const chartBottom = spark ? 100 : trough === 0 ? 75 : 82;
   const plotRange = chartBottom - chartTop;
   const zero =
     peak === 0 && trough === 0
@@ -76,7 +79,7 @@ export function MonthlySpendChart({
   const last = months.at(-1);
   return (
     <figure
-      className="min-w-0"
+      className={cn("min-w-0", spark && "flex items-center gap-2")}
       data-testid="monthly-spend-chart"
       aria-busy={spend.isPending || undefined}
     >
@@ -84,7 +87,7 @@ export function MonthlySpendChart({
         <span
           className={cn(
             "font-medium text-muted-foreground",
-            compact && "sr-only",
+            (compact || spark) && "sr-only",
           )}
         >
           {entity === "productCategory" || entity === "spendingCategory"
@@ -95,15 +98,18 @@ export function MonthlySpendChart({
           {spend.isPending ? "…" : formatCurrency(total / 100)}
         </span>
       </figcaption>
-      {(entity === "productCategory" || entity === "spendingCategory") && (
-        <p className="text-xs text-muted-foreground">
-          Includes descendants; excludes planned Expenses.
-        </p>
-      )}
+      {(entity === "productCategory" || entity === "spendingCategory") &&
+        !spark && (
+          <p className="text-xs text-muted-foreground">
+            Includes descendants; excludes planned Expenses.
+          </p>
+        )}
       <div
         className={cn(
-          "relative mt-1.5 flex gap-[3px]",
-          compact ? "h-10" : "h-30",
+          "relative flex",
+          spark
+            ? "h-4 w-24 gap-px"
+            : cn("mt-1.5 gap-[3px]", compact ? "h-10" : "h-30"),
         )}
       >
         <div
@@ -111,7 +117,7 @@ export function MonthlySpendChart({
           className="pointer-events-none absolute inset-x-0 z-0 border-b border-muted-foreground/35"
           style={{ top: `${zero}%` }}
         />
-        {average !== undefined && averagePosition !== undefined ? (
+        {average !== undefined && averagePosition !== undefined && !spark ? (
           <>
             <div
               aria-hidden
@@ -184,7 +190,7 @@ export function MonthlySpendChart({
                   }}
                 />
               ) : null}
-              {month ? (
+              {month && !spark ? (
                 <span className="pointer-events-none absolute inset-x-0 bottom-0 text-center font-sans text-xs text-muted-foreground">
                   {monthLabel(month.month).slice(0, 1)}
                 </span>

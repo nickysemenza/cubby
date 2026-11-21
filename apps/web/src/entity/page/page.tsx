@@ -17,6 +17,7 @@ import {
   DetailPageHeader,
   type DetailWayfinding,
   ListPageHeader,
+  RecordIdentity,
 } from "~/entity/page/entity-page-header";
 import { ListLoadingSkeleton } from "~/ui/feedback/loading-skeletons";
 import { type PageLayout, PageWrapper } from "~/ui/layout/page-wrapper";
@@ -78,9 +79,13 @@ export function usePageIdentity(): PageIdentity | null {
   return useContext(PageIdentityContext);
 }
 
-/** Detail-only context keeps shared body sections aware of their owner. */
+/**
+ * Detail-only context keeps shared body sections aware of their owner. A
+ * workspace page hands its identity down: the record workspace draws it at the
+ * top of its rail instead of a header block above the page.
+ */
 const PageDetailContext = createContext<
-  { entity: Entity; rawData: unknown } | undefined
+  { entity: Entity; rawData: unknown; identity?: ReactNode } | undefined
 >(undefined);
 
 export function usePageDetailContext() {
@@ -162,6 +167,12 @@ interface PageDetailProps extends PageBaseProps {
   /** Edit, the main workflow action, and overflow at every width. */
   heroActions?: DetailHeroActions;
   rawData?: unknown;
+  /**
+   * The children render the record workspace (`DetailSections`), whose rail
+   * owns the record's identity. Without it the page keeps a header block, for
+   * a body that is one form.
+   */
+  workspace?: boolean;
 }
 
 /**
@@ -264,30 +275,38 @@ function DetailPageShell(props: PageDetailProps) {
   const loadingLabel = isTextTitle(props.title)
     ? `Loading ${props.title.toLocaleLowerCase()} details…`
     : "Loading records…";
+  const header = {
+    entity: props.entity,
+    wayfinding: props.wayfinding,
+    title: props.title,
+    rawData: props.rawData,
+    heroNo: props.heroNo,
+    status: props.status,
+    summary: props.summary,
+    heroActions: props.heroActions,
+    heroImages: props.heroImages,
+    heroDisplayImage: props.heroDisplayImage,
+  };
   return (
-    <PageWrapper layout={props.layout}>
+    <PageWrapper layout={props.workspace ? "full" : props.layout}>
       <div
         data-record-page
-        // The crumb row scrolls away; the 40px title band stays (`DetailPageHeader`).
-        className="space-y-2 [--record-crumb-height:1rem] md:[--record-title-height:2.5rem]"
+        // A header block's crumb row scrolls away; its 40px title band stays.
+        className={
+          props.workspace
+            ? undefined
+            : "space-y-2 [--record-crumb-height:1rem] md:[--record-title-height:2.5rem]"
+        }
       >
-        <DetailPageHeader
-          entity={props.entity}
-          wayfinding={props.wayfinding}
-          title={props.title}
-          rawData={props.rawData}
-          heroNo={props.heroNo}
-          status={props.status}
-          summary={props.summary}
-          heroActions={props.heroActions}
-          heroImages={props.heroImages}
-          heroDisplayImage={props.heroDisplayImage}
-        />
+        {props.workspace ? null : <DetailPageHeader {...header} />}
         <PageIdentityContext.Provider value={null}>
           <PageDetailContext.Provider
             value={{
               entity: props.entity,
               rawData: props.rawData,
+              identity: props.workspace ? (
+                <RecordIdentity {...header} />
+              ) : undefined,
             }}
           >
             <PageCountContext.Provider value={() => undefined}>
