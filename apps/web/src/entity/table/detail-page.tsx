@@ -9,11 +9,11 @@ import { usePageDetailContext } from "~/entity/page/page";
 import { useDebug } from "~/ui/hooks/use-debug";
 import { Section } from "~/ui/layout";
 
-import {
-  type IndexedSection,
-  type IndexedSectionGroup,
-  IndexedSections,
+import type {
+  IndexedSection,
+  IndexedSectionGroup,
 } from "../../ui/data-table/indexed-sections";
+import { RecordWorkspace } from "../../ui/data-table/record-workspace";
 import JsonRenderer from "../../ui/text/json-renderer";
 import { AuditLogList } from "../audit-log/audit-log-list";
 import {
@@ -71,8 +71,12 @@ interface DetailSectionsProps {
   rawData: unknown;
   /** The record's section groups, in order; `DEFAULT_DETAIL_GROUPS` when omitted. */
   groups?: readonly DetailGroup[];
-  /** Needs you and key facts, above the sections. */
-  side?: ReactNode;
+  /** Every singular fact, under the record's identity in the rail. */
+  facts?: ReactNode;
+  /** Needs you and the summary figures, pinned above the sections. */
+  signals?: ReactNode;
+  /** Sections with something waiting on the member. */
+  attention?: ReadonlySet<string>;
 }
 
 /**
@@ -198,15 +202,17 @@ function contextSourceId(
 }
 
 /**
- * A record's body: the side content above one scrolling page of its section
- * groups with a sticky contents index, plus the
+ * A record's body: its identity and singular facts in the rail, signals above
+ * one column body of its section groups, and Activity beside them, plus the
  * generic Relationships explorer and History when the page brings neither.
  */
 export const DetailSections: FC<DetailSectionsProps> = ({
   sections,
   rawData,
   groups = DEFAULT_DETAIL_GROUPS,
-  side,
+  facts,
+  signals,
+  attention,
 }) => {
   const { isDebugEnabled } = useDebug();
   const pageDetail = usePageDetailContext();
@@ -234,26 +240,24 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     ...(activity.ownSection || !activity.section ? [] : [activity.section]),
   ]);
   return (
-    <div className="min-w-0 space-y-4">
-      {side ? (
-        <aside
-          aria-label="Record summary"
-          data-detail-side
-          className="@container/side min-w-0 border-b border-border pt-2 pb-4"
-        >
-          {side}
-        </aside>
-      ) : null}
-      <IndexedSections
-        groups={indexed}
-        footer={
-          isDebugEnabled && (
-            <Section headingAs="h2" title="Raw details">
-              <JsonRenderer input={rawData} pretty />
-            </Section>
-          )
-        }
-      />
-    </div>
+    <RecordWorkspace
+      groups={indexed}
+      activityId={ACTIVITY_SECTION_ID}
+      rail={
+        <div className="space-y-3">
+          {pageDetail?.identity}
+          {facts}
+        </div>
+      }
+      signals={signals}
+      attention={attention}
+      footer={
+        isDebugEnabled && (
+          <Section headingAs="h2" title="Raw details">
+            <JsonRenderer input={rawData} pretty />
+          </Section>
+        )
+      }
+    />
   );
 };

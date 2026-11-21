@@ -114,9 +114,9 @@ describe("table density", () => {
     const spill = overlay();
     if (!spill) throw new Error("missing spill overlay");
     expect(rect(spill).width).toBeGreaterThan(rect(clipped).width);
-    expect(Math.round(rect(spill).height)).toBe(28);
+    expect(Math.round(rect(spill).height)).toBe(22);
     expect(Math.round(rect(spill).top)).toBe(Math.round(rect(clipped).top));
-    expect(Math.round(rect(clipped).height)).toBe(28);
+    expect(Math.round(rect(clipped).height)).toBe(22);
 
     // The overlay now covers its neighbour, so leave through the header.
     await userEvent.hover(view.getByTestId("head-1"));
@@ -455,7 +455,7 @@ describe("table density", () => {
     const shown = [...cell.querySelectorAll<HTMLElement>("[data-chip]")];
     const tops = new Set(shown.map((chip) => Math.round(rect(chip).top)));
     expect(tops.size).toBe(1);
-    expect(Math.round(rect(cell).height)).toBe(28);
+    expect(Math.round(rect(cell).height)).toBe(22);
   });
 
   it("keeps a code's first and last four characters when it truncates", async () => {
@@ -616,7 +616,7 @@ describe("table density", () => {
       expect(overflow?.textContent ?? null).toBe(
         count === 1 ? null : `+${count - 1}`,
       );
-      expect(Math.round(rect(view.getByTestId("cell-0")).height)).toBe(28);
+      expect(Math.round(rect(view.getByTestId("cell-0")).height)).toBe(22);
     },
   );
 });

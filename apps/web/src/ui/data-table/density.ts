@@ -1,7 +1,7 @@
 import { createContext, useSyncExternalStore } from "react";
 
-// One fixed row height per table. A fine-pointer desktop draws 28px rows
-// (54px in two-line mode) under a 30px header; phones, coarse pointers and
+// One fixed row height per table. A fine-pointer desktop draws 22px rows
+// (54px in two-line mode) under a 22px header; phones, coarse pointers and
 // hosted native workspaces draw 32px (54px). styles.css owns the same numbers
 // as `--table-row-height` and `--table-row-height-two-line`. `row` MUST equal
 // the painted row: the virtualizer's spacer math and the fast-scroll ghost-row
@@ -58,8 +58,8 @@ export function rowDensity({
   const desktop = desktopDensity();
   return {
     lines: double ? ("double" as const) : ("single" as const),
-    row: double ? 54 : desktop ? 28 : 32,
-    header: desktop ? 30 : 32,
+    row: double ? 54 : desktop ? 22 : 32,
+    header: desktop ? 22 : 32,
     ...(double ? DOUBLE : SINGLE),
   };
 }

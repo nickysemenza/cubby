@@ -8,7 +8,7 @@
   :root:not([data-hosted-workspace]) {
     --section-heading-pad: 0.25rem;
     --section-body-gap: 0.25rem;
-    --compact-fact-pad: 0.1875rem;
+    --compact-fact-pad: 0.125rem;
   }
 }
 

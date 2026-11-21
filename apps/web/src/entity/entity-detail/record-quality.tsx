@@ -413,6 +413,25 @@ export function useQualityAttention() {
   }));
 }
 
+/**
+ * The sections holding an open check that asks the member for something: the
+ * section a check is placed in, else the record's quality section.
+ */
+export function useQualityAttentionSections(fallback: string) {
+  const assessment = useContext(AssessmentContext);
+  return new Set(
+    (assessment?.attention ?? EMPTY_CHECKS).flatMap((check) => {
+      const placement = placementOf(check);
+      if (placement && "field" in placement) return [];
+      return [
+        placement && assessment?.checks.includes(check)
+          ? placement.section
+          : fallback,
+      ];
+    }),
+  );
+}
+
 function AssessedRecordQuality({
   entity,
   id,

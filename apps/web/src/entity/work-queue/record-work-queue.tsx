@@ -30,10 +30,25 @@ export function useRecordWorkQueue(id: string, enabled = true) {
   };
 }
 
-/** One Work queue row's failed checks (or reason), actions and owner. */
-export function RecordWorkQueueRow({ row }: { row: WorkQueueRow }) {
+/**
+ * One Work queue row's failed checks (or reason), actions and owner; `inline`
+ * keeps them on one line for a chip.
+ */
+export function RecordWorkQueueRow({
+  row,
+  inline = false,
+}: {
+  row: WorkQueueRow;
+  inline?: boolean;
+}) {
   return (
-    <div className="grid min-w-0 gap-1">
+    <div
+      className={
+        inline
+          ? "flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
+          : "grid min-w-0 gap-1"
+      }
+    >
       <div className="flex min-w-0 flex-wrap items-center gap-1">
         {row.gaps.length > 0
           ? row.gaps.map((gap) => <GapChip key={gap.check} gap={gap} />)

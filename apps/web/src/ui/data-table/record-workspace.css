@@ -1,0 +1,167 @@
+/*
+  Record workspace: singular facts in a left rail, plural records in a column
+  body, signals pinned above it and Activity beside it. Every width below is
+  the record pane's (the `record` container), never the viewport's.
+
+  The stacked layout is the base: phones, coarse pointers and hosted native
+  workspaces read the rail, the signals, the sections and Activity in order.
+*/
+.record-frame {
+  --record-rail-width: 15.5rem;
+  --record-activity-width: 18.75rem;
+  --record-hints-height: 0px;
+  min-width: 0;
+}
+.record-rail {
+  min-width: 0;
+  border-bottom: 1px solid var(--border);
+}
+.record-rail-scroll {
+  padding: 0.5rem 0.5rem 0.75rem;
+}
+.record-index,
+.record-hints {
+  display: none;
+}
+.record-jump {
+  position: sticky;
+  top: var(--app-chrome-top);
+  z-index: 30;
+  background: var(--card);
+}
+.record-signals {
+  min-width: 0;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+.record-main,
+.record-body,
+.record-activity {
+  min-width: 0;
+}
+.record-body,
+.record-activity {
+  padding: 0.5rem;
+}
+.record-body [data-detail-section]:not([hidden]),
+.record-body [data-folded-sections] {
+  margin-bottom: var(--section-gap);
+}
+.record-body [data-detail-section] {
+  scroll-margin-top: calc(
+    var(--app-chrome-top) + var(--record-signals-height, 2rem) + 0.5rem
+  );
+}
+/* The J/K cursor: one row, marked on its leading edge. */
+.record-frame [data-row-cursor] {
+  background: var(--brand-action-create-surface);
+  box-shadow: inset 2px 0 0 var(--link);
+}
+
+@media (min-width: 48rem) and (hover: hover) and (pointer: fine) {
+  @container record (min-width: 50rem) {
+    :root:not([data-hosted-workspace]) .record-frame {
+      --record-hints-height: 1.25rem;
+      display: grid;
+      grid-template-columns: var(--record-rail-width) minmax(0, 1fr);
+      align-items: start;
+    }
+    :root:not([data-hosted-workspace]) .record-rail {
+      position: sticky;
+      top: var(--app-chrome-top);
+      display: flex;
+      height: calc(100dvh - var(--app-chrome-top));
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      border-bottom: 0;
+    }
+    :root:not([data-hosted-workspace]) .record-rail-scroll {
+      min-height: 0;
+      flex: 1 1 auto;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: 0.625rem 0.75rem 0.75rem;
+    }
+    :root:not([data-hosted-workspace]) .record-index {
+      display: block;
+      max-height: 45%;
+      flex: none;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      border-top: 1px solid var(--border);
+      padding: 0.375rem 0.625rem 0.5rem;
+    }
+    :root:not([data-hosted-workspace]) .record-jump {
+      display: none;
+    }
+    :root:not([data-hosted-workspace]) .record-main {
+      display: flex;
+      min-height: calc(100dvh - var(--app-chrome-top));
+      flex-direction: column;
+    }
+    :root:not([data-hosted-workspace]) .record-signals {
+      position: sticky;
+      top: var(--app-chrome-top);
+      z-index: 20;
+    }
+    :root:not([data-hosted-workspace]) .record-main-grid {
+      flex: 1 1 auto;
+    }
+    :root:not([data-hosted-workspace]) .record-body,
+    :root:not([data-hosted-workspace]) .record-activity {
+      padding: 0.5rem 0.875rem 0.75rem;
+    }
+    :root:not([data-hosted-workspace]) .record-hints {
+      position: sticky;
+      bottom: 0;
+      z-index: 20;
+      display: flex;
+      height: var(--record-hints-height);
+      flex: none;
+      align-items: center;
+      gap: 0.75rem;
+      overflow: hidden;
+      border-top: 1px solid var(--border);
+      background: var(--sidebar);
+      padding-inline: 0.875rem;
+      white-space: nowrap;
+    }
+  }
+
+  @container record (min-width: 62.5rem) {
+    :root:not([data-hosted-workspace]) .record-body {
+      columns: 2;
+      column-gap: 1.75rem;
+      column-rule: 1px solid var(--border);
+    }
+    :root:not([data-hosted-workspace])
+      .record-body
+      :is([data-detail-section], [data-folded-sections]) {
+      break-inside: avoid;
+    }
+    :root:not([data-hosted-workspace])
+      .record-body
+      [data-detail-section][data-wide] {
+      column-span: all;
+    }
+  }
+
+  @container record (min-width: 75rem) {
+    :root:not([data-hosted-workspace]) .record-main-grid[data-activity] {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) var(--record-activity-width);
+      align-items: start;
+    }
+    :root:not([data-hosted-workspace]) .record-activity {
+      position: sticky;
+      top: calc(var(--app-chrome-top) + var(--record-signals-height, 2rem));
+      max-height: calc(
+        100dvh - var(--app-chrome-top) - var(--record-signals-height, 2rem) -
+          var(--record-hints-height)
+      );
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      border-left: 1px solid var(--border);
+    }
+  }
+}
