@@ -42,6 +42,7 @@ import {
   databaseForTransaction,
 } from "~/server/db/helpers";
 import { textArrayParam } from "~/server/db/helpers/array-param";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { recordKey, evidenceBinding } from "~/server/db/kernel-schema";
 import {
   expense,
@@ -55,7 +56,7 @@ import {
   vendor,
 } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
-import { emailLinkDecisionsRead } from "~/server/domains/email/repo/email-decision-sql";
+import { emailLinkDecisionsReadForEmails } from "~/server/domains/email/repo/email-decision-sql";
 import { readEmailPurchaseAssociations } from "~/server/domains/email/repo/email-purchase-associations";
 import { decideExpenseLineRole } from "~/server/domains/expense/service/expense-line-role";
 import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
@@ -1761,17 +1762,20 @@ export async function commitPurchaseImport(
           row.emailId ? [row.emailId] : [],
         );
         if (emailIds.length) {
+          const links = emailLinkDecisionsReadForEmails(
+            uuidArrayParam(emailIds),
+          );
           const dismissed = await getDb(database)
             .select({
-              emailId: emailLinkDecisionsRead.emailId,
-              purchaseId: emailLinkDecisionsRead.purchaseId,
+              emailId: links.emailId,
+              purchaseId: links.purchaseId,
             })
-            .from(emailLinkDecisionsRead)
+            .from(links)
             .where(
               and(
-                inArray(emailLinkDecisionsRead.emailId, emailIds),
-                eq(emailLinkDecisionsRead.decision, "dismissed"),
-                eq(emailLinkDecisionsRead.active, true),
+                inArray(links.emailId, emailIds),
+                eq(links.decision, "dismissed"),
+                eq(links.active, true),
               ),
             );
           const deniedTargets = dismissed.length
