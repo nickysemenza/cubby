@@ -1652,16 +1652,18 @@ export function createPurchaseEvent({
       // Only a member's explicit category is stored and must be live. Absent,
       // weak or retired derived categories never hold booking: the Expense
       // books Uncategorized and its resolver reads Vendor defaults live.
-      const selectedCategory =
-        typeof value("spendingCategoryId") === "string"
-          ? c.reference("spendingCategory", String(value("spendingCategoryId")))
-          : null;
+      // A member choice whose category no longer resolves holds the booking:
+      // booking without it would record their decision as no category.
+      const categoryChosen = typeof value("spendingCategoryId") === "string";
+      const selectedCategory = categoryChosen
+        ? c.reference("spendingCategory", String(value("spendingCategoryId")))
+        : null;
       const category = selectedCategory
         ? spendingCategoryForDiscovery(input.categories, {
             id: selectedCategory,
           })
         : undefined;
-      if (selectedCategory && !category) {
+      if (categoryChosen && !category) {
         c.gap.decision("a live spending category");
         retained(c);
         return c.done();

@@ -207,9 +207,10 @@ purchase-event evidence or decisions and the reconciler.
 Clean new spending keeps the transaction-kind agreement, identity, ownership and
 money checks. A spending category never holds otherwise-supported booking: a
 charge whose category is absent, uncertain or a retired default books its
-aggregate Expense with no category override, reports as Uncategorized, and its
-missing effective category stays in the shared Work queue until a member
-categorizes it. No confidence level makes a guessed category trusted: the model
+aggregate Expense with no category override. It reports under its Vendor's
+live default category when one resolves; otherwise it reports as Uncategorized
+and its missing effective category stays in the shared Work queue until a
+member categorizes it. No confidence level makes a guessed category trusted: the model
 proposes no category per charge and a guess is never stored. The effective
 category comes from a member's reviewed choice, a refund's identified original
 Purchase, or the resolved Vendor's live default category; otherwise the Expense
