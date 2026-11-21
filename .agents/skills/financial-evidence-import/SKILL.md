@@ -28,20 +28,17 @@ Keep existing actionable account/identity/correction review visible. Missing sou
    them covered or change their connection. Distinguish unavailable accounts
    from accounts with an enumerated empty window. Keep budgets, holdings, goals
    and balance-history import outside this workflow.
-2. Backfill the agreed historical account/date scope first. After historical
-   evidence and spending reconciliation are verified, routine pulls use a
-   rolling two-week overlap. Older edits require a targeted older refresh;
+2. Routine pulls use a rolling two-week overlap and do not wait on historical
+   reconciliation. Older edits require a targeted older refresh;
    ordinary pulls cannot detect them. Enable recurrence only on explicit
    instruction after verifying the execution host, credentials, cadence and
    replay. This skill itself installs no scheduler.
 3. Enumerate by account and bounded date window, recording expected count,
    fetched occurrences, IDs, signed totals and visibility for every partition,
-   including empty ones. Follow real pagination when available. The investigated
-   Monarch tool exposed no cursor/offset and capped detailed responses at 20;
-   recheck the current tools. A returned continuation such as `next_offset` is
-   usable only when the live request schema accepts it; a response hint alone
-   does not supply a pagination capability. Verify account filters against every
-   returned row's account ID: unknown filter keys can be silently ignored.
+   including empty ones. Monarch `GetTransactions` pages with `offset` and
+   `next_offset`, and caps detailed responses at 20 per page; recheck the
+   current tools. Its `account_ids` filter is silently ignored: filter by
+   `accounts` name, and verify every returned row's account ID.
    An accepted request alone does not prove account scope. Use basic enumeration plus targeted detail reads,
    subdividing accounts/date windows until all identities can be enumerated.
    A nontruncated flag, a short page, count agreement or signed-total agreement
@@ -56,9 +53,10 @@ Keep existing actionable account/identity/correction review visible. Missing sou
    children as separate bank money. Source categorization does not allocate
    Expenses. Count each genuine occurrence, including identical purchases and
    zero values. Pending/posted status is optional: preserve explicit values;
-   use `providerStatus: null` when unavailable. Observed MCP responses included
-   pending transactions without a status label; absence of that label never
-   establishes posting and does not by itself make enumeration incomplete.
+   use `providerStatus: null` when unavailable. Monarch rows carry an explicit
+   `pending` boolean: record `true` as pending and `false` as posted. A row
+   without that field has unknown status; its absence never establishes posting
+   and does not by itself make enumeration incomplete.
 5. Preserve the unmodified provider response in `providerData`. For Monarch
    MCP it is exactly `{"transaction": <GetTransactions row>, "account":
    {"id", "displayName"}}`: the raw row with its notes, tags, category,
