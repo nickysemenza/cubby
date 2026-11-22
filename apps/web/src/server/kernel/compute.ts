@@ -7,6 +7,7 @@
  */
 import type { KernelActor, KernelGap } from "@cubby/schemas/kernel/stage";
 import { sourceActor } from "@cubby/schemas/kernel/stage";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { and, sql } from "drizzle-orm";
 
 import { withDatabaseOperationPhase } from "~/server/db/db-observability";
@@ -44,7 +45,6 @@ import {
 import {
   answerKey,
   decisionKey,
-  hashCanonical,
   recordIdentity,
   recordShortcode,
   VETO_SEPARATOR,
@@ -436,8 +436,12 @@ async function computeBatchInPhase(
         missing,
         answers: used,
         decisions: decided,
-        inputsHash: await hashCanonical(
-          [...keys].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+        // [key, revision] pairs of strings and numbers are already canonical
+        // JSON; the hash equals `hashCanonical` without walking every pair.
+        inputsHash: await sha256Hex(
+          JSON.stringify(
+            [...keys].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+          ),
         ),
         durationMs,
       };
