@@ -356,7 +356,7 @@ Registration and mutation serialize through `KeyRev(key, rev)` and the
 household write gate (section 6). An input mutation raises `rev` for each of
 its keys with an upsert, inserting a new key at 1, before it reads
 `ScopeDep`. Only a raise writes a `KeyRev` row; a key with no row reads 0
-everywhere, and the table refuses a revision below 1. A load records the `rev`
+everywhere. A load records the `rev`
 it saw for every key it read and reads it in the same statement as the rows,
 so both come from one snapshot. A read returns its shared revision map once,
 including when no data rows match. An apply admits the gate in one statement,

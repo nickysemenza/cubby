@@ -1,8 +1,6 @@
--- KeyRev holds only raised keys. An absent key reads 0, so every rev-0 row is
--- removed and the table refuses a revision below 1. Neither a foreign key nor
--- a trigger references KeyRev, so TRUNCATE returns the storage inside this
--- transaction. The constraint is added after the rebuild; a Worker that still
--- materialises a zero row fails its statement and rolls back its apply.
+-- KeyRev holds only raised keys: an absent key reads 0. Neither a foreign key
+-- nor a trigger references KeyRev, so TRUNCATE returns the storage inside this
+-- transaction.
 LOCK TABLE "KeyRev" IN ACCESS EXCLUSIVE MODE;
 --> statement-breakpoint
 DO $$
@@ -41,10 +39,7 @@ BEGIN
   END IF;
 END $$;
 --> statement-breakpoint
-ALTER TABLE "KeyRev" ALTER COLUMN "rev" DROP DEFAULT;--> statement-breakpoint
-ALTER TABLE "KeyRev" ADD CONSTRAINT "KeyRev_raised_check" CHECK ("rev" > 0);--> statement-breakpoint
 ANALYZE "KeyRev";
-
 --> statement-breakpoint
 
 -- Plain reads are invisible to the runner's lock detection. Every table this
@@ -70,8 +65,10 @@ LOCK TABLE "ScopeDep", "ScopeDirty", "FactKey", "Purchase" IN ACCESS EXCLUSIVE M
 --    column keys of EmailClassificationObservation, SourceOrderObservation,
 --    OrderMailEvent, RunOperation, EmailReadSnapshot, OrderMail, LedgerParty,
 --    Purchase and RecordKey. Each emailState scope holding such rows is made
---    dirty (an already dirty scope's seq is raised, so a claim loaded before
---    this migration cannot publish) and all of its ScopeDep rows are deleted.
+--    dirty the way markDirty dirties a scope on a new input (seq raised, so a
+--    claim loaded before this migration cannot publish; attempts and wait
+--    cleared, so an exhausted scope is claimable again) and all of its
+--    ScopeDep rows are deleted.
 --    A dirty scope needs no dependency edge to be rerun; its next publication
 --    registers the per-Email keys, and an in-flight load is still refused by
 --    the KeyRev fence on every key it read. A scope with no ScopeDep rows has
@@ -131,7 +128,10 @@ BEGIN
   ORDER BY "scopeKey"
   ON CONFLICT ("scopeKind", "scopeKey") DO UPDATE SET
     seq = "ScopeDirty".seq + 1,
+    reason = excluded.reason,
+    attempts = 0,
     "availableAt" = LEAST("ScopeDirty"."availableAt", now()),
+    "waitCause" = NULL,
     "updatedAt" = now();
   DELETE FROM "ScopeDep" WHERE "scopeKind" = 'emailState';
 
@@ -141,14 +141,41 @@ BEGIN
   IF EXISTS (
     SELECT 1 FROM email_state_dep_scopes s WHERE NOT EXISTS (
       SELECT 1 FROM "ScopeDirty" d
-      WHERE d."scopeKind" = 'emailState' AND d."scopeKey" = s."scopeKey")
+      WHERE d."scopeKind" = 'emailState' AND d."scopeKey" = s."scopeKey"
+        AND d.attempts = 0 AND d."waitCause" IS NULL AND d."availableAt" <= now())
   ) THEN
-    RAISE EXCEPTION 'emailState dependencies: a scope lost its edges without being dirty';
+    RAISE EXCEPTION 'emailState dependencies: a scope lost its edges without being claimable';
   END IF;
   SELECT count(*) INTO dirty_after FROM "ScopeDirty" WHERE "scopeKind" = 'emailState';
   RAISE NOTICE 'Purchase memberships: % order, % vendor; emailState: % ScopeDep rows of % scopes deleted, dirty % -> %',
     order_rows, vendor_rows, dep_rows, dep_scopes, dirty_before, dirty_after;
 END $$;
 --> statement-breakpoint
-ANALYZE "ScopeDep";--> statement-breakpoint
+
+-- The deleted and superseded dependency rows are returned by copying the live
+-- rows; no foreign key or trigger references ScopeDep.
+DO $$
+DECLARE
+  dep_before bigint;
+  dep_after bigint;
+BEGIN
+  SELECT count(*) INTO dep_before FROM "ScopeDep";
+  CREATE TEMP TABLE scope_dep_live ON COMMIT DROP AS
+    SELECT "scopeKind", "scopeKey", key FROM "ScopeDep";
+  TRUNCATE "ScopeDep";
+  INSERT INTO "ScopeDep" ("scopeKind", "scopeKey", key)
+  SELECT "scopeKind", "scopeKey", key FROM scope_dep_live
+  ORDER BY "scopeKind", "scopeKey", key;
+  SELECT count(*) INTO dep_after FROM "ScopeDep";
+  IF dep_after <> dep_before OR EXISTS (
+    SELECT 1 FROM scope_dep_live l WHERE NOT EXISTS (
+      SELECT 1 FROM "ScopeDep" d WHERE d."scopeKind" = l."scopeKind"
+        AND d."scopeKey" = l."scopeKey" AND d.key = l.key)
+  ) THEN
+    RAISE EXCEPTION 'ScopeDep rewrite: % rows before, % after', dep_before, dep_after;
+  END IF;
+END $$;
+--> statement-breakpoint
+ANALYZE "ScopeDep";
+--> statement-breakpoint
 ANALYZE "FactKey";

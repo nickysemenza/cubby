@@ -301,19 +301,15 @@ const liveKey = (key: AnyPgColumn) =>
 
 /**
  * One revision per raised key: the serialization point between mutation and
- * dependency registration. Only a raise writes a row, at 1 or above; an absent
- * key reads 0, so a Worker that materialises a zero row fails here.
+ * dependency registration. Only a raise writes a row; an absent key reads 0.
  */
 export const keyRev = pgTable(
   "KeyRev",
   {
     key: text("key").primaryKey(),
-    rev: bigint("rev", { mode: "number" }).notNull(),
+    rev: bigint("rev", { mode: "number" }).notNull().default(0),
   },
-  (table) => [
-    check("KeyRev_retired_key_check", liveKey(table.key)),
-    check("KeyRev_raised_check", sql`${table.rev} > 0`),
-  ],
+  (table) => [check("KeyRev_retired_key_check", liveKey(table.key))],
 );
 
 /** One row per scope that must run. */
