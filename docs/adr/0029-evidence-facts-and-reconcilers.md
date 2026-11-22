@@ -420,10 +420,8 @@ A locked background fallback tries the gate without waiting before it reads
 inside the transaction. Busy admission releases its claim as a conflict,
 retains the dirty work and makes it claimable again after a short delay, so a
 gate wait cannot consume the budget needed for recomputation and a busy gate
-does not drive a recompute loop. Once admitted and holding its revisions, the
-fallback publishes the computation it made before the gate when none of those
-revisions and no dirtying moved; it recomputes inside the transaction only
-for inputs that changed. Admitted work keeps every revision and sequence fence. Member
+does not drive a recompute loop. The fallback's reload rule is in the lock
+order below. Admitted work keeps every revision and sequence fence. Member
 work retains its bounded gate wait. A failed locked load settles its original
 cause before issuing another query on that transaction.
 
@@ -463,10 +461,15 @@ locks without a cycle, because no other kernel writer runs beside it. A
 conflict on `seq` or `rev`, a deadlock or a serialization failure does not
 count as a failed attempt. After three
 conflicts in a row the runner makes an exception to loading outside the
-transaction: it discovers the read set, takes the gate,
-locks the union of input and planned output keys in sorted order, then reloads,
-computes and fences the dirty row in that bounded transaction. A newly needed
-key retries without spending an attempt. Producer calls stay outside it.
+transaction: it discovers the read set by computing outside, takes the gate,
+and locks the union of input and planned output keys in sorted order. It then
+publishes that outside computation only when every input it read is fenced
+and unchanged: each keyed read's revision is the one now held, each identity
+reference (with its redirects and misses) reads the same rows again, and the
+dirty row's `seq` has not moved. A computation that read through a prepared
+source, or whose inputs moved, reloads, computes and fences the dirty row in
+that bounded transaction. A newly needed key retries without spending an
+attempt. Producer calls stay outside it.
 
 Catalog scopes use the same fence and take the gate with their first revision
 lock. A catalog apply also

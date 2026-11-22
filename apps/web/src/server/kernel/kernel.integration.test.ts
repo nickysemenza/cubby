@@ -93,7 +93,7 @@ import {
   claimScopes,
   fenceClaim,
 } from "./claim";
-import { computeBatch } from "./compute";
+import { computeBatch, referencesUnchanged } from "./compute";
 import { markDirty } from "./dirty";
 import { enterWriteTransaction, householdWrite } from "./gate";
 import { runOnePass } from "./pass";
@@ -293,6 +293,65 @@ describe("evidence-facts kernel", () => {
     });
     await kernel.reconcileNow(ctx.db, [scope]);
     expect(seen.at(-1)).toBe(1);
+  });
+
+  it("re-reads the identity references a pre-gate computation resolved", async () => {
+    const target = writes(vendor, [], {
+      entity: "vendor",
+      createOnly: ["name"],
+    });
+    const project = crypto.randomUUID();
+    const q = repositoryQueries(ctx.db);
+    await q
+      .insert(entityIdentity)
+      .values({ id: project, kind: "project", shortcode: "PRJ-SYNREF" });
+    const reconciler = defineReconciler<string>({
+      scope: PURCHASE_SCOPE,
+      lane: "money",
+      version: 1,
+      reads: [],
+      writes: [target],
+      load: async (_reads, keys) => new Map(keys.map((key) => [key, key])),
+      reconcile(key, c) {
+        c.record(
+          target,
+          "seller",
+          { name: `Synthetic ${key}` },
+          {
+            provenance: { project: c.reference("project", project) ?? "none" },
+          },
+        );
+        return c.done();
+      },
+    });
+    const kernel = createKernel([
+      defineModule({
+        name: "references",
+        evidence: [chargeEvidence],
+        reconcilers: [reconciler],
+      }),
+    ]);
+    await kernel.append(ctx.db, [charge("ORD-REF", 100)]);
+    const compute = () =>
+      computeBatch(
+        q,
+        kernel.registry,
+        reconciler,
+        [{ kind: PURCHASE_SCOPE, key: "ORD-REF" }],
+        { locked: false, hideBaseline: false },
+      );
+    const [prepared] = await compute();
+    expect(prepared!.reusable).toBe(true);
+    expect(prepared!.desired!.records[0]!.provenance.project).toBe(project);
+    expect(await referencesUnchanged(q, prepared!)).toBe(true);
+    // A Project deleted after the computation carries no input revision.
+    await q
+      .update(entityIdentity)
+      .set({ deletedAt: new Date() })
+      .where(eq(entityIdentity.id, project));
+    expect(await referencesUnchanged(q, prepared!)).toBe(false);
+    const [reloaded] = await compute();
+    expect(reloaded!.desired!.records[0]!.provenance.project).toBe("none");
   });
 
   it("reserves public codes during reconcile and retries a collision without leaking an identity", async () => {
