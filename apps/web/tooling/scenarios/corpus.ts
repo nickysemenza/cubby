@@ -8,7 +8,9 @@ import { testUserId } from "@cubby/schemas/testing";
 import { upsertCookbookInput } from "@cubby/schemas/import-recipe";
 import { plainDate } from "@cubby/schemas/base-entity";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
+import { eq } from "drizzle-orm";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
+import { appendEmailIdentity } from "~/server/domains/purchase-import/repo/order-evidence";
 import { recordShipmentEvidence } from "~/server/domains/shipment/repo/evidence";
 import { saveMealFoodInput } from "@cubby/schemas/meal";
 import { z } from "zod";
@@ -891,18 +893,23 @@ async function seedConnectedHousehold(
       currency: "USD",
       sourceKey: `classified:${checksum}:0`,
     });
-  await insertWithShortcode(db, "email", {
-    ledgerPartyId: parseEntityId("ledgerParty", memberId),
-    orderMailId: mail.id,
-    mailboxId: "synthetic-household-mailbox",
-    messageId: "synthetic-household-order-001",
-    sender: "Cedar Market <orders@example.test>",
-    subject: "Cedar Market synthetic receipt",
-    receivedAt: householdDateTime(day(-20), 15 * 60),
-    checksum,
-    classification: "uncertain",
-    classificationVersion: "synthetic-household/v1",
-    status: "pending",
+  const emailId = parseEntityId("email", crypto.randomUUID());
+  await appendEmailIdentity(db, {
+    where: eq(schema.email.id, emailId),
+    values: () => ({
+      id: emailId,
+      ledgerPartyId: parseEntityId("ledgerParty", memberId),
+      orderMailId: mail.id,
+      mailboxId: "synthetic-household-mailbox",
+      messageId: "synthetic-household-order-001",
+      sender: "Cedar Market <orders@example.test>",
+      subject: "Cedar Market synthetic receipt",
+      receivedAt: householdDateTime(day(-20), 15 * 60),
+      checksum,
+      classification: "uncertain",
+      classificationVersion: "synthetic-household/v1",
+      status: "pending",
+    }),
   });
 
   await seedHouseholdPhotos(db, context, userId, storage, clothing, readImage);
