@@ -538,6 +538,9 @@ metrics. It exports no pass key, cursor or source input.
 
 Synchronous `reconcileNow` returns one final outcome per requested scope.
 Input-fence conflicts that are retried within the call are intermediate results.
+Inside a caller's transaction, which already holds the gate, a scope whose
+locked run conflicts a second time returns waiting and stays dirty for
+background work.
 
 ### 8. Paid producer calls
 

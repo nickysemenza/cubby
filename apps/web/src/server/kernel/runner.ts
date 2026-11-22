@@ -17,7 +17,12 @@ import {
 
 import { runClaimedScopes } from "./apply";
 import { expireAsks, runQueuedAsks } from "./ask";
-import { claimScopes, stopUnregisteredWork, type ClaimedScope } from "./claim";
+import {
+  claimScopes,
+  LOCKED_RUN_AFTER_CONFLICTS,
+  stopUnregisteredWork,
+  type ClaimedScope,
+} from "./claim";
 import { withWorkContext } from "./context";
 
 export { nextWakeSql as kernelNextSql } from "./claim";
@@ -114,6 +119,11 @@ export async function reconcileNow(
     scopes.map((scope) => [`${scope.kind}\u0000${scope.key}`, scope]),
   );
   const outcomes = new Map<string, Outcome>();
+  // Inside the caller's transaction the gate is already held, so nothing else
+  // can change a scope's inputs: a locked run that conflicts again conflicts on
+  // its own writes. One locked retry admits a newly needed key; the scope then
+  // stays dirty for background work instead of looping to the transaction limit.
+  const lockedConflicts = new Map<string, number>();
   while (pending.size) {
     let claimed: ClaimedScope[] = [];
     for (const lane of kernelLane.options) {
@@ -128,6 +138,11 @@ export async function reconcileNow(
     }
     if (claimed.length) {
       const reconciler = registry.reconcilers.get(claimed[0]!.kind)!;
+      const ranLocked = new Set(
+        claimed
+          .filter((scope) => scope.conflicts >= LOCKED_RUN_AFTER_CONFLICTS)
+          .map((scope) => `${scope.kind}\u0000${scope.key}`),
+      );
       for (const outcome of await runClaimedScopes(
         db,
         registry,
@@ -138,12 +153,21 @@ export async function reconcileNow(
           mode: "member",
         },
       )) {
-        outcomes.set(
-          `${outcome.scope.kind}\u0000${outcome.scope.key}`,
-          outcome,
-        );
-        if (outcome.status !== "conflict")
-          pending.delete(`${outcome.scope.kind}\u0000${outcome.scope.key}`);
+        const id = `${outcome.scope.kind}\u0000${outcome.scope.key}`;
+        outcomes.set(id, outcome);
+        if (outcome.status !== "conflict") pending.delete(id);
+        else if (transactional && ranLocked.has(id)) {
+          const repeats = (lockedConflicts.get(id) ?? 0) + 1;
+          lockedConflicts.set(id, repeats);
+          if (repeats > 1) {
+            outcomes.set(id, {
+              scope: outcome.scope,
+              status: "waiting",
+              gaps: [],
+            });
+            pending.delete(id);
+          }
+        }
       }
       continue;
     }
