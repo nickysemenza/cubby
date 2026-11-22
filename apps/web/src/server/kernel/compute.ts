@@ -118,10 +118,6 @@ export type Computed = {
   missing: readonly MissingAnswer[];
   answers: readonly UsedAnswer[];
   decisions: readonly { subject: string; id: string }[];
-  /** Every read is covered by `keys` or by `references`, so held revisions can fence it. */
-  reusable: boolean;
-  /** The identity references resolved, with the rows they read. */
-  references: { requested: readonly string[]; rows: string };
   inputsHash: string;
   durationMs: number;
 };
@@ -269,7 +265,6 @@ async function computeBatchInPhase(
   const shortcodeOwners = new Map<string, string>();
   const entityReferences = new Map<string, EntityReference>();
   const loadedReferences = new Set<string>();
-  const referenceRows = new Map<string, EntityReference>();
 
   let results = new Map<string, { desired: Desired | null; error: unknown }>();
   for (let round = 0; ; round++) {
@@ -359,16 +354,32 @@ async function computeBatchInPhase(
     await Promise.all([
       (async () => {
         if (!wantedReferences.size) return;
-        for (const row of await loadReferences(
-          q,
-          wantedReferences,
-          loadedReferences,
-        )) {
-          referenceRows.set(row.id, row);
-          entityReferences.set(row.id, row);
-          if (row.shortcode) {
-            shortcodeOwners.set(row.shortcode, row.id);
-            entityReferences.set(row.shortcode, row);
+        let pending = [...wantedReferences];
+        while (pending.length) {
+          for (const ref of pending) loadedReferences.add(ref);
+          const ids = pending.filter((ref) =>
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+              ref,
+            ),
+          );
+          const codes = pending
+            .filter((ref) => !ids.includes(ref))
+            .map((ref) => ref.toUpperCase());
+          const rows = await q
+            .select()
+            .from(entityIdentity)
+            .where(
+              sql`${entityIdentity.id} = ANY(${columnArrayParam(ids)}) OR ${entityIdentity.shortcode} = ANY(${textArrayParam(codes)})`,
+            );
+          pending = [];
+          for (const row of rows) {
+            entityReferences.set(row.id, row);
+            if (row.shortcode) {
+              shortcodeOwners.set(row.shortcode, row.id);
+              entityReferences.set(row.shortcode, row);
+            }
+            if (row.mergedIntoId && !loadedReferences.has(row.mergedIntoId))
+              pending.push(row.mergedIntoId);
           }
         }
       })(),
@@ -425,11 +436,6 @@ async function computeBatchInPhase(
         missing,
         answers: used,
         decisions: decided,
-        reusable: !ledger.isUnfenced(scope.key),
-        references: {
-          requested: [...loadedReferences],
-          rows: referenceSnapshot(referenceRows.values()),
-        },
         inputsHash: await hashCanonical(
           [...keys].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
         ),
@@ -458,71 +464,9 @@ function failed(
     missing: [],
     answers: [],
     decisions: [],
-    reusable: false,
-    references: { requested: [], rows: "" },
     inputsHash: "",
     durationMs,
   };
-}
-
-/**
- * Identity rows for references and every redirect they reach. A reference
- * that resolves to nothing is part of the result: its absence is read too.
- */
-async function loadReferences(
-  q: Q,
-  wanted: Iterable<string>,
-  loaded: Set<string>,
-): Promise<EntityReference[]> {
-  const found: EntityReference[] = [];
-  let pending = [...wanted].filter((ref) => !loaded.has(ref));
-  while (pending.length) {
-    for (const ref of pending) loaded.add(ref);
-    const ids = pending.filter((ref) =>
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        ref,
-      ),
-    );
-    const codes = pending
-      .filter((ref) => !ids.includes(ref))
-      .map((ref) => ref.toUpperCase());
-    const rows = await q
-      .select()
-      .from(entityIdentity)
-      .where(
-        sql`${entityIdentity.id} = ANY(${columnArrayParam(ids)}) OR ${entityIdentity.shortcode} = ANY(${textArrayParam(codes)})`,
-      );
-    pending = [];
-    for (const row of rows) {
-      found.push(row);
-      if (row.mergedIntoId && !loaded.has(row.mergedIntoId))
-        pending.push(row.mergedIntoId);
-    }
-  }
-  return found;
-}
-
-const referenceSnapshot = (rows: Iterable<EntityReference>) =>
-  JSON.stringify(
-    [...new Map([...rows].map((row) => [row.id, row])).values()].sort((a, b) =>
-      a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
-    ),
-  );
-
-/**
- * Whether every identity a computation resolved, including redirects and
- * misses, still reads the same. Identity rows carry no input revision, so a
- * computation reused under the gate re-reads them there.
- */
-export async function referencesUnchanged(
-  q: Q,
-  computed: Computed,
-): Promise<boolean> {
-  const { requested, rows } = computed.references;
-  if (!requested.length) return true;
-  return (
-    referenceSnapshot(await loadReferences(q, requested, new Set())) === rows
-  );
 }
 
 /** The stored rows a batch's patches target, read before the apply compares them. */

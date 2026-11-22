@@ -9,7 +9,6 @@ import { insertFieldsFixture as insert } from "~/server/ai/fields/fields.fixture
 import { getDb } from "~/server/db/helpers";
 import { decision } from "~/server/db/kernel-schema";
 import { emailReadSnapshot } from "~/server/db/read-snapshot-schema";
-import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import {
   email,
   orderMailEvent,
@@ -25,8 +24,6 @@ import {
   deletePurchases,
 } from "~/server/domains/purchase/repo/purchase";
 import { reconcileNow } from "~/server/kernel/api";
-import { computeBatch } from "~/server/kernel/compute";
-import { productionKernel } from "~/server/kernel/kernel";
 
 describe("Email Purchase link decisions", () => {
   const ctx = withTestDb();
@@ -225,18 +222,6 @@ describe("Email Purchase link decisions", () => {
         emailRelationshipResult.parse(row?.relationshipFacts).purchaseLinks,
       ).toEqual([]);
     }
-    // B's computation is fenced by A's link decisions, and its prepared
-    // suggestion read keeps a locked run from publishing it unreloaded.
-    const kernel = await productionKernel();
-    const [computed] = await computeBatch(
-      repositoryQueries(ctx.db),
-      kernel.registry,
-      kernel.registry.reconcilers.get("emailState")!,
-      [{ kind: "emailState", key: holder!.id }],
-      { db: ctx.db, locked: false, hideBaseline: false },
-    );
-    expect(computed!.keys.has(`decision:email:${f.mail.id}`)).toBe(true);
-    expect(computed!.reusable).toBe(false);
   });
   it("replays the same link publication without another decision", async () => {
     const f = await fixture();

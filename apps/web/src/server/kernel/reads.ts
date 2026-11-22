@@ -139,16 +139,6 @@ export function rowIdentity(table: PgTable, row: ColumnValues): string {
 export class KeyLedger {
   private readonly scopes = new Map<string, Map<Key, number>>();
   private readonly facts = new Map<string, Map<string, FactRef>>();
-  private readonly unfenced = new Set<string>();
-
-  /** A read whose result no recorded key fully covers, such as a prepared source. */
-  markUnfenced(scopeKeys: readonly string[]) {
-    for (const scopeKey of scopeKeys) this.unfenced.add(scopeKey);
-  }
-
-  isUnfenced(scopeKey: string): boolean {
-    return this.unfenced.has(scopeKey);
-  }
 
   recordFacts(scopeKeys: readonly string[], facts: readonly FactRef[]) {
     for (const scopeKey of scopeKeys) {
@@ -537,8 +527,6 @@ export function createReads(
       const revs = await revisions(keys);
       const value = await load(mode.db);
       recordAll(scopes, revs, keys);
-      // The callback may read beyond the declared roster columns.
-      ledger.markUnfenced(scopes);
       return value;
     },
     async rows<T extends KeyedTable>(table: T, ids: readonly string[]) {

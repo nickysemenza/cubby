@@ -386,38 +386,6 @@ export const emailState = defineReconciler<Input>({
         ),
       ),
     );
-    // Another Email's link decision on one of these Emails' order events
-    // suppresses its suggestion; record that subject before the suggestion
-    // read so a change to it fences this scope's publication.
-    const foreign = await reads.prepare(
-      [],
-      async (database) =>
-        (
-          await repositoryQueries(database).execute<{
-            emailId: string;
-            subject: string;
-          }>(sql`
-        SELECT DISTINCT scoped.id::text AS "emailId", link.subject FROM "Email" scoped
-        JOIN "OrderMailEvent" event ON event."orderMailId"=scoped."orderMailId"
-        JOIN "Decision" link ON link.field LIKE 'link:%' AND link.value->>'eventId'=event.id::text
-        WHERE scoped.id IN (SELECT ids.id FROM unnest(${uuidArrayParam(keys)}) AS ids(id))
-          AND link.channel=${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)}
-          AND link.subject LIKE 'email:%' AND link.subject <> 'email:'||scoped.id::text`)
-        ).rows,
-    );
-    if (foreign.length)
-      await reads.selectEach(
-        decision,
-        new Map(
-          keys.map((key) => [
-            key,
-            foreign
-              .filter((row) => row.emailId === key)
-              .map((row) => decisionKey(row.subject)),
-          ]),
-        ),
-        sql`${decision.subject}=ANY(${textArrayParam([...new Set(foreign.map((row) => row.subject))])}) AND ${decision.field} LIKE 'link:%'`,
-      );
     const suggestions = await reads.prepare(
       [
         purchase,

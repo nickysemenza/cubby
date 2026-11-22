@@ -62,7 +62,6 @@ import {
 import {
   computeBatch,
   recordEntity,
-  referencesUnchanged,
   usedInputs,
   type Computed,
 } from "./compute";
@@ -1692,11 +1691,10 @@ export async function applyComputed(
 }
 
 /**
- * The fallback after three conflicts: take the gate (money), hold each key's
- * revision row, then apply the pre-gate computation if every input it read is
- * fenced and unchanged, or recompute under those locks, all in one bounded
- * transaction. Producer calls
- * never happen here: a missing answer is filed as an ask.
+ * The fallback after three conflicts: take the gate (money), then load with
+ * each key's revision row held, lock the dirty row, compute and apply, all in
+ * one bounded transaction. Producer calls never happen here: a missing answer
+ * is filed as an ask.
  */
 async function runLocked(
   db: Database,
@@ -1761,32 +1759,18 @@ async function runLocked(
               ].sort(),
             );
             advance("compute");
-            const current = await q.execute<{ seq: string }>(
-              sql`SELECT seq FROM "ScopeDirty" WHERE "scopeKind"=${scope.kind} AND "scopeKey"=${scope.key}`,
+            const [computed] = await computeBatch(
+              q,
+              registry,
+              reconciler,
+              [scope],
+              {
+                db: tx,
+                locked: true,
+                lockedRevisions,
+                hideBaseline: options.hideBaseline ?? false,
+              },
             );
-            const seq = Number(current.rows[0]?.seq ?? claimed.seq);
-            // The pre-gate computation stands when every input it read is
-            // fenced and none moved: keyed reads by the revisions now held,
-            // identity references by re-reading them here, dirtying by `seq`.
-            // A computation with an unfenced read (a prepared source)
-            // recomputes under the gate, as does one whose inputs changed.
-            const unchanged =
-              prepared!.error === null &&
-              prepared!.reusable &&
-              seq === claimed.seq &&
-              [...prepared!.keys].every(
-                ([key, seen]) => lockedRevisions.get(key) === seen,
-              ) &&
-              (await referencesUnchanged(q, prepared!));
-            if (unchanged) span.setAttribute("kernel.scope.reused", true);
-            const [computed] = unchanged
-              ? [prepared!]
-              : await computeBatch(q, registry, reconciler, [scope], {
-                  db: tx,
-                  locked: true,
-                  lockedRevisions,
-                  hideBaseline: options.hideBaseline ?? false,
-                });
             if (computed!.error !== null) throw computed!.error;
             advance("verify");
             const currentMemberships = await relatedMemberships(
@@ -1801,12 +1785,15 @@ async function runLocked(
               ].some((key) => !lockedRevisions.has(key))
             )
               throw new LockedReadChangedError();
+            const current = await q.execute<{ seq: string }>(
+              sql`SELECT seq FROM "ScopeDirty" WHERE "scopeKind"=${scope.kind} AND "scopeKey"=${scope.key}`,
+            );
             advance("publish");
             const result = await applyOne(
               tx,
               registry,
               computed!,
-              { ...claimed, seq },
+              { ...claimed, seq: Number(current.rows[0]?.seq ?? claimed.seq) },
               options,
               proposals,
             );
