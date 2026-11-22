@@ -488,7 +488,10 @@ same record wins and the scope reruns.
 
 Background money applies commit after each bounded batch of at most 64 scopes,
 before the next batch can take the gate. A batch's set-based writes publish
-atomically; session timeouts bound in-flight statements. A member's write
+atomically; session timeouts bound in-flight statements. Each record update
+also compares the columns it sets with the values its load saw, and a changed
+value is a conflict; timestamps compare at the millisecond precision a loaded
+value carries. A member's write
 uses a 2 second `lock_timeout` and reports a lock timeout as a retryable
 wait.
 

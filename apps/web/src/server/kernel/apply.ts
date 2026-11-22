@@ -268,8 +268,17 @@ async function updateRecords(q: Q, updates: Difference["updates"]) {
       return sql`${sql.identifier(name)} = CASE WHEN incoming.value->'nextValues' ? ${name} THEN desired.${sql.identifier(name)} ELSE t.${sql.identifier(name)} END`;
     });
     const conditions = props.map((prop) => {
-      const name = columns[prop]!.name;
-      return sql`(NOT (incoming.value->'seen' ? ${name}) OR t.${sql.identifier(name)} IS NOT DISTINCT FROM seen.${sql.identifier(name)})`;
+      const column = columns[prop]!;
+      const name = column.name;
+      // A loaded timestamp is a JS Date, which keeps milliseconds only; a
+      // stored microsecond value must not read as a concurrent change.
+      const [stored, loaded] = column.getSQLType().startsWith("timestamp")
+        ? [
+            sql`date_trunc('milliseconds', t.${sql.identifier(name)})`,
+            sql`date_trunc('milliseconds', seen.${sql.identifier(name)})`,
+          ]
+        : [sql`t.${sql.identifier(name)}`, sql`seen.${sql.identifier(name)}`];
+      return sql`(NOT (incoming.value->'seen' ? ${name}) OR ${stored} IS NOT DISTINCT FROM ${loaded})`;
     });
     const touched =
       columns.updatedAt && !props.includes("updatedAt")
