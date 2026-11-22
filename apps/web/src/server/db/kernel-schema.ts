@@ -230,6 +230,16 @@ export const ask = pgTable(
     index("Ask_sent_deadline_idx")
       .on(table.claimDeadline)
       .where(sql`${table.state} = ${sqlEnumConstant(askState, "sent")}`),
+    // The runner's claim and next-wake reads; most queued rows are hosted.
+    index("Ask_queued_idx")
+      .on(table.availableAt, table.createdAt)
+      .where(
+        sql`${table.state} = ${sqlEnumConstant(askState, "queued")} AND NOT ${table.hosted} AND ${table.executor} IS NULL AND ${table.cancelledAt} IS NULL`,
+      ),
+    // Partition admission counts held claims.
+    index("Ask_held_idx")
+      .on(table.claimPartition)
+      .where(sql`${table.claimToken} IS NOT NULL`),
     enumCheck("Ask_state_check", table.state, askState),
     enumCheck("Ask_producer_check", table.producer, askProducer),
     check("Ask_waitCause_check", waitCauseCheck(table.waitCause)),
@@ -321,6 +331,10 @@ export const scopeDirty = pgTable(
       table.availableAt,
       table.seq,
     ),
+    // The next wake reads held claims without the queue.
+    index("ScopeDirty_held_idx")
+      .on(table.claimDeadline)
+      .where(sql`${table.claimToken} IS NOT NULL`),
     enumCheck("ScopeDirty_lane_check", table.lane, kernelLane),
     check("ScopeDirty_waitCause_check", waitCauseCheck(table.waitCause)),
   ],

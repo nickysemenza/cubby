@@ -53,7 +53,7 @@ describe("external Ask lifecycle", () => {
     );
     const next = await repositoryQueries(ctx.db).execute<{
       wake: string | null;
-    }>(sql`SELECT ${nextWakeSql()} AS wake`);
+    }>(sql`SELECT ${nextWakeSql(kernel.registry)} AS wake`);
     expect(next.rows[0]?.wake).toBeNull();
     const claim = await claimExternalAsk(ctx.db, kind, {
       id,

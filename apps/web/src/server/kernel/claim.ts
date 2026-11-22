@@ -7,7 +7,10 @@
  * write checks the token and a live deadline under a row lock.
  */
 import type { ExecutionWaitReason } from "@cubby/schemas/execution";
-import type { KernelWaitCause } from "@cubby/schemas/kernel/machinery";
+import {
+  kernelLane,
+  type KernelWaitCause,
+} from "@cubby/schemas/kernel/machinery";
 import {
   kernelWaitCause,
   MACHINERY_RAW_ERROR_BYTES,
@@ -27,7 +30,7 @@ import {
 import { classifyWorkFailure, type WorkFailure } from "~/server/kernel/failure";
 import { WorkSupersededError } from "~/server/kernel/work-errors";
 
-import type { AskKind, ClaimLimit, Pass } from "./define";
+import type { AskKind, ClaimLimit, Pass, Reconciler } from "./define";
 import type { KernelRegistry } from "./registry";
 import { fromIso, isoText } from "./sql-time";
 import { ASK, MEMBER_PASS } from "./vocab";
@@ -54,6 +57,8 @@ export async function renewScopeClaims(
 export const UNREGISTERED_RECONCILER = "Unregistered reconciler: ";
 /** Non-transient failures before a dirty scope is Stuck. */
 export const MAX_SCOPE_ATTEMPTS = 5;
+const UNREGISTERED_CHECK_MS = 10 * 60_000;
+const lastUnregisteredCheck = new WeakMap<KernelRegistry, number>();
 /** Consecutive `seq`/`rev` conflicts before a scope runs locked. */
 export const LOCKED_RUN_AFTER_CONFLICTS = 3;
 
@@ -272,33 +277,46 @@ export type ClaimedScope = {
   deadline: Date;
 };
 
+/** Dirty rows a runner may claim now. */
+const claimableScope = (d: SQL): SQL =>
+  sql`${d}."availableAt" <= now() AND ${d}.attempts < ${MAX_SCOPE_ATTEMPTS}
+    AND (${d}."claimToken" IS NULL OR ${d}."claimDeadline" <= now())`;
+
+/** Scope kinds in claim order: money lane first, upstream kinds first. */
+export const scopeClaimOrder = (registry: KernelRegistry): Reconciler[] =>
+  [...registry.reconcilers.values()].sort(
+    (a, b) =>
+      kernelLane.options.indexOf(a.lane) - kernelLane.options.indexOf(b.lane) ||
+      registry.rank(a.scope) - registry.rank(b.scope) ||
+      (a.scope < b.scope ? -1 : 1),
+  );
+
 /**
- * Claim up to `limit` dirty scopes of one kind in `lane`, in the order the
- * runner always claims: upstream rank, `availableAt`, `seq`. A kind waits
- * while a claimable dirty scope of an upstream kind in its lane exists.
+ * Claim up to `limit` dirty scopes of the first kind in `kinds` that has
+ * claimable rows, in `availableAt`, `seq` order. Each kind's head comes from
+ * `ScopeDirty_claim_idx`; the queue is never read whole. The caller's order is
+ * the whole scheduling preference: no kind waits on another's backlog.
  */
-export async function claimScopes(
+export async function claimScopeBatch(
   q: Q,
-  registry: KernelRegistry,
-  lane: string,
+  kinds: readonly Reconciler[],
   limit: number,
   only?: readonly { kind: string; key: string }[],
 ): Promise<ClaimedScope[]> {
-  const kinds = [...registry.reconcilers.values()].filter(
-    (reconciler) => reconciler.lane === lane,
-  );
   if (!kinds.length) return [];
   const token = crypto.randomUUID();
-  const ranks = sql.join(
+  const order = sql.join(
     kinds.map(
-      (reconciler) =>
-        sql`(${reconciler.scope}::text, ${registry.rank(reconciler.scope)}::int, ${textArrayParam(registry.upstream(reconciler.scope))})`,
+      (reconciler, position) =>
+        sql`(${reconciler.scope}::text, ${reconciler.lane}::text, ${position}::int)`,
     ),
     sql`, `,
   );
-  const restrict = only
-    ? sql`AND (d."scopeKind", d."scopeKey") IN (SELECT o.kind, o.key FROM jsonb_to_recordset(${JSON.stringify(only)}::jsonb) AS o(kind text, key text))`
-    : sql``;
+  // A member's reconcile-now names its scopes.
+  const restrict = (d: SQL) =>
+    only
+      ? sql`AND (${d}."scopeKind", ${d}."scopeKey") IN (SELECT o.kind, o.key FROM jsonb_to_recordset(${JSON.stringify(only)}::jsonb) AS o(kind text, key text))`
+      : sql``;
   const result = await q.execute<{
     scopeKind: string;
     scopeKey: string;
@@ -308,26 +326,18 @@ export async function claimScopes(
     updatedAt: string;
     deadline: string;
   }>(sql`
-    WITH ranks (kind, rank, upstream) AS (VALUES ${ranks}),
-    claimable AS (
-      SELECT d."scopeKind", d."scopeKey", d."availableAt", d.seq, ranks.rank, ranks.upstream
-      FROM "ScopeDirty" d JOIN ranks ON ranks.kind = d."scopeKind"
-      WHERE d.lane = ${lane} AND d."availableAt" <= now()
-        AND d.attempts < ${MAX_SCOPE_ATTEMPTS}
-        AND (d."claimToken" IS NULL OR d."claimDeadline" <= now()) ${restrict}
-    ), claimable_kinds AS MATERIALIZED (
-      SELECT DISTINCT "scopeKind" FROM claimable
-    ), eligible AS (
-      SELECT c.* FROM claimable c
-      WHERE NOT EXISTS (SELECT 1 FROM claimable_kinds u WHERE u."scopeKind" = ANY(c.upstream))
-    ), chosen AS (
-      SELECT "scopeKind" FROM eligible ORDER BY rank, "availableAt", seq LIMIT 1
+    WITH kinds (kind, lane, position) AS (VALUES ${order}),
+    chosen AS MATERIALIZED (
+      SELECT kinds.kind, kinds.lane FROM kinds WHERE EXISTS (
+        SELECT 1 FROM "ScopeDirty" d
+        WHERE d.lane = kinds.lane AND d."scopeKind" = kinds.kind AND ${claimableScope(sql`d`)} ${restrict(sql`d`)}
+      ) ORDER BY kinds.position LIMIT 1
     ), picked AS (
+      -- The limit applies after locked rows are skipped, and the predicates are rechecked under each row lock.
       SELECT d."scopeKind", d."scopeKey" FROM "ScopeDirty" d
-      WHERE (d."scopeKind", d."scopeKey") IN (
-        SELECT e."scopeKind", e."scopeKey" FROM eligible e
-        WHERE e."scopeKind" = (SELECT "scopeKind" FROM chosen)
-        ORDER BY e."availableAt", e.seq LIMIT ${limit})
+      WHERE d.lane = (SELECT lane FROM chosen) AND d."scopeKind" = (SELECT kind FROM chosen)
+        AND ${claimableScope(sql`d`)} ${restrict(sql`d`)}
+      ORDER BY d."availableAt", d.seq LIMIT ${limit}
       FOR UPDATE SKIP LOCKED
     )
     UPDATE "ScopeDirty" d SET "claimToken" = ${token}::uuid,
@@ -346,6 +356,21 @@ export async function claimScopes(
     token,
   }));
 }
+
+/** Claim from one lane, upstream kinds first. */
+export const claimScopes = (
+  q: Q,
+  registry: KernelRegistry,
+  lane: string,
+  limit: number,
+  only?: readonly { kind: string; key: string }[],
+): Promise<ClaimedScope[]> =>
+  claimScopeBatch(
+    q,
+    scopeClaimOrder(registry).filter((reconciler) => reconciler.lane === lane),
+    limit,
+    only,
+  );
 
 /** Serialize only slot admission; no network work holds this transaction. */
 async function withPartition<T>(
@@ -679,24 +704,42 @@ async function claimPassGroup(
 
 /**
  * The next wake across the three tables: the least `availableAt` of claimable
- * work, or the deadline of a claim that would lapse into claimable work.
- * Scalar SQL, also the drain's `next`.
+ * work, or the deadline of a claim that would lapse into claimable work. Any
+ * due scope is claimable, so a due wake always finds work. Scope heads come from `ScopeDirty_claim_idx` and
+ * held claims from `ScopeDirty_held_idx`. Scalar SQL, also the drain's `next`.
  */
-export const nextWakeSql = (registry?: KernelRegistry): SQL => sql`(
+export const nextWakeSql = (registry: KernelRegistry): SQL => {
+  const kinds = [...registry.reconcilers.values()];
+  const scopes = kinds.length
+    ? sql`(SELECT min(head."availableAt") FROM (VALUES ${sql.join(
+        kinds.map(
+          (reconciler) =>
+            sql`(${reconciler.lane}::text, ${reconciler.scope}::text)`,
+        ),
+        sql`, `,
+      )}) AS known(lane, kind) CROSS JOIN LATERAL (
+        SELECT d."availableAt" FROM "ScopeDirty" d
+        WHERE d.lane = known.lane AND d."scopeKind" = known.kind
+          AND d.attempts < ${MAX_SCOPE_ATTEMPTS} AND d."claimToken" IS NULL
+        ORDER BY d."availableAt", d.seq LIMIT 1) head),
+    (SELECT min(greatest("availableAt", "claimDeadline")) FROM "ScopeDirty"
+      WHERE "claimToken" IS NOT NULL AND attempts < ${MAX_SCOPE_ATTEMPTS}
+        AND "scopeKind" = ANY(${textArrayParam(kinds.map((reconciler) => reconciler.scope))}))`
+    : sql`NULL::timestamp`;
+  return sql`(
   SELECT least(
-    (SELECT min(CASE WHEN "claimToken" IS NULL THEN "availableAt" ELSE greatest("availableAt", "claimDeadline") END)
-      FROM "ScopeDirty" WHERE attempts < ${MAX_SCOPE_ATTEMPTS}
-        ${registry ? sql`AND "scopeKind" = ANY(${textArrayParam([...registry.reconcilers.keys()])})` : sql``}),
+    ${scopes},
     (SELECT min(CASE WHEN "claimToken" IS NULL THEN "availableAt" ELSE greatest("availableAt", "claimDeadline") END)
       FROM "Ask" WHERE state = ${ASK.queued} AND "cancelledAt" IS NULL AND executor IS NULL AND NOT hosted AND attempts < "maxAttempts"
-        ${registry ? sql`AND feature = ANY(${textArrayParam([...registry.asks.values()].filter((kind) => kind.produce && !kind.hosted).map((kind) => kind.feature))})` : sql``}
+        AND feature = ANY(${textArrayParam([...registry.asks.values()].filter((kind) => kind.produce && !kind.hosted).map((kind) => kind.feature))})
         AND EXISTS (SELECT 1 FROM "AskScope" s WHERE s."askId" = "Ask".id AND s."cancelledAt" IS NULL)),
     (SELECT min("claimDeadline") FROM "Ask" WHERE state = ${ASK.sent}
-      ${registry ? sql`AND feature = ANY(${textArrayParam([...registry.asks.keys()])})` : sql``}),
+      AND feature = ANY(${textArrayParam([...registry.asks.keys()])})),
     (SELECT min(CASE WHEN "claimToken" IS NULL THEN "availableAt" ELSE greatest("availableAt", "claimDeadline") END)
       FROM "Pass" WHERE "doneAt" IS NULL AND "cancelledAt" IS NULL AND attempts < "maxAttempts"
-        ${registry ? sql`AND name = ANY(${textArrayParam([...registry.passes.keys()])})` : sql``})
+        AND name = ANY(${textArrayParam([...registry.passes.keys()])}))
   )::timestamp)`;
+};
 
 /**
  * Retain orphaned work for inspection without spinning the queue on
@@ -710,6 +753,9 @@ export async function stopUnregisteredWork(
   db: Database,
   registry: KernelRegistry,
 ): Promise<void> {
+  // Its predicates cannot use an index, so each isolate checks on an interval.
+  const checked = lastUnregisteredCheck.get(registry) ?? 0;
+  if (Date.now() - checked < UNREGISTERED_CHECK_MS) return;
   await repositoryQueries(db).execute(sql`
     WITH scopes AS (
       UPDATE "ScopeDirty" SET "claimToken" = NULL, "claimDeadline" = NULL,
@@ -730,6 +776,7 @@ export async function stopUnregisteredWork(
     ) INSERT INTO "ScopeState" ("scopeKind", "scopeKey", version, rules, stage, "errorClass", error)
       SELECT "scopeKind", "scopeKey", 0, 'unregistered', ${"stuck"}, ${"failed"}, "lastError" FROM scopes
       ON CONFLICT ("scopeKind", "scopeKey") DO UPDATE SET stage = ${"stuck"}, "errorClass" = ${"failed"}, error = excluded.error`);
+  lastUnregisteredCheck.set(registry, Date.now());
 }
 
 /** Clear funding waits atomically; version live holders so an older refusal cannot put them back. */
