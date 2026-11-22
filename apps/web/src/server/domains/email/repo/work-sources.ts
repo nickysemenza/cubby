@@ -9,9 +9,10 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { householdDaySql } from "~/server/db/helpers/query";
+import { emailReadSnapshot } from "~/server/db/read-snapshot-schema";
 import { email } from "~/server/db/schema";
 import { emailScaffold } from "~/server/domains/email/repo/email";
-import { emailImportOutcomeSql } from "~/server/domains/email/repo/import-outcome";
+import { emailSnapshotOutcomeSql } from "~/server/domains/email/repo/import-outcome";
 import {
   gapDeclaration,
   gapPublicationRead,
@@ -40,7 +41,7 @@ const importGap: WorkSource = {
   link: { kind: "record" },
   reasons: [{ key: "email:import-gap", label: "Unresolved mail import" }],
   candidates: async (db, scope) => {
-    const outcome = emailImportOutcomeSql();
+    const outcome = emailSnapshotOutcomeSql;
     return {
       query: selectWorkCandidates(db, importGap, {
         entity: "email",
@@ -54,6 +55,7 @@ const importGap: WorkSource = {
         reasonKeys: [importGap.id],
       })
         .from(email)
+        .innerJoin(emailReadSnapshot, eq(emailReadSnapshot.entityId, email.id))
         .where(
           and(
             // An unresolved outcome settles its Email `unsettled`.

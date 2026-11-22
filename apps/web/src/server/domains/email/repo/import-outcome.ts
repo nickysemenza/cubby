@@ -10,8 +10,12 @@ import type { RepositoryQueryInput } from "~/server/db/repository-access.boundar
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 
 /** Outcome and link state are one publication from emailState. */
+export const emailSnapshotOutcomeSql = sql<string | null>`
+  ${emailReadSnapshot.relationshipFacts} #>> '{outcome,outcome}'
+`;
+
 export const emailImportOutcomeSql = (): SQL<string | null> => sql`(
-  SELECT snapshot."relationshipFacts" #>> '{outcome,outcome}' FROM "EmailReadSnapshot" snapshot WHERE snapshot."entityId" = "Email".id
+  SELECT ${emailSnapshotOutcomeSql} FROM ${emailReadSnapshot} WHERE ${emailReadSnapshot.entityId} = "Email".id
 )`;
 
 export async function loadEmailImportOutcomes(

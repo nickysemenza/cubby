@@ -79,12 +79,13 @@ export function historicalRoutineRunPredicate(input: {
 }): SQL<boolean> {
   if (!historicalRoutineStepPurposes.length) return sql<boolean>`false`;
   // CASE keeps obligation probes off unrelated Run kinds on every Work poll.
+  // Keep the Ask probe correlated so these few Runs use their indexed roster.
   return sql<boolean>`CASE WHEN ${input.purpose} = ANY(${textArrayParam(historicalRoutineStepPurposes)})
     AND ${input.trigger} = ${runTrigger.enum.scheduled} AND ${input.endedAt} IS NOT NULL
     AND ${input.status} IN (${RUN.failed}, ${RUN.dispatch_failed}, ${RUN.needs_review})
     AND ${input.failureCode} IS DISTINCT FROM 'execution_limit'
   THEN NOT ${runHasLiveWork(input.id)}
-    AND NOT EXISTS (SELECT 1 FROM "AskScope" s WHERE s."runId" = ${input.id})
+    AND NOT EXISTS (SELECT 1 FROM "AskScope" s WHERE s."runId" = ${input.id} OFFSET 0)
     AND NOT ${unresolvedImageWorkExists(input.id)}
     AND NOT EXISTS (SELECT 1 FROM "RunFinding" historical_finding WHERE historical_finding."runId" = ${input.id} AND ${activeFindingSql("historical_finding")})
     AND NOT EXISTS (SELECT 1 FROM "PhotoGroupProposal" historical_proposal WHERE historical_proposal."runId" = ${input.id} AND historical_proposal.state = ${photoGroupProposalState.enum.proposed})
