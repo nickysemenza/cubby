@@ -70,6 +70,12 @@ export type PaymentMatchInput = {
   recordDecisions: (typeof decision.$inferSelect)[];
   bindings: Binding[];
   totals: Map<string, bigint | null>;
+  /** Each Order's payment set, in `payments` order. */
+  paymentsByOrder: ReadonlyMap<string, Payment[]>;
+  /** Live Vendor ids by normalized name or alias. */
+  vendorsByMerchant: ReadonlyMap<string, ReadonlySet<string>>;
+  /** Each fact's effective binding, by fact kind and id. */
+  effectiveBindings: ReadonlyMap<string, Binding>;
 };
 
 const newerOrder = (candidate: Order, existing: Order) =>
@@ -93,9 +99,8 @@ export function acceptedOrderHeads(orders: readonly Order[], c: Pure) {
       orderEventKey(row),
       orderSourceHeadField(row),
     );
-    const parsed = reviewedOrderHead.safeParse(
-      choice?.kind === "set" ? choice.value : null,
-    );
+    if (choice?.kind !== "set") return true;
+    const parsed = reviewedOrderHead.safeParse(choice.value);
     if (!parsed.success || !parsed.data.supersedes.includes(row.id))
       return true;
     const replacement = byId.get(parsed.data.observationId);
@@ -200,19 +205,25 @@ function chosenOrderScope(input: PaymentMatchInput, order: Order, c: Pure) {
     linked?.kind === "set" && typeof linked.value === "string"
       ? c.reference("purchase", linked.value)
       : order.purchaseId;
-  const chosenScope = input.records.find(
+  // A cross-scope merge leaves the absorbed scope's key pointing at the
+  // survivor's id: the live owner wins, independent of row order.
+  const owners = input.records.filter(
     (record) =>
       record.entity === "purchase" &&
       record.entityId === chosenId &&
       record.scopeKind === "purchaseEvent",
-  )?.scopeKey;
-  return chosenScope;
+  );
+  const live = owners.filter(
+    (record) => !record.mergedAt && !record.rejectedAt,
+  );
+  return (live.length ? live : owners)
+    .map((record) => record.scopeKey)
+    .sort()[0];
 }
 
+const factIndexKey = (kind: string, id: string) => `${kind}\u0000${id}`;
 const bindingFor = (input: PaymentMatchInput, kind: string, id: string) =>
-  effectiveBindings(input.bindings).find(
-    (binding) => binding.fact.kind === kind && binding.fact.id === id,
-  );
+  input.effectiveBindings.get(factIndexKey(kind, id));
 
 const allocationInput = z.object({
   table: z.literal("FinancialTransactionAllocation"),
@@ -253,16 +264,6 @@ function paymentChoices(
   c: Pure,
   paymentsFor: PaymentsFor,
 ) {
-  const merchant = (value: string | null) => statementMerchantKey(value ?? "");
-  const knownVendor = (transaction: Movement) =>
-    input.vendors.filter(
-      (row) =>
-        !row.deletedAt &&
-        [row.name, ...row.aliases].some(
-          (name) =>
-            merchant(name) && merchant(name) === merchant(transaction.merchant),
-        ),
-    );
   const accounts = new Map(input.accounts.map((row) => [row.id, row]));
   const bindings = new Map<string, Binding[]>();
   for (const binding of input.bindings) {
@@ -292,7 +293,10 @@ function paymentChoices(
         position,
         party: account.ledgerPartyId,
         subject: recordSubject("financialTransaction", transaction.id),
-        vendors: new Set(knownVendor(transaction).map((row) => row.id)),
+        vendors:
+          input.vendorsByMerchant.get(
+            statementMerchantKey(transaction.merchant ?? ""),
+          ) ?? new Set<string>(),
         bindings: bindings.get(paymentBankEventKey(transaction.id)) ?? [],
         choice: {
           id: transaction.id,
@@ -712,18 +716,20 @@ export const paymentMatching: Pick<
         AND ${decision.value}#>>'{table}' = 'FinancialTransactionAllocation'
         AND ${decision.value}->'values'->>'transactionId' = ANY(${textArrayParam(transactionIds)})`,
         ),
+        // The decided Purchases join the id array as an init plan: a subquery
+        // or text cast inside the OR turns this lookup into a sequential scan.
         reads.select(
           recordKey,
           [],
           sql`${recordKey.scopeKind} = 'purchaseEvent' AND (
         ${recordKey.scopeKey} = ANY(${textArrayParam([...events, ...transactionIds])})
-        OR ${recordKey.entityId}::text = ANY(${textArrayParam(orders.flatMap((row) => (row.purchaseId ? [row.purchaseId] : [])))})
-        OR ${recordKey.entityId}::text IN (SELECT e.id::text FROM "Decision" choice JOIN "Entity" e
+        OR ${recordKey.entityId} = ANY(${textArrayParam(orders.flatMap((row) => (row.purchaseId ? [row.purchaseId] : [])))}::uuid[]
+          || ARRAY(SELECT e.id FROM "Decision" choice JOIN "Entity" e
           ON (e.id = CASE WHEN pg_input_is_valid(choice.value #>> '{}', ${"uuid"})
             THEN (choice.value #>> '{}')::uuid END AND e.id::text = choice.value #>> '{}')
             OR e.shortcode = choice.value #>> '{}'
           WHERE choice.channel = ${decisionChannel.enum.assignment} AND choice.field = 'purchaseId'
-            AND choice.subject = ANY(${textArrayParam([...events, ...orders.flatMap((row) => (row.emailId ? [`email:${row.emailId}`] : []))])}))
+            AND choice.subject = ANY(${textArrayParam([...events, ...orders.flatMap((row) => (row.emailId ? [`email:${row.emailId}`] : []))])})))
       )`,
         ),
         reads.bindings({
@@ -745,6 +751,32 @@ export const paymentMatching: Pick<
           : moneyToMinor(row.extraction.candidate.printedGrandTotal),
       ]),
     );
+    // Every scope in the batch reconciles this same input, once per round:
+    // derive the input-only indexes here rather than in each reconcile.
+    const belongs = createOrderPaymentMatcher(orders, payments);
+    const paymentsByOrder = new Map(
+      orders.map((order) => [
+        order.id,
+        payments.filter((payment) => belongs(payment, order)),
+      ]),
+    );
+    const vendorsByMerchant = new Map<string, Set<string>>();
+    for (const row of vendors) {
+      if (row.deletedAt) continue;
+      for (const name of [row.name, ...row.aliases]) {
+        const merchant = statementMerchantKey(name);
+        if (!merchant) continue;
+        const ids = vendorsByMerchant.get(merchant) ?? new Set<string>();
+        ids.add(row.id);
+        vendorsByMerchant.set(merchant, ids);
+      }
+    }
+    const effective = new Map(
+      effectiveBindings(bindings).map((binding) => [
+        factIndexKey(binding.fact.kind, binding.fact.id),
+        binding,
+      ]),
+    );
     return new Map(
       keys.map((key) => [
         key,
@@ -760,22 +792,16 @@ export const paymentMatching: Pick<
           recordDecisions,
           bindings,
           totals,
+          paymentsByOrder,
+          vendorsByMerchant,
+          effectiveBindings: effective,
         },
       ]),
     );
   },
   reconcile(input, c) {
-    const belongs = createOrderPaymentMatcher(input.orders, input.payments);
-    const paymentsByOrder = new Map<string, Payment[]>();
-    const paymentsFor: PaymentsFor = (order) => {
-      const existing = paymentsByOrder.get(order.id);
-      if (existing) return existing;
-      const payments = input.payments.filter((payment) =>
-        belongs(payment, order),
-      );
-      paymentsByOrder.set(order.id, payments);
-      return payments;
-    };
+    const paymentsFor: PaymentsFor = (order) =>
+      input.paymentsByOrder.get(order.id) ?? [];
     const heads = acceptedOrderHeads(input.orders, c);
     const headsByPaymentSet = new Map<string, Order[]>();
     const events = new Map<string, Order>();
