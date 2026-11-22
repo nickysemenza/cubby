@@ -205,13 +205,20 @@ function chosenOrderScope(input: PaymentMatchInput, order: Order, c: Pure) {
     linked?.kind === "set" && typeof linked.value === "string"
       ? c.reference("purchase", linked.value)
       : order.purchaseId;
-  const chosenScope = input.records.find(
+  // A cross-scope merge leaves the absorbed scope's key pointing at the
+  // survivor's id: the live owner wins, independent of row order.
+  const owners = input.records.filter(
     (record) =>
       record.entity === "purchase" &&
       record.entityId === chosenId &&
       record.scopeKind === "purchaseEvent",
-  )?.scopeKey;
-  return chosenScope;
+  );
+  const live = owners.filter(
+    (record) => !record.mergedAt && !record.rejectedAt,
+  );
+  return (live.length ? live : owners)
+    .map((record) => record.scopeKey)
+    .sort()[0];
 }
 
 const factIndexKey = (kind: string, id: string) => `${kind}\u0000${id}`;

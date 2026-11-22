@@ -1,14 +1,18 @@
 import { type FinancialAccountId } from "@cubby/schemas/identifiers";
 import { importWriterInput } from "@cubby/schemas/purchase-import";
 import { moneyToMinor } from "@cubby/shared";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, notDeleted } from "~/server/db/helpers";
-import { scopeState, scopeDirty } from "~/server/db/kernel-schema";
-import { evidenceBinding } from "~/server/db/kernel-schema";
+import {
+  evidenceBinding,
+  recordKey,
+  scopeDirty,
+  scopeState,
+} from "~/server/db/kernel-schema";
 import {
   purchasePaymentEvidence,
   sourceOrderObservation,
@@ -307,6 +311,61 @@ describe("settlement from retained order evidence", () => {
           .from(financialTransactionAllocation)
           .where(notDeleted(financialTransactionAllocation)),
       ).toEqual([{ amount: 2700n }]);
+
+      // A cross-scope merge leaves an absorbed key on the survivor's id; the
+      // Order's proof follows the live owner whichever row reads first.
+      const database = getDb(ctx.db);
+      const [booked] = await database
+        .select()
+        .from(purchase)
+        .where(notDeleted(purchase));
+      const [owner] = await database
+        .select()
+        .from(recordKey)
+        .where(
+          and(
+            eq(recordKey.scopeKind, "purchaseEvent"),
+            eq(recordKey.entity, "purchase"),
+            eq(recordKey.entityId, booked!.id),
+          ),
+        );
+      await database
+        .update(sourceOrderObservation)
+        .set({ purchaseId: booked!.id });
+      await database.insert(recordKey).values({
+        scopeKind: "purchaseEvent",
+        scopeKey: "0-synthetic-absorbed",
+        entity: "purchase",
+        naturalKey: owner!.naturalKey,
+        entityId: booked!.id,
+        mergedAt: new Date(),
+      });
+      const proofOwner = async () => {
+        await reconcileNow(ctx.db, [matching]);
+        return database
+          .select({ event: evidenceBinding.eventKey })
+          .from(evidenceBinding)
+          .where(
+            and(
+              eq(evidenceBinding.factKind, "orderObservation"),
+              eq(evidenceBinding.basis, "proven"),
+            ),
+          );
+      };
+      expect(await proofOwner()).toEqual([{ event: owner!.scopeKey }]);
+      // Rewriting the live row moves it after the absorbed row in the heap.
+      await database
+        .update(recordKey)
+        .set({ createdAt: owner!.createdAt })
+        .where(
+          and(
+            eq(recordKey.scopeKind, owner!.scopeKind),
+            eq(recordKey.scopeKey, owner!.scopeKey),
+            eq(recordKey.entity, owner!.entity),
+            eq(recordKey.naturalKey, owner!.naturalKey),
+          ),
+        );
+      expect(await proofOwner()).toEqual([{ event: owner!.scopeKey }]);
     },
   );
 
