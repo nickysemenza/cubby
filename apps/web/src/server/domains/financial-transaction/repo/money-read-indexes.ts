@@ -16,16 +16,29 @@ import {
 } from "~/server/db/schema";
 import { defineReadIndex } from "~/server/kernel/api";
 
+/** One lookup value per transaction: its absolute amount and effective day. */
+export const amountDayValue = (amount: bigint, date: string) =>
+  `${amount < 0n ? -amount : amount}:${date}`;
+
+/**
+ * Matches `FinancialTransaction_amount_day_idx`. Day numbers keep the indexed
+ * expression immutable; a date's text output depends on the session DateStyle.
+ */
+const amountDay = sql`(abs(${financialTransaction.amount})::text || ':' || (coalesce(${financialTransaction.transactionDate}, ${financialTransaction.postedDate}) - DATE '1970-01-01')::text)`;
+
 export const transactionCandidates = defineReadIndex(financialTransaction, {
-  name: "transaction.accountAmount",
+  name: "transaction.amountDay",
   values: (row) =>
     (row.transactionDate ?? row.postedDate)
-      ? [
-          `${row.accountId}:${row.amount}:${row.transactionDate ?? row.postedDate}`,
-        ]
+      ? [amountDayValue(row.amount, (row.transactionDate ?? row.postedDate)!)]
       : [],
   where: (values) =>
-    sql`EXISTS (SELECT 1 FROM jsonb_to_recordset(${JSON.stringify(values.map((value) => ({ account: value.slice(0, 36), amount: value.split(":")[1], date: value.split(":")[2] })))}::jsonb) candidate(account uuid, amount bigint, date text) WHERE ${financialTransaction.accountId}=candidate.account AND ${financialTransaction.amount}=candidate.amount AND coalesce(${financialTransaction.transactionDate}, ${financialTransaction.postedDate})::text=candidate.date)`,
+    sql`${amountDay} = ANY(${textArrayParam(
+      values.map((value) => {
+        const split = value.indexOf(":");
+        return `${value.slice(0, split)}:${Date.parse(`${value.slice(split + 1)}T00:00:00Z`) / 86_400_000}`;
+      }),
+    )})`,
 });
 export const acceptedOccurrences = defineReadIndex(sourceOccurrence, {
   name: "occurrence.transaction",

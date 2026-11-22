@@ -52,6 +52,7 @@ import { recordIdentity } from "~/server/kernel/keys";
 
 import { manualTransactionEvidence } from "./manual-evidence";
 import {
+  amountDayValue,
   transactionCandidates,
   acceptedOccurrences,
 } from "./money-read-indexes";
@@ -94,29 +95,25 @@ import {
 
 import type { statementAsks } from "../service/purchase-asks";
 
+/** Matches `ManualEntry_financial_merchant_idx`; the load keeps live accounts. */
 const manualHistory = defineReadIndex(manualEntry, {
-  name: "manualTransaction.accountMerchant",
+  name: "manualTransaction.merchant",
   values: (row) => {
     const p = row.payload;
     return row.entity === "financialTransaction" &&
       p &&
       typeof p === "object" &&
       !Array.isArray(p) &&
-      typeof p.accountId === "string" &&
       typeof p.merchant === "string"
-      ? [`${p.accountId}:${p.merchant.trim().toLowerCase()}`]
+      ? [p.merchant.trim().toLowerCase()]
       : [];
   },
   where: (values) => {
-    const account = sql`${manualEntry.payload}->>'accountId'`;
     const merchant = sql`lower(trim(${manualEntry.payload}->>'merchant'))`;
     // Fixed-width index keys narrow the lookup. Equality still checks the original values.
-    return sql`EXISTS (
-      SELECT 1 FROM jsonb_to_recordset(${JSON.stringify(values.map((value) => ({ account: value.split(":")[0], merchant: value.slice(value.indexOf(":") + 1) })))}::jsonb) wanted(account text,merchant text)
-      WHERE ${manualEntry.entity}=${"financialTransaction"}
-        AND md5(${account})=md5(wanted.account) AND md5(${merchant})=md5(wanted.merchant)
-        AND ${account}=wanted.account AND ${merchant}=wanted.merchant
-    )`;
+    return sql`md5(${merchant}) = ANY(ARRAY(SELECT md5(wanted) FROM unnest(${textArrayParam(values)}) wanted))
+      AND ${merchant} = ANY(${textArrayParam(values)})
+      AND ${manualEntry.entity} = ${"financialTransaction"}`;
   },
 });
 
@@ -498,28 +495,38 @@ export function createBankEvent({
                     ),
                 )
               : [];
+            // The lookup spans accounts; later reads key only live-account rows.
             const candidates = current
-              ? await scoped.lookup(
-                  financialTransaction,
-                  transactionCandidates,
-                  accounts.flatMap((account) =>
-                    dates.flatMap((date) => [
-                      `${account.id}:${current.providerAmount}:${date}`,
-                      `${account.id}:${-current.providerAmount}:${date}`,
-                    ]),
-                  ),
+              ? (
+                  await scoped.lookup(
+                    financialTransaction,
+                    transactionCandidates,
+                    dates.map((date) =>
+                      amountDayValue(current.providerAmount, date),
+                    ),
+                  )
+                ).filter((row) =>
+                  accounts.some((account) => account.id === row.accountId),
                 )
               : [];
             const past = current?.merchant
-              ? await scoped.lookup(
-                  manualEntry,
-                  manualHistory,
-                  accounts.flatMap((account) =>
-                    [account.id, account.shortcode].map(
-                      (id) => `${id}:${current.merchant!.trim().toLowerCase()}`,
-                    ),
-                  ),
-                )
+              ? (
+                  await scoped.lookup(manualEntry, manualHistory, [
+                    current.merchant.trim().toLowerCase(),
+                  ])
+                ).filter((row) => {
+                  const saved = row.payload;
+                  return (
+                    saved &&
+                    typeof saved === "object" &&
+                    !Array.isArray(saved) &&
+                    accounts.some(
+                      (account) =>
+                        account.id === saved.accountId ||
+                        account.shortcode === saved.accountId,
+                    )
+                  );
+                })
               : [];
             const history = past.flatMap((row) => {
               const saved = row.payload;

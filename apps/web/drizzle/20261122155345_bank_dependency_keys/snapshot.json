@@ -1,0 +1,181 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "8bd36037-d147-4e40-bcda-f25c51d6568b",
+  "prevIds": [
+    "36888a35-983b-4029-84b2-081317d85735"
+  ],
+  "footprints": [
+    {
+      "statementType": "drop_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "ManualEntry",
+        "ManualEntry_financial_history_lookup_idx"
+      ],
+      "writes": [
+        "s|idx|public.ManualEntry_financial_history_lookup_idx",
+        "n|idx|public.ManualEntry_financial_history_lookup_idx",
+        "e|idx|public.ManualEntry_financial_history_lookup_idx",
+        "n|rel|public.ManualEntry_financial_history_lookup_idx"
+      ],
+      "reads": [
+        "e|tbl|public.ManualEntry",
+        "n|sch|public"
+      ],
+      "sharedWrites": []
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "FinancialTransaction",
+        "FinancialTransaction_amount_day_idx"
+      ],
+      "writes": [
+        "s|idx|public.FinancialTransaction_amount_day_idx",
+        "n|idx|public.FinancialTransaction_amount_day_idx",
+        "e|idx|public.FinancialTransaction_amount_day_idx",
+        "n|rel|public.FinancialTransaction_amount_day_idx"
+      ],
+      "reads": [
+        "n|tbl|public.FinancialTransaction",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "ManualEntry",
+        "ManualEntry_financial_merchant_idx"
+      ],
+      "writes": [
+        "s|idx|public.ManualEntry_financial_merchant_idx",
+        "n|idx|public.ManualEntry_financial_merchant_idx",
+        "e|idx|public.ManualEntry_financial_merchant_idx",
+        "n|rel|public.ManualEntry_financial_merchant_idx"
+      ],
+      "reads": [
+        "n|tbl|public.ManualEntry",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_check",
+      "statementTarget": [
+        "table",
+        "public",
+        "KeyRev"
+      ],
+      "writes": [
+        "s|ck|public.KeyRev.KeyRev_retired_key_check",
+        "n|ck|public.KeyRev.KeyRev_retired_key_check",
+        "e|ck|public.KeyRev.KeyRev_retired_key_check",
+        "n|con|public.KeyRev.KeyRev_retired_key_check"
+      ],
+      "reads": [
+        "n|tbl|public.KeyRev",
+        "n|sch|public",
+        "n|col|public.KeyRev.key"
+      ]
+    },
+    {
+      "statementType": "add_check",
+      "statementTarget": [
+        "table",
+        "public",
+        "ScopeDep"
+      ],
+      "writes": [
+        "s|ck|public.ScopeDep.ScopeDep_retired_key_check",
+        "n|ck|public.ScopeDep.ScopeDep_retired_key_check",
+        "e|ck|public.ScopeDep.ScopeDep_retired_key_check",
+        "n|con|public.ScopeDep.ScopeDep_retired_key_check"
+      ],
+      "reads": [
+        "n|tbl|public.ScopeDep",
+        "n|sch|public",
+        "n|col|public.ScopeDep.key"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "FinancialTransaction",
+        "name": "FinancialTransaction_amount_day_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "(abs(\"amountMinor\")::text || ':' || (coalesce(\"transactionDate\", \"postedDate\") - DATE '1970-01-01')::text)",
+            "isExpression": true,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ManualEntry",
+        "name": "ManualEntry_financial_merchant_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "(md5(lower(trim(\"payload\"->>'merchant'))))",
+            "isExpression": true,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "KeyRev",
+        "name": "KeyRev_retired_key_check",
+        "value": "\"key\" NOT LIKE 'index:transaction.accountAmount:%' AND \"key\" NOT LIKE 'index:manualTransaction.accountMerchant:%'",
+        "entityType": "checks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ScopeDep",
+        "name": "ScopeDep_retired_key_check",
+        "value": "\"key\" NOT LIKE 'index:transaction.accountAmount:%' AND \"key\" NOT LIKE 'index:manualTransaction.accountMerchant:%'",
+        "entityType": "checks"
+      }
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"ManualEntry_financial_history_lookup_idx\"]"
+    }
+  ]
+}

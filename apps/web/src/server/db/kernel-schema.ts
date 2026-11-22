@@ -5,7 +5,6 @@
  * refs, fact refs), so they hold no foreign keys into entity tables; the
  * kernel's writers own their integrity.
  */
-import { entitySchema } from "@cubby/schemas/entity-core";
 import {
   askProducer,
   askState,
@@ -79,14 +78,9 @@ export const manualEntry = pgTable(
     createdAt: createdAt(),
   },
   (table) => [
-    index("ManualEntry_financial_history_lookup_idx")
-      .on(
-        sql`(md5(${table.payload}->>'accountId'))`,
-        sql`(md5(lower(trim(${table.payload}->>'merchant'))))`,
-      )
-      .where(
-        sql`${table.entity} = ${sqlEnumConstant(entitySchema, "financialTransaction")}`,
-      ),
+    index("ManualEntry_financial_merchant_idx").on(
+      sql`(md5(lower(trim(${table.payload}->>'merchant'))))`,
+    ),
     index("ManualEntry_allocation_transaction_idx")
       .on(sql`(${table.payload}->'values'->>'transactionId')`)
       .where(
@@ -297,11 +291,23 @@ export const factKey = pgTable(
   ],
 );
 
+/**
+ * Retired read-index families. A Worker built before their replacement fails
+ * its raise or dependency registration here instead of writing keys no
+ * current reader or writer shares.
+ */
+const liveKey = (key: AnyPgColumn) =>
+  sql`${key} NOT LIKE 'index:transaction.accountAmount:%' AND ${key} NOT LIKE 'index:manualTransaction.accountMerchant:%'`;
+
 /** One revision per key: the serialization point between mutation and dependency registration. */
-export const keyRev = pgTable("KeyRev", {
-  key: text("key").primaryKey(),
-  rev: bigint("rev", { mode: "number" }).notNull().default(0),
-});
+export const keyRev = pgTable(
+  "KeyRev",
+  {
+    key: text("key").primaryKey(),
+    rev: bigint("rev", { mode: "number" }).notNull().default(0),
+  },
+  (table) => [check("KeyRev_retired_key_check", liveKey(table.key))],
+);
 
 /** One row per scope that must run. */
 export const scopeDirty = pgTable(
@@ -354,6 +360,7 @@ export const scopeDep = pgTable(
       columns: [table.scopeKind, table.scopeKey, table.key],
     }),
     index("ScopeDep_key_idx").on(table.key),
+    check("ScopeDep_retired_key_check", liveKey(table.key)),
   ],
 );
 

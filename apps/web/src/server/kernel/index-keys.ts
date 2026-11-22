@@ -4,6 +4,11 @@
  * indexed table raises the keys of the rows before and after its write: plain
  * indexes from row values, joined predicates from memberships loaded from the
  * committed graph before and after the write.
+ *
+ * A reconciler publication and a repoint hold both rows. An authored writer
+ * reports after its write, so the kernel stores each row's membership as
+ * `index:<table>` facts and every writer of the row replaces them: the stored
+ * keys are the row before an authored write.
  */
 import { and, eq, getTableName, inArray } from "drizzle-orm";
 
@@ -39,7 +44,7 @@ export function rowIndexKeys(
 }
 
 /** Index fact rows for written rows of an indexed table. */
-export function indexFacts(
+function indexFacts(
   registry: KernelRegistry,
   table: string,
   rows: readonly ColumnValues[],
@@ -52,29 +57,29 @@ export function indexFacts(
   }));
 }
 
-/** The stored index keys of rows, before a writer changes them. */
-async function indexedKeys(
-  q: Q,
+/** Replace the stored membership of rows with their current values. */
+export async function storeIndexFacts(
+  q: Pick<Q, "execute" | "delete">,
   registry: KernelRegistry,
   table: string,
-  ids: readonly string[],
-): Promise<Key[]> {
-  if (!ids.length || !plainIndexes(registry, table).length) return [];
-  const rows = await q
-    .select({ key: factKey.key })
-    .from(factKey)
-    .where(
-      and(
-        eq(factKey.factKind, `index:${table}`),
-        inArray(factKey.factId, [...ids]),
+  rows: readonly ColumnValues[],
+): Promise<void> {
+  if (!rows.length || !plainIndexes(registry, table).length) return;
+  await q.delete(factKey).where(
+    and(
+      eq(factKey.factKind, `index:${table}`),
+      inArray(
+        factKey.factId,
+        rows.map((row) => String(row.id)),
       ),
-    );
-  return rows.map((row) => row.key);
+    ),
+  );
+  await insertFactKeys(q, indexFacts(registry, table, rows));
 }
 
 /**
- * Replace the index facts of rows just written and return their previous and
- * current keys: the previous facts stand for the rows before the write.
+ * Store the membership of rows an authored writer just wrote and return the
+ * keys they held before and hold now.
  */
 export async function reindexRows(
   q: Q,
@@ -84,16 +89,20 @@ export async function reindexRows(
   rows: readonly ColumnValues[],
 ): Promise<Key[]> {
   if (!ids.length || !plainIndexes(registry, table).length) return [];
-  const kind = `index:${table}`;
-  const where = and(
-    eq(factKey.factKind, kind),
-    inArray(factKey.factId, [...ids]),
-  );
-  const previous = await indexedKeys(q, registry, table, ids);
-  const indexed = indexFacts(registry, table, rows);
-  await q.delete(factKey).where(where);
-  await insertFactKeys(q, indexed);
-  return [...previous, ...indexed.flatMap((row) => row.keys)];
+  const previous = await q
+    .select({ key: factKey.key })
+    .from(factKey)
+    .where(
+      and(
+        eq(factKey.factKind, `index:${table}`),
+        inArray(factKey.factId, [...ids]),
+      ),
+    );
+  await storeIndexFacts(q, registry, table, rows);
+  return [
+    ...previous.map((row) => row.key),
+    ...rows.flatMap((row) => rowIndexKeys(registry, table, row)),
+  ];
 }
 
 /** Joined-predicate memberships of the changed rows, read from the committed graph. */
