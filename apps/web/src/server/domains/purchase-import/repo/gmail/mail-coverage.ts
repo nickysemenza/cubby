@@ -14,7 +14,7 @@ import {
   mailboxDiscoveryInput,
   mailboxDiscoveryProgress,
 } from "@cubby/schemas/mailbox-research";
-import { runPurpose } from "@cubby/schemas/run-fields";
+import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import {
   and,
@@ -278,7 +278,9 @@ async function loadMailCoverage(db: Database) {
         status: run.status,
         failureCode: run.failureCode,
         phase: sql<string | null>`${run.progress}->>'phase'`,
-        input: run.input,
+        controlled: sql<unknown>`${run.input}->'controlled'`,
+        // Only a completed request's query list is coverage evidence.
+        input: sql<unknown>`CASE WHEN ${run.status} = ${runStatus.enum.completed} THEN ${run.input} END`,
         endedAt: run.endedAt,
       })
       .from(run)
@@ -321,8 +323,9 @@ async function loadMailCoverage(db: Database) {
         mailboxId: sql<string>`${run.input}->>'mailboxId'`,
         status: run.status,
         failureCode: run.failureCode,
-        input: run.input,
-        progress: run.progress,
+        activeQueryKey: sql<
+          string | null
+        >`${run.progress}->${mailboxDiscoveryProgress.keyof().enum.page}->>'scopedKey'`,
       })
       .from(run)
       .where(
@@ -545,7 +548,9 @@ function projectMailCoverage(
     if (!control.vendorId || !control.ledgerPartyId) continue;
     const id = key(control.vendorId, control.ledgerPartyId, control.mailboxId);
     if (controlRuns.has(id)) continue;
-    const scope = mailboxDiscoveryInput.safeParse(control.input);
+    const scope = mailboxDiscoveryInput.shape.controlled.safeParse(
+      control.controlled ?? undefined,
+    );
     controlRuns.set(
       id,
       mailCoverageRow.shape.controlledRun.parse({
@@ -553,8 +558,8 @@ function projectMailCoverage(
         status: control.status,
         queued: control.failureCode === "controlled_mail_queued",
         phase: control.phase,
-        from: scope.success ? (scope.data.controlled?.from ?? null) : null,
-        to: scope.success ? (scope.data.controlled?.to ?? null) : null,
+        from: scope.data?.from ?? null,
+        to: scope.data?.to ?? null,
         imports: importsByParent.get(control.internalId) ?? {
           running: 0,
           paused: 0,
@@ -624,11 +629,8 @@ function projectMailCoverage(
       pendingCount += 1;
       if (!pendingPositions.has(id)) pendingPositions.set(id, pendingCount);
     }
-    const progress = mailboxDiscoveryProgress.safeParse(active?.progress);
     // A pending cursor is not proof that the worker is processing this query now.
-    const activeQueryKey = progress.success
-      ? progress.data.page?.scopedKey
-      : undefined;
+    const activeQueryKey = active?.activeQueryKey;
     const pause = settings.controlledPauses.some(
       (entry) => entry.mailboxId === member.mailboxId,
     );

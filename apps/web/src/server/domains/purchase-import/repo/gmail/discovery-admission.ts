@@ -35,7 +35,7 @@ export async function lockMailDiscoveryRunAdmission(
     .select({
       purpose: run.purpose,
       ledgerPartyId: run.ledgerPartyId,
-      input: run.input,
+      mailboxId: sql<unknown>`${run.input}->'mailboxId'`,
     })
     .from(run)
     .where(eq(run.id, runId));
@@ -44,7 +44,7 @@ export async function lockMailDiscoveryRunAdmission(
     throw new Error("Mail discovery has no member scope");
   const identity = {
     ledgerPartyId: owner.ledgerPartyId,
-    mailboxId: mailboxDiscoveryInput.parse(owner.input).mailboxId,
+    mailboxId: mailboxDiscoveryInput.shape.mailboxId.parse(owner.mailboxId),
   };
   await lockMailDiscoveryAdmission(db, identity);
   return identity;
@@ -95,9 +95,13 @@ async function readMailDiscoveryOwners(
     generation: sql`${run.progress}->>'attempt'`,
   };
   // includes-deleted: a running legacy writer occupies capacity until it stops.
-  const owners = await getDb(db)
+  // The mailbox is compared on returned rows: as a WHERE predicate it would
+  // detoast each status-matched candidate's input, query roster included,
+  // before the Pass filters reject most of them.
+  const rows = await getDb(db)
     .select({
       id: run.id,
+      mailboxId: sql<string | null>`${run.input}->>'mailboxId'`,
       status: run.status,
       failureCode: run.failureCode,
       controlled: sql<boolean>`${run.input}->'controlled' IS NOT NULL`,
@@ -117,7 +121,6 @@ async function readMailDiscoveryOwners(
       and(
         eq(run.purpose, runPurpose.enum.mail_discovery),
         eq(run.ledgerPartyId, ledgerPartyId.parse(input.ledgerPartyId)),
-        sql`${run.input}->>'mailboxId' = ${input.mailboxId}`,
         or(
           eq(run.status, runStatus.enum.running),
           and(
@@ -154,24 +157,27 @@ async function readMailDiscoveryOwners(
         ),
       ),
     );
-  return owners.map((owner) => {
+  return rows.flatMap(({ mailboxId, ...owner }) => {
+    if (mailboxId !== input.mailboxId) return [];
     const progress =
       mailboxDiscoveryProgress.safeParse(owner.progress).data ?? null;
-    return {
-      ...owner,
-      progress,
-      // Ordinary mailbox owners are pinned to history by the listing path.
-      historyOnly:
-        progress?.discoveryScope?.kind === "mailbox" &&
-        progress.admissionClass === "automatic" &&
-        !owner.controlled &&
-        !owner.pageScopedKey &&
-        (progress.discoveryScope.mode === "new_mail" ||
-          (owner.status === "paused" &&
-            owner.failureCode === MAIL_DISCOVERY_ADMISSION_WAIT &&
-            progress.phase === "paused" &&
-            !owner.hasFrozenPage)),
-    };
+    return [
+      {
+        ...owner,
+        progress,
+        // Ordinary mailbox owners are pinned to history by the listing path.
+        historyOnly:
+          progress?.discoveryScope?.kind === "mailbox" &&
+          progress.admissionClass === "automatic" &&
+          !owner.controlled &&
+          !owner.pageScopedKey &&
+          (progress.discoveryScope.mode === "new_mail" ||
+            (owner.status === "paused" &&
+              owner.failureCode === MAIL_DISCOVERY_ADMISSION_WAIT &&
+              progress.phase === "paused" &&
+              !owner.hasFrozenPage)),
+      },
+    ];
   });
 }
 

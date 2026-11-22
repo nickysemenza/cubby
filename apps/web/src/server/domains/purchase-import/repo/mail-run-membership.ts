@@ -440,7 +440,7 @@ export async function releaseUnsettledMailRunSources(
     .select({
       runId: runOperation.runId,
       kind: runOperation.kind,
-      result: runOperation.result,
+      result: attemptEvidence,
     })
     .from(run)
     .innerJoin(runOperation, eq(runOperation.runId, run.id))
@@ -501,7 +501,7 @@ export async function releaseUnsettledMailRunSources(
   // This Run's own claims count as attempts: its coordinator reached the
   // Email and ended without settling it.
   const ownClaims = await tx
-    .select({ result: runOperation.result })
+    .select({ result: attemptEvidence })
     .from(runOperation)
     .where(
       and(
@@ -580,6 +580,17 @@ export async function releaseUnsettledMailRunSources(
     .returning({ id: emailTable.id });
 }
 
+/**
+ * The claim identity or target outcome an attempt check reads. A claim's
+ * stored result also carries the Email it handed the coordinator; replay
+ * keeps that copy, but attempt counting never reads it.
+ */
+const attemptEvidence = sql<unknown>`CASE WHEN ${runOperation.kind} = ${"claim_next_work"}
+  THEN jsonb_build_object(${"kind"}::text, ${runOperation.result}->${"kind"},
+    ${"email"}::text, jsonb_build_object(
+      ${"mailboxId"}::text, ${runOperation.result}->${"email"}->${"mailboxId"},
+      ${"messageId"}::text, ${runOperation.result}->${"email"}->${"messageId"}))
+  ELSE jsonb_build_object(${"target"}::text, ${runOperation.result}->${"target"}) END`;
 const claimedMail = z.object({
   kind: z.literal("email"),
   email: z.object({ mailboxId: z.string(), messageId: z.string() }),

@@ -669,13 +669,16 @@ export async function admitMailImport(
         ? await tx
             .select({
               purpose: run.purpose,
-              input: run.input,
+              // Admission reads the parent's policy, never its query roster.
+              input: sql<unknown>`${run.input} - 'scopedQueries'`,
               vendorId: run.vendorId,
             })
             .from(run)
             .where(eq(run.id, input.parentRunId))
         : [];
-      const parentPolicy = mailboxDiscoveryInput.safeParse(parent?.input);
+      const parentPolicy = mailboxDiscoveryInput
+        .omit({ scopedQueries: true })
+        .safeParse(parent?.input);
       const discoveryParent =
         parent?.purpose === "mail_discovery" && parentPolicy.success
           ? parentPolicy.data

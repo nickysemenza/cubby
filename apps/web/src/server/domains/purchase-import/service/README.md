@@ -98,8 +98,11 @@ their funding admission.
 ### Mailbox admission and coverage
 
 Mailbox discovery admits at most four independent targeted searches per member
-and mailbox. Each Run keeps the complete frozen query roster and a stable
-selected query resource. History and controlled scans own the whole mailbox.
+and mailbox. Each Run freezes the complete query roster and a stable selected
+query resource. A completed ordinary Run with no Ask scope or step keeps only
+the query it searched once its continuation has fanned out; controlled Runs
+keep their roster as coverage evidence. History and controlled scans own the
+whole mailbox.
 Short admission transactions coordinate resource conflicts, and a database
 guard preserves the capacity and exclusion rules. Only current
 connected-mailbox discovery reconciles the canonical query roster; individual

@@ -94,6 +94,7 @@ import {
   user,
   verification,
 } from "./auth.schema";
+import { vectorCleanupPendingSql } from "./entity-embedding-predicates";
 import {
   entityLinkKindCheckSql,
   entityLinkNoSelfCheckSql,
@@ -225,11 +226,9 @@ export const entityEmbedding = pgTable(
         sql`${table.deletedAt} IS NULL AND ${table.artifactState} = ${sqlEnumConstant(embeddingArtifactState, "selected")}`,
       ),
     index("EntityEmbedding_entity_idx").on(table.entityKind, table.entityId),
-    index("EntityEmbedding_model_idx").on(
-      table.provider,
-      table.model,
-      table.dimensions,
-    ),
+    index("EntityEmbedding_cleanup_idx")
+      .on(table.id)
+      .where(vectorCleanupPendingSql(table)),
     uniqueIndex("EntityEmbedding_one_submission_key")
       .on(
         table.entityKind,
@@ -779,23 +778,8 @@ export const mcpToolCall = pgTable(
     errorKind: text("errorKind").$type<McpToolErrorKind>(),
   },
   (table) => [
-    index("McpToolCall_tool_occurredAt_idx").on(
-      table.toolName,
-      table.occurredAt.desc(),
-    ),
-    index("McpToolCall_user_occurredAt_idx").on(
-      table.userId,
-      table.occurredAt.desc(),
-    ),
-    index("McpToolCall_client_occurredAt_idx").on(
-      table.clientId,
-      table.occurredAt.desc(),
-    ),
-    index("McpToolCall_outcome_idx").on(table.outcome),
-    index("McpToolCall_entity_occurredAt_idx").on(
-      table.entityKind,
-      table.occurredAt.desc(),
-    ),
+    // Usage reads aggregate the whole table or one `occurredAt` window.
+    index("McpToolCall_occurredAt_idx").on(table.occurredAt),
     index("McpToolCall_runId_idx")
       .on(table.runId)
       .where(sql`${table.runId} IS NOT NULL`),

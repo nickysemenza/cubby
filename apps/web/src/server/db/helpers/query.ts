@@ -501,6 +501,17 @@ export { columnArrayParam, textArrayParam };
 export const uuidArrayParam = (ids: readonly string[] | SQL): SQL =>
   ids instanceof SQL ? ids : sql`${`{${[...new Set(ids)].join(",")}}`}::uuid[]`;
 
+const CANONICAL_UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
+
+/**
+ * The values that are canonical UUID text. `id = ANY(uuidArrayParam(...))`
+ * over them matches exactly the rows `id::text = ANY(values)` matched, through
+ * the index; shortcodes and other keys drop out instead of failing the cast.
+ */
+export const canonicalUuids = (values: readonly string[]): string[] =>
+  values.filter((value) => CANONICAL_UUID.test(value));
+
 /**
  * Equality against one value or any of a set — the server half of a
  * multi-select column filter (see `oneOrMany`).

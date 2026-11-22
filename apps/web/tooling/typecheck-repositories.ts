@@ -156,6 +156,7 @@ export const repositoryOwners = [
   "src/server/db/helpers/array-param.ts",
   "src/server/db/helpers/query.ts",
   "src/server/db/helpers/requested.ts",
+  "src/server/db/entity-embedding-predicates.ts",
   "src/server/db/sql-enum.ts",
   "src/server/db/helpers/crud.ts",
   "src/server/db/helpers/transform.ts",

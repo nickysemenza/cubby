@@ -45,14 +45,24 @@ const refuse = (message: string): never => {
   throw createAppError("FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT", message);
 };
 
-/** Presentation of retained references on an already identified transaction. Never resolve acceptance from these rows. */
+/**
+ * Presentation of retained references on an already identified transaction. Never resolve acceptance from these rows.
+ * `owner` is a plain column in every branch so an owner filter reaches each
+ * branch's index; an accepted occurrence belongs to its accepted owner, not to
+ * its reserved bank key.
+ */
 export const financialSourceReferenceRows = sql`(
   -- includes-deleted: occurrence reservations and accepted history survive source tombstones.
-  SELECT coalesce(occurrence."acceptedTransactionId", bank."entityId") AS owner,occurrence.source,occurrence.shortcode AS "externalId"
-  FROM "SourceOccurrence" occurrence LEFT JOIN "RecordKey" bank
-    ON bank."scopeKind" = 'bankEvent' AND bank."scopeKey" = occurrence.id::text AND bank.entity = ${sqlEnumConstant(entitySchema, entitySchema.enum.financialTransaction)}
-      AND bank."rejectedAt" IS NULL AND bank."mergedAt" IS NULL
-  WHERE coalesce(occurrence."acceptedTransactionId", bank."entityId") IS NOT NULL
+  SELECT occurrence."acceptedTransactionId" AS owner,occurrence.source,occurrence.shortcode AS "externalId"
+  FROM "SourceOccurrence" occurrence
+  WHERE occurrence."acceptedTransactionId" IS NOT NULL
+  UNION ALL
+  SELECT bank."entityId",occurrence.source,occurrence.shortcode
+  FROM "RecordKey" bank JOIN "SourceOccurrence" occurrence
+    ON occurrence.id = CASE WHEN pg_input_is_valid(bank."scopeKey", ${"uuid"}) THEN bank."scopeKey"::uuid END
+    AND occurrence.id::text = bank."scopeKey" AND occurrence."acceptedTransactionId" IS NULL
+  WHERE bank."scopeKind" = 'bankEvent' AND bank.entity = ${sqlEnumConstant(entitySchema, entitySchema.enum.financialTransaction)}
+    AND bank."rejectedAt" IS NULL AND bank."mergedAt" IS NULL
   UNION
   SELECT alias."historicalTransactionId",alias.source,alias.value FROM "FinancialEvidenceAlias" alias
   WHERE alias."historicalTransactionId" IS NOT NULL AND ${notDeleted("alias")}

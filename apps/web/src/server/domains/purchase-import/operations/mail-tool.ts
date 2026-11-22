@@ -304,10 +304,10 @@ export async function readMailImportOutcomes(
       producerRun: runTable.shortcode,
       waitingEmail: sql<
         string | null
-      >`(SELECT shortcode FROM "Entity" WHERE id::text = ${runOperation.result} #>> '{mailOutcome,judgment,waitingOn,emailId}')`,
+      >`(SELECT shortcode FROM "Entity" WHERE id = CASE WHEN pg_input_is_valid(${runOperation.result} #>> '{mailOutcome,judgment,waitingOn,emailId}', ${"uuid"}) THEN (${runOperation.result} #>> '{mailOutcome,judgment,waitingOn,emailId}')::uuid END AND id::text = ${runOperation.result} #>> '{mailOutcome,judgment,waitingOn,emailId}')`,
       waitingVendor: sql<
         string | null
-      >`(SELECT shortcode FROM "Entity" WHERE id::text = ${runOperation.result} #>> '{mailOutcome,judgment,waitingOn,vendorId}')`,
+      >`(SELECT shortcode FROM "Entity" WHERE id = CASE WHEN pg_input_is_valid(${runOperation.result} #>> '{mailOutcome,judgment,waitingOn,vendorId}', ${"uuid"}) THEN (${runOperation.result} #>> '{mailOutcome,judgment,waitingOn,vendorId}')::uuid END AND id::text = ${runOperation.result} #>> '{mailOutcome,judgment,waitingOn,vendorId}')`,
     })
     .from(runOperation)
     .leftJoin(runTable, eq(runTable.id, runOperation.runId))

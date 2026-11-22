@@ -5,6 +5,7 @@ import { z } from "zod";
 import { plainDateDaysBetween } from "~/lib/household-date";
 import { textArrayParam } from "~/server/db/helpers/array-param";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { canonicalUuids, uuidArrayParam } from "~/server/db/helpers/query";
 import { manualEntry } from "~/server/db/kernel-schema";
 import {
   ledgerTransfer,
@@ -124,23 +125,27 @@ const transferPair = defineReconciler<Input>({
       const parsed = seed.safeParse(row.payload);
       return parsed.success ? parsed.data.transactionIds : [];
     });
+    // Each source selects transaction ids on its own plan: as OR branches of
+    // one filter the anchor match rescanned every transaction for each row.
     const transactions = await reads.select(
       financialTransaction,
       [],
-      sql`
-      ${financialTransaction.id}::text = ANY(${textArrayParam([...keys, ...manualIds])})
-      OR EXISTS (SELECT 1 FROM "FinancialTransaction" anchor
-        WHERE anchor.id::text = ANY(${textArrayParam(keys)}) AND ${notDeleted("anchor")}
-          AND ${financialTransaction.amount} = -anchor."amountMinor"
-          AND abs(coalesce(${financialTransaction.transactionDate}, ${financialTransaction.postedDate})::date
-            - coalesce(anchor."transactionDate", anchor."postedDate")::date) <= 5)
-      OR ${financialTransaction.id} IN (SELECT e.id FROM "Decision" choice
+      sql`${financialTransaction.id} = ANY(ARRAY(
+      SELECT unnest(${uuidArrayParam(canonicalUuids([...keys, ...manualIds]))})
+      UNION SELECT candidate.id FROM "FinancialTransaction" anchor
+        JOIN "FinancialTransaction" candidate ON candidate."amountMinor" = -anchor."amountMinor"
+          AND abs(coalesce(candidate."transactionDate", candidate."postedDate")::date
+            - coalesce(anchor."transactionDate", anchor."postedDate")::date) <= 5
+        WHERE anchor.id = ANY(${uuidArrayParam(canonicalUuids(keys))}) AND ${notDeleted("anchor")}
+      UNION SELECT e.id FROM "Decision" choice
         CROSS JOIN LATERAL jsonb_array_elements_text(CASE WHEN jsonb_typeof(choice.value)='array' THEN choice.value ELSE '[]'::jsonb END) selected
-        JOIN "Entity" e ON e.id::text=selected.value OR e.shortcode=selected.value
+        JOIN "Entity" e ON (e.id = CASE WHEN pg_input_is_valid(selected.value, ${"uuid"}) THEN selected.value::uuid END
+          AND e.id::text = selected.value) OR e.shortcode = selected.value
         WHERE choice.channel=${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)} AND choice.field='transactions'
-          AND choice.subject=ANY(${textArrayParam(keys.map((key) => `transferPair:${key}`))}))
-      OR ${financialTransaction.ledgerTransferId} IN (SELECT "entityId" FROM "RecordKey"
-        WHERE "scopeKind"='transferPair' AND "scopeKey"=ANY(${textArrayParam(keys)}))`,
+          AND choice.subject=ANY(${textArrayParam(keys.map((key) => `transferPair:${key}`))})
+      UNION SELECT linked.id FROM "FinancialTransaction" linked
+        WHERE linked."ledgerTransferId" IN (SELECT "entityId" FROM "RecordKey"
+          WHERE "scopeKind"='transferPair' AND "scopeKey"=ANY(${textArrayParam(keys)}))))`,
     );
     const [accounts, parties, expenses, allocations, transfers] =
       await Promise.all([
@@ -157,13 +162,14 @@ const transferPair = defineReconciler<Input>({
         reads.select(
           financialTransactionAllocation,
           [],
-          sql`${financialTransactionAllocation.transactionId}::text=ANY(${textArrayParam(transactions.map((row) => row.id))})`,
+          sql`${financialTransactionAllocation.transactionId}=ANY(${uuidArrayParam(transactions.map((row) => row.id))})`,
         ),
         reads.select(
           ledgerTransfer,
           [],
-          sql`${ledgerTransfer.id}::text=ANY(${textArrayParam(transactions.flatMap((row) => (row.ledgerTransferId ? [row.ledgerTransferId] : [])))})
-        OR ${ledgerTransfer.id} IN (SELECT "entityId" FROM "RecordKey" WHERE "scopeKind"='transferPair' AND "scopeKey"=ANY(${textArrayParam(keys)}))`,
+          sql`${ledgerTransfer.id} = ANY(ARRAY(
+        SELECT unnest(${uuidArrayParam(transactions.flatMap((row) => (row.ledgerTransferId ? [row.ledgerTransferId] : [])))})
+        UNION SELECT "entityId" FROM "RecordKey" WHERE "scopeKind"='transferPair' AND "scopeKey"=ANY(${textArrayParam(keys)})))`,
         ),
       ]);
     return new Map(
