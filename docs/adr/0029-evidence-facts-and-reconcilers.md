@@ -417,9 +417,10 @@ wait rather than a terminated session. A nested writer that already holds the
 gate retains the outer transaction's timeouts and does not reset its budget.
 
 A locked background fallback tries the gate without waiting before it reads
-inside the transaction. Busy admission releases its claim as a conflict and
-retains the dirty work, so a gate wait cannot consume the budget needed for
-recomputation. Admitted work keeps every revision and sequence fence. Member
+inside the transaction. Busy admission releases its claim as a conflict,
+retains the dirty work and makes it claimable again after a short delay, so a
+gate wait cannot consume the budget needed for recomputation and a busy gate
+does not drive a recompute loop. Admitted work keeps every revision and sequence fence. Member
 work retains its bounded gate wait. A failed locked load settles its original
 cause before issuing another query on that transaction.
 

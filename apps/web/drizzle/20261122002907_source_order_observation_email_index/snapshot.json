@@ -1,0 +1,57 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "fc3f5718-84f9-4d9e-9932-ef0c8cedaf4e",
+  "prevIds": [
+    "2f146de2-2fd6-4ca4-8849-a13beff8a7d7"
+  ],
+  "footprints": [
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "SourceOrderObservation",
+        "SourceOrderObservation_email_idx"
+      ],
+      "writes": [
+        "s|idx|public.SourceOrderObservation_email_idx",
+        "n|idx|public.SourceOrderObservation_email_idx",
+        "e|idx|public.SourceOrderObservation_email_idx",
+        "n|rel|public.SourceOrderObservation_email_idx"
+      ],
+      "reads": [
+        "n|tbl|public.SourceOrderObservation",
+        "n|sch|public",
+        "n|col|public.SourceOrderObservation.emailId"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "SourceOrderObservation",
+        "name": "SourceOrderObservation_email_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "emailId",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    }
+  ]
+}

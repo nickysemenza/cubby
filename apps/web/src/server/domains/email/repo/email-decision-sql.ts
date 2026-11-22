@@ -123,8 +123,11 @@ const emailLinkDecisionProjection = (
     (substring(d.field from 6)::uuid=coalesce(target."mergedIntoId",target.id)) DESC,d.id
  )`;
 export const emailLinkDecisionsSql = emailLinkDecisionProjection(false);
+/** One Email's links; correlated per row, it reads only that Email's subjects. */
 export const emailLinkDecisionsForEmailSql = (emailId: SQL) =>
-  emailLinkDecisionProjection(true, emailId);
+  emailLinkDecisionProjection(true, emailId, {
+    emailIds: sql`ARRAY[${emailId}]::uuid[]`,
+  });
 export const emailLinkDecisionsForPurchasesSql = (purchaseIds: SQL) =>
   emailLinkDecisionProjection(true, undefined, { purchaseIds });
 /** Current links for a uuid[] of Emails, without projecting the household's. */

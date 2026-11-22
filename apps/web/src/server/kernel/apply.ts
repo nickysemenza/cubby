@@ -674,10 +674,15 @@ async function fenceBatch(
 }
 
 /** One retry mutation for a batch; a conflict spends no attempt. */
-async function releaseConflicts(q: Q, claims: readonly ClaimedScope[]) {
+async function releaseConflicts(
+  q: Q,
+  claims: readonly ClaimedScope[],
+  delayMs = 0,
+) {
   if (!claims.length) return;
   await q.execute(sql`
     UPDATE "ScopeDirty" d SET "claimToken" = NULL, "claimDeadline" = NULL, conflicts = d.conflicts + 1
+      ${delayMs > 0 ? sql`, "availableAt" = greatest(d."availableAt", now() + make_interval(secs => ${delayMs / 1000}))` : sql``}
     FROM unnest(${orderedTextArrayParam(claims.map((item) => item.kind))}, ${orderedTextArrayParam(claims.map((item) => item.key))}, ${orderedTextArrayParam(claims.map((item) => item.token))}) AS wanted(kind, key, token)
     WHERE d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key AND d."claimToken" = wanted.token::uuid`);
 }
@@ -1506,6 +1511,9 @@ async function runHeldScopes(
   ];
 }
 
+/** A locked background run that found the gate busy waits this long before its next claim. */
+const LOCKED_GATE_BUSY_DELAY_MS = 5_000;
+
 // Leave room under the background deadline for fences, output writes and gate admission.
 const BACKGROUND_PUBLICATION_WEIGHT = 10_000;
 
@@ -1817,7 +1825,14 @@ async function runLocked(
     return traced.result;
   } catch (error) {
     if (isConflict(error) || error instanceof HouseholdWriteBusyError) {
-      await releaseConflicts(repositoryQueries(db), [claimed]);
+      // A busy gate retries after other applies, not in a recompute loop.
+      await releaseConflicts(
+        repositoryQueries(db),
+        [claimed],
+        error instanceof HouseholdWriteBusyError
+          ? LOCKED_GATE_BUSY_DELAY_MS
+          : 0,
+      );
       return outcome(scope, "conflict");
     }
     const [failed] = await settleBatchFailure(
