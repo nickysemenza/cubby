@@ -1,3 +1,4 @@
+import { ArrowsHorizontalIcon } from "@phosphor-icons/react/dist/csr/ArrowsHorizontal";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { cn } from "cn";
@@ -5,6 +6,7 @@ import {
   type ComponentProps,
   type ElementType,
   type ReactNode,
+  createContext,
   useCallback,
   useContext,
   useEffect,
@@ -73,7 +75,28 @@ export interface IndexedSection {
   countPending?: boolean;
   /** The declared section has no title of its own: it renders no heading. */
   bare?: boolean;
+  /** Record pages: one quiet line that stands for the body while folded. */
+  digest?: ReactNode;
+  /** Record pages: a table that can span every body column. */
+  wideable?: boolean;
+  /** Record pages: a workspace that always spans every body column. */
+  span?: boolean;
 }
+
+/**
+ * A record page's per-section fold and width, owned by its workspace. Absent
+ * on Settings and the analytical pages, whose sections neither fold nor span.
+ */
+export interface RecordSectionControls {
+  folded: ReadonlySet<string>;
+  toggleFold: (id: string) => void;
+  wide: ReadonlySet<string>;
+  toggleWide: (id: string) => void;
+  /** Whether the body has more than one column to span. */
+  columns: boolean;
+}
+export const RecordSectionControlsContext =
+  createContext<RecordSectionControls | null>(null);
 
 /** A group heading and its sections. Ids use `detail-group-<key>`, so `#<key>` reaches it. */
 export interface IndexedSectionGroup {
@@ -130,6 +153,12 @@ function SectionCard({
   const [reportedEmpty, setEmpty] = useState(false);
   const register = useContext(SectionIndexRegistryContext);
   const continuous = useContext(ContinuousDetailContext);
+  const controls = useContext(RecordSectionControlsContext);
+  const foldable = controls !== null && !section.bare;
+  const closed = foldable && controls.folded.has(section.id);
+  const wide =
+    controls !== null &&
+    (section.span === true || controls.wide.has(section.id));
   const count = section.count ?? reportedCount ?? section.knownCount;
   const empty =
     section.empty === true ||
@@ -164,10 +193,14 @@ function SectionCard({
           }}
           data-empty={empty || undefined}
           data-detail-section
+          data-section-title={section.title}
+          data-wide={wide || undefined}
+          data-folded={closed || undefined}
           hidden={folded}
           className={cn(
             "scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-            section.overflowVisible
+            // A column body balances on real heights, never a reserved one.
+            section.overflowVisible || controls !== null
               ? "overflow-visible"
               : "[contain-intrinsic-size:auto_320px] [content-visibility:auto]",
             className,
@@ -175,19 +208,64 @@ function SectionCard({
           aria-label={section.bare ? section.title : undefined}
           {...heading}
           disclosure={
-            section.collapsed ? { open, onOpenChange: setOpen } : undefined
+            foldable
+              ? {
+                  open: !closed,
+                  onOpenChange: () => controls.toggleFold(section.id),
+                  // Folding is a view, never a discard: editors keep drafts.
+                  // Evidence that starts folded still mounts only once open.
+                  keepMounted: !section.collapsed,
+                }
+              : section.collapsed
+                ? { open, onOpenChange: setOpen }
+                : undefined
           }
           empty={empty}
           count={
             section.bare ? undefined : (
-              <SectionIndexMarker
-                id={`${section.id}-marker`}
-                state={{ empty, count }}
-              />
+              <>
+                <SectionIndexMarker
+                  id={`${section.id}-marker`}
+                  state={{ empty, count }}
+                />
+                {closed && section.digest != null ? (
+                  <span
+                    data-section-digest
+                    className="ml-1.5 min-w-0 truncate font-sans text-muted-foreground"
+                  >
+                    {section.digest}
+                  </span>
+                ) : null}
+              </>
             )
           }
           caption={section.description}
-          actions={section.headerAction}
+          actions={
+            controls?.columns &&
+            section.wideable &&
+            !section.span &&
+            !closed ? (
+              <>
+                {section.headerAction}
+                <button
+                  type="button"
+                  aria-pressed={wide}
+                  aria-label={
+                    wide
+                      ? `Return ${section.title} to its column`
+                      : `Widen ${section.title} across the page`
+                  }
+                  title={wide ? "Return to column (W)" : "Widen (W)"}
+                  onClick={() => controls.toggleWide(section.id)}
+                  className="inline-flex size-4.5 items-center justify-center rounded-sm outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-pressed:bg-row-current aria-pressed:text-foreground"
+                >
+                  <ArrowsHorizontalIcon aria-hidden className="size-3" />
+                </button>
+              </>
+            ) : (
+              section.headerAction
+            )
+          }
         >
           {section.content ?? <EmptyState size="inline">No items.</EmptyState>}
         </Section>
@@ -217,7 +295,7 @@ export function SectionStack({
  * Known-empty sections read as one quiet line at the end of their group. A
  * name unfolds its section, which keeps the section's own Add and Open all.
  */
-function FoldedSectionsLine({
+export function FoldedSectionsLine({
   sections,
   pending,
   onUnfold,
@@ -253,7 +331,7 @@ function FoldedSectionsLine({
   );
 }
 
-function hashForDetailTarget(id: string, groups: IndexedSectionGroup[]) {
+export function hashForDetailTarget(id: string, groups: IndexedSectionGroup[]) {
   const alias = id.replace("detail-group-", "");
   // A group whose id is also a section's keeps its prefixed anchor.
   return groups.some(
@@ -294,22 +372,152 @@ function SectionIndexMarker({
   ) : null;
 }
 
+interface SectionIndexProps {
+  groups: IndexedSectionGroup[];
+  sectionStates: ReadonlyMap<string, SectionIndexState>;
+  activeId: string | undefined;
+  onSelect: (id: string) => void;
+  onFocusTarget: (id: string) => void;
+}
+
+const sectionMarkerId = (
+  sectionStates: ReadonlyMap<string, SectionIndexState>,
+  id: string,
+) => {
+  const state = sectionStates.get(id);
+  return state?.count !== undefined || state?.empty
+    ? `${id}-marker`
+    : undefined;
+};
+
+/** The narrow page's contents: one "Jump to" menu naming the current section. */
+export function SectionJumpMenu({
+  groups,
+  sectionStates,
+  activeId,
+  onSelect,
+  onFocusTarget,
+}: SectionIndexProps) {
+  const menuTargetRef = useRef<HTMLElement | null>(null);
+  const selectMenuTarget = (id: string) => {
+    menuTargetRef.current = document.getElementById(id);
+    onSelect(id);
+  };
+  const activeTitle =
+    groups
+      .flatMap((group) => [group, ...group.sections])
+      .find((entry) => entry.id === activeId)?.title ?? groups[0]?.title;
+  const describedBy = (id: string) => sectionMarkerId(sectionStates, id);
+  const entryState = (id: string) => ({
+    "aria-current": activeId === id ? ("location" as const) : undefined,
+  });
+  return (
+    <DropdownMenu
+      onOpenChange={(open) => {
+        if (open) menuTargetRef.current = null;
+      }}
+    >
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            className="min-h-11 w-full justify-between px-2 text-muted-foreground"
+          />
+        }
+      >
+        <span className="min-w-0 truncate">
+          Jump to:{" "}
+          <span className="font-medium text-foreground">{activeTitle}</span>
+        </span>
+        <CaretDownIcon className="size-3.5 shrink-0" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        // Final focus keeps the selected section in view after the menu closes
+        // without adding a second history entry.
+        finalFocus={() => {
+          const target = menuTargetRef.current;
+          if (!target) return true;
+          onFocusTarget(target.id);
+          return false;
+        }}
+        className="max-h-[70dvh] w-72 overflow-y-auto"
+      >
+        {groups.map((group, index) => (
+          <div key={group.id}>
+            {index > 0 && <DropdownMenuSeparator />}
+            <DropdownMenuItem
+              render={
+                <a
+                  href={`#${hashForDetailTarget(group.id, groups)}`}
+                  aria-label={group.title}
+                />
+              }
+              className="font-semibold"
+              onClick={(event) => {
+                event.preventDefault();
+                selectMenuTarget(group.id);
+              }}
+            >
+              {group.title}
+            </DropdownMenuItem>
+            {group.sections
+              .filter((section) => section.includeInIndex !== false)
+              .map((section) => (
+                <DropdownMenuItem
+                  key={section.id}
+                  render={
+                    <a
+                      href={`#${section.id}`}
+                      aria-label={section.title}
+                      aria-describedby={describedBy(section.id)}
+                    />
+                  }
+                  {...entryState(section.id)}
+                  className={cn(
+                    sectionStates.get(section.id)?.empty &&
+                      "text-muted-foreground",
+                  )}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    selectMenuTarget(section.id);
+                  }}
+                >
+                  {section.indexLeading != null ? (
+                    <span className="shrink-0">{section.indexLeading}</span>
+                  ) : null}
+                  <span
+                    className="min-w-0 flex-1 truncate"
+                    title={section.title}
+                  >
+                    {section.title}
+                  </span>
+                  {sectionStates.get(section.id)?.count !== undefined && (
+                    <span
+                      aria-hidden
+                      className="text-xs text-muted-foreground tabular-nums"
+                    >
+                      {formatCount(sectionStates.get(section.id)?.count ?? 0)}
+                    </span>
+                  )}
+                </DropdownMenuItem>
+              ))}
+          </div>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function SectionIndex({
   groups,
   sectionStates,
   activeId,
   onSelect,
   onFocusTarget,
-}: {
-  groups: IndexedSectionGroup[];
-  sectionStates: ReadonlyMap<string, SectionIndexState>;
-  activeId: string | undefined;
-  onSelect: (id: string) => void;
-  onFocusTarget: (id: string) => void;
-}) {
+}: SectionIndexProps) {
   const { containerRef: navigationRef, indicatorRef } =
     useSlidingIndicator<HTMLElement>(activeId);
-  const menuTargetRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
     const nav = navigationRef.current;
     const active = nav?.querySelector<HTMLElement>(
@@ -323,20 +531,7 @@ function SectionIndex({
     else if (item.bottom > viewport.bottom)
       nav.scrollTop += item.bottom - viewport.bottom;
   }, [activeId, navigationRef]);
-  const selectMenuTarget = (id: string) => {
-    menuTargetRef.current = document.getElementById(id);
-    onSelect(id);
-  };
-  const activeTitle =
-    groups
-      .flatMap((group) => [group, ...group.sections])
-      .find((entry) => entry.id === activeId)?.title ?? groups[0]?.title;
-  const describedBy = (id: string) => {
-    const state = sectionStates.get(id);
-    return state?.count !== undefined || state?.empty
-      ? `${id}-marker`
-      : undefined;
-  };
+  const describedBy = (id: string) => sectionMarkerId(sectionStates, id);
   const entryState = (id: string) => ({
     "aria-current": activeId === id ? ("location" as const) : undefined,
   });
@@ -433,102 +628,13 @@ function SectionIndex({
         ))}
       </nav>
       <div className="@min-[800px]/record:hidden">
-        <DropdownMenu
-          onOpenChange={(open) => {
-            if (open) menuTargetRef.current = null;
-          }}
-        >
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="ghost"
-                className="min-h-11 w-full justify-between px-2 text-muted-foreground"
-              />
-            }
-          >
-            <span className="min-w-0 truncate">
-              Jump to:{" "}
-              <span className="font-medium text-foreground">{activeTitle}</span>
-            </span>
-            <CaretDownIcon className="size-3.5 shrink-0" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            // Final focus keeps the selected section in view after the menu closes
-            // without adding a second history entry.
-            finalFocus={() => {
-              const target = menuTargetRef.current;
-              if (!target) return true;
-              onFocusTarget(target.id);
-              return false;
-            }}
-            className="max-h-[70dvh] w-72 overflow-y-auto"
-          >
-            {groups.map((group, index) => (
-              <div key={group.id}>
-                {index > 0 && <DropdownMenuSeparator />}
-                <DropdownMenuItem
-                  render={
-                    <a
-                      href={`#${hashForDetailTarget(group.id, groups)}`}
-                      aria-label={group.title}
-                    />
-                  }
-                  className="font-semibold"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    selectMenuTarget(group.id);
-                  }}
-                >
-                  {group.title}
-                </DropdownMenuItem>
-                {group.sections
-                  .filter((section) => section.includeInIndex !== false)
-                  .map((section) => (
-                    <DropdownMenuItem
-                      key={section.id}
-                      render={
-                        <a
-                          href={`#${section.id}`}
-                          aria-label={section.title}
-                          aria-describedby={describedBy(section.id)}
-                        />
-                      }
-                      {...entryState(section.id)}
-                      className={cn(
-                        sectionStates.get(section.id)?.empty &&
-                          "text-muted-foreground",
-                      )}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        selectMenuTarget(section.id);
-                      }}
-                    >
-                      {section.indexLeading != null ? (
-                        <span className="shrink-0">{section.indexLeading}</span>
-                      ) : null}
-                      <span
-                        className="min-w-0 flex-1 truncate"
-                        title={section.title}
-                      >
-                        {section.title}
-                      </span>
-                      {sectionStates.get(section.id)?.count !== undefined && (
-                        <span
-                          aria-hidden
-                          className="text-xs text-muted-foreground tabular-nums"
-                        >
-                          {formatCount(
-                            sectionStates.get(section.id)?.count ?? 0,
-                          )}
-                        </span>
-                      )}
-                    </DropdownMenuItem>
-                  ))}
-              </div>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <SectionJumpMenu
+          groups={groups}
+          sectionStates={sectionStates}
+          activeId={activeId}
+          onSelect={onSelect}
+          onFocusTarget={onFocusTarget}
+        />
       </div>
     </div>
   );
@@ -551,20 +657,18 @@ function currentAtLine(targets: readonly HTMLElement[], line: number) {
 }
 
 /**
- * One continuous, mounted page of grouped sections with a sticky contents
- * index on a wide surface (a "Jump to" menu below 800px), scroll-tracked
- * current entry, and URL fragments that keep Back/Forward. Record details,
- * Settings and the long analytical pages render through it.
+ * Section state for one indexed page: the registry of counts and emptiness,
+ * the folded and unfolded sets, the scroll-tracked current entry and the URL
+ * fragment that selects a section.
  */
-export function IndexedSections({
-  groups,
-  footer,
-}: {
-  groups: IndexedSectionGroup[];
-  /** Rendered after the last group, outside the index. */
-  footer?: ReactNode;
-}) {
+export function useIndexedSections(
+  groups: IndexedSectionGroup[],
+  /** Called before a section is focused, so its owner can reveal it. */
+  onReveal?: (id: string) => void,
+) {
   const hydrated = useHydrated();
+  const revealRef = useRef(onReveal);
+  revealRef.current = onReveal;
   const workspaceRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [sectionStates, setSectionStates] = useState<
@@ -630,6 +734,7 @@ export function IndexedSections({
     (id: string) => {
       const target = document.getElementById(id);
       if (!target || !workspaceRef.current?.contains(target)) return;
+      revealRef.current?.(id);
       // A link to a folded section unfolds it, then focuses it once it renders.
       if (target.hidden) {
         pendingFocus.current = id;
@@ -821,6 +926,50 @@ export function IndexedSections({
       cancelAnimationFrame(frame);
     };
   }, [hydrated, groups, focusTarget]);
+  return {
+    workspaceRef,
+    bodyRef,
+    sectionStates,
+    registerSection,
+    unfolded,
+    unfold,
+    isFolded,
+    isPending,
+    indexGroups,
+    activeId,
+    selectSection,
+    focusTarget,
+  };
+}
+
+/**
+ * One continuous, mounted page of grouped sections with a sticky contents
+ * index on a wide surface (a "Jump to" menu below 800px), scroll-tracked
+ * current entry, and URL fragments that keep Back/Forward. Record details,
+ * Settings and the long analytical pages render through it.
+ */
+export function IndexedSections({
+  groups,
+  footer,
+}: {
+  groups: IndexedSectionGroup[];
+  /** Rendered after the last group, outside the index. */
+  footer?: ReactNode;
+}) {
+  const {
+    workspaceRef,
+    bodyRef,
+    sectionStates,
+    registerSection,
+    unfolded,
+    unfold,
+    isFolded,
+    isPending,
+    indexGroups,
+    activeId,
+    selectSection,
+    focusTarget,
+  } = useIndexedSections(groups);
   return (
     <div ref={workspaceRef} className="@container/record min-w-0">
       <div className="space-y-3 @min-[800px]/record:flex @min-[800px]/record:items-start @min-[800px]/record:gap-6 @min-[800px]/record:space-y-0">

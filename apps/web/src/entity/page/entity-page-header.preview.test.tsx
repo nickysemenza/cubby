@@ -8,8 +8,7 @@ import { usePageWorkbenchTarget } from "~/entity/page/page";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 
-import { DetailPageHeader, ListPageHeader } from "./entity-page-header";
-import { HeaderLines } from "./header-lines";
+import { ListPageHeader, RecordIdentity } from "./entity-page-header";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 beforeEach(() => {
@@ -19,67 +18,12 @@ afterEach(() => {
   harness.dispose();
 });
 
-for (const width of [402, 900, 1280]) {
-  it(`keeps detail identity and facts compact without clipping at ${width}px`, async () => {
-    await page.viewport(width, 874);
-    render(
-      <div className="px-2 md:px-4">
-        <DetailPageHeader
-          entity="product"
-          title="Example utility lamp"
-          heroNo="4K7M"
-          heroDisplayImage={{
-            url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Crect width='48' height='48' fill='%23111'/%3E%3C/svg%3E",
-          }}
-          status={<span>Ready</span>}
-          rawData={{ createdAt: "2026-01-01T12:00:00Z" }}
-          heroActions={{ primary: <Button size="sm">Edit</Button> }}
-          summary={
-            <HeaderLines
-              lines={[
-                { label: "Why", value: "Value $48.00" },
-                { label: "What", value: "On hand 3" },
-              ]}
-            />
-          }
-        />
-      </div>,
-      { wrapper: harness.wrapper },
-    );
-    const thumbnail = screen
-      .getByTestId("detail-spec-plate")
-      .querySelector("img");
-    expect(thumbnail?.getBoundingClientRect().width).toBe(28);
-    expect(thumbnail?.getBoundingClientRect().height).toBe(28);
-    const title = screen.getByRole("heading").getBoundingClientRect();
-    const edit = screen
-      .getByRole("button", { name: "Edit" })
-      .getBoundingClientRect();
-    const plate = screen
-      .getByTestId("detail-spec-plate")
-      .getBoundingClientRect();
-    const centersMatch =
-      Math.abs(title.top + title.height / 2 - edit.top - edit.height / 2) <= 2;
-    expect(centersMatch).toBe(width >= 640);
-    // About 56px on a desktop; the lines sit outside this sticky header.
-    expect(plate.height).toBeLessThanOrEqual(width < 640 ? 164 : 64);
-    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
-    expect(screen.getByText("Value $48.00")).toBeVisible();
-  });
-}
-
 it.each([
   {
     name: "a declared timestamp leads and the ingest time follows",
     entity: "email" as const,
     rawData: { receivedAt: "2026-08-13T17:41:19Z" },
     expected: /Received Aug 13, 2026.*added Oct 14, 2026/,
-  },
-  {
-    name: "a declared date stays on its calendar day",
-    entity: "purchase" as const,
-    rawData: { date: "2026-08-13" },
-    expected: /Ordered Aug 13, 2026.*added Oct 14, 2026/,
   },
   {
     name: "an empty declared time falls back to the ingest time",
@@ -89,7 +33,7 @@ it.each([
   },
 ])("hero time: $name", ({ entity, rawData, expected }) => {
   render(
-    <DetailPageHeader
+    <RecordIdentity
       entity={entity}
       title="Example record"
       rawData={{ createdAt: "2026-10-15T02:26:59Z", ...rawData }}

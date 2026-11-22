@@ -16,6 +16,7 @@ import {
 } from "~/entity/display/entity-display";
 import { entities } from "~/entity/entities";
 import type { StandardEntity } from "~/entity/entity-contracts";
+import { useRememberRecordSequence } from "~/entity/entity-detail/record-sequence";
 import { entityListFor } from "~/entity/entity-list";
 import { identityListConfig } from "~/entity/entity-list/identity-list-config";
 import { ListEvidenceSummary } from "~/entity/entity-list/list-evidence-summary";
@@ -582,6 +583,7 @@ function ServerListBody({
     summaryOnly: view === PIVOT_VIEW_ID,
   });
   usePageCount(list.totalCount);
+  useRememberRecordSequence(entity, list.data, list.totalCount);
   const [chipsTarget, setChipsTarget] = useState<HTMLDivElement | null>(null);
   // The module's hook or a no-op: one call per render either way.
   const useWorkbenchProps = parts.useWorkbench ?? useNoWorkbenchProps;

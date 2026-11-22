@@ -323,7 +323,7 @@ describe("GenericEntityDetail", () => {
     expect(categoryRecord.contains(categoryFilter)).toBe(false);
   });
 
-  it("keeps record facts before workflow sections and leaves summarized fields to the summary", () => {
+  it("lists every singular fact once in the rail, ahead of the sections", () => {
     const record = recordFor("product");
     const { container, rerender } = render(
       <GenericEntityDetail
@@ -343,10 +343,10 @@ describe("GenericEntityDetail", () => {
       />,
       { wrapper: harness.wrapper },
     );
-    const overview = container.querySelector("#detail-group-overview");
+    const facts = container.querySelector("[data-record-facts]");
     const work = container.querySelector("#detail-group-work");
-    if (!(overview instanceof HTMLElement) || !(work instanceof HTMLElement)) {
-      throw new Error("Record Overview and Work groups must render");
+    if (!(facts instanceof HTMLElement) || !(work instanceof HTMLElement)) {
+      throw new Error("The rail's facts and the Work group must render");
     }
     const fact = within(container).getByText("Category", {
       selector: '[data-slot="fact-label"]',
@@ -360,14 +360,14 @@ describe("GenericEntityDetail", () => {
         selector: '[data-slot="fact-label"]',
       }),
     ).toBeNull();
-    // Brand has its own summary cell, so the sections do not repeat it.
+    // A summary field is a fact like any other: it reads once.
     expect(
-      within(overview).queryByText("Brand", {
+      within(container).getAllByText("Brand", {
         selector: '[data-slot="fact-label"]',
       }),
-    ).toBeNull();
-    expect(overview.querySelector("#coverage")).not.toBeNull();
-    // An empty summary fact folds in the side column, which keeps it fillable.
+    ).toHaveLength(1);
+    expect(container.querySelector("#coverage")).not.toBeNull();
+    // An empty fact folds in the rail, which keeps it fillable.
     rerender(
       <GenericEntityDetail
         entity="product"
@@ -387,7 +387,7 @@ describe("GenericEntityDetail", () => {
     );
     expect(
       within(
-        container.querySelector<HTMLElement>("[data-key-facts]")!,
+        container.querySelector<HTMLElement>("[data-record-facts]")!,
       ).getByText(/not recorded:/).parentElement?.textContent,
     ).toContain("Brand");
   });

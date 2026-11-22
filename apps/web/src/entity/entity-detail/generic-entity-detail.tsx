@@ -57,7 +57,6 @@ import {
 } from "~/entity/machinery/record-machinery";
 import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import type { DetailHeroActions } from "~/entity/page/entity-page-header";
-import { HeaderLines } from "~/entity/page/header-lines";
 import { Page } from "~/entity/page/page";
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { DetailEditAction } from "~/ui/forms/detail-edit-action";
@@ -88,9 +87,8 @@ import { DetailActionProvider, DetailActionTarget } from "./detail-action-bar";
 import { DetailActivity } from "./detail-activity";
 import { detailEditOverrideFor } from "./detail-edit-overrides";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
-import { declaredNeedsOf, DetailSide } from "./detail-side";
 import { detailSlotsFor } from "./detail-slots";
-import { detailSectionFields } from "./detail-summary";
+import { detailSectionFields, railFieldKeys } from "./detail-summary";
 import { EntityRecordFields } from "./entity-record-fields";
 import {
   EntityRelationTable,
@@ -100,19 +98,17 @@ import {
   RelationStaticSkeleton,
   relationSkeletonRows,
 } from "./entity-relation-table";
-import {
-  aiSummaryOf,
-  headerLinesOf,
-  recordKindOf,
-  recordStateOf,
-} from "./record-header";
+import { RailAiSummary, RailFacts } from "./rail-facts";
+import { aiSummaryOf, recordKindOf, recordStateOf } from "./record-header";
 import {
   isScoredEntity,
   QualitySectionChecks,
   RecordQualityProvider,
   RecordQualitySection,
+  useQualityAttentionSections,
   useQualityCheckSections,
 } from "./record-quality";
+import { declaredNeedsOf, RecordSignals } from "./record-signals";
 
 const RelatednessRail = lazy(() =>
   import("~/entity/relatedness/relatedness-rail").then((module) => ({
@@ -195,7 +191,7 @@ function headerStatus<E extends GenericDetailEntity>(
             option={state.option}
             phase={state.phase}
             reason={
-              // The side column's Needs you already says it.
+              // The signals bar's Needs you already says it.
               declaredNeedsOf(queryClient, entity, record).some(
                 (item) =>
                   item.title === state.reason || item.subtitle === state.reason,
@@ -287,24 +283,9 @@ function declaredSections<E extends GenericDetailEntity>(
         (detail.groups === null ? defaultGroup(section) : undefined),
     };
     switch (section.kind) {
-      case "fields": {
-        const fields = unsummarized(section.fields);
-        if (fields.length === 0) return [];
-        return [
-          {
-            ...base,
-            title: section.title,
-            content: (
-              <EntityRecordFields
-                entity={entity}
-                record={record}
-                fields={fields}
-                sectionTitle={section.title}
-              />
-            ),
-          },
-        ];
-      }
+      // Singular facts live in the rail (`RailFacts`), never in the body.
+      case "fields":
+        return [];
       case "relation": {
         const plan = planRelationSection(queryClient, entity, section);
         const contextFields = unsummarized(section.contextFields);
@@ -322,6 +303,7 @@ function declaredSections<E extends GenericDetailEntity>(
               : base.icon,
             title: section.title,
             overflowVisible: true,
+            wideable: true,
             headerAction: (
               <RelationSectionActions
                 plan={plan}
@@ -413,10 +395,9 @@ function declaredSections<E extends GenericDetailEntity>(
   let streamedRelation = false;
   return ordered.map((section) => {
     const declared = sections.find((candidate) => candidate.id === section.id);
-    // Fields and slots mount with the page so a hidden tab's text stays
-    // findable and deep links into slot content have a destination.
-    if (declared?.kind === "fields" || declared?.kind === "slot")
-      return section;
+    // Slots mount with the page so their text stays findable and deep links
+    // into slot content have a destination.
+    if (declared?.kind === "slot") return section;
     if (declared?.kind === "relation" && !streamedRelation) {
       streamedRelation = true;
       return section;
@@ -589,18 +570,23 @@ export function GenericEntityDetail<E extends GenericDetailEntity>(
   return <FullEntityDetail {...props} />;
 }
 
+const QUALITY_SECTION_ID = "record-quality";
+
 /**
  * A section owning a quality result never folds: every applicable check keeps
- * one visible result beside its evidence.
+ * one visible result beside its evidence. The index dots the sections with an
+ * open check, and Suggestions while any wait.
  */
 function DetailBody({
   sections,
   ...props
 }: ComponentProps<typeof DetailSections>) {
   const owning = new Set<string>(useQualityCheckSections());
+  const attention = useQualityAttentionSections(QUALITY_SECTION_ID);
   return (
     <DetailSections
       {...props}
+      attention={attention}
       sections={sections.map((section) =>
         owning.has(section.id) ? { ...section, foldWhenEmpty: false } : section,
       )}
@@ -801,6 +787,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
     id: "documents",
     title: "Documents",
     count: documents.length,
+    digest: documents.map((document) => document.filename).join(" · "),
     group: "evidence",
     icon: FileTextIcon,
     placement: "primary",
@@ -813,7 +800,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
   // a tab; its open issues join Needs you.
   if (isScoredEntity(entity))
     sections.push({
-      id: "record-quality",
+      id: QUALITY_SECTION_ID,
       title: "Record quality",
       group: "evidence",
       icon: CheckCircleIcon,
@@ -842,18 +829,26 @@ function FullEntityDetail<E extends GenericDetailEntity>({
         relationCounts.pending,
     };
   });
-  const renderedFields = detail.sections.flatMap((section) => {
-    if (!onDetailSurface(section, "web")) return [];
-    if (section.kind === "fields" || section.kind === "relation")
-      return detailSectionFields(
-        queryClient,
-        entity,
-        record,
-        section.kind === "fields" ? section.fields : section.contextFields,
-        { omitTitle: true, placed: true },
-      );
-    return [];
-  });
+  const renderedFields = [
+    ...railFieldKeys(queryClient, entity, record),
+    ...detail.sections.flatMap((section) =>
+      section.kind === "relation" && onDetailSurface(section, "web")
+        ? detailSectionFields(
+            queryClient,
+            entity,
+            record,
+            section.contextFields,
+            { omitTitle: true, placed: true },
+          )
+        : [],
+    ),
+  ];
+  // A field section's own checks draw in the rail, beside its facts.
+  const railSections = detail.sections.flatMap((section) =>
+    section.kind === "fields" && onDetailSurface(section, "web")
+      ? [section.id]
+      : [],
+  );
   const withQualityChecks = (section: DetailSection): DetailSection => ({
     ...section,
     content: (
@@ -886,6 +881,8 @@ function FullEntityDetail<E extends GenericDetailEntity>({
     primary: editable ? (
       <DetailEditAction
         aria-label={`Edit ${singular}`}
+        aria-keyshortcuts="E"
+        title="Edit (E)"
         onClick={() => setEditing(true)}
       />
     ) : undefined,
@@ -910,6 +907,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
     <DetailActionProvider>
       <Page
         variant="detail"
+        workspace
         entity={entity}
         wayfinding={hosted ? false : detailWayfinding(entity, record)}
         title={
@@ -939,15 +937,12 @@ function FullEntityDetail<E extends GenericDetailEntity>({
               </p>
             ) : null}
             <RecordMachineryHeader entity={entity} id={bag.id} />
-            <HeaderLines
-              lines={headerLinesOf(queryClient, entity, record)}
-              aiSummary={
-                summary && {
-                  text: summary.text,
-                  attribution: `AI-written summary · ${summary.model}, after the ${singular.toLocaleLowerCase()} ended`,
-                }
-              }
-            />
+            {summary ? (
+              <RailAiSummary
+                text={summary.text}
+                attribution={`AI-written summary · ${summary.model}, after the ${singular.toLocaleLowerCase()} ended`}
+              />
+            ) : null}
           </>
         }
         heroActions={plateActions}
@@ -957,14 +952,18 @@ function FullEntityDetail<E extends GenericDetailEntity>({
             entity={entity}
             id={bag.id}
             summary="placed"
-            renderedSections={placed.map((section) => section.id)}
+            renderedSections={[
+              ...railSections,
+              ...placed.map((section) => section.id),
+            ]}
             visibleFields={renderedFields}
           >
             <DetailBody
               sections={placed.map(withQualityChecks)}
               rawData={record}
               groups={detail.groups ?? undefined}
-              side={<DetailSide entity={entity} record={record} />}
+              facts={<RailFacts entity={entity} record={record} />}
+              signals={<RecordSignals entity={entity} record={record} />}
             />
           </RecordQualityProvider>
         </FactsAddProvider>

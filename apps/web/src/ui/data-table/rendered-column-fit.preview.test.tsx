@@ -562,7 +562,7 @@ describe("rendered column fit", () => {
       info.getBoundingClientRect().left - pill.getBoundingClientRect().right;
     expect(gap).toBeGreaterThanOrEqual(2);
     expect(gap).toBeLessThan(3);
-    expect(view.getByTestId("quality").getBoundingClientRect().height).toBe(28);
+    expect(view.getByTestId("quality").getBoundingClientRect().height).toBe(22);
     expect(view.getByTestId("manual-state").textContent).toBe("{}");
   });
 

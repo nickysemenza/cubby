@@ -282,6 +282,7 @@ export const USDAFoodDetail: React.FC<{
   return (
     <Page
       variant="detail"
+      workspace
       entity="usda-food"
       title={foodInfo.description || "Unnamed Food"}
       rawData={food}

@@ -723,9 +723,9 @@
     --text-lg--line-height: 1.25rem;
     --text-xl: 1.25rem; /* 20px page title */
     --text-xl--line-height: 1.625rem;
-    --table-row-height: 28px;
+    --table-row-height: 22px;
     --table-row-height-two-line: 54px;
-    --table-header-height: 30px;
+    --table-header-height: 22px;
     --table-cell-leading: 1rem;
     --table-checkbox-size: 0.875rem;
     --table-checkbox-glyph: 0.75rem;
@@ -735,12 +735,12 @@
     --pill-font-size: 0.6875rem; /* 11px */
     --record-pill-height: 18px;
     --record-pill-mark: 14px;
-    --fact-row-height: 1.375rem;
+    --fact-row-height: 1.25rem;
     --control-height: 26px;
     --control-height-sm: 24px;
     --control-height-xs: 20px;
     --input-height: 26px;
-    --section-gap: 0.75rem;
+    --section-gap: 0.625rem;
   }
 }
 
