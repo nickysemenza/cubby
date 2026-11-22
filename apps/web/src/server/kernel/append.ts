@@ -5,7 +5,8 @@
  * identity decide a race between two writers of the same observation, and the
  * loser inserts nothing.
  * In the same transaction it records the rows' fact keys and dirties every
- * scope they discover or that read one of their keys.
+ * scope they discover or that read one of their keys, including the declared
+ * read-index memberships of the inserted rows.
  */
 import { generateShortcode } from "@cubby/shared";
 import { getTableColumns, getTableName, inArray } from "drizzle-orm";
@@ -29,6 +30,7 @@ import type {
 } from "./define";
 import { insertFactKeys, markDirty } from "./dirty";
 import { enterHouseholdGate } from "./gate";
+import { membershipKeys, relatedMemberships, rowIndexKeys } from "./index-keys";
 import { tableKey, columnKey } from "./keys";
 import type { KernelRegistry } from "./registry";
 
@@ -123,6 +125,8 @@ export async function append(
     const q = repositoryQueries(tx);
     const facts: { kind: string; id: string; keys: Key[] }[] = [];
     const discovers: ScopeRef[] = [];
+    // A predicate read of an evidence table depends on index membership.
+    const indexKeys: Key[] = [];
     for (const { evidence, values } of groups.values()) {
       const hasRun = "runId" in getTableColumns(evidence.table);
       const insertValues = values.map((value) =>
@@ -141,12 +145,30 @@ export async function append(
         });
         discovers.push(...evidence.discovers(typed));
       }
+      const name = getTableName(evidence.table);
+      indexKeys.push(
+        ...inserted.flatMap((row) => rowIndexKeys(registry, name, row)),
+        ...membershipKeys(
+          await relatedMemberships(
+            tx,
+            registry,
+            inserted.map((row) => ({
+              table: name,
+              id: String(row.id),
+              before: null,
+              after: row,
+            })),
+          ),
+          true,
+        ),
+      );
     }
     await insertFactKeys(q, facts);
     await markDirty(q, registry, {
       keys: [
         ...new Set([
           ...facts.flatMap((fact) => fact.keys),
+          ...indexKeys,
           ...[...groups.values()]
             .filter(({ evidence }) =>
               facts.some((fact) => fact.kind === evidence.kind),

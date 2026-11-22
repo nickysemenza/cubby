@@ -75,7 +75,7 @@ import type {
   ScopeRef,
 } from "./define";
 import { difference, isEmptyDifference, type Difference } from "./diff";
-import { insertFactKeys, lockKeyRevs, markDirty } from "./dirty";
+import { lockKeyRevs, markDirty } from "./dirty";
 import { recordDrifts } from "./drift";
 import {
   enterWriteTransaction,
@@ -85,10 +85,10 @@ import {
 import { heldBaselineGap } from "./held-gap";
 import { mergeRecords, removeRecords } from "./identity";
 import {
-  indexFacts,
   membershipKeys,
   relatedMemberships,
   rowIndexKeys,
+  storeIndexFacts,
 } from "./index-keys";
 import {
   canonicalJson,
@@ -268,8 +268,17 @@ async function updateRecords(q: Q, updates: Difference["updates"]) {
       return sql`${sql.identifier(name)} = CASE WHEN incoming.value->'nextValues' ? ${name} THEN desired.${sql.identifier(name)} ELSE t.${sql.identifier(name)} END`;
     });
     const conditions = props.map((prop) => {
-      const name = columns[prop]!.name;
-      return sql`(NOT (incoming.value->'seen' ? ${name}) OR t.${sql.identifier(name)} IS NOT DISTINCT FROM seen.${sql.identifier(name)})`;
+      const column = columns[prop]!;
+      const name = column.name;
+      // A loaded timestamp is a JS Date, which keeps milliseconds only; a
+      // stored microsecond value must not read as a concurrent change.
+      const [stored, loaded] = column.getSQLType().startsWith("timestamp")
+        ? [
+            sql`date_trunc('milliseconds', t.${sql.identifier(name)})`,
+            sql`date_trunc('milliseconds', seen.${sql.identifier(name)})`,
+          ]
+        : [sql`t.${sql.identifier(name)}`, sql`seen.${sql.identifier(name)}`];
+      return sql`(NOT (incoming.value->'seen' ? ${name}) OR ${stored} IS NOT DISTINCT FROM ${loaded})`;
     });
     const touched =
       columns.updatedAt && !props.includes("updatedAt")
@@ -996,15 +1005,25 @@ async function applyBatch(
           for (const row of rows) touch(group[0]!.target, row);
         }
         await insertRows(q, recordKey, recordKeys);
-        await insertFactKeys(
-          q,
-          combined.inserts.flatMap((entry) =>
-            indexFacts(registry, entry.target.name, [
-              { ...entry.values, id: entry.id },
-            ]),
-          ),
-        );
         await updateRecords(q, combined.updates);
+        // Several scopes may set columns of one row; its membership is one row's.
+        const published = new Map<string, Map<string, ColumnValues>>();
+        for (const entry of combined.inserts) {
+          const rows = published.get(entry.target.name) ?? new Map();
+          rows.set(entry.id, { ...entry.values, id: entry.id });
+          published.set(entry.target.name, rows);
+        }
+        for (const entry of combined.updates) {
+          const rows = published.get(entry.target.name) ?? new Map();
+          rows.set(entry.id, {
+            ...entry.row,
+            ...rows.get(entry.id),
+            ...entry.set,
+          });
+          published.set(entry.target.name, rows);
+        }
+        for (const [name, rows] of published)
+          await storeIndexFacts(q, registry, name, [...rows.values()]);
         for (const entry of combined.updates) {
           touch(entry.target, { ...entry.row, ...entry.seen });
           touch(entry.target, entry.row);

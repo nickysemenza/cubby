@@ -1555,6 +1555,16 @@ export const { definition, readSchemas } = defineEntityModel(
         // account; a serializable read locks only that account's date range.
         { on: ["accountId", "postedDate"], where: "{deletedAt} IS NULL" },
         { on: ["accountId", "transactionDate"], where: "{deletedAt} IS NULL" },
+        // Bank-event candidates look up by absolute amount and effective
+        // day across accounts. Day numbers keep the expression immutable.
+        {
+          name: "FinancialTransaction_amount_day_idx",
+          on: [
+            {
+              sql: "(abs({amount})::text || ':' || (coalesce({transactionDate}, {postedDate}) - DATE '1970-01-01')::text)",
+            },
+          ],
+        },
       ],
       checks: [
         {

@@ -391,9 +391,23 @@ Predicate reads record declared index membership keys, including empty reads.
 Catalog rosters track the declared columns they consume. The registry rejects
 a table-wide dependency on any reconciled table. A matching authored or
 catalog mutation raises that key, including when the previous predicate read
-was empty. Reviewed evidence-association changes replace the affected
-`FactKey` entries and raise both the old and the new keys in their transaction.
-Raw source observations remain insert-only.
+was empty, and so does an evidence append to a table with declared read
+indexes. A write that moves a row between memberships raises the key it left
+and the key it joined. A publication and a repoint derive both from the row
+before and after. An authored writer reports after its write, so the kernel
+stores each indexed row's membership as `index:<table>` `FactKey` rows, every
+writer of the row replaces them, and the stored keys stand for the row before
+an authored write. A migration that adds a read index or changes its values
+rebuilds those rows from the table. Reviewed evidence-association changes
+replace the affected `FactKey` entries and raise both the old and the new keys
+in their transaction. Raw source observations remain insert-only.
+
+A lookup value carries only the columns that select rows. A component every
+scope enumerates, such as each live account, belongs in the consumer's filter:
+it multiplies `ScopeDep` and `KeyRev` rows without narrowing any read.
+`KeyRev` and `ScopeDep` reject the retired `transaction.accountAmount` and
+`manualTransaction.accountMerchant` index families, so a Worker built before
+their replacement fails instead of registering keys no current writer raises.
 
 ### 6. One write gate, one input fence
 
@@ -474,7 +488,10 @@ same record wins and the scope reruns.
 
 Background money applies commit after each bounded batch of at most 64 scopes,
 before the next batch can take the gate. A batch's set-based writes publish
-atomically; session timeouts bound in-flight statements. A member's write
+atomically; session timeouts bound in-flight statements. Each record update
+also compares the columns it sets with the values its load saw, and a changed
+value is a conflict; timestamps compare at the millisecond precision a loaded
+value carries. A member's write
 uses a 2 second `lock_timeout` and reports a lock timeout as a retryable
 wait.
 

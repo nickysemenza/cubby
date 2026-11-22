@@ -612,6 +612,57 @@ describe("statement spending review and re-import", () => {
     await expectFixedPoint();
   });
 
+  const bankEventSeq = async (key: string) => {
+    const dirty = await getDb(ctx.db).execute<{ seq: string | number }>(
+      sql`SELECT coalesce(max(seq), 0) AS seq FROM "ScopeDirty" WHERE "scopeKind"='bankEvent' AND "scopeKey"=${key}`,
+    );
+    return Number(dirty.rows[0]!.seq);
+  };
+
+  it("dirties a bank event when a matching transaction appears on another day of its posting window", async () => {
+    const setup = await fixture("window-candidate");
+    const [occurrence] = await getDb(ctx.db).select().from(sourceOccurrence);
+    await reconcileNow(ctx.db, [{ kind: "bankEvent", key: occurrence!.id }]);
+    const transaction = {
+      accountId: setup.account.output.id,
+      kind: "purchase",
+      status: "posted",
+      merchant: "Synthetic Nursery",
+    } as const;
+    const settled = await bankEventSeq(occurrence!.id);
+    await createRepoIdentity(ctx, "financialTransaction", {
+      ...transaction,
+      amount: 7.25,
+      transactionDate: "2026-01-10",
+      postedDate: "2026-01-10",
+    });
+    expect(await bankEventSeq(occurrence!.id)).toBe(settled);
+    await createRepoIdentity(ctx, "financialTransaction", {
+      ...transaction,
+      amount: 42.5,
+      transactionDate: "2026-05-06",
+      postedDate: "2026-05-06",
+    });
+    expect(await bankEventSeq(occurrence!.id)).toBeGreaterThan(settled);
+  });
+
+  it("dirties a bank event when a manual transaction names the merchant it looked up", async () => {
+    const setup = await fixture("merchant-history");
+    const [occurrence] = await getDb(ctx.db).select().from(sourceOccurrence);
+    await reconcileNow(ctx.db, [{ kind: "bankEvent", key: occurrence!.id }]);
+    const settled = await bankEventSeq(occurrence!.id);
+    await createRepoIdentity(ctx, "financialTransaction", {
+      accountId: setup.account.output.id,
+      amount: 7.25,
+      kind: "purchase",
+      status: "posted",
+      transactionDate: "2026-01-10",
+      postedDate: "2026-01-10",
+      merchant: " synthetic ORCHARD ",
+    });
+    expect(await bankEventSeq(occurrence!.id)).toBeGreaterThan(settled);
+  });
+
   it("retains old partly paid candidates and invalidates them when their capacity closes", async () => {
     const setup = await fixture("old-partial");
     const [seller] = await getDb(ctx.db)
