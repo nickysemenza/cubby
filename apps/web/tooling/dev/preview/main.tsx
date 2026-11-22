@@ -1,4 +1,3 @@
-import "~/fonts.css";
 import "~/styles.css";
 
 import { IconContext } from "@phosphor-icons/react/dist/lib/context";
