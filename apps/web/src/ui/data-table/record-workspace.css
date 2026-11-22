@@ -1,14 +1,15 @@
 /*
-  Record workspace: singular facts in a left rail, plural records in a column
-  body, signals pinned above it and Activity beside it. Every width below is
+  Record workspace: singular facts in a thin left rail, plural records in a
+  body whose sections take the width their content needs, signals pinned above
+  it and Activity beside it. Every width below is
   the record pane's (the `record` container), never the viewport's.
 
   The stacked layout is the base: phones, coarse pointers and hosted native
   workspaces read the rail, the signals, the sections and Activity in order.
 */
 .record-frame {
-  --record-rail-width: 15.5rem;
-  --record-activity-width: 18.75rem;
+  --record-rail-width: 10.75rem;
+  --record-activity-width: 17.25rem;
   --record-hints-height: 0px;
   min-width: 0;
 }
@@ -102,7 +103,7 @@
       flex: 1 1 auto;
       overflow-y: auto;
       overscroll-behavior: contain;
-      padding: 0.625rem 0.75rem 0.75rem;
+      padding: 0.5rem 0.625rem 0.75rem;
     }
     :root:not([data-hosted-workspace]) .record-index {
       display: block;
@@ -111,7 +112,7 @@
       overflow-y: auto;
       overscroll-behavior: contain;
       border-top: 1px solid var(--border);
-      padding: 0.375rem 0.625rem 0.5rem;
+      padding: 0.375rem 0.5rem 0.5rem;
     }
     :root:not([data-hosted-workspace]) .record-jump {
       display: none;
@@ -148,23 +149,94 @@
       padding-inline: 0.875rem;
       white-space: nowrap;
     }
-  }
 
-  @container record (min-width: 62.5rem) {
-    :root:not([data-hosted-workspace]) .record-body {
-      columns: 2;
-      column-gap: 1.75rem;
-      column-rule: 1px solid var(--border);
+    /* Sections share a row when their content fits beside each other: a
+       section that is or holds a table asks for a table's width, any other for a
+       paragraph's, and each grows into what its row leaves. A widened or
+       `full` section takes the whole row. */
+    :root:not([data-hosted-workspace]) .record-body [data-detail-group] {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      column-gap: 1.5rem;
+    }
+    :root:not([data-hosted-workspace]) .record-body [data-detail-section] {
+      min-width: 0;
+      flex: 1 1 16rem;
     }
     :root:not([data-hosted-workspace])
       .record-body
-      :is([data-detail-section], [data-folded-sections]) {
-      break-inside: avoid;
+      [data-detail-section]:is([data-wideable], :has(table)) {
+      flex-basis: 30rem;
+    }
+    :root:not([data-hosted-workspace])
+      .record-body
+      [data-detail-section][data-folded] {
+      flex-basis: 16rem;
     }
     :root:not([data-hosted-workspace])
       .record-body
       [data-detail-section][data-wide] {
-      column-span: all;
+      flex-basis: 100%;
+    }
+
+    /* The rail is too thin for a label beside its value: each fact stacks its
+       label over its value, and two short facts share a row. */
+    :root:not([data-hosted-workspace])
+      .record-rail
+      .ledger[data-ledger="facts"] {
+      display: flex;
+      flex-wrap: wrap;
+      column-gap: 0.5rem;
+    }
+    :root:not([data-hosted-workspace])
+      .record-rail
+      .ledger[data-ledger="facts"]
+      > .ledger-row {
+      display: grid;
+      min-width: 40%;
+      max-width: 100%;
+      flex: 1 1 auto;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      column-gap: 0.25rem;
+      row-gap: 0;
+      padding-block: 0.125rem;
+      border-top: 0;
+      border-bottom: 1px solid var(--hairline-soft);
+    }
+    :root:not([data-hosted-workspace])
+      .record-rail
+      .ledger[data-ledger="facts"]
+      > .ledger-row[data-full-width="true"] {
+      flex-basis: 100%;
+    }
+    :root:not([data-hosted-workspace])
+      .record-rail
+      .ledger[data-ledger="facts"]
+      > .ledger-row
+      > [data-ledger-slot="primary"] {
+      grid-row: 1;
+      grid-column: 1 / -1;
+      padding-top: 0;
+      font-size: var(--text-xs);
+      line-height: 0.875rem;
+    }
+    :root:not([data-hosted-workspace])
+      .record-rail
+      .ledger[data-ledger="facts"]
+      > .ledger-row
+      > [data-ledger-slot="secondary"] {
+      grid-row: 2;
+      grid-column: 1;
+    }
+    :root:not([data-hosted-workspace])
+      .record-rail
+      .ledger[data-ledger="facts"]
+      > .ledger-row
+      > [data-ledger-slot="actions"] {
+      grid-row: 2;
+      grid-column: 2;
     }
   }
 

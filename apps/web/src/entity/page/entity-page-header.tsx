@@ -312,24 +312,27 @@ export function RecordIdentity({
           />
         </div>
       ) : null}
-      <div className="flex min-w-0 items-start gap-2.5">
+      {/* The title wraps around the cover, so a thin rail keeps its width. */}
+      <div className="flow-root min-w-0">
         {heroNo && (cover || heroDisplayImage) ? (
-          <ImageChainPopover entity={entity} id={heroNo}>
-            <EntityCover
-              images={
-                heroImages?.length
-                  ? heroImages
-                  : heroDisplayImage
-                    ? [heroDisplayImage]
-                    : []
-              }
-              entity={entity}
-              alt="Record cover"
-              size={56}
-            />
-          </ImageChainPopover>
+          <div className="float-left mr-2 mb-0.5">
+            <ImageChainPopover entity={entity} id={heroNo}>
+              <EntityCover
+                images={
+                  heroImages?.length
+                    ? heroImages
+                    : heroDisplayImage
+                      ? [heroDisplayImage]
+                      : []
+                }
+                entity={entity}
+                alt="Record cover"
+                size={40}
+              />
+            </ImageChainPopover>
+          </div>
         ) : null}
-        <h1 className="min-w-0 flex-1 text-lg/5 font-semibold break-words text-foreground-strong">
+        <h1 className="min-w-0 text-lg/5 font-semibold break-words text-foreground-strong">
           {title}
         </h1>
       </div>
