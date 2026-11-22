@@ -666,7 +666,9 @@ load only for the selected page. The single-consumer Needs You record projection
 inlines routing and filtering so the human-executor predicate reaches the
 candidate queries. Source-owner routing shares one projection of bound
 Purchase and ledger-party pairs from accepted order evidence per statement.
-Settled AI Run attention checks probe the Run's indexed Ask roster.
+Settled AI and historical routine Run attention checks probe the Run's indexed
+Ask roster. Email import gaps join their published relationship snapshot for
+both admission and executor routing.
 Pending suggestions resolve UUID references through the live Entity identity.
 A relation list's search schema derives from its declaration
 (`relationListSearch`), and row actions render through the
