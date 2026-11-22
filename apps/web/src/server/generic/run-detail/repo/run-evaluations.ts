@@ -31,7 +31,8 @@ export async function readRunEvaluationsByCode(
     SELECT a.id, a.feature, a.state, a.attempts, a."maxAttempts", s."cancelledAt", a."answeredAt", a."updatedAt", a."lastError" AS error,
       e.kind AS entity, e.shortcode AS "recordCode"
     FROM "AskScope" s JOIN "Ask" a ON a.id=s."askId"
-    LEFT JOIN "Entity" e ON e.id::text = a.input->${"input"}->>${"recordId"}
+    LEFT JOIN "Entity" e ON e.id = CASE WHEN pg_input_is_valid(a.input->${"input"}->>${"recordId"}, ${"uuid"})
+      THEN (a.input->${"input"}->>${"recordId"})::uuid END AND e.id::text = a.input->${"input"}->>${"recordId"}
     WHERE s."scopeKind"=${"run"} AND s."scopeKey"=${runId} AND s."runId"=${runId}::uuid
     ORDER BY a."updatedAt" DESC, a.id`);
   const byKind = new Map<string, RunEvaluationsOut["byKind"][number]>();

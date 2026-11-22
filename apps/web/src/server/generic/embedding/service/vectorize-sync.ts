@@ -62,7 +62,7 @@ export async function syncVectorize(
           key: `${doc.entityId}:${doc.sourceHash}`,
         },
       };
-      const retained = await retainedVectorArtifact(db, doc.entityId, hash);
+      const retained = await retainedVectorArtifact(db, doc, hash);
       if (
         retained?.submissionId ||
         retained?.artifactState === embeddingArtifactState.enum.selected

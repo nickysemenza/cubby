@@ -7,6 +7,7 @@ import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { textArrayParam } from "~/server/db/helpers/array-param";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { requestedRows } from "~/server/db/helpers/requested";
 import { decision, manualEntry, recordKey } from "~/server/db/kernel-schema";
 import {
@@ -698,7 +699,7 @@ export const paymentMatching: Pick<
         reads.select(
           vendor,
           [],
-          sql`${vendor.id}::text = ANY(${textArrayParam(orders.map((row) => row.vendorId))})
+          sql`${vendor.id} = ANY(${uuidArrayParam(orders.map((row) => row.vendorId))})
         OR EXISTS (SELECT 1 FROM unnest(array_prepend(${vendor.name}, ${vendor.aliases})) alias
           WHERE lower(regexp_replace(regexp_replace(alias, '^[[:space:]]+|[[:space:]]+$', '', 'g'), '[[:space:]]+', ' ', 'g')) = ANY(
             ${textArrayParam(transactions.map((row) => statementMerchantKey(row.merchant ?? "")))}) )`,
@@ -718,12 +719,14 @@ export const paymentMatching: Pick<
         ),
         // The decided Purchases join the id array as an init plan: a subquery
         // or text cast inside the OR turns this lookup into a sequential scan.
+        // Only Purchase owners are read from the entity arm, which lets it use
+        // the (entity, entityId) index.
         reads.select(
           recordKey,
           [],
           sql`${recordKey.scopeKind} = 'purchaseEvent' AND (
         ${recordKey.scopeKey} = ANY(${textArrayParam([...events, ...transactionIds])})
-        OR ${recordKey.entityId} = ANY(${textArrayParam(orders.flatMap((row) => (row.purchaseId ? [row.purchaseId] : [])))}::uuid[]
+        OR ${recordKey.entity} = ${"purchase"} AND ${recordKey.entityId} = ANY(${textArrayParam(orders.flatMap((row) => (row.purchaseId ? [row.purchaseId] : [])))}::uuid[]
           || ARRAY(SELECT e.id FROM "Decision" choice JOIN "Entity" e
           ON (e.id = CASE WHEN pg_input_is_valid(choice.value #>> '{}', ${"uuid"})
             THEN (choice.value #>> '{}')::uuid END AND e.id::text = choice.value #>> '{}')

@@ -1305,7 +1305,7 @@ describe("scheduled Gmail discovery", () => {
             .slice(1)
             .map(async (params) => (await readRun(params.runId)).input),
         ),
-      ).toEqual(scanPending ? [(await readRun(state.params.runId)).input] : []);
+      ).toEqual(scanPending ? [completed.input] : []);
     },
   );
 });

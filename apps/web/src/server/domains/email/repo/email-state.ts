@@ -18,7 +18,7 @@ import { z } from "zod";
 
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { textArrayParam } from "~/server/db/helpers/array-param";
-import { uuidArrayParam } from "~/server/db/helpers/query";
+import { canonicalUuids, uuidArrayParam } from "~/server/db/helpers/query";
 import { decision } from "~/server/db/kernel-schema";
 import { recordKey } from "~/server/db/kernel-schema";
 import { emailReadSnapshot } from "~/server/db/read-snapshot-schema";
@@ -423,9 +423,13 @@ export const emailState = defineReconciler<Input>({
     const purchases = await reads.select(
       purchase,
       [],
-      sql`${purchase.id}::text = ANY(${textArrayParam(ids)})
-      OR ${purchase.orderId} = ANY(${textArrayParam(events.flatMap((row) => (row.orderId ? [row.orderId] : [])))})
-      OR ${purchase.id} IN (SELECT coalesce(e."mergedIntoId",e.id) FROM "Decision" choice
+      // Each source selects Purchase ids on its own plan; as OR branches of one
+      // filter they scanned every Purchase.
+      sql`${purchase.id} = ANY(ARRAY(
+      SELECT unnest(${uuidArrayParam(canonicalUuids(ids))})
+      UNION SELECT candidate.id FROM "Purchase" candidate
+        WHERE candidate."orderId" = ANY(${textArrayParam(events.flatMap((row) => (row.orderId ? [row.orderId] : [])))})
+      UNION SELECT coalesce(e."mergedIntoId",e.id) FROM "Decision" choice
         CROSS JOIN LATERAL (VALUES
           (choice.value #>> '{}'),
           (choice.value->>'purchaseId'),
@@ -435,7 +439,7 @@ export const emailState = defineReconciler<Input>({
           e.id = CASE WHEN pg_input_is_valid(reference.token, ${"uuid"}) THEN reference.token::uuid END
           AND e.id::text = reference.token
         ) OR e.shortcode = reference.token
-        WHERE choice.channel = ${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)} AND choice.subject = ANY(${textArrayParam(subjects)}))`,
+        WHERE choice.channel = ${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)} AND choice.subject = ANY(${textArrayParam(subjects)})))`,
     );
     const accounts = [
       ...(

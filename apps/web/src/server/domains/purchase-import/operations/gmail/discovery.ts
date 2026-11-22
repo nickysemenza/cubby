@@ -946,19 +946,35 @@ export async function continueMailDiscovery(
     .limit(1);
   if (!previous?.ledgerPartyId) return;
   const input = mailboxDiscoveryInput.parse(previous.input);
+  if (
+    await continueMailDiscoveryFrom(
+      db,
+      { ...previous, ledgerPartyId: previous.ledgerPartyId },
+      input,
+    )
+  )
+    await releaseDiscoveryRoster(db, previous, input);
+}
+
+/** Returns whether continuation decided this Run's successors from its roster. */
+async function continueMailDiscoveryFrom(
+  db: Database,
+  previous: typeof runTable.$inferSelect & { ledgerPartyId: string },
+  input: z.output<typeof mailboxDiscoveryInput>,
+): Promise<boolean> {
   const control = await findControlledMailImport(db, input.mailboxId);
   if (control) {
     await launchQueuedControlledMailImport(db, input.mailboxId);
-    return;
+    return false;
   }
   // A selected Vendor finishes in this Run; it never fans out to the history lane.
-  if (input.controlled) return;
+  if (input.controlled) return false;
   const target = {
     ledgerPartyId: previous.ledgerPartyId,
     mailboxId: input.mailboxId,
   };
   // The retained funding owner admits the next pass after capacity returns.
-  if (await fundingPausedDiscovery(db, target, "paused_auth")) return;
+  if (await fundingPausedDiscovery(db, target, "paused_auth")) return false;
   const clientKey = `mailbox-continuation:${previous.id}`;
   const { coverage } = await loadGmailCursor(db, target);
   // Continuation carries current objectives, never a retired or revised search.
@@ -967,7 +983,7 @@ export async function continueMailDiscovery(
       (current) => current.key === query.key && current.query === query.query,
     ),
   );
-  if (!(await discoveryAllowed(db, { ...target, scopedQueries }))) return;
+  if (!(await discoveryAllowed(db, { ...target, scopedQueries }))) return true;
   await createDiscoveryPasses(db, {
     ledgerPartyId: previous.ledgerPartyId,
     actor: buildActorContext(previous.actorUserId, "system"),
@@ -978,6 +994,43 @@ export async function continueMailDiscovery(
     trigger: "scheduled",
     cause: "scheduled",
   });
+  return true;
+}
+
+/**
+ * An ordinary Run reads its full roster only while it executes and when its
+ * continuation fans out. Afterwards it keeps only the search it ran. Only
+ * continuation reads a completed Run's roster, and only during its own Pass
+ * attempt, which a completed Run never claims again. A member relaunches a
+ * completed Run only while it owes queued Asks or steps, so a Run with any
+ * Ask scope or step keeps its roster. Controlled Runs are never trimmed:
+ * their roster is coverage evidence.
+ */
+async function releaseDiscoveryRoster(
+  db: Database,
+  previous: typeof runTable.$inferSelect,
+  input: z.output<typeof mailboxDiscoveryInput>,
+) {
+  if (input.controlled) return;
+  const scope = mailboxDiscoveryProgress.safeParse(previous.progress).data
+    ?.discoveryScope;
+  const kept = input.scopedQueries.filter(
+    (query) => scope?.kind === "query" && query.key === scope.key,
+  );
+  if (kept.length === input.scopedQueries.length) return;
+  await getDb(db)
+    .update(runTable)
+    .set({
+      input: sql`jsonb_set(${runTable.input}, '{scopedQueries}', ${JSON.stringify(kept)}::jsonb)`,
+    })
+    .where(
+      and(
+        eq(runTable.id, previous.id),
+        eq(runTable.status, "completed"),
+        sql`NOT EXISTS (SELECT 1 FROM "AskScope" s WHERE s."runId" = ${runTable.id})`,
+        sql`NOT EXISTS (SELECT 1 FROM "RunStep" s WHERE s."runId" = ${runTable.id})`,
+      ),
+    );
 }
 
 const discoveryCursor = z.object({

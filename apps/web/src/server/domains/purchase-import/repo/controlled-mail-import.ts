@@ -52,8 +52,8 @@ export type ControlledMailRequest = Pick<
 type CompletedSearches = Map<string, Map<string, MailboxScopedPosition>>;
 type SearchReceipt = Pick<
   typeof run.$inferSelect,
-  "vendorId" | "ledgerPartyId" | "input" | "status" | "endedAt"
-> & { shortcode?: string };
+  "vendorId" | "ledgerPartyId" | "status" | "endedAt"
+> & { shortcode?: string; input: unknown };
 
 /** Completed all-history requests prove coverage even after request cursors are pruned. */
 export function completedControlledSearches(
@@ -136,7 +136,11 @@ export async function controlledMailScopeForRun(
   if (owner?.purpose !== "mail_import" || !owner.parentRunId || !owner.vendorId)
     return null;
   const [parent] = await getDb(db)
-    .select({ input: run.input, purpose: run.purpose })
+    .select({
+      // An ordinary parent's query roster is never this child's scope.
+      input: sql<unknown>`CASE WHEN ${run.input}->'controlled' IS NOT NULL THEN ${run.input} END`,
+      purpose: run.purpose,
+    })
     .from(run)
     .where(and(eq(run.id, owner.parentRunId), notDeleted(run)))
     .limit(1);
@@ -313,12 +317,17 @@ export async function waitForMailImportPermission(
     return;
   const [parent] = owner.parentRunId
     ? await getDb(db)
-        .select({ input: run.input })
+        .select({ controlled: sql<unknown>`${run.input}->'controlled'` })
         .from(run)
         .where(eq(run.id, owner.parentRunId))
         .limit(1)
     : [];
-  if (mailboxDiscoveryInput.safeParse(parent?.input).data?.controlled) return;
+  if (
+    mailboxDiscoveryInput.shape.controlled.safeParse(
+      parent?.controlled ?? undefined,
+    ).data
+  )
+    return;
   const sources = await getDb(db)
     .selectDistinct({ mailboxId: email.mailboxId })
     .from(email)

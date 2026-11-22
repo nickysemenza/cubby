@@ -3,6 +3,7 @@ import { askState } from "@cubby/schemas/kernel/machinery";
 import { and, eq, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db/database";
+import { vectorCleanupPendingSql } from "~/server/db/entity-embedding-predicates";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { entityEmbedding, searchDocument } from "~/server/db/retained-tables";
@@ -27,7 +28,7 @@ export async function loadVectorDocument(
 }
 export async function retainedVectorArtifact(
   db: Database,
-  entityId: string,
+  doc: Pick<Document, "entityKind" | "entityId">,
   hash: string,
 ): Promise<Artifact | undefined> {
   const [row] = await repositoryQueries(db)
@@ -35,7 +36,8 @@ export async function retainedVectorArtifact(
     .from(entityEmbedding)
     .where(
       and(
-        eq(entityEmbedding.entityId, entityId),
+        eq(entityEmbedding.entityKind, doc.entityKind),
+        eq(entityEmbedding.entityId, doc.entityId),
         eq(entityEmbedding.artifactHash, hash),
         notDeleted(entityEmbedding),
       ),
@@ -58,7 +60,7 @@ export async function stageVectorArtifact(
   config: Pick<Artifact, "provider" | "model" | "dimensions">,
 ): Promise<Artifact | null> {
   if (!(await lockVectorDocument(db, doc))) return null;
-  const existing = await retainedVectorArtifact(db, doc.entityId, hash);
+  const existing = await retainedVectorArtifact(db, doc, hash);
   if (existing) return existing;
   const [created] = await repositoryQueries(db)
     .insert(entityEmbedding)
@@ -98,7 +100,7 @@ export async function selectVisibleVector(
   const current = await lockVectorDocument(db, doc);
   if (current)
     await q.execute(
-      sql`UPDATE "EntityEmbedding" SET "artifactState"=${embeddingArtifactState.enum.retired},"deletedAt"=now() WHERE "entityId"=${doc.entityId}::uuid AND id<>${id}::uuid AND ${notDeleted("EntityEmbedding")} AND "artifactState"=${embeddingArtifactState.enum.selected}`,
+      sql`UPDATE "EntityEmbedding" SET "artifactState"=${embeddingArtifactState.enum.retired},"deletedAt"=now() WHERE "entityKind"=${doc.entityKind} AND "entityId"=${doc.entityId}::uuid AND id<>${id}::uuid AND ${notDeleted("EntityEmbedding")} AND "artifactState"=${embeddingArtifactState.enum.selected}`,
     );
   await q
     .update(entityEmbedding)
@@ -120,9 +122,7 @@ export async function retiredVectorIds(db: Database): Promise<string[]> {
   const rows = await repositoryQueries(db)
     .select({ id: entityEmbedding.id })
     .from(entityEmbedding)
-    .where(
-      sql`${entityEmbedding.deletionId} IS NULL AND (${entityEmbedding.deletedAt} IS NOT NULL OR ${entityEmbedding.artifactState} IN (${embeddingArtifactState.enum.retired},${embeddingArtifactState.enum.failed})) AND ${entityEmbedding.artifactState}<>${embeddingArtifactState.enum.selected}`,
-    )
+    .where(vectorCleanupPendingSql(entityEmbedding))
     .limit(100);
   return rows.map((row) => row.id);
 }

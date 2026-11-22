@@ -104,13 +104,17 @@ export async function readNeedsYou(
       UNION ALL
       SELECT m."scopeKind", m."scopeKey", e.kind, e.shortcode, m.stage,
         ${gapOrder}
-      FROM members m JOIN "Entity" e ON m."scopeKey" = e.kind || ':' || e.id::text
+      FROM members m JOIN "Entity" e
+        ON e.id = CASE WHEN pg_input_is_valid(split_part(m."scopeKey", ':', 2), ${"uuid"})
+                       THEN split_part(m."scopeKey", ':', 2)::uuid END
+        AND m."scopeKey" = e.kind || ':' || e.id::text
       WHERE m."scopeKind" IN ('fields', 'quality')
         AND ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL
       UNION ALL
       SELECT m."scopeKind", m."scopeKey", e.kind, e.shortcode, m.stage, ${gapOrder}
       FROM members m JOIN jsonb_to_recordset(${JSON.stringify(consumers)}::jsonb) consumer(entity text, kind text) ON consumer.kind = m."scopeKind"
-      JOIN "Entity" e ON e.kind = consumer.entity AND e.id::text = m."scopeKey"
+      JOIN "Entity" e ON e.id = CASE WHEN pg_input_is_valid(m."scopeKey", ${"uuid"}) THEN m."scopeKey"::uuid END
+        AND e.id::text = m."scopeKey" AND e.kind = consumer.entity
       WHERE ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL
       UNION ALL
       SELECT m."scopeKind", m."scopeKey", e.kind, e.shortcode, m.stage, ${gapOrder}

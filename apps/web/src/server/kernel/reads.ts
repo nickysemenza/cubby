@@ -383,14 +383,28 @@ export function createReads(
         values.push(key.slice(`index:${index.name}:`.length));
         lookups.set(index, values);
       }
+      const identity = idColumn(table);
       const predicates = [
         ...(ids.length
-          ? [sql`${idColumn(table)} = ANY(${columnArrayParam(ids)})`]
+          ? [sql`${identity} = ANY(${columnArrayParam(ids)})`]
           : []),
         ...[...lookups].map(([index, values]) => index.where(values)),
       ];
-      const read = predicates.length
-        ? await revised(table, or(...predicates)!, [
+      // An OR across branches is planned as one filter, so one unindexable
+      // branch scans the whole table. Each branch selects identities on its
+      // own plan; the outer read stays one statement with its revisions.
+      const where =
+        predicates.length > 1
+          ? sql`${identity} = ANY(ARRAY(${sql.join(
+              predicates.map(
+                (predicate) =>
+                  sql`SELECT ${identity} FROM ${table} WHERE ${predicate}`,
+              ),
+              sql` UNION `,
+            )}))`
+          : predicates[0];
+      const read = where
+        ? await revised(table, where, [
             ...ids.map((id) => rowKey(name, id)),
             ...[...lookups].flatMap(([index, values]) =>
               values.map((value) => indexKey(index.name, value)),

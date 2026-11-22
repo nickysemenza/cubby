@@ -4,6 +4,7 @@ import {
   type ExecutionWaitReason,
 } from "@cubby/schemas/execution";
 import type { ImageId, ImageJobId, DeviceId } from "@cubby/schemas/identifiers";
+import { imageProcessingJobState } from "@cubby/schemas/image-processing";
 import { and, count, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -45,6 +46,46 @@ export async function recordImageProcessingEvent(
   await dbc.execute(sql`INSERT INTO "ImageProcessingEvent" ("jobId", "eventKey", event, attempt, level, source, details)
  SELECT id, ${input.eventKey}, ${input.event}, ${input.attempt ?? null}, ${input.level ?? "info"}, ${input.source ?? "server"}, ${JSON.stringify(input.details ?? null)}::jsonb
  FROM "ImageProcessingJob" WHERE (id = ${input.jobId}::uuid OR "askId"=${input.jobId}::uuid) ON CONFLICT DO NOTHING`);
+}
+
+/**
+ * Deletes events of terminal jobs older than 30 days and reports whether a full
+ * batch went. Kept: each attempt's latest `execution.receipt` (the receipt
+ * projection and the next append read only that row), `image.answer` rows and
+ * any event bound as kernel evidence. A newer receipt is looked up within the
+ * same job because an attempt's receipts are appended under its one job.
+ */
+export async function pruneImageProcessingEvents(
+  db: Database | DrizzleTransaction,
+  limit: number,
+): Promise<boolean> {
+  const { imageExecutionEvidence } =
+    await import("~/server/domains/image-processing/module");
+  const terminal = sql.join(
+    (["ready", "skipped", "failed"] as const).map(
+      (state) => sql`${imageProcessingJobState.enum[state]}`,
+    ),
+    sql`,`,
+  );
+  const deleted = await unwrapDb(db).execute<{ id: string }>(sql`
+    WITH doomed AS (
+      SELECT e.id FROM "ImageProcessingEvent" e
+      JOIN "ImageProcessingJob" j ON j.id = e."jobId"
+      WHERE j.state IN (${terminal})
+        AND e."occurredAt" < now() - interval '30 days'
+        AND e.event <> 'image.answer'
+        AND (e.event <> 'execution.receipt' OR EXISTS (
+          SELECT 1 FROM "ImageProcessingEvent" newer
+          WHERE newer."jobId" = e."jobId" AND newer.event = 'execution.receipt'
+            AND newer.details->>'id' = e.details->>'id'
+            AND (newer."occurredAt", newer.id) > (e."occurredAt", e.id)))
+        AND NOT EXISTS (
+          SELECT 1 FROM "EvidenceBinding" b
+          WHERE b."factKind" = ${imageExecutionEvidence.kind} AND b."factId" = e.id::text)
+      LIMIT ${limit} FOR UPDATE OF e SKIP LOCKED
+    ) DELETE FROM "ImageProcessingEvent" e USING doomed d WHERE e.id = d.id
+    RETURNING e.id`);
+  return deleted.rows.length === limit;
 }
 
 /**

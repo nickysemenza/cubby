@@ -35,6 +35,7 @@ export async function appendExecutionReceipt(
     .from(imageProcessingEvent)
     .where(
       and(
+        eq(imageProcessingEvent.jobId, jobId),
         eq(imageProcessingEvent.event, "execution.receipt"),
         sql`${data}->>'id'=${input.id}`,
       ),
