@@ -380,8 +380,10 @@ raises `seq` without changing an active claim, so its publication fence still
 rejects work computed before the input changed.
 
 Correctness comes from dirtying, not from order. `after` is a scheduling
-preference that avoids rework: the runner does not claim a scope of a kind
-while a claimable dirty scope of an upstream kind exists in the same lane. The
+preference that avoids rework: scope kinds take turns in claim order, money
+lane first and upstream kinds first, one batch per turn, continuing after the
+kind served last. No kind waits on another's backlog, so upstream work that
+keeps arriving cannot hold downstream work back. The
 graph is `bankEvent → purchaseEvent → transferPair` and
 `purchaseEvent → emailState`; `shipment`, `fields` and `quality` have no upstream.
 
@@ -488,10 +490,8 @@ key-share locks on the records it references.
 ### 7. Three work forms, one claim
 
 Background work is a dirty scope, an Ask or a Pass. One module owns claiming
-and checks upstream eligibility against the distinct claimable scope kinds,
-materialized once per claim statement. Record count does not multiply that
-upstream scan by the whole queue; claim order and the upstream barrier stay
-unchanged. The claim module also owns the shared lease protocol
+and reads each scope kind's oldest claimable row from the claim index, so the
+queue's size does not enter a claim or the next-wake read. The claim module also owns the shared lease protocol
 for all three: a claim token, a deadline with renewal, an attempt count,
 `availableAt` backoff, a wait cause, cancellation, and the single failure
 classifier. Scopes that share a transient failure release their claims and

@@ -90,10 +90,13 @@ import {
   cancelClaimable,
   claimPass,
   ClaimLapsedError,
+  claimScopeBatch,
   claimScopes,
   fenceClaim,
+  scopeClaimOrder,
 } from "./claim";
 import { computeBatch } from "./compute";
+import type { Reconciler } from "./define";
 import { markDirty } from "./dirty";
 import { enterWriteTransaction, householdWrite } from "./gate";
 import { runOnePass } from "./pass";
@@ -136,6 +139,54 @@ describe("evidence-facts kernel", () => {
     registerOwnedColumns(ownedColumns(kernel.registry));
     return { kernel, fixture };
   };
+  it("claims a downstream kind in its turn while upstream work keeps arriving", async () => {
+    const idle = (scope: string, after?: string[]) =>
+      defineReconciler<string>({
+        scope,
+        lane: "money",
+        version: 1,
+        after,
+        reads: [],
+        writes: [],
+        load: async (_reads, keys) => new Map(keys.map((key) => [key, key])),
+        reconcile: (_key, c) => c.done(),
+      });
+    const kernel = createKernel([
+      defineModule({
+        name: "order",
+        reconcilers: [
+          idle("synthetic.down", ["synthetic.up"]),
+          idle("synthetic.up"),
+        ],
+      }),
+    ]);
+    const q = repositoryQueries(ctx.db);
+    const dirty = (kind: string, key: string) =>
+      q.execute(
+        sql`INSERT INTO "ScopeDirty" ("scopeKind", "scopeKey", lane, reason) VALUES (${kind}, ${key}, ${"money"}, 'synthetic')`,
+      );
+    await dirty("synthetic.down", "waiting");
+    await dirty("synthetic.up", "first");
+    const [up, down] = scopeClaimOrder(kernel.registry) as [
+      Reconciler,
+      Reconciler,
+    ];
+    const claim = async (kinds: Reconciler[]) =>
+      (await claimScopeBatch(q, kinds, 10)).map(
+        (scope) => `${scope.kind}:${scope.key}`,
+      );
+    expect(await claim([up, down])).toEqual(["synthetic.up:first"]);
+    await dirty("synthetic.up", "arriving");
+    expect(await claim([down, up])).toEqual(["synthetic.down:waiting"]);
+    expect(await claim([down, up])).toEqual(["synthetic.up:arriving"]);
+    expect(
+      (
+        await q.execute<{ later: boolean }>(
+          sql`SELECT ${nextWakeSql(kernel.registry)} > now() AS later`,
+        )
+      ).rows,
+    ).toEqual([{ later: true }]);
+  });
   it("parks unregistered work as Stuck, keeps a dirty scope claimable, and excludes it from the next wake", async () => {
     const { kernel } = kernelWith();
     const q = repositoryQueries(ctx.db);
@@ -2368,7 +2419,7 @@ describe("evidence-facts kernel", () => {
     await q.execute(sql`UPDATE "Ask" SET "availableAt" = now()`);
     const [wake] = (
       await q.execute<{ later: boolean }>(
-        sql`SELECT ${nextWakeSql()} > now() + interval '50 minutes' AS later`,
+        sql`SELECT ${nextWakeSql(kernel.registry)} > now() + interval '50 minutes' AS later`,
       )
     ).rows;
     expect(wake?.later).toBe(true);

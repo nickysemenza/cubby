@@ -1,6 +1,6 @@
 /**
  * The kernel runner (ADR 0029 section 7): drains dirty scopes in batches,
- * money lane first, in claim order; runs queued asks; runs due passes; and
+ * kinds taking turns in claim order; runs queued asks; runs due passes; and
  * expires lapsed ask claims. Queue permits and the hourly cron wake it
  * directly; the next wake is the least
  * `availableAt` across `ScopeDirty`, `Ask` and `Pass`.
@@ -17,7 +17,13 @@ import {
 
 import { runClaimedScopes } from "./apply";
 import { expireAsks, runQueuedAsks } from "./ask";
-import { claimScopes, stopUnregisteredWork, type ClaimedScope } from "./claim";
+import {
+  claimScopeBatch,
+  claimScopes,
+  scopeClaimOrder,
+  stopUnregisteredWork,
+  type ClaimedScope,
+} from "./claim";
 import { withWorkContext } from "./context";
 
 export { nextWakeSql as kernelNextSql } from "./claim";
@@ -41,27 +47,37 @@ async function ensureVersionSweep(db: Database, registry: KernelRegistry) {
   if (sweep && (await hasStaleScopes(db, registry))) await startPass(db, sweep);
 }
 
-/** One dirty-scope batch from the first lane with claimable work. */
+/** Where each isolate's next scope batch starts in the claim order. */
+const nextKind = new WeakMap<KernelRegistry, number>();
+
+/**
+ * One dirty-scope batch. Kinds take turns in claim order across both lanes,
+ * continuing after the kind served last, so a kind or lane that never empties
+ * cannot hold the others back. A new isolate starts at a random kind: the
+ * budget cuts invocations short, and a fixed start would favour its kind.
+ */
 async function runScopeBatch(
   db: Database,
   registry: KernelRegistry,
 ): Promise<number> {
-  for (const lane of kernelLane.options) {
-    const claimed = await claimScopes(
-      repositoryQueries(db),
-      registry,
-      lane,
-      SCOPE_BATCH,
-    );
-    if (!claimed.length) continue;
-    const reconciler = registry.reconcilers.get(claimed[0]!.kind)!;
-    await runClaimedScopes(db, registry, reconciler, claimed, {
-      releaseBaseline: false,
-      mode: "background",
-    });
-    return claimed.length;
-  }
-  return 0;
+  const order = scopeClaimOrder(registry);
+  const start =
+    nextKind.get(registry) ?? Math.floor(Math.random() * order.length);
+  const claimed = await claimScopeBatch(
+    repositoryQueries(db),
+    [...order.slice(start), ...order.slice(0, start)],
+    SCOPE_BATCH,
+  );
+  if (!claimed.length) return 0;
+  const served = order.findIndex(
+    (reconciler) => reconciler.scope === claimed[0]!.kind,
+  );
+  nextKind.set(registry, (served + 1) % order.length);
+  await runClaimedScopes(db, registry, order[served]!, claimed, {
+    releaseBaseline: false,
+    mode: "background",
+  });
+  return claimed.length;
 }
 
 /**
