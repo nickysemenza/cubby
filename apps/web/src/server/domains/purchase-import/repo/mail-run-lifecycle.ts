@@ -12,6 +12,7 @@ import { eq, inArray } from "drizzle-orm";
 import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { run as runTable } from "~/server/db/schema";
 import { waitForMailImportPermission } from "~/server/domains/purchase-import/repo/controlled-mail-import";
+import { emitEmailRunAssignment } from "~/server/domains/purchase-import/repo/mail-run-kernel";
 import {
   holdCancelledMailRunSources,
   importAttemptsExhausted,
@@ -173,11 +174,14 @@ async function retryTransientMailImport(tx: DrizzleTransaction, runId: RunId) {
     decisionRevision: locked.decisionRevision + 1,
     agentSessionId: importRunAgentIdentity(successorId, "mail_import"),
   });
-  await transferMailRunSources(
+  await emitEmailRunAssignment(
     tx,
-    runId,
-    successorId,
-    unsettled.map((source) => source.orderMailId),
+    await transferMailRunSources(
+      tx,
+      runId,
+      successorId,
+      unsettled.map((source) => source.orderMailId),
+    ),
   );
   await dispatchStartedRun(tx, {
     id: successorId,
@@ -194,11 +198,14 @@ async function retryTransientMailImport(tx: DrizzleTransaction, runId: RunId) {
 export const mailRunLifecycle: RunPurposeLifecycle = {
   targets: mailRunTargets,
   handOff: async (tx, { from, to, carried, restart }) => {
-    await transferMailRunSources(
+    await emitEmailRunAssignment(
       tx,
-      from,
-      to,
-      restart ? undefined : carried.map((target) => target.workKey),
+      await transferMailRunSources(
+        tx,
+        from,
+        to,
+        restart ? undefined : carried.map((target) => target.workKey),
+      ),
     );
   },
   retryInput: (input, carried) => {
@@ -250,11 +257,17 @@ export const mailRunLifecycle: RunPurposeLifecycle = {
       });
     }
     // Changed sources the retry could not carry return through release.
-    await releaseUnsettledMailRunSources(tx, runId);
+    await emitEmailRunAssignment(
+      tx,
+      (await releaseUnsettledMailRunSources(tx, runId)).map((row) => row.id),
+    );
   },
   // Its coordinator never started, so nothing else would ever admit these Emails.
   dispatchFailed: async (tx, runId) => {
-    await releaseUnsettledMailRunSources(tx, runId);
+    await emitEmailRunAssignment(
+      tx,
+      (await releaseUnsettledMailRunSources(tx, runId)).map((row) => row.id),
+    );
   },
   beforeCoordinatorAdmission: waitForMailImportPermission,
 };

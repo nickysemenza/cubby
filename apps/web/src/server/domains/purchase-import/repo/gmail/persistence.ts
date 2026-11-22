@@ -1099,6 +1099,10 @@ export const persistGmailEvents = async (
   if (input.events.length === 0) return { saved: 0, dropped: 0 };
   const ledgerPartyId = parseEntityId("ledgerParty", input.ledgerPartyId);
   return withTransaction(db, async (tx) => {
+    // New events raise kernel keys: the gate is this transaction's first lock.
+    await (
+      await import("~/server/kernel/api")
+    ).enterHouseholdGate(databaseForTransaction(tx));
     const known = new Map(
       (
         await tx

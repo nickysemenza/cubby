@@ -339,7 +339,9 @@ Every mutation of an input dirties the scopes it affects in the transaction
 that makes it. That covers evidence appends, new answers, decisions, a
 reconciler's own applied output, and a write to any authored or catalog column
 a reconciler declares in `reads` (the generator adds the key emission to that
-entity's writer). The statement inserts the row's `FactKey` rows and upserts
+entity's writer; generic removal, detach and merge-repoint writes report their
+rows with their values before the write, after taking the gate ahead of their
+first row lock). The statement inserts the row's `FactKey` rows and upserts
 `ScopeDirty`, raising `seq`, for:
 
 - every scope the row `discovers`, which is how a scope starts with no

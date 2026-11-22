@@ -32,6 +32,7 @@ import {
   resolveMergeTargets,
 } from "~/server/generic/merge/repo/core";
 import { applyMergePolicy } from "~/server/generic/removal/repo/dispositions";
+import { enterRemovalGate } from "~/server/generic/removal/repo/kernel-writes";
 
 type IngredientSurvivorChanges = {
   mergedFrom: { from: null; to: string[] };
@@ -254,6 +255,7 @@ export const mergeIngredients = async (
   };
 
   return await withTransaction(db, async (tx) => {
+    await enterRemovalGate(tx);
     const r = await resolve(tx);
 
     // fold the absorbed names/aliases into the survivor

@@ -48,7 +48,12 @@ import {
 } from "./drift";
 import { enterHouseholdGate, householdWrite } from "./gate";
 import { mergeRecords, type MergeVerdict } from "./identity";
-import { membershipKeys, reindexRows, relatedMemberships } from "./index-keys";
+import {
+  membershipKeys,
+  reindexRows,
+  relatedMemberships,
+  rowIndexKeys,
+} from "./index-keys";
 import { rowKey, tableKey, columnKey } from "./keys";
 import { machinery } from "./machinery";
 import { startPass } from "./pass";
@@ -108,6 +113,12 @@ export type Kernel = {
       discovers?: readonly ScopeRef[];
       entity?: string;
       created?: boolean;
+      /**
+       * The written rows' values before the write, for a writer that can
+       * report them: their read-index memberships are raised too, whether or
+       * not a stored membership exists.
+       */
+      before?: readonly ColumnValues[];
     },
   ): Promise<number>;
   /**
@@ -339,6 +350,8 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
           ),
         );
       }
+      for (const row of write.before ?? [])
+        evidenceKeys.push(...rowIndexKeys(bound, name, row));
       if (!read && !discovers.length && !evidenceKeys.length) return 0;
       const dirtied = await markDirty(repositoryQueries(db), bound, {
         keys: [

@@ -36,7 +36,14 @@ import type { RemovableEntity } from "~/server/generic/removal/repo/core";
 import type { DeleteHooks } from "~/server/generic/removal/repo/dispositions";
 import { applyMergePolicy } from "~/server/generic/removal/repo/dispositions";
 
-import type { ColumnRef, MergePort, RemovePort, ScopeRef } from "./define";
+import type {
+  ColumnRef,
+  ColumnValues,
+  MergePort,
+  RemovePort,
+  ScopeRef,
+} from "./define";
+import { reindexRows, rowIndexKeys } from "./index-keys";
 import {
   bindingEventKey,
   bindingFactKey,
@@ -367,11 +374,21 @@ export async function mergeRecords(
     ownersOf(keepId),
     ownersOf(loserId),
   ]);
+  const merged = () =>
+    q
+      .select()
+      .from(target.table)
+      .where(inArray(idColumn(target.table), [keepId, loserId]));
+  // The port may change either record's indexed values (a fold carries the
+  // absorbed metadata; the loser is removed), so both memberships are raised
+  // before and after it.
+  const before: ColumnValues[] = await merged();
   await port(tx, {
     keepId,
     loserIds: [loserId],
     actor: merge.actor ?? systemActor(),
   });
+  const after: ColumnValues[] = await merged();
 
   const survivor = survivorOwners[0];
   const foreign = survivor
@@ -385,6 +402,8 @@ export async function mergeRecords(
     rowKey(target.name, loserId),
     decisionKey(recordSubject(entity, keepId)),
     decisionKey(recordSubject(entity, loserId)),
+    ...before.flatMap((row) => rowIndexKeys(registry, target.name, row)),
+    ...(await reindexRows(q, registry, target.name, [keepId, loserId], after)),
   ];
   const scopes = new Map<string, ScopeRef>();
   for (const owner of [...survivorOwners, ...absorbedOwners])

@@ -24,6 +24,7 @@ import {
   runFinding,
   runOperation,
 } from "~/server/db/schema";
+import { emitEmailRunAssignment } from "~/server/domains/purchase-import/repo/mail-run-kernel";
 import {
   importAttemptsExhaustedSql,
   readMailRunSources,
@@ -92,7 +93,7 @@ async function retryTransientMailGaps(
     .filter(([, category]) => category === "transient_failure")
     .map(([emailId]) => emailEntityId.parse(emailId));
   if (!transient.length) return;
-  await tx
+  const released = await tx
     .update(emailTable)
     .set({ runId: null, status: "pending", updatedAt: new Date() })
     .where(
@@ -102,7 +103,12 @@ async function retryTransientMailGaps(
         inArray(emailTable.id, transient),
         sql`NOT ${importAttemptsExhaustedSql}`,
       ),
-    );
+    )
+    .returning({ id: emailTable.id });
+  await emitEmailRunAssignment(
+    tx,
+    released.map((row) => row.id),
+  );
 }
 
 /**

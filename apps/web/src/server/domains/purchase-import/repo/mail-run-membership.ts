@@ -235,7 +235,7 @@ export async function admitSupportingMailSource(
   const roster = mailResearchRunInput.parse(owner.input);
   if (roster.sources.some((source) => source.orderMailId === mail.id)) {
     await assertMailRunMembership(tx, runId, mail.id);
-    return;
+    return null;
   }
   // Targets fill at most 50 slots, so a full batch still admits the originals
   // its notices need; reaching the backstop means the coordinator is looping.
@@ -314,6 +314,7 @@ export async function admitSupportingMailSource(
     })
     .where(eq(emailTable.id, message.id));
   await recordChange(db, { kind: "source", categories: ["email"] });
+  return message.id;
 }
 
 /**
@@ -387,6 +388,7 @@ export async function transferMailRunSources(
     })
     .where(eq(run.id, toRunId));
   await recordChange(tx, { kind: "source", categories: ["email"] });
+  return assigned.map((row) => row.id);
 }
 
 /**

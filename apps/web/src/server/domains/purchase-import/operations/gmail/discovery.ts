@@ -783,6 +783,10 @@ export async function saveMailDiscoveryBatch(
       });
     }
     return withTransactionDatabase(db, async (tx) => {
+      // History events raise their originals' kernel keys; the gate precedes
+      // the Run lock, the order a kernel apply and cancellation take.
+      if (!more && page.events.length)
+        await (await import("~/server/kernel/api")).enterHouseholdGate(tx);
       const [locked] = await getDb(tx)
         .select({ id: runTable.id })
         .from(runTable)
