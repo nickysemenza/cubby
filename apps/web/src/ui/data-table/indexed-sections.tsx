@@ -77,9 +77,9 @@ export interface IndexedSection {
   bare?: boolean;
   /** Record pages: one quiet line that stands for the body while folded. */
   digest?: ReactNode;
-  /** Record pages: a table that can span every body column. */
+  /** Record pages: a table, which asks for a table's width and can take the whole row. */
   wideable?: boolean;
-  /** Record pages: a workspace that always spans every body column. */
+  /** Record pages: a workspace that always takes a whole row. */
   span?: boolean;
 }
 
@@ -92,7 +92,7 @@ export interface RecordSectionControls {
   toggleFold: (id: string) => void;
   wide: ReadonlySet<string>;
   toggleWide: (id: string) => void;
-  /** Whether the body has more than one column to span. */
+  /** Whether the body lets sections share a row. */
   columns: boolean;
 }
 export const RecordSectionControlsContext =
@@ -195,11 +195,12 @@ function SectionCard({
           data-detail-section
           data-section-title={section.title}
           data-wide={wide || undefined}
+          data-wideable={section.wideable || undefined}
           data-folded={closed || undefined}
           hidden={folded}
           className={cn(
             "scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-            // A column body balances on real heights, never a reserved one.
+            // Sections sharing a row size on real heights, never a reserved one.
             section.overflowVisible || controls !== null
               ? "overflow-visible"
               : "[contain-intrinsic-size:auto_320px] [content-visibility:auto]",
@@ -252,10 +253,10 @@ function SectionCard({
                   aria-pressed={wide}
                   aria-label={
                     wide
-                      ? `Return ${section.title} to its column`
-                      : `Widen ${section.title} across the page`
+                      ? `Return ${section.title} to its own width`
+                      : `Widen ${section.title} to the full row`
                   }
-                  title={wide ? "Return to column (W)" : "Widen (W)"}
+                  title={wide ? "Return to its width (W)" : "Widen (W)"}
                   onClick={() => controls.toggleWide(section.id)}
                   className="inline-flex size-4.5 items-center justify-center rounded-sm outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-pressed:bg-row-current aria-pressed:text-foreground"
                 >

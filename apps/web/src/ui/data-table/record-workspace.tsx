@@ -34,9 +34,8 @@ import "./record-workspace.css";
 
 const FINE_DESKTOP =
   "(min-width: 48rem) and (hover: hover) and (pointer: fine)";
-/** Pane widths (px) where the rail appears and the body takes two columns. */
+/** The pane width (px) from which the rail appears and sections share rows. */
 const RAIL_WIDTH = 800;
-const COLUMNS_WIDTH = 1000;
 
 const ROWS =
   '[data-slot="table-row"]:not(thead *), [data-slot="record-row"], [data-row-cursor-target]';
@@ -48,7 +47,7 @@ const isEditableTarget = (target: EventTarget | null) =>
       "input, textarea, select, [contenteditable=''], [contenteditable=true], [role=combobox], [role=listbox], [role=menu], [role=dialog], [role=alertdialog]",
     ) !== null);
 
-/** Whether the pane draws the rail, and whether its body has two columns. */
+/** Whether the pane draws the rail, and with it lets sections share rows. */
 function usePaneMode(workspace: RefObject<HTMLElement | null>) {
   const [mode, setMode] = useState({ rail: false, columns: false });
   useEffect(() => {
@@ -60,10 +59,8 @@ function usePaneMode(workspace: RefObject<HTMLElement | null>) {
         (media?.matches ?? true) &&
         !document.documentElement.hasAttribute("data-hosted-workspace");
       const width = element.getBoundingClientRect().width;
-      const next = {
-        rail: desktop && width >= RAIL_WIDTH,
-        columns: desktop && width >= COLUMNS_WIDTH,
-      };
+      const rail = desktop && width >= RAIL_WIDTH;
+      const next = { rail, columns: rail };
       setMode((previous) =>
         previous.rail === next.rail && previous.columns === next.columns
           ? previous
@@ -84,8 +81,8 @@ function usePaneMode(workspace: RefObject<HTMLElement | null>) {
 
 /**
  * Whether Activity is too short to hold a column of its own. A short Activity
- * joins the body's columns, so no empty column runs beside a long body; it
- * returns to its column once it outgrows the threshold. Loading never decides.
+ * joins the body's sections, so no empty column runs beside a long body; it
+ * returns to its own column once it outgrows the threshold. Loading never decides.
  */
 function useShortActivity(
   workspace: RefObject<HTMLElement | null>,
@@ -153,7 +150,7 @@ function useOnScreen(
 }
 
 /**
- * The rail's contents index: each group's sections in two columns, with a
+ * The rail's contents index: each group's label over its sections, with a
  * mark on the ones on screen, a dot on the ones that need the member, and
  * their counts.
  */
@@ -187,13 +184,10 @@ function RailIndex({
         );
         if (sections.length === 0) return null;
         return (
-          <div
-            key={group.id}
-            className="grid grid-cols-[3.25rem_minmax(0,1fr)] items-start"
-          >
+          <div key={group.id}>
             <a
               href={`#${hashForDetailTarget(group.id, groups)}`}
-              className="flex h-4.5 items-center truncate rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              className="mt-0.5 flex h-4 items-center truncate rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
               onClick={(event) => {
                 event.preventDefault();
                 onSelect(group.id);
@@ -201,7 +195,7 @@ function RailIndex({
             >
               {group.title}
             </a>
-            <ul className="grid min-w-0 grid-cols-2 gap-x-2">
+            <ul className="min-w-0">
               {sections.map((section) => {
                 const state = sectionStates.get(section.id);
                 const current = activeId === section.id;
@@ -507,8 +501,9 @@ function HintLine({
 }
 
 /**
- * A record's page: singular facts in a sticky left rail over its contents
- * index, signals pinned above a column body of the record's collections, and
+ * A record's page: singular facts in a thin sticky left rail over its contents
+ * index, signals pinned above the record's collections, each as wide as its
+ * content needs, and
  * Activity in its own column on a wide pane. Phones, coarse pointers and hosted
  * native workspaces read the same parts as one stack.
  */
@@ -689,7 +684,7 @@ export function RecordWorkspace({
                   </div>
                 ) : null}
                 <div
-                  // Scroll tracking reads the sections of both columns.
+                  // Scroll tracking reads the body's sections and Activity's.
                   ref={bodyRef}
                   className="record-main-grid"
                   data-activity={activity && !activityInBody ? "" : undefined}

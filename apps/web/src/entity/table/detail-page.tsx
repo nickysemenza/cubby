@@ -110,7 +110,7 @@ function groupSections(
           {
             id: `detail-group-${tab.id}`,
             title: tab.title,
-            // A `full` section is a workspace: it spans every body column.
+            // A `full` section is a workspace: it takes a whole row.
             sections: members.map((section) =>
               section.placement === "full"
                 ? { ...section, span: true }
@@ -214,7 +214,7 @@ function contextSourceId(
 
 /**
  * A record's body: its identity and singular facts in the rail, signals above
- * one column body of its section groups, and Activity beside them, plus the
+ * its section groups, and Activity beside them, plus the
  * generic Relationships explorer and History when the page brings neither.
  */
 export const DetailSections: FC<DetailSectionsProps> = ({
