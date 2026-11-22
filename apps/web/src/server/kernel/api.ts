@@ -98,8 +98,10 @@ export {
   type MergeVerdict,
 } from "./identity";
 export {
+  columnKey,
   decisionKey,
   driftSubject,
+  indexKey,
   legacyKey,
   recordIdentity,
   recordSubject,

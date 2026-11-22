@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import { insertFieldsFixture as insert } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
-import { decision } from "~/server/db/kernel-schema";
+import { decision, scopeDirty } from "~/server/db/kernel-schema";
 import { emailReadSnapshot } from "~/server/db/read-snapshot-schema";
 import {
   email,
@@ -17,13 +17,14 @@ import {
 } from "~/server/db/schema";
 import { emailLinkDecisionsRead } from "~/server/domains/email/repo/email-decision-sql";
 import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-write";
+import { emailPredictionEvidence } from "~/server/domains/email/repo/email-state";
 import { decideEmailPurchase } from "~/server/domains/purchase-import/repo/email-purchase-decision";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import {
   mergePurchases,
   deletePurchases,
 } from "~/server/domains/purchase/repo/purchase";
-import { reconcileNow } from "~/server/kernel/api";
+import { append, evidenceRow, reconcileNow } from "~/server/kernel/api";
 
 describe("Email Purchase link decisions", () => {
   const ctx = withTestDb();
@@ -222,6 +223,60 @@ describe("Email Purchase link decisions", () => {
         emailRelationshipResult.parse(row?.relationshipFacts).purchaseLinks,
       ).toEqual([]);
     }
+  });
+  it("dirties only the Email whose own inputs changed", async () => {
+    const f = await fixture();
+    const other = await syntheticRetainedMail(ctx.db, {
+      ledgerPartyId: f.party.id,
+      vendorId: f.vendor.id,
+      mailboxId: "synthetic-mailbox",
+      messageId: "synthetic-second-message",
+      threadId: "synthetic-second-thread",
+      sender: "orders@example.test",
+      subject: "Synthetic second order",
+      receivedAt: new Date("2026-10-02T12:00:00Z"),
+      rawChecksum: "d".repeat(64),
+      content: { bodyText: "Synthetic second", bodyHtml: null, snippet: null },
+    });
+    const [second] = await getDb(ctx.db)
+      .select()
+      .from(email)
+      .where(eq(email.orderMailId, other.id));
+    if (!second) throw new Error("Missing second synthetic Email");
+    const keys: string[] = [f.mail.id, second.id];
+    const dirty = async () =>
+      (
+        await getDb(ctx.db)
+          .select({ key: scopeDirty.scopeKey })
+          .from(scopeDirty)
+          .where(eq(scopeDirty.scopeKind, "emailState"))
+      )
+        .map((row) => row.key)
+        .filter((key) => keys.includes(key));
+    await reconcileNow(
+      ctx.db,
+      keys.map((key) => ({ kind: "emailState", key })),
+    );
+    expect(await dirty()).toEqual([]);
+    await append(ctx.db, [
+      evidenceRow(emailPredictionEvidence, {
+        emailId: second.id,
+        checksum: second.checksum,
+        classification: "unrelated",
+        stage: "rule",
+        reason: "Synthetic newsletter",
+        classificationVersion: "synthetic-v2",
+        application: "applied",
+      }),
+    ]);
+    expect(await dirty()).toEqual([second.id]);
+    await reconcileNow(ctx.db, [{ kind: "emailState", key: second.id }]);
+    const [published] = await getDb(ctx.db)
+      .select({ classification: email.classification })
+      .from(email)
+      .where(eq(email.id, second.id));
+    expect(published?.classification).toBe("unrelated");
+    expect(await dirty()).toEqual([]);
   });
   it("replays the same link publication without another decision", async () => {
     const f = await fixture();

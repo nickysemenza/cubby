@@ -248,6 +248,10 @@ A batch is one coherent input
 snapshot: its output notifications exclude every completed scope in that
 batch and still notify other dependent scopes. Each read through `Reads` records its key, including a read that
 returns no rows, and `Reads` reaches only the sources the reconciler declared.
+A batch-level read records its keys for every scope of the batch, so a scope
+reads the rows it owns through `reads.for(key)`. A shared projection over
+several scopes is fenced per scope: before it runs, each scope records the keys
+of every row the projection can read for it.
 `reconcile` has no database, clock or network access. Inside it,
 `c.answer(kind, input)` returns the Answer or `Missing`, and `Missing` files an
 Ask; `c.decision(channel, subject, field)` returns the decision in force;
@@ -403,8 +407,11 @@ and the key it joined. A publication and a repoint derive both from the row
 before and after. An authored writer reports after its write, so the kernel
 stores each indexed row's membership as `index:<table>` `FactKey` rows, every
 writer of the row replaces them, and the stored keys stand for the row before
-an authored write. A migration that adds a read index or changes its values
-rebuilds those rows from the table. Reviewed evidence-association changes
+an authored write. A migration that adds a read index over values a writer can
+change, or changes an index's values, rebuilds those rows from the table; an
+index over columns set once at insert has no before image to store. A plain
+insert into an indexed table outside `append` reports its new rows through the
+writer's key emission. Reviewed evidence-association changes
 replace the affected `FactKey` entries and raise both the old and the new keys
 in their transaction. Raw source observations remain insert-only.
 

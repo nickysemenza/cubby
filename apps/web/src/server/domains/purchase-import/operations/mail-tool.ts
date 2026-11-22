@@ -624,6 +624,11 @@ async function linkOrderMail(
         )
         .limit(1);
   if (!event) throw new Error("The Email event was not recorded.");
+  // A new event joins its original's read-index membership.
+  if (created)
+    await (
+      await import("~/server/kernel/api")
+    ).emitWrites(db, { table: orderMailEvent, ids: [created.id], columns: [] });
   // A member's dismissal of this Email for this Purchase, on any of its
   // events, wins over a later automatic or session link.
   const [dismissed] = await tx
@@ -826,6 +831,7 @@ export async function settleMail(
       settled,
       identity,
     ).then((rows) => rows.map((row) => ({ id: row.id })));
+    const outcomes: string[] = [];
     if (input.importRunId && input.mail.id) {
       if (settledEmails.length !== 1)
         throw createAppError(
@@ -870,7 +876,7 @@ export async function settleMail(
           outcome: mailOutcome.fingerprint,
         }),
       );
-      await tx
+      const [recorded] = await tx
         .insert(runOperation)
         .values({
           runId: input.importRunId,
@@ -901,7 +907,9 @@ export async function settleMail(
         })
         .onConflictDoNothing({
           target: [runOperation.runId, runOperation.operationId],
-        });
+        })
+        .returning({ id: runOperation.id });
+      if (recorded) outcomes.push(recorded.id);
     }
     // Lists, filters and the Email panel read the snapshot: a link, outcome
     // or status written here must reach it now, not at the hourly pass.
@@ -912,7 +920,7 @@ export async function settleMail(
     }));
     await emitWrites(databaseForTransaction(tx), {
       table: runOperation,
-      ids: [],
+      ids: outcomes,
       columns: ["result", "completedAt"],
       discovers: scopes,
     });
