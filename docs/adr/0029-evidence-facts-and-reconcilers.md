@@ -236,7 +236,7 @@ machinery(db: Db, viewer: Actor, ref: EntityRef, o?: { field?: string }): Promis
 the batch. Reads issued in the same tick coalesce into one statement per
 table, and a row read once serves the rest of the batch. `load` may read
 Answers through `reads.answers`, so a scope whose inputs depend on an Answer
-reconciles in its first round. Apply locks the union of input revisions and dirty claims once,
+reconciles in its first round. Apply reads the union of input revisions and locks the dirty claims once,
 then writes each table as a set. Identity reservations, RecordKeys, bindings,
 audits, dependencies and cached scope outcomes are batch writes. Kernel publication
 alone audits owned column changes; domain receipts describe independent source
@@ -324,7 +324,7 @@ new rows is refused before any record is inserted.
 | `EvidenceBinding` | Which evidence belongs to which purchase event, and on what basis (`proven`, `decision`, `baseline`).               |
 | `Pass`            | One row per registered pass instance: cursor, claim, attempts, `availableAt`.                                       |
 | `Drift`           | One proposal per scope: proposal hash, inputs hash, exact difference, ask count, estimated cost.                    |
-| `KeyRev`          | One revision counter per key, the serialization point between mutation and dependency registration.                 |
+| `KeyRev`          | One revision counter per raised key, the serialization point between mutation and dependency registration.          |
 
 Answers, asks and decisions live in Neon. Durable Object SQLite holds only what
 can be rebuilt or fetched again (ADR 0025 item 1).
@@ -346,16 +346,22 @@ A purchase-event payment scope uses the payment fact key itself. Evidence
 discovers it directly; its binding output dirties the bank/order scopes that
 consume those bindings. There is one EvidenceBinding column owner throughout.
 
-Registration and mutation serialize per key through `KeyRev(key, rev)`. An
-input mutation raises `rev` for each of its keys with an upsert before it reads
-`ScopeDep`. A load records the `rev` it saw for every key it read, 0 for a key
-with no row, and reads it in the same statement as the rows, so both come from
-one snapshot. A read returns its shared revision map once, including when no
-data rows match. An apply locks existing rows, upserts missing rows at 0, and
-compares each resulting `rev` with the one its load saw. Because both sides
-lock the same row, either the apply sees the committed mutation and leaves
-the scope dirty, or the mutation sees the committed `ScopeDep` row and raises
-`ScopeDirty.seq`.
+Registration and mutation serialize through `KeyRev(key, rev)` and the
+household write gate (section 6). An input mutation raises `rev` for each of
+its keys with an upsert, inserting a new key at 1, before it reads
+`ScopeDep`. Only a raise writes a `KeyRev` row; a key with no row reads 0
+everywhere, and the table refuses a revision below 1. A load records the `rev`
+it saw for every key it read and reads it in the same statement as the rows,
+so both come from one snapshot. A read returns its shared revision map once,
+including when no data rows match. An apply admits the gate in one statement,
+then reads the revisions of its keys in a later statement of the same
+transaction and compares each with the one its load saw. A statement's
+snapshot at read committed predates a gate wait inside it, so the read never
+shares the gate's statement. Both sides hold the gate: either the mutation
+committed before the apply was admitted, and the apply's later read sees its
+raise and leaves the scope dirty, or the apply registers its `ScopeDep` rows
+and commits before the mutation is admitted, and the mutation sees them and
+raises `ScopeDirty.seq`.
 
 `ScopeDirty` can never hold more rows than there are scopes. Implicit output
 invalidations never dirty their applying scopes, including writes a delete
@@ -413,10 +419,11 @@ their replacement fails instead of registering keys no current writer raises.
 
 Every transaction that writes a money-lane column first takes
 `pg_advisory_xact_lock(HOUSEHOLD_WRITE)` and runs at read committed. This is
-the household write gate. Every other transaction that raises or locks a
-`KeyRev` row or upserts a `ScopeDirty` row holds it too: each kernel statement
-that takes those locks carries the gate, and a writer that locks records ahead
-of its kernel writes takes the gate before them. Transactions that mutate
+the household write gate. Every other transaction that raises or fences a
+`KeyRev` revision or upserts a `ScopeDirty` row holds it too: each kernel
+statement that raises a revision or locks a dirty row carries the gate, a
+revision fence reads after a statement that admitted it, and a writer that
+locks records ahead of its kernel writes takes the gate before them. Transactions that mutate
 kernel inputs therefore never interleave their kernel locks, including a member
 transaction that decides, reconciles and writes again. Claim partitions use separate short
 admission locks shared by Ask and Pass claims; producer calls happen after
@@ -463,26 +470,28 @@ that commits later raises `seq` again and the scope runs again.
 A member decision that invokes an authored field writer opens `householdWrite`
 before inserting its Decisions, so the writer enters with the gate held.
 
-Lock order inside an apply is the gate, then the `KeyRev` rows in key order,
-then the `ScopeDirty` row, then the record rows. A writer that takes the gate
+Order inside an apply is the gate, admitted in the transaction's first
+statement, then the revision read in a later statement, then the `ScopeDirty`
+row lock, then the record rows. A writer that takes the gate
 ahead of its row locks takes it as its first lock, and the gate entry refuses a
 transaction that already holds a row or advisory lock. A Pass publication, a
 member publication and an external Ask settlement take the gate before their
 Pass, record or Ask row; a Run transaction locks the Run row before its Pass
 row. Money writes read after the gate at read committed, so they see every
 writer the gate serialized before them. The gate binds that order: a
-transaction holding it may take further revision locks after dirty or record
-locks without a cycle, because no other kernel writer runs beside it. A
+transaction holding it may raise revisions after dirty or record locks
+without a cycle, because no other kernel writer runs beside it. A
 conflict on `seq` or `rev`, a deadlock or a serialization failure does not
 count as a failed attempt. After three
 conflicts in a row the runner makes an exception to loading outside the
 transaction: it discovers the read set, takes the gate,
-locks the union of input and planned output keys in sorted order, then reloads,
-computes and fences the dirty row in that bounded transaction. A newly needed
-key retries without spending an attempt. Producer calls stay outside it.
+reads the revisions of the union of input and planned output keys, 0 for an
+absent key, then reloads against those revisions, computes and fences the
+dirty row in that bounded transaction. A newly needed key, one outside that
+union, retries without spending an attempt. Producer calls stay outside it.
 
-Catalog scopes use the same fence and take the gate with their first revision
-lock. A catalog apply also
+Catalog scopes use the same fence and take the gate in the apply
+transaction's first statement, with its limits. A catalog apply also
 compares the target record's revision, so a member's concurrent edit of the
 same record wins and the scope reruns.
 
@@ -729,9 +738,9 @@ when that computation re-derives the approved hash under the proposal's rules;
 otherwise it stores the recomputed proposal, which must be approved again.
 
 The sweep loads and computes a page outside any transaction, then publishes it
-with its cursor in the pass's fenced transaction: it locks the page's input
-revisions once and writes its scope states, dependencies and proposals as
-sets. It takes the write gate with those revision locks. A scope
+with its cursor in the pass's fenced transaction: that transaction admits
+the write gate first, then reads the page's input revisions once and writes
+its scope states, dependencies and proposals as sets. A scope
 whose revisions moved retains its previous version, dependencies and
 proposal; one that went dirty retains its version and dependencies.
 

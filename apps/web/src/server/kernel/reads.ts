@@ -238,7 +238,7 @@ type Pending<T> = {
 
 export type ReadMode = {
   db?: Database;
-  /** Locked runs hold each key's revision row from its read to commit. */
+  /** Locked runs read each key's revision behind the gate they hold to commit. */
   locked: boolean;
   lockedRevisions?: ReadonlyMap<Key, number>;
   /** The version sweep derives without baseline bindings. */

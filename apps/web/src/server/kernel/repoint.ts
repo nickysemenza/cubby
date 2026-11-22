@@ -7,7 +7,8 @@ import { withKernelApply } from "~/server/db/kernel-apply-context";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 
 import type { ColumnValues } from "./define";
-import { lockKeyRevs, markDirty } from "./dirty";
+import { markDirty } from "./dirty";
+import { admitHouseholdGate } from "./gate";
 import {
   membershipKeys,
   reindexRows,
@@ -83,20 +84,8 @@ export async function repointOwnedReference(
     after: { ...row, [column]: toId },
   }));
   const prior = await relatedMemberships(tx, registry, planned);
-  // Revisions before rows, the order a kernel apply takes them in.
-  await lockKeyRevs(
-    q,
-    [
-      ...new Set([
-        tableKey(name),
-        ...planned.flatMap((change) => [
-          ...rowKeys(change.before),
-          ...rowKeys(change.after),
-        ]),
-        ...membershipKeys(prior, false),
-      ]),
-    ].sort(),
-  );
+  // The gate before rows, the order a kernel apply takes them in.
+  await admitHouseholdGate(q);
   const rows: ColumnValues[] = await withKernelApply(
     null,
     async () =>

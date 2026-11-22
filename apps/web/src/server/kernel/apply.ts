@@ -1,8 +1,8 @@
 import type { KernelAuditProvenance } from "@cubby/schemas/kernel/machinery";
 /**
  * Apply (ADR 0029 section 6). Loading and computing happen before the
- * transaction opens; the apply transaction takes the household write gate
- * for the money lane, locks each read key's `KeyRev` and the scope's
+ * transaction opens; the apply transaction takes the household write gate in
+ * its first statement, then reads each read key's `KeyRev`, locks the scope's
  * `ScopeDirty` row, and writes nothing for a scope whose `rev` or `seq`
  * moved since its load. A conflict spends no attempt; after three in a row
  * the scope runs locked: load, compute and apply in one bounded transaction.
@@ -75,7 +75,7 @@ import type {
   ScopeRef,
 } from "./define";
 import { difference, isEmptyDifference, type Difference } from "./diff";
-import { lockKeyRevs, markDirty } from "./dirty";
+import { markDirty, readGatedKeyRevs } from "./dirty";
 import { recordDrifts } from "./drift";
 import {
   enterWriteTransaction,
@@ -629,7 +629,10 @@ function changesOf(diff: Difference): IndexChange[] {
     })),
   ];
 }
-/** Lock the union once, then compare every scope against that one input fence. */
+/**
+ * Read the union's revisions once behind the gate the transaction admitted on
+ * entry, then compare every scope against that one input fence.
+ */
 async function fenceBatch(
   q: Q,
   computed: readonly Computed[],
@@ -642,7 +645,7 @@ async function fenceBatch(
       ...outputKeys,
     ]),
   ].sort();
-  const revisions = await lockKeyRevs(q, keys);
+  const revisions = await readGatedKeyRevs(q, keys);
   const rows = await q.execute<{
     kind: string;
     key: string;
@@ -1710,8 +1713,8 @@ export async function applyComputed(
 }
 
 /**
- * The fallback after three conflicts: take the gate (money), then load with
- * each key's revision row held, lock the dirty row, compute and apply, all in
+ * The fallback after three conflicts: take the gate, then load with each
+ * key's revision read behind it, lock the dirty row, compute and apply, all in
  * one bounded transaction. Producer calls never happen here: a missing answer
  * is filed as an ask.
  */
@@ -1766,7 +1769,9 @@ async function runLocked(
               registry,
               indexChanges([prepared!], options),
             );
-            const lockedRevisions = await lockKeyRevs(
+            // Every requested key, 0 when absent: a key the reload needs
+            // outside this set is a newly needed key.
+            const lockedRevisions = await readGatedKeyRevs(
               q,
               [
                 ...new Set([

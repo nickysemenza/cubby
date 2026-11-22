@@ -271,7 +271,7 @@ export type HeldFieldsValues<V> = {
   values: V;
   /** The `fields` columns held back from the write. */
   held: readonly string[];
-  /** Before an update, lock what `settle` will raise: revisions before rows. */
+  /** Before an update, take the write gate `settle` raises under: the gate before rows. */
   lock(db: Database | DrizzleTransaction, recordId: string): Promise<void>;
   settle(
     db: Database | DrizzleTransaction,

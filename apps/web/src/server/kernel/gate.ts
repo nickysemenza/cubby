@@ -1,7 +1,7 @@
 import type { KernelLane } from "@cubby/schemas/kernel/machinery";
 /**
  * The household write gate (ADR 0029 section 6): every transaction that
- * writes a money-lane column, raises or locks a kernel revision, or dirties a
+ * writes a money-lane column, raises or fences a kernel revision, or dirties a
  * scope takes this one transaction-scoped advisory lock at read committed.
  * `SET LOCAL` timeouts let Postgres release the gate when a Worker dies
  * mid-transaction.
@@ -67,15 +67,25 @@ const GATE_LOCK = sql`pg_advisory_xact_lock(hashtextextended('cubby:household-wr
 
 /**
  * Take the household write gate as select-list items; re-entrant within a
- * transaction. Every statement that locks a `KeyRev` or `ScopeDirty` row for
- * a mutation carries it, so a transaction holds the gate before its first
- * kernel lock. It applies a member write's limits first when the transaction
- * has none, so the lock wait is bounded and a dead Worker releases the gate.
+ * transaction. Every statement that raises a `KeyRev` or locks a `ScopeDirty`
+ * row for a mutation carries it, so a transaction holds the gate before its
+ * first kernel lock. It applies a member write's limits first when the
+ * transaction has none, so the lock wait is bounded and a dead Worker releases
+ * the gate.
  */
 export const takeHouseholdGate = sql`${writeLimits("member")} AS limits, ${GATE_LOCK} AS gate`;
 
+/**
+ * Take the gate in a statement of its own, ahead of a writer's revision reads
+ * and kernel-keyed row writes. A revision read belongs in a later statement:
+ * at read committed a statement's snapshot predates a gate wait inside it.
+ */
+export async function admitHouseholdGate(q: Q): Promise<void> {
+  await q.execute(sql`SELECT ${takeHouseholdGate}`);
+}
+
 /** Whether this transaction holds the household write gate. */
-const holdsHouseholdGate = sql`EXISTS (
+export const holdsHouseholdGate = sql`EXISTS (
   SELECT 1 FROM pg_locks WHERE pid = pg_backend_pid() AND locktype = 'advisory'
     AND classid = ((hashtextextended('cubby:household-write', 0) >> 32) & 4294967295)::oid
     AND objid = (hashtextextended('cubby:household-write', 0) & 4294967295)::oid
@@ -124,9 +134,12 @@ export async function enterHouseholdGate(
 }
 
 /**
- * Session limits for this transaction only, then the gate for money writes.
- * A locked background computation tries the gate before spending its budget
- * on reads; busy admission throws the existing retryable gate error.
+ * Session limits for this transaction only, then the gate, in one statement.
+ * A money write enters with the gate as its first lock. A catalog apply takes
+ * it the way a kernel statement carries it, since a synchronous reconcile may
+ * run nested in a transaction that already holds other locks. A locked
+ * background computation tries the gate before spending its budget on reads;
+ * busy admission throws the existing retryable gate error.
  */
 export async function enterWriteTransaction(
   q: Q,
@@ -141,7 +154,9 @@ export async function enterWriteTransaction(
     if (!acquired) throw new HouseholdWriteBusyError();
     return;
   }
-  await q.execute(sql`SELECT ${writeLimits(options.mode)}`);
+  await q.execute(
+    sql`SELECT ${writeLimits(options.mode)} AS limits, ${GATE_LOCK}::text IS NOT NULL AS gate`,
+  );
 }
 
 /**

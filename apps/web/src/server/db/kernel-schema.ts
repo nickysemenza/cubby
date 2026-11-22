@@ -299,14 +299,21 @@ export const factKey = pgTable(
 const liveKey = (key: AnyPgColumn) =>
   sql`${key} NOT LIKE 'index:transaction.accountAmount:%' AND ${key} NOT LIKE 'index:manualTransaction.accountMerchant:%'`;
 
-/** One revision per key: the serialization point between mutation and dependency registration. */
+/**
+ * One revision per raised key: the serialization point between mutation and
+ * dependency registration. Only a raise writes a row, at 1 or above; an absent
+ * key reads 0, so a Worker that materialises a zero row fails here.
+ */
 export const keyRev = pgTable(
   "KeyRev",
   {
     key: text("key").primaryKey(),
-    rev: bigint("rev", { mode: "number" }).notNull().default(0),
+    rev: bigint("rev", { mode: "number" }).notNull(),
   },
-  (table) => [check("KeyRev_retired_key_check", liveKey(table.key))],
+  (table) => [
+    check("KeyRev_retired_key_check", liveKey(table.key)),
+    check("KeyRev_raised_check", sql`${table.rev} > 0`),
+  ],
 );
 
 /** One row per scope that must run. */
