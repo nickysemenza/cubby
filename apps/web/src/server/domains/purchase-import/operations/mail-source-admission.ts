@@ -20,6 +20,7 @@ import {
   readRetainedMail,
   type RetainedMail,
 } from "~/server/domains/mail/repo/retained-mail";
+import { emitEmailRunAssignment } from "~/server/domains/purchase-import/repo/mail-run-kernel";
 import {
   admitSupportingMailSource,
   readMailRunSources,
@@ -247,9 +248,14 @@ export async function applyMailSourceAdmissions(
   options: { requireAttribution: boolean },
 ) {
   for (const admission of admissions) {
-    if (admission.supporting)
-      await admitSupportingMailSource(db, runId, admission.mail);
-    else if (
+    if (admission.supporting) {
+      const assigned = await admitSupportingMailSource(
+        db,
+        runId,
+        admission.mail,
+      );
+      if (assigned) await emitEmailRunAssignment(db, [assigned]);
+    } else if (
       options.requireAttribution &&
       admission.attribution !== "explicit" &&
       admission.attribution !== "recipient"

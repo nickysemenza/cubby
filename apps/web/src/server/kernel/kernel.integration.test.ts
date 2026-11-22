@@ -1872,6 +1872,95 @@ describe("evidence-facts kernel", () => {
     expect(await dirtyCount(ctx.db)).toBe(0);
   });
 
+  it("fences a key read with no revision row and never stores a zero revision", async () => {
+    // Two vendor ids no writer has raised: each read finds no row.
+    const raised = crypto.randomUUID();
+    const untouched = crypto.randomUUID();
+    const raisedKey = `row:Vendor:${raised}`;
+    const untouchedKey = `row:Vendor:${untouched}`;
+    let loads = 0;
+    const reconciler = defineReconciler<null>({
+      scope: "fixture.unraisedKey",
+      lane: "catalog",
+      version: 1,
+      reads: [source.table(vendor, ["name"])],
+      writes: [],
+      async load(reads, keys) {
+        await reads.for(keys[0]!).rows(vendor, [raised, untouched]);
+        loads += 1;
+        // A mutation between the load and its apply raises a key from absent;
+        // no dependency names it yet, so only the revision fence sees it.
+        if (loads === 1)
+          await kernel.emitWrites(ctx.db, {
+            table: vendor,
+            ids: [raised],
+            columns: ["name"],
+          });
+        return new Map(keys.map((key) => [key, null]));
+      },
+      reconcile(_input, c) {
+        return c.done();
+      },
+    });
+    const kernel = createKernel([
+      defineModule({ name: "unraisedKey", reconcilers: [reconciler] }),
+    ]);
+    const scope = { kind: reconciler.scope, key: "synthetic" };
+    const q = repositoryQueries(ctx.db);
+    const storedRevisions = async () =>
+      (
+        await q.execute<{ key: string; rev: number }>(
+          sql`SELECT key, rev::int AS rev FROM "KeyRev"
+              WHERE key IN (${raisedKey}, ${untouchedKey}) ORDER BY key`,
+        )
+      ).rows;
+    expect(await storedRevisions()).toEqual([]);
+    await kernel.emitWrites(ctx.db, {
+      table: fixturePurchase,
+      ids: [],
+      columns: [],
+      discovers: [scope],
+    });
+    const run = async () =>
+      runClaimedScopes(
+        ctx.db,
+        kernel.registry,
+        reconciler,
+        await claimScopes(q, kernel.registry, "catalog", 1, [scope]),
+        { mode: "background", releaseBaseline: false },
+      );
+
+    const dirty = async () =>
+      (
+        await q.execute<{ n: number }>(
+          sql`SELECT count(*)::int AS n FROM "ScopeDirty" WHERE "scopeKind" = ${scope.kind}`,
+        )
+      ).rows[0]!.n;
+
+    expect((await run()).map((item) => item.status)).toEqual(["conflict"]);
+    expect(await dirty()).toBe(1);
+
+    expect((await run()).map((item) => item.status)).toEqual(["applied"]);
+    expect(loads).toBe(2);
+    expect(await dirty()).toBe(0);
+    expect(await storedRevisions()).toEqual([{ key: raisedKey, rev: 1 }]);
+    expect(
+      (
+        await q.execute<{ key: string }>(
+          sql`SELECT key FROM "ScopeDep" WHERE "scopeKind" = ${scope.kind}
+              AND key IN (${raisedKey}, ${untouchedKey}) ORDER BY key`,
+        )
+      ).rows.map((row) => row.key),
+    ).toEqual([raisedKey, untouchedKey].sort());
+    expect(
+      (
+        await q.execute<{ n: number }>(
+          sql`SELECT count(*)::int AS n FROM "KeyRev" WHERE rev <= 0`,
+        )
+      ).rows[0]!.n,
+    ).toBe(0);
+  });
+
   it("renews a compute batch together without reviving expired scopes", async () => {
     const { kernel } = kernelWith();
     await kernel.append(ctx.db, [

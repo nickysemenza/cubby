@@ -38,7 +38,7 @@ import {
   isEmptyDifference,
   type Difference,
 } from "./diff";
-import { lockKeyRevs, markDirty } from "./dirty";
+import { markDirty, readGatedKeyRevs } from "./dirty";
 import { householdWrite } from "./gate";
 import { heldBaselineGap } from "./held-gap";
 import { driftSubject, hashCanonical } from "./keys";
@@ -110,7 +110,7 @@ const stale = (reconciler: Reconciler) => sql`
  * asks that fill values no accepted record holds goes dirty, so its normal run
  * files them; the rest become proposals that wait on the member. Sweep tables
  * hold no money-lane column; the caller's transaction opens with the write
- * gate, before any row this page locks.
+ * gate, before any row this page locks, so the revision read here follows it.
  */
 async function proposeOrAdvance(
   tx: Database,
@@ -135,7 +135,7 @@ async function proposeOrAdvance(
   const keys = [
     ...new Set(plans.flatMap((plan) => [...plan.computed.keys.keys()])),
   ].sort();
-  const revisions = await lockKeyRevs(q, keys);
+  const revisions = await readGatedKeyRevs(q, keys);
   const fenced = plans.filter((plan) =>
     [...plan.computed.keys].every(([key, rev]) => revisions.get(key) === rev),
   );

@@ -51,7 +51,7 @@ import {
 } from "~/server/domains/product/repo/match/product-identity-overlap";
 import { unknownProductVariantComparison } from "~/server/domains/product/repo/product-variant-comparison";
 import { loadProductQuantitySummaries } from "~/server/domains/product/repo/quantity-ledger";
-import { acceptedOrders } from "~/server/domains/purchase-import/repo/accepted-order-read";
+import { acceptedOrdersBoundTo } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { liveAliasSqlText } from "~/server/lib/live-row";
@@ -78,27 +78,27 @@ export async function loadPhotoAcceptedSourceLines(
     ),
   ];
   if (!purchaseIds.length) return result;
+  const boundOrders = acceptedOrdersBoundTo((id) => inArray(id, purchaseIds));
   const orders = await getDb(db)
     .select({
-      id: acceptedOrders.id,
-      purchaseId: acceptedOrders.purchaseId,
-      extraction: acceptedOrders.extraction,
+      id: boundOrders.id,
+      purchaseId: boundOrders.purchaseId,
+      extraction: boundOrders.extraction,
     })
-    .from(acceptedOrders)
+    .from(boundOrders)
     .innerJoin(
       ledgerParty,
       and(
-        eq(ledgerParty.id, acceptedOrders.ledgerPartyId),
+        eq(ledgerParty.id, boundOrders.ledgerPartyId),
         eq(ledgerParty.userId, actor.userId),
         notDeleted(ledgerParty),
       ),
     )
     .innerJoin(
       purchase,
-      and(eq(purchase.id, acceptedOrders.purchaseId), notDeleted(purchase)),
+      and(eq(purchase.id, boundOrders.purchaseId), notDeleted(purchase)),
     )
-    .where(inArray(acceptedOrders.purchaseId, purchaseIds))
-    .orderBy(acceptedOrders.id)
+    .orderBy(boundOrders.id)
     .limit(1000);
   for (const order of orders) {
     const parsed = importExtractionOutcome.safeParse(order.extraction);

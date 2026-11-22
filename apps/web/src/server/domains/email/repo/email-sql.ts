@@ -1,5 +1,4 @@
 import { emailPurchaseLinkState } from "@cubby/schemas/email-fields";
-import { entitySchema } from "@cubby/schemas/entity";
 import {
   mailboxClassificationStage,
   type MailboxClassification,
@@ -8,7 +7,6 @@ import { feedbackAuthority } from "@cubby/schemas/suggestion";
 import { sql, type SQL } from "drizzle-orm";
 
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { sqlEnumConstant } from "~/server/db/sql-enum";
 import {
   emailLinkDecisionsForEmailSql,
   emailLinkDecisionsForPurchasesSql,
@@ -18,7 +16,10 @@ import { emailReviewsSql } from "~/server/domains/email/repo/email-decision-sql"
 const { rule, decision, model, resolution } = mailboxClassificationStage.enum;
 const automatedStagesSql = sql`(${rule}, ${decision}, ${model})`;
 
-import { acceptedOrderPurchasesSql } from "~/server/domains/purchase-import/repo/accepted-order-read";
+import {
+  acceptedOrderPurchasesSql,
+  acceptedOrdersBoundToSql,
+} from "~/server/domains/purchase-import/repo/accepted-order-read";
 
 export const emailAcceptedEvidenceSql = (
   includeDeleted = false,
@@ -54,31 +55,10 @@ export const emailPurchaseAssociationsSql = (
 `;
 /** Current accepted sources and active lifecycle links for requested Purchases. */
 const purchaseEmailSourcesSql = (purchaseIds: SQL): SQL => sql`
- WITH requested_purchases AS MATERIALIZED (${purchaseIds}),
- purchase_owners AS MATERIALIZED (
-   SELECT owner."scopeKey" FROM "RecordKey" owner
-   JOIN requested_purchases requested ON requested.id=owner."entityId"
-   WHERE owner.entity=${sqlEnumConstant(entitySchema, entitySchema.enum.purchase)}
-     AND owner."scopeKind"='purchaseEvent' AND owner."mergedAt" IS NULL
-     AND owner."rejectedAt" IS NULL
- ),
- candidate_facts AS MATERIALIZED (
-   SELECT b."factId" FROM purchase_owners owner
-   JOIN "EvidenceBinding" b ON b."eventKey"=owner."scopeKey"
-   WHERE b."factKind"='orderObservation'
-   UNION
-   SELECT b."factId" FROM purchase_owners owner
-   JOIN "EvidenceBinding" b ON b."scopeKind"='purchaseEvent' AND b."scopeKey"=owner."scopeKey"
-   WHERE b."factKind"='orderObservation'
- )
+ WITH requested_purchases AS MATERIALIZED (${purchaseIds})
  SELECT accepted."boundPurchaseId" AS "purchaseId", e.id AS "emailId"
- FROM ${acceptedOrderPurchasesSql} accepted
- JOIN requested_purchases requested ON requested.id=accepted."boundPurchaseId"
+ FROM ${acceptedOrdersBoundToSql((id) => sql`${id} IN (SELECT id FROM requested_purchases)`)} accepted
  JOIN "Email" e ON e.id=accepted."emailId" AND e."ledgerPartyId"=accepted."ledgerPartyId"
- WHERE accepted.id IN (
-   SELECT CASE WHEN pg_input_is_valid("factId", pg_typeof(NULL::uuid)::text)
-     THEN "factId"::uuid END FROM candidate_facts
- )
  UNION
  SELECT decision."purchaseId", decision."emailId"
  FROM ${emailLinkDecisionsForPurchasesSql(sql`SELECT id FROM requested_purchases`)} decision

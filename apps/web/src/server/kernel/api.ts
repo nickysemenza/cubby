@@ -18,6 +18,7 @@ import type { DecisionWriters } from "./decide";
 import type {
   AskKind,
   ColumnRef,
+  ColumnValues,
   DecisionInput,
   DecisionRef,
   EvidenceRow,
@@ -98,8 +99,10 @@ export {
   type MergeVerdict,
 } from "./identity";
 export {
+  columnKey,
   decisionKey,
   driftSubject,
+  indexKey,
   legacyKey,
   recordIdentity,
   recordSubject,
@@ -175,6 +178,7 @@ export async function emitWrites(
     discovers?: readonly ScopeRef[];
     entity?: string;
     created?: boolean;
+    before?: readonly ColumnValues[];
   },
 ): Promise<number> {
   return (await productionKernel()).emitWrites(db, write);

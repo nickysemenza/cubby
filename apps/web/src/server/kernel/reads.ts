@@ -180,7 +180,8 @@ export interface ScopeReads {
     tables: readonly PgTable[],
     load: (db: Database) => Promise<T>,
   ): Promise<T>;
-  rows<T extends KeyedTable>(
+  /** Rows by identity: `id`, or a snapshot table's entity foreign key. */
+  rows<T extends PgTable>(
     table: T,
     ids: readonly string[],
   ): Promise<Map<string, InferSelectModel<T>>>;
@@ -238,7 +239,7 @@ type Pending<T> = {
 
 export type ReadMode = {
   db?: Database;
-  /** Locked runs hold each key's revision row from its read to commit. */
+  /** Locked runs read each key's revision behind the gate they hold to commit. */
   locked: boolean;
   lockedRevisions?: ReadonlyMap<Key, number>;
   /** The version sweep derives without baseline bindings. */
@@ -368,6 +369,9 @@ export function createReads(
     const rowPrefix = `row:${name}:`;
     const indexOf = (key: Key) =>
       indexes.find((index) => key.startsWith(`index:${index.name}:`));
+    // A snapshot table's identity is its entity foreign key, not `id`.
+    const identityOf = (row: ColumnValues) =>
+      String(row[identityProperty(table)]);
     const byId = new Map<string, ColumnValues | null>();
     const reader = coalesced<ColumnValues[]>(async (keys) => {
       const ids = keys.flatMap((key) =>
@@ -416,7 +420,7 @@ export function createReads(
       const direct = new Set(ids);
       for (const id of ids) byId.set(id, null);
       for (const row of read.rows)
-        if (direct.has(String(row.id))) byId.set(String(row.id), row);
+        if (direct.has(identityOf(row))) byId.set(identityOf(row), row);
       return {
         revs: mode.lockedRevisions
           ? lockedRevisionsOf(keys)
@@ -543,14 +547,15 @@ export function createReads(
       recordAll(scopes, revs, keys);
       return value;
     },
-    async rows<T extends KeyedTable>(table: T, ids: readonly string[]) {
+    async rows<T extends PgTable>(table: T, ids: readonly string[]) {
       const name = requireTable(table);
       const rows = await tableReader(table)(
         scopes,
         ids.map((id) => rowKey(name, id)),
       );
+      const property = identityProperty(table);
       // SAFETY: rows come from `select().from(table)` of this same table.
-      return new Map(rows.map((row) => [String(row.id), row])) as Map<
+      return new Map(rows.map((row) => [String(row[property]), row])) as Map<
         string,
         InferSelectModel<T>
       >;

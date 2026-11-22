@@ -1138,7 +1138,7 @@ export async function commitFinancialBooking(
         }));
       await decide(database, actor, choices);
     }
-    const { acceptedOrders } =
+    const { acceptedOrdersBoundTo } =
       await import("~/server/domains/purchase-import/repo/accepted-order-read");
     const targetId = review.purchaseId
       ? await resolveOrThrow(database, "purchase", review.purchaseId)
@@ -1146,8 +1146,7 @@ export async function commitFinancialBooking(
     const orders = targetId
       ? await getDb(database)
           .select()
-          .from(acceptedOrders)
-          .where(eq(acceptedOrders.purchaseId, targetId))
+          .from(acceptedOrdersBoundTo((id) => eq(id, targetId)))
       : [];
     if (orders.length)
       await (

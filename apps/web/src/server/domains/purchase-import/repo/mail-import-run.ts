@@ -78,7 +78,7 @@ import {
 } from "~/server/domains/mail/repo/retained-mail";
 import {
   acceptedOrders,
-  acceptedOrderPurchasesSql,
+  acceptedOrdersBoundToSql,
 } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import {
   findControlledMailImport,
@@ -90,6 +90,7 @@ import {
   readEmailProtectingIntent,
 } from "~/server/domains/purchase-import/repo/email-review-intent";
 import { mailImportEnabled } from "~/server/domains/purchase-import/repo/mail-import-settings";
+import { emitEmailRunAssignment } from "~/server/domains/purchase-import/repo/mail-run-kernel";
 import {
   countImportAttempt,
   importAttemptsExhausted,
@@ -665,6 +666,11 @@ export async function admitMailImport(
   const admit = (writeDb: Database) =>
     withTransaction(writeDb, async (tx) => {
       await tx.execute(sql`SELECT set_config('lock_timeout', '2000', true)`);
+      // Admission assigns Emails to Runs and raises their kernel keys; the
+      // gate precedes its first row lock.
+      await (
+        await import("~/server/kernel/api")
+      ).enterHouseholdGate(databaseForTransaction(tx));
       const [parent] = input.parentRunId
         ? await tx
             .select({
@@ -890,19 +896,22 @@ export async function admitMailImport(
         if (transferFrom) {
           // transferMailRunSources preserves the old frozen roster and outcomes;
           // each successor names just this owner's selected, still-held sources.
-          await transferMailRunSources(
+          await emitEmailRunAssignment(
             tx,
-            transferFrom,
-            id,
-            admittedSources.map((source) => source.id),
-            input.sourceRecheck
-              ? new Map(
-                  admittedSources.map((source) => [
-                    source.id,
-                    source.rawChecksum,
-                  ]),
-                )
-              : undefined,
+            await transferMailRunSources(
+              tx,
+              transferFrom,
+              id,
+              admittedSources.map((source) => source.id),
+              input.sourceRecheck
+                ? new Map(
+                    admittedSources.map((source) => [
+                      source.id,
+                      source.rawChecksum,
+                    ]),
+                  )
+                : undefined,
+            ),
           );
           const receipt = mailSourceTransferReceipt.parse({
             toRunId: id,
@@ -951,9 +960,16 @@ export async function admitMailImport(
                 eq(emailTable.checksum, selected.col("checksum")),
               ),
             )
-            .returning({ orderMailId: emailTable.orderMailId });
+            .returning({
+              id: emailTable.id,
+              orderMailId: emailTable.orderMailId,
+            });
           if (assigned.length !== admittedSources.length)
             throw new Error("Mail source ownership assignment is incomplete.");
+          await emitEmailRunAssignment(
+            tx,
+            assigned.map((row) => row.id),
+          );
         }
         await recordChange(tx, { kind: "source", categories: ["email"] });
         await dispatchStartedRun(tx, {
@@ -1113,8 +1129,7 @@ const awaitedOrderKeySql = normalizedOrderIdSql(
  * was imported or linked. Null while it has not.
  */
 const waitedSourceSettledSql = sql`SELECT max(at) AS at FROM (
-  SELECT greatest(x.created, (SELECT max(accepted."createdAt") FROM ${acceptedOrderPurchasesSql} accepted
-      WHERE accepted."boundPurchaseId" = x.id)) AS at
+  SELECT greatest(x.created, (SELECT max(accepted."createdAt") FROM ${acceptedOrdersBoundToSql((id) => sql`${id} = x.id`)} accepted)) AS at
   FROM unnest(keyed.ids, keyed.created, keyed.vendor_ids, keyed.parties) AS x(id, created, vendor_id, party)
   WHERE newest.result #>> '{mailOutcome,judgment,waitingOn,kind}' = ${"order"}
     AND (newest.result #>> '{mailOutcome,judgment,waitingOn,vendorId}' IS NULL

@@ -59,6 +59,7 @@ import {
   resolveMergeTargets,
 } from "~/server/generic/merge/repo/core";
 import { applyMergePolicy } from "~/server/generic/removal/repo/dispositions";
+import { enterRemovalGate } from "~/server/generic/removal/repo/kernel-writes";
 import {
   lookupEntityReferences,
   resolveOrThrow,
@@ -381,6 +382,7 @@ async function mergeSpendingCategories(
     ...input,
   });
   return withTransaction(db, async (tx) => {
+    await enterRemovalGate(tx);
     await lockLiveSpendingCategories(tx, [keepId, ...loserIds]);
     // A loser above the keeper would reparent the keeper's own chain under it.
     const lineage = await selfAndAncestors(tx, keepId);

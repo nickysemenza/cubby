@@ -17,7 +17,10 @@ import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
 import { entityIdentity } from "~/server/db/entity-identity-schema";
-import { textArrayParam } from "~/server/db/helpers/array-param";
+import {
+  columnArrayParam,
+  textArrayParam,
+} from "~/server/db/helpers/array-param";
 import { canonicalUuids, uuidArrayParam } from "~/server/db/helpers/query";
 import { decision } from "~/server/db/kernel-schema";
 import { recordKey } from "~/server/db/kernel-schema";
@@ -53,8 +56,11 @@ import {
 } from "~/server/domains/purchase-import/repo/order-evidence";
 import {
   defineEvidence,
+  defineReadIndex,
   effectiveBindings,
   defineReconciler,
+  columnKey,
+  indexKey,
   rowKey,
   source,
   writes,
@@ -95,6 +101,89 @@ export const emailPredictionEvidence = defineEvidence({
     return new Map(rows.map((row) => [row.id, row.owner]));
   },
 });
+/**
+ * Per-Email read indexes. Each indexed column is set once at insert and never
+ * updated, so a row never moves between memberships.
+ */
+/** Matches `EmailClassificationObservation_email_idx`. */
+const emailPredictions = defineReadIndex(emailClassificationObservation, {
+  name: "emailPrediction.email",
+  values: (row) => [row.emailId],
+  where: (values) =>
+    sql`${emailClassificationObservation.emailId} = ANY(${columnArrayParam(values)})`,
+});
+/** Matches `SourceOrderObservation_email_idx`. */
+const emailOrderObservations = defineReadIndex(sourceOrderObservation, {
+  name: "orderObservation.email",
+  values: (row) => (row.emailId ? [row.emailId] : []),
+  where: (values) =>
+    sql`${sourceOrderObservation.emailId} = ANY(${columnArrayParam(values)})`,
+});
+/** Matches the leading column of `OrderMailEvent_source_key`. */
+const originalEvents = defineReadIndex(orderMailEvent, {
+  name: "orderMailEvent.original",
+  values: (row) => [row.orderMailId],
+  where: (values) =>
+    sql`${orderMailEvent.orderMailId} = ANY(${columnArrayParam(values)})`,
+});
+/**
+ * Matches `RunOperation_mail_outcome_email_idx`; outcomeFor reads only these
+ * rows. Only a string target can equal an Email id, so other JSON values join
+ * no membership.
+ */
+/**
+ * Purchase search memberships: equal order ids, and the Vendor's Purchases for
+ * the amount and date branch. Values include deleted Purchases, so a deletion
+ * raises the same key. Matches `Purchase_orderId_gin_idx` and
+ * `Purchase_vendorId_idx`.
+ */
+const orderPurchaseCandidates = defineReadIndex(purchase, {
+  name: "purchase.order",
+  values: (row) => (row.orderId !== null ? [row.orderId] : []),
+  where: (values) => sql`${purchase.orderId} = ANY(${textArrayParam(values)})`,
+});
+const vendorPurchaseCandidates = defineReadIndex(purchase, {
+  name: "purchase.vendor",
+  values: (row) => (row.vendorId !== null ? [row.vendorId] : []),
+  where: (values) =>
+    sql`${purchase.vendorId} = ANY(${columnArrayParam(values)})`,
+});
+const purchaseColumns = [
+  "vendorId",
+  "orderId",
+  "vendorAccountId",
+  "statedTotal",
+  "date",
+  "deletedAt",
+] as const;
+const recordKeyColumns = [
+  "scopeKind",
+  "scopeKey",
+  "entity",
+  "entityId",
+  "mergedAt",
+] as const;
+const outcomeTarget = z.object({ target: z.object({ entityId: z.string() }) });
+const emailOutcomes = defineReadIndex(runOperation, {
+  name: "runOperation.mailOutcome",
+  values: (row) => {
+    const result = row.result;
+    if (
+      row.kind !== "target_outcome" ||
+      !result ||
+      typeof result !== "object" ||
+      Array.isArray(result) ||
+      !Object.hasOwn(result, "mailOutcome")
+    )
+      return [];
+    const parsed = outcomeTarget.safeParse(result);
+    return parsed.success ? [parsed.data.target.entityId] : [];
+  },
+  where: (values) =>
+    sql`${runOperation.kind} = 'target_outcome' AND ${runOperation.result}->'mailOutcome' IS NOT NULL
+      AND ${runOperation.result} #>> '{target,entityId}' = ANY(${textArrayParam(values)})`,
+});
+
 export const emailStateColumns = [
   "classification",
   "classificationStage",
@@ -254,48 +343,43 @@ export const emailState = defineReconciler<Input>({
       "orderMailId",
       "deletedAt",
     ]),
-    source.table(emailClassificationObservation, [
-      "emailId",
-      "classification",
-      "stage",
-      "reason",
-      "classificationVersion",
-      "application",
-      "conflict",
-      "checksum",
-      "createdAt",
-    ]),
-    source.table(sourceOrderObservation, [
-      "emailId",
-      "vendorId",
-      "checksum",
-      "extraction",
-      "purchaseId",
-    ]),
-    source.table(orderMailEvent, [
-      "orderMailId",
-      "orderId",
-      "amount",
-      "supersededAt",
-    ]),
-    source.table(purchase, [
-      "vendorId",
-      "orderId",
-      "vendorAccountId",
-      "statedTotal",
-      "date",
-      "deletedAt",
+    source.table(
+      emailClassificationObservation,
+      [
+        "emailId",
+        "classification",
+        "stage",
+        "reason",
+        "classificationVersion",
+        "application",
+        "conflict",
+        "checksum",
+        "createdAt",
+      ],
+      [emailPredictions],
+    ),
+    source.table(
+      sourceOrderObservation,
+      ["emailId", "vendorId", "checksum", "extraction", "purchaseId"],
+      [emailOrderObservations],
+    ),
+    source.table(
+      orderMailEvent,
+      ["orderMailId", "orderId", "amount", "supersededAt"],
+      [originalEvents],
+    ),
+    source.table(purchase, purchaseColumns, [
+      orderPurchaseCandidates,
+      vendorPurchaseCandidates,
     ]),
     source.table(vendorAccount, ["ledgerPartyId", "deletedAt"]),
-    source.table(recordKey, [
-      "scopeKind",
-      "scopeKey",
-      "entity",
-      "entityId",
-      "mergedAt",
-    ]),
+    source.table(recordKey, recordKeyColumns),
     source.table(orderMail, ["ledgerPartyId", "rawChecksum", "vendorId"]),
-    source.table(runOperation, ["kind", "result", "completedAt"]),
+    source.table(
+      runOperation,
+      ["kind", "result", "completedAt"],
+      [emailOutcomes],
+    ),
     source.table(run, ["status", "purpose", "deletedAt"]),
     source.table(emailReadSnapshot, [
       "relationshipFacts",
@@ -304,70 +388,80 @@ export const emailState = defineReconciler<Input>({
   ],
   writes: [emailStateRecords, emailStateSnapshot],
   async load(reads, keys) {
-    const rows = await reads.rows(email, keys);
-    const originals = [...rows.values()].flatMap((row) =>
-      row.orderMailId ? [row.orderMailId] : [],
+    // Every scope reads its own Email and the rows keyed by it through its
+    // own scope, so a batchmate's input never dirties it. Each phase issues
+    // its scoped reads in one tick: they coalesce into one statement per table.
+    const rows = new Map(
+      (
+        await Promise.all(keys.map((key) => reads.for(key).rows(email, [key])))
+      ).flatMap((found) => [...found]),
     );
-    const [predictions, observations, events, snapshots, operations, runs] =
-      await Promise.all([
-        reads.select(
-          emailClassificationObservation,
-          [],
-          sql`${emailClassificationObservation.emailId} = ANY(${uuidArrayParam(keys)})`,
-        ),
-        reads.select(
-          sourceOrderObservation,
-          [],
-          sql`${sourceOrderObservation.emailId} = ANY(${uuidArrayParam(keys)})`,
-        ),
-        reads.select(
-          orderMailEvent,
-          [],
-          sql`${orderMailEvent.orderMailId} = ANY(${uuidArrayParam(originals)})`,
-        ),
-        reads.select(
-          emailReadSnapshot,
-          [],
-          sql`${emailReadSnapshot.entityId} = ANY(${uuidArrayParam(keys)})`,
-        ),
-        // Matches RunOperation_mail_outcome_email_idx; outcomeFor reads only these rows.
-        reads.select(
-          runOperation,
-          [],
-          sql`${runOperation.kind} = 'target_outcome' AND ${runOperation.result}->'mailOutcome' IS NOT NULL
-            AND ${runOperation.result} #>> '{target,entityId}' = ANY(${textArrayParam(keys)})`,
-        ),
-        reads.rows(
-          run,
-          [...rows.values()].flatMap((row) => (row.runId ? [row.runId] : [])),
-        ),
-      ]);
-    const bindings = await reads.bindings({
-      facts: observations.map((row) => ({
-        kind: orderEvidence.kind,
-        id: row.id,
-      })),
-    });
-    const scopeKeys = bindings.map((binding) =>
-      binding.basis === "baseline" && binding.scope.kind === "purchaseEvent"
-        ? binding.scope.key
-        : binding.eventKey,
+    const own = await Promise.all(
+      keys.map((key) => {
+        const scoped = reads.for(key);
+        const row = rows.get(key);
+        const original = row?.orderMailId ? [row.orderMailId] : [];
+        return Promise.all([
+          scoped.lookup(emailClassificationObservation, emailPredictions, [
+            key,
+          ]),
+          scoped.lookup(sourceOrderObservation, emailOrderObservations, [key]),
+          scoped.lookup(orderMailEvent, originalEvents, original),
+          scoped.rows(emailReadSnapshot, [key]),
+          scoped.lookup(runOperation, emailOutcomes, [key]),
+          scoped.rows(run, row?.runId ? [row.runId] : []),
+          // The shared projections below join only this Email's original and
+          // ledger party; these reads fence them for this scope alone.
+          scoped.rows(orderMail, original),
+          scoped.rows(ledgerParty, row ? [row.ledgerPartyId] : []),
+        ]);
+      }),
     );
-    const owners = await reads.select(
+    const events = own.flatMap(([, , found]) => found);
+    const scopedBindings = await Promise.all(
+      keys.map((key, index) =>
+        reads.for(key).bindings({
+          facts: own[index]![1].map((row) => ({
+            kind: orderEvidence.kind,
+            id: row.id,
+          })),
+        }),
+      ),
+    );
+    const ownerKeys = scopedBindings.map(
+      (bindings) =>
+        new Set(
+          bindings.map((binding) =>
+            binding.basis === "baseline" &&
+            binding.scope.kind === "purchaseEvent"
+              ? binding.scope.key
+              : binding.eventKey,
+          ),
+        ),
+    );
+    // A Purchase publication inserts, rejects or merges the RecordKey rows
+    // that own a scope's bound observations, and no writer raises a key per
+    // RecordKey row. A scope with order observations therefore depends on the
+    // declared RecordKey and Purchase columns that publication raises; one
+    // without them has no owner to read.
+    const ownerFence = [
+      ...recordKeyColumns.map((column) => columnKey("RecordKey", column)),
+      ...purchaseColumns.map((column) => columnKey("Purchase", column)),
+    ];
+    const owners = await reads.selectEach(
       recordKey,
-      [],
+      new Map(
+        keys.map((key, index) => [
+          key,
+          own[index]![1].length ? ownerFence : [],
+        ]),
+      ),
       sql`${recordKey.scopeKind} = 'purchaseEvent'
-      AND ${recordKey.entity} = ${sqlEnumConstant(entitySchema, entitySchema.enum.purchase)} AND ${recordKey.scopeKey} = ANY(${textArrayParam(scopeKeys)})`,
+      AND ${recordKey.entity} = ${sqlEnumConstant(entitySchema, entitySchema.enum.purchase)} AND ${recordKey.scopeKey} = ANY(${textArrayParam(ownerKeys.flatMap((set) => [...set]))})`,
     );
     const subjects = [
       ...keys.map((key) => `email:${key}`),
       ...events.map((row) => `emailEvent:${row.id}`),
-    ];
-    const ids = [
-      ...owners.map((row) => row.entityId),
-      ...observations.flatMap((row) =>
-        row.purchaseId ? [row.purchaseId] : [],
-      ),
     ];
     const linkChoices = await reads.selectEach(
       decision,
@@ -376,25 +470,79 @@ export const emailState = defineReconciler<Input>({
       ),
       sql`${decision.subject}=ANY(${textArrayParam(keys.map((key) => recordSubject("email", key)))}) AND ${decision.field} LIKE 'link:%'`,
     );
-    await Promise.all(
-      keys.map((key) =>
-        reads.for(key).rows(
-          entityIdentity,
-          linkChoices
-            .filter((row) => row.subject === recordSubject("email", key))
-            .map((row) => row.field!.slice(5)),
-        ),
-      ),
+    const linkTargets = await Promise.all(
+      keys.map((key) => {
+        const targets = linkChoices
+          .filter((row) => row.subject === recordSubject("email", key))
+          .map((row) => row.field!.slice(5));
+        return reads
+          .for(key)
+          .rows(entityIdentity, targets)
+          .then((found) => [
+            ...targets,
+            ...targets.flatMap((id) => {
+              const merged = found.get(id)?.mergedIntoId;
+              return merged ? [merged] : [];
+            }),
+          ]);
+      }),
     );
+    // Each scope fences the Purchases its shared projections can read before
+    // they run: rows it names, and the order and Vendor memberships its own
+    // order events search.
+    const named = keys.map((_, index) => {
+      const [, observations, events, , , , originals] = own[index]!;
+      const vendorId = [...originals.values()][0]?.vendorId;
+      return {
+        ids: canonicalUuids([
+          ...owners
+            .filter((row) => ownerKeys[index]!.has(row.scopeKey))
+            .map((row) => row.entityId),
+          ...observations.flatMap((row) =>
+            row.purchaseId ? [row.purchaseId] : [],
+          ),
+          ...linkTargets[index]!,
+        ]),
+        orders: events.flatMap((row) =>
+          row.orderId !== null ? [row.orderId] : [],
+        ),
+        // The amount and date branch searches the original's Vendor.
+        vendorId:
+          vendorId &&
+          events.some((row) => !row.supersededAt && row.amount !== null)
+            ? vendorId
+            : null,
+      };
+    });
+    const fenced = await reads.selectEach(
+      purchase,
+      new Map(
+        keys.map((key, index) => {
+          const { ids, orders, vendorId } = named[index]!;
+          return [
+            key,
+            [
+              ...ids.map((id) => rowKey("Purchase", id)),
+              ...orders.map((order) =>
+                indexKey(orderPurchaseCandidates.name, order),
+              ),
+              ...(vendorId
+                ? [indexKey(vendorPurchaseCandidates.name, vendorId)]
+                : []),
+            ],
+          ];
+        }),
+      ),
+      // Each source selects Purchase ids on its own plan; as OR branches of one
+      // filter they scanned every Purchase.
+      sql`${purchase.id} = ANY(ARRAY(
+      SELECT unnest(${uuidArrayParam(named.flatMap((row) => row.ids))})
+      UNION SELECT candidate.id FROM "Purchase" candidate
+        WHERE candidate."orderId" = ANY(${textArrayParam(named.flatMap((row) => row.orders))})))`,
+    );
+    // The search's candidate accounts are unknown before it runs.
     const suggestions = await reads.prepare(
-      [
-        purchase,
-        orderMailEvent,
-        orderMail,
-        vendorAccount,
-        entityIdentity,
-        ledgerParty,
-      ],
+      [vendorAccount, entityIdentity],
       async (database) => {
         const result = await repositoryQueries(database).execute<{
           emailId: string;
@@ -419,17 +567,10 @@ export const emailState = defineReconciler<Input>({
         }));
       },
     );
-    ids.push(...suggestions.map((row) => row.purchaseId));
-    const purchases = await reads.select(
-      purchase,
-      [],
-      // Each source selects Purchase ids on its own plan; as OR branches of one
-      // filter they scanned every Purchase.
-      sql`${purchase.id} = ANY(ARRAY(
-      SELECT unnest(${uuidArrayParam(canonicalUuids(ids))})
-      UNION SELECT candidate.id FROM "Purchase" candidate
-        WHERE candidate."orderId" = ANY(${textArrayParam(events.flatMap((row) => (row.orderId ? [row.orderId] : [])))})
-      UNION SELECT coalesce(e."mergedIntoId",e.id) FROM "Decision" choice
+    // Purchases a subject's assignment decisions name, by shortcode or id.
+    const references = await reads.prepare([], (database) =>
+      repositoryQueries(database).execute<{ subject: string; id: string }>(sql`
+      SELECT DISTINCT choice.subject, coalesce(e."mergedIntoId",e.id) AS id FROM "Decision" choice
         CROSS JOIN LATERAL (VALUES
           (choice.value #>> '{}'),
           (choice.value->>'purchaseId'),
@@ -439,16 +580,56 @@ export const emailState = defineReconciler<Input>({
           e.id = CASE WHEN pg_input_is_valid(reference.token, ${"uuid"}) THEN reference.token::uuid END
           AND e.id::text = reference.token
         ) OR e.shortcode = reference.token
-        WHERE choice.channel = ${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)} AND choice.subject = ANY(${textArrayParam(subjects)})))`,
+        WHERE choice.channel = ${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)} AND choice.subject = ANY(${textArrayParam(subjects)})`),
     );
+    const referenced = keys.map((key, index) => {
+      const owned = new Set([
+        `email:${key}`,
+        ...own[index]![2].map((row) => `emailEvent:${row.id}`),
+      ]);
+      return canonicalUuids([
+        ...references.rows.flatMap((row) =>
+          owned.has(row.subject) ? [row.id] : [],
+        ),
+        ...suggestions.flatMap((row) =>
+          row.emailId === key ? [row.purchaseId] : [],
+        ),
+      ]);
+    });
+    const referencedRows = await reads.selectEach(
+      purchase,
+      new Map(
+        keys.map((key, index) => [
+          key,
+          referenced[index]!.map((id) => rowKey("Purchase", id)),
+        ]),
+      ),
+      sql`${purchase.id} = ANY(${uuidArrayParam(referenced.flat())})`,
+    );
+    const purchases = [
+      ...new Map(
+        [...fenced, ...referencedRows].map((row) => [row.id, row] as const),
+      ).values(),
+    ];
+    const byId = new Map<string, (typeof purchases)[number]>(
+      purchases.map((row) => [row.id, row]),
+    );
+    // Each scope reads the accounts of the Purchases it names.
     const accounts = [
-      ...(
-        await reads.rows(
-          vendorAccount,
-          purchases.flatMap((row) =>
-            row.vendorAccountId ? [row.vendorAccountId] : [],
-          ),
-        )
+      ...new Map(
+        (
+          await Promise.all(
+            keys.map((key, index) =>
+              reads.for(key).rows(
+                vendorAccount,
+                [...named[index]!.ids, ...referenced[index]!].flatMap((id) => {
+                  const account = byId.get(id)?.vendorAccountId;
+                  return account ? [account] : [];
+                }),
+              ),
+            ),
+          )
+        ).flatMap((found) => [...found]),
       ).values(),
     ];
     // Email rows, Purchase roster, subject decisions and redirect rows were
@@ -464,26 +645,30 @@ export const emailState = defineReconciler<Input>({
     );
     const at = new Date();
     return new Map(
-      keys.map((key) => [
-        key,
-        {
+      keys.map((key, index) => {
+        const [predictions, observations, events, snapshot, operations, runs] =
+          own[index]!;
+        return [
           key,
-          row: rows.get(key),
-          predictions: predictions.filter((row) => row.emailId === key),
-          observations: observations.filter((row) => row.emailId === key),
-          events,
-          purchases,
-          accounts,
-          owners,
-          bindings,
-          links: links.filter((link) => link.emailId === key),
-          suggestions: suggestions.filter((row) => row.emailId === key),
-          snapshot: snapshots.find((row) => row.entityId === key),
-          at,
-          operations,
-          runs: [...runs.values()],
-        },
-      ]),
+          {
+            key,
+            row: rows.get(key),
+            predictions,
+            observations,
+            events,
+            purchases,
+            accounts,
+            owners,
+            bindings: scopedBindings[index]!,
+            links: links.filter((link) => link.emailId === key),
+            suggestions: suggestions.filter((row) => row.emailId === key),
+            snapshot: snapshot.get(key),
+            at,
+            operations,
+            runs: [...runs.values()],
+          },
+        ];
+      }),
     );
   },
   reconcile(input, c) {

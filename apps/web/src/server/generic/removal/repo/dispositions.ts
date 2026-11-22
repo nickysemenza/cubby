@@ -80,6 +80,8 @@ import {
 } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { enterWriteTransaction } from "~/server/kernel/gate";
 
+import { enterRemovalGate, reportRowWrites } from "./kernel-writes";
+
 type Policy = Readonly<Record<string, OperationDisposition>>;
 type Tx = DrizzleTransaction;
 
@@ -271,10 +273,12 @@ const detach = async (
       where,
     });
   } else {
+    const before = await tx.select().from(edge.table).where(where);
     await tx
       .update(edge.table)
       .set({ [edge.property]: null })
       .where(where);
+    await reportRowWrites(tx, edge.table, before, [edge.property]);
   }
   if (source && detached.length > 0)
     await logAuditEntries(
@@ -490,6 +494,8 @@ export const applyMergePolicy = async <E extends RemovableEntity>(
     >;
   },
 ): Promise<Record<string, number>> => {
+  // Repointed rows are reported to the kernel; the gate precedes their locks.
+  await enterRemovalGate(tx);
   const edges = physicalEdges(args.entity, args.policy, args.order);
   await assertNotBlocked(
     tx,
@@ -552,11 +558,13 @@ export const applyMergePolicy = async <E extends RemovableEntity>(
         },
       );
     } else {
+      const before = await tx.select().from(edge.table).where(where);
       const rows = await tx
         .update(edge.table)
         .set({ [edge.property]: args.keepId })
         .where(where)
         .returning();
+      await reportRowWrites(tx, edge.table, before, [edge.property]);
       repointed[edge.key] = rows.length;
     }
   }

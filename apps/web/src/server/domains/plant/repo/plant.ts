@@ -34,6 +34,7 @@ import {
   resolveMergeTargets,
 } from "~/server/generic/merge/repo/core";
 import { applyMergePolicy } from "~/server/generic/removal/repo/dispositions";
+import { enterRemovalGate } from "~/server/generic/removal/repo/kernel-writes";
 
 type PlantRow = typeof plant.$inferSelect;
 
@@ -107,6 +108,7 @@ export async function mergePlants(
     ...input,
   });
   return withTransaction(db, async (tx) => {
+    await enterRemovalGate(tx);
     const rows = await tx
       .select({ id: plant.id, notes: plant.notes })
       .from(plant)

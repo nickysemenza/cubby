@@ -2,14 +2,16 @@
  * Dirtying (ADR 0029 section 5). Every input mutation, in its own
  * transaction, raises `KeyRev` for each of its keys before it reads
  * `ScopeDep`, then raises `ScopeDirty.seq` for every scope that read one of
- * those keys or that the row discovers. An apply locks the same `KeyRev` rows
+ * those keys or that the row discovers. An apply admits the household write
+ * gate (section 6), then reads the same keys' revisions in a later statement
  * before registering dependencies, so a load's dependency registration and a
- * concurrent mutation serialize per key: either the apply sees the mutation
- * and conflicts, or the mutation sees the committed `ScopeDep` and dirties.
+ * concurrent mutation serialize through the gate: either the apply sees the
+ * mutation and conflicts, or the mutation sees the committed `ScopeDep` and
+ * dirties. Only a raise writes `KeyRev`; an absent key reads 0.
  *
- * Each statement here that locks `KeyRev` or `ScopeDirty` first takes the
- * household write gate (section 6), so transactions that mutate kernel inputs
- * never interleave their kernel locks.
+ * Each statement here that raises `KeyRev` or locks `ScopeDirty` first takes
+ * the gate, so transactions that mutate kernel inputs never interleave their
+ * kernel locks.
  */
 import { sql } from "drizzle-orm";
 
@@ -18,7 +20,7 @@ import { kernelApplyScopes } from "~/server/db/kernel-apply-context";
 import type { RepositoryQueryClient } from "~/server/db/repository-access.boundary";
 
 import type { Key, ScopeRef } from "./define";
-import { takeHouseholdGate } from "./gate";
+import { holdsHouseholdGate, takeHouseholdGate } from "./gate";
 import type { KernelRegistry } from "./registry";
 
 type Q = Pick<RepositoryQueryClient, "execute">;
@@ -34,35 +36,35 @@ async function raiseKeys(q: Q, keys: readonly Key[]): Promise<void> {
 }
 
 /**
- * Lock each key's revision row, creating an absent one at 0, and return the
- * revisions. Existing rows are locked without rewriting their revisions.
+ * Every requested key's revision behind the held household write gate; an
+ * absent key reads 0. An earlier statement of this transaction must have
+ * admitted the gate: this statement's snapshot then includes every raise the
+ * gate admitted before it, and no raise of these keys can commit until this
+ * transaction ends. Refuses when the gate is not held.
  */
-export async function lockKeyRevs(
+export async function readGatedKeyRevs(
   q: Q,
   keys: readonly Key[],
 ): Promise<Map<Key, number>> {
-  if (!keys.length) return new Map();
-  // The upsert returns the current revision if a key was created after the
-  // statement snapshot but before gate admission.
-  const result = await q.execute<{ key: string; rev: string | number }>(sql`
-    WITH gate AS MATERIALIZED (SELECT ${takeHouseholdGate}),
-    wanted AS MATERIALIZED (
-      SELECT keys.key FROM unnest(${textArrayParam(keys)}) AS keys(key) CROSS JOIN gate
-    ), locked AS MATERIALIZED (
-      SELECT current.key, current.rev FROM wanted JOIN "KeyRev" current USING (key)
-      ORDER BY current.key FOR UPDATE OF current
-    ), inserted AS (
-      INSERT INTO "KeyRev" (key, rev)
-      SELECT wanted.key, 0 FROM wanted LEFT JOIN locked USING (key)
-      WHERE locked.key IS NULL ORDER BY wanted.key
-      ON CONFLICT (key) DO UPDATE SET rev = "KeyRev".rev
-      RETURNING key, rev
-    )
-    SELECT key, rev FROM locked UNION ALL SELECT key, rev FROM inserted`);
-  return new Map(result.rows.map((row) => [row.key, Number(row.rev)]));
+  const revs = new Map<Key, number>(keys.map((key) => [key, 0]));
+  if (!keys.length) return revs;
+  const result = await q.execute<{
+    held: boolean;
+    revs: Record<string, string | number>;
+  }>(sql`
+    SELECT ${holdsHouseholdGate} AS held, coalesce(
+      (SELECT jsonb_object_agg(key, rev) FROM "KeyRev" WHERE key = ANY(${textArrayParam(keys)})),
+      '{}'::jsonb) AS revs`);
+  const row = result.rows[0];
+  if (!row?.held)
+    throw new Error(
+      "A revision fence reads after the household write gate; admit the gate in an earlier statement of this transaction",
+    );
+  for (const [key, rev] of Object.entries(row.revs)) revs.set(key, Number(rev));
+  return revs;
 }
 
-/** Current revisions without locking; an absent key reads 0. */
+/** Current revisions without the gate; an absent key reads 0. */
 export async function readKeyRevs(
   q: Q,
   keys: readonly Key[],

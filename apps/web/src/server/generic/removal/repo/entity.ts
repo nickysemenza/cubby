@@ -41,7 +41,7 @@ import {
   type ImageShortcode,
   imageId as imageIdSchema,
 } from "@cubby/schemas/identifiers";
-import { and, inArray, or, type SQL } from "drizzle-orm";
+import { and, getTableColumns, inArray, or, type SQL } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
@@ -63,7 +63,9 @@ import {
   SHORTCODE_TABLE,
   type ShortcodeTable,
 } from "~/server/generic/shortcode/repo/shortcode-utils";
+import type { ColumnValues } from "~/server/kernel/define";
 
+import { enterRemovalGate, reportRowWrites } from "./kernel-writes";
 import { assertNoOrdinaryReferences } from "./ordinary-reference-guard";
 
 /** A table a `mode: "soft"` cascade can write `deletedAt` on. */
@@ -139,44 +141,41 @@ type RowRemoval =
 /**
  * Issue one removal statement. Soft removal re-applies `notDeleted` so a row
  * already dead keeps its original `deletedAt` rather than having the timestamp
- * rewritten by a second delete.
+ * rewritten by a second delete. The removed rows are reported to the kernel
+ * with their values before the statement.
  */
 const removeRows = async (
   tx: DrizzleTransaction,
   removal: RowRemoval,
   at: Date,
 ): Promise<void> => {
-  const query =
+  // SAFETY: returning() without a selection yields whole rows of this table.
+  const removed = (
     removal.mode === "hard"
-      ? tx.delete(removal.table).where(removal.where)
-      : tx
-          .update(removal.table)
-          .set({ deletedAt: at })
-          .where(and(removal.where, notDeleted(removal.table)));
-  const identityTable = Object.values(SHORTCODE_TABLE).find(
-    (table) => table === removal.table,
-  );
-  if (!identityTable) {
-    await query;
-    return;
-  }
-  // Child dispositions can remove shortcode entities as well as plain rows.
-  // Only rows actually removed receive a tombstone.
-  const removed =
-    removal.mode === "hard"
-      ? await tx
-          .delete(identityTable)
-          .where(removal.where)
-          .returning({ id: identityTable.id })
+      ? await tx.delete(removal.table).where(removal.where).returning()
       : await tx
           .update(removal.table)
           .set({ deletedAt: at })
           .where(and(removal.where, notDeleted(removal.table)))
-          .returning({ id: identityTable.id });
-  await tombstoneEntityIdentities(
+          .returning()
+  ) as ColumnValues[];
+  // Child dispositions can remove shortcode entities as well as plain rows.
+  // Only rows actually removed receive a tombstone.
+  if (Object.values(SHORTCODE_TABLE).some((table) => table === removal.table))
+    await tombstoneEntityIdentities(
+      tx,
+      removed.map((row) => String(row.id)),
+      at,
+    );
+  await reportRowWrites(
     tx,
-    removed.map((row) => row.id),
-    at,
+    removal.table,
+    removal.mode === "hard"
+      ? removed
+      : removed.map((row) => ({ ...row, deletedAt: null })),
+    removal.mode === "hard"
+      ? Object.keys(getTableColumns(removal.table))
+      : ["deletedAt"],
   );
 };
 
@@ -284,6 +283,7 @@ export const removeEntity = async <E extends RemovableEntity>(
   }
 
   return await withTransactionOn(dbOrTx, async (tx) => {
+    await enterRemovalGate(tx);
     await assertNoOrdinaryReferences(tx, entity, ids);
     // Every count is taken before any statement runs: counting between removals
     // would report a child's rows against a parent whose earlier sibling edge

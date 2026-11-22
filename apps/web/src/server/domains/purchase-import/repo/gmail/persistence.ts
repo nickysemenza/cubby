@@ -1099,6 +1099,10 @@ export const persistGmailEvents = async (
   if (input.events.length === 0) return { saved: 0, dropped: 0 };
   const ledgerPartyId = parseEntityId("ledgerParty", input.ledgerPartyId);
   return withTransaction(db, async (tx) => {
+    // New events raise kernel keys: the gate is this transaction's first lock.
+    await (
+      await import("~/server/kernel/api")
+    ).enterHouseholdGate(databaseForTransaction(tx));
     const known = new Map(
       (
         await tx
@@ -1119,10 +1123,11 @@ export const persistGmailEvents = async (
       ).map((row) => [row.messageId, row.id]),
     );
     let saved = 0;
+    const inserted: string[] = [];
     for (const event of input.events) {
       const orderMailId = known.get(event.messageId);
       if (!orderMailId) continue;
-      await tx
+      const [row] = await tx
         .insert(orderMailEvent)
         .values({
           orderMailId,
@@ -1137,9 +1142,20 @@ export const persistGmailEvents = async (
             labelIds: event.labelIds,
           },
         })
-        .onConflictDoNothing();
+        .onConflictDoNothing()
+        .returning({ id: orderMailEvent.id });
+      if (row) inserted.push(row.id);
       saved += 1;
     }
+    // A new event joins its original's read-index membership.
+    if (inserted.length)
+      await (
+        await import("~/server/kernel/api")
+      ).emitWrites(databaseForTransaction(tx), {
+        table: orderMailEvent,
+        ids: inserted,
+        columns: [],
+      });
     if (saved)
       await recordChange(tx, { kind: "source", categories: ["email"] });
     return { saved, dropped: input.events.length - saved };

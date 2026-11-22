@@ -299,7 +299,10 @@ export const factKey = pgTable(
 const liveKey = (key: AnyPgColumn) =>
   sql`${key} NOT LIKE 'index:transaction.accountAmount:%' AND ${key} NOT LIKE 'index:manualTransaction.accountMerchant:%'`;
 
-/** One revision per key: the serialization point between mutation and dependency registration. */
+/**
+ * One revision per raised key: the serialization point between mutation and
+ * dependency registration. Only a raise writes a row; an absent key reads 0.
+ */
 export const keyRev = pgTable(
   "KeyRev",
   {

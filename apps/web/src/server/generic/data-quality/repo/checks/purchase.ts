@@ -16,7 +16,7 @@ import {
   settlementReferencePredicate,
 } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
 import { settlementConflictSql } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
-import { acceptedOrderPurchasesSql } from "~/server/domains/purchase-import/repo/accepted-order-read";
+import { acceptedOrdersBoundToSql } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import { awaitingOrderDetailsSql } from "~/server/domains/purchase-import/repo/notice-purchase";
 import {
   purchaseItemizationExpectationSql,
@@ -160,8 +160,8 @@ async function loadPurchaseQualityRecords(
       spendingCategoryId: purchase.spendingCategoryId,
       spendingCategoryOrigin: purchase.spendingCategoryOrigin,
       orderEvidence: vendor.orderEvidence,
-      expectsOrderId: sql<boolean>`EXISTS (SELECT 1 FROM ${acceptedOrderPurchasesSql} dq_order
-      WHERE dq_order."boundPurchaseId"::uuid = ${purchase.id} AND dq_order."orderKey" LIKE '%/order/%')`,
+      expectsOrderId: sql<boolean>`EXISTS (SELECT 1 FROM ${acceptedOrdersBoundToSql((id) => sql`${id} = ${purchase.id}`)} dq_order
+      WHERE dq_order."orderKey" LIKE '%/order/%')`,
       expectation: sql<string>`${purchaseItemizationExpectationSql("Purchase")}`,
       hasPrimaryDocument: sql<boolean>`${purchaseHasPrimaryDocumentSql("Purchase")}`,
       hasItemization: sql<boolean>`${purchaseHasItemizationSql("Purchase")}`,
