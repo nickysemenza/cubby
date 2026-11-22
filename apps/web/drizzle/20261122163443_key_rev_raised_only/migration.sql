@@ -26,16 +26,16 @@ BEGIN
   SELECT count(*), count(*) FILTER (WHERE rev <= 0)
     INTO rev_total, rev_zero
   FROM "KeyRev";
-  CREATE TEMP TABLE key_rev_keep ON COMMIT DROP AS
+  CREATE TEMP TABLE key_rev_raised ON COMMIT DROP AS
     SELECT key, rev FROM "KeyRev" WHERE rev > 0;
   TRUNCATE "KeyRev";
-  INSERT INTO "KeyRev" (key, rev) SELECT key, rev FROM key_rev_keep ORDER BY key;
+  INSERT INTO "KeyRev" (key, rev) SELECT key, rev FROM key_rev_raised ORDER BY key;
   SELECT count(*) INTO rev_after FROM "KeyRev";
   IF rev_after <> rev_total - rev_zero THEN
     RAISE EXCEPTION 'KeyRev rebuild: kept % rows, expected %',
       rev_after, rev_total - rev_zero;
   END IF;
-  IF EXISTS (SELECT 1 FROM key_rev_keep k
+  IF EXISTS (SELECT 1 FROM key_rev_raised k
     WHERE NOT EXISTS (SELECT 1 FROM "KeyRev" r WHERE r.key = k.key AND r.rev = k.rev)) THEN
     RAISE EXCEPTION 'KeyRev rebuild: a kept revision changed';
   END IF;
