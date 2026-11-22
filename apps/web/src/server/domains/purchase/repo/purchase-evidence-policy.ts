@@ -36,7 +36,7 @@ import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.bou
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
 import {
-  acceptedOrderPurchasesSql,
+  acceptedOrdersBoundToSql,
   acceptedOrderLinesSql,
 } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import {
@@ -198,9 +198,8 @@ const purchaseHasLinkedGoodsSql = (alias: string): SQL => sql`(
 )`;
 
 const purchaseHasForeignItemsSql = (purchaseId: SQL): SQL<boolean> => {
-  const completeSource = sql`EXISTS(SELECT 1 FROM ${acceptedOrderPurchasesSql} accepted
-    WHERE accepted."boundPurchaseId"::uuid=${purchaseId}
-    AND ${foreignReceiptSourceSql(sql`jsonb_build_object('extraction',accepted.extraction)`)}
+  const completeSource = sql`EXISTS(SELECT 1 FROM ${acceptedOrdersBoundToSql((id) => sql`${id}=${purchaseId}`)} accepted
+    WHERE ${foreignReceiptSourceSql(sql`jsonb_build_object('extraction',accepted.extraction)`)}
     AND jsonb_array_length(jsonb_path_query_array(accepted.extraction,'$.candidate.lines[*] ? (@.lineKind == "principal")')) > 0
     AND (SELECT count(DISTINCT item.id) FROM ${acceptedOrderLinesSql} binding
       JOIN "Expense" item ON item.id=binding."expenseId" AND ${notDeleted("item")}

@@ -4,7 +4,10 @@ import { sql, type SQL } from "drizzle-orm";
 
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
-import { acceptedOrderLinesSql } from "~/server/domains/purchase-import/repo/accepted-order-read";
+import {
+  acceptedOrderLinesBoundToSql,
+  acceptedOrderLinesSql,
+} from "~/server/domains/purchase-import/repo/accepted-order-read";
 
 /** Eligible original evidence, independent of its USD ledger valuation. */
 export const foreignReceiptSourceSql = (
@@ -38,7 +41,7 @@ export const foreignReceiptExpenseSql = (row: {
   purchaseId: SQL;
   lineKind: SQL;
 }): SQL<boolean> => sql<boolean>`EXISTS (
-  SELECT 1 FROM ${acceptedOrderLinesSql} accepted WHERE accepted."expenseId"=${row.id} AND accepted."purchaseId"=${row.purchaseId}
+  SELECT 1 FROM ${acceptedOrderLinesBoundToSql((id) => sql`${id}=${row.purchaseId}`)} accepted WHERE accepted."expenseId"=${row.id}
   AND ${foreignReceiptSourceSql(sql`accepted."originalOrder"`)}
   AND (accepted.extraction#>'{candidate,lines}')->accepted."lineIndex"->>${"lineKind"}=${row.lineKind})`;
 
@@ -47,7 +50,7 @@ const unpricedItemizationExpenseSql = (row: {
   purchaseId: SQL;
   lineKind: SQL;
 }): SQL<boolean> => sql<boolean>`EXISTS (
-  SELECT 1 FROM ${acceptedOrderLinesSql} accepted WHERE accepted."expenseId"=${row.id} AND accepted."purchaseId"=${row.purchaseId}
+  SELECT 1 FROM ${acceptedOrderLinesBoundToSql((id) => sql`${id}=${row.purchaseId}`)} accepted WHERE accepted."expenseId"=${row.id}
   AND ${unpricedItemizationSourceSql(sql`accepted."originalOrder"`)}
   AND (accepted.extraction#>'{candidate,lines}')->accepted."lineIndex"->>${"lineKind"}=${row.lineKind}
   AND EXISTS(SELECT 1 FROM "Expense" carried WHERE carried."purchaseId"=${row.purchaseId} AND ${notDeleted("carried")}

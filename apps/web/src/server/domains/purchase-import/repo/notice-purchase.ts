@@ -14,7 +14,7 @@ import { notDeleted } from "~/server/db/helpers";
 import { purchase, vendorAccount } from "~/server/db/schema";
 import { emailLinkDecisionsSql } from "~/server/domains/email/repo/email-decision-sql";
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
-import { acceptedOrderPurchasesSql } from "~/server/domains/purchase-import/repo/accepted-order-read";
+import { acceptedOrdersBoundToSql } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import { enterWriteTransaction } from "~/server/kernel/gate";
 
 import { normalizedOrderIdSql, normalizeOrderKey } from "./order-identity";
@@ -33,7 +33,7 @@ export const awaitingOrderDetailsSql = (purchaseId: SQL): SQL<boolean> =>
     SELECT 1 FROM "Expense" aod_expense
     WHERE aod_expense."purchaseId" = ${purchaseId} AND ${notDeleted("aod_expense")}
   ) AND NOT EXISTS (
-    SELECT 1 FROM ${acceptedOrderPurchasesSql} aod_order WHERE aod_order."boundPurchaseId" = ${purchaseId}
+    SELECT 1 FROM ${acceptedOrdersBoundToSql((id) => sql`${id} = ${purchaseId}`)} aod_order
   ) AND EXISTS (
     SELECT 1 FROM ${emailLinkDecisionsSql} aod_link
     JOIN "OrderMailEvent" aod_event ON aod_event.id = aod_link."eventId"

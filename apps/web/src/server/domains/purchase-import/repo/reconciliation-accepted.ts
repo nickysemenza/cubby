@@ -44,6 +44,7 @@ import { importLineWritePolicy } from "~/server/domains/purchase-import/policy/i
 import { orderEventKey } from "~/server/domains/purchase-import/policy/payment-keys";
 import {
   acceptedOrders,
+  acceptedOrdersBoundTo,
   acceptedOrderLinesSql,
 } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import {
@@ -710,11 +711,11 @@ async function validateAcceptedPreparation(
         eq(importSourceOrder.id, importSourceProduct.sourceOrderId),
       )
       .where(eq(importSourceOrder.purchaseId, state.target.id));
+    const targetOrders = acceptedOrdersBoundTo((id) => eq(id, state.target.id));
     const sources = await tx
       .select()
-      .from(acceptedOrders)
-      .where(eq(acceptedOrders.purchaseId, state.target.id))
-      .orderBy(desc(acceptedOrders.createdAt), desc(acceptedOrders.id));
+      .from(targetOrders)
+      .orderBy(desc(targetOrders.createdAt), desc(targetOrders.id));
     const heads = new Map<string, (typeof sources)[number]>();
     const retainedObservationIds = new Set(
       retainedSources.map((source) => source.acceptedObservationId),

@@ -31,7 +31,7 @@ import {
 } from "~/server/db/schema";
 import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
-import { acceptedOrderLinesSql } from "~/server/domains/purchase-import/repo/accepted-order-read";
+import { acceptedOrderLinesBoundToSql } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import { paymentEvidenceDollars } from "~/server/domains/purchase-import/repo/payment-evidence";
 import {
   isLiveSourceOrder,
@@ -330,8 +330,8 @@ export async function loadSourceReconciliationState(
     quantity: number | null;
   }>(sql`
     SELECT accepted."expenseId", (accepted.extraction#>'{candidate,lines}')->accepted."lineIndex"->'quantity' AS quantity
-    FROM ${acceptedOrderLinesSql} accepted
-    WHERE accepted."purchaseId"=${target.id} AND accepted."expenseId" IS NOT NULL
+    FROM ${acceptedOrderLinesBoundToSql((id) => sql`${id}=${target.id}`)} accepted
+    WHERE accepted."expenseId" IS NOT NULL
       AND accepted.extraction#>>'{candidate,currency}' <> 'USD'`);
   const allProductIds = new Set(
     expenses.flatMap((row) => (row.productId ? [row.productId] : [])),

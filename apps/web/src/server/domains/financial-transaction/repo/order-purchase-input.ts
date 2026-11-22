@@ -25,7 +25,7 @@ import { orderBookingInput } from "~/server/domains/purchase-import/policy/order
 import { orderEventKey } from "~/server/domains/purchase-import/policy/payment-keys";
 import { paymentBankEventKey } from "~/server/domains/purchase-import/policy/payment-keys";
 import { recordedAttributionMargins } from "~/server/domains/purchase-import/policy/replacement-attributions";
-import { acceptedOrders } from "~/server/domains/purchase-import/repo/accepted-order-read";
+import { acceptedOrdersBoundTo } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import { parseMailSourceKey } from "~/server/domains/purchase-import/repo/import-scope";
 import { orderEvidence } from "~/server/domains/purchase-import/repo/order-evidence";
 import { unpricedForeignExpenseSql } from "~/server/domains/purchase-import/repo/writer-policy";
@@ -72,9 +72,10 @@ async function carriedExpenseIds(
     async (database) =>
       repositoryQueries(database)
         .select()
-        .from(acceptedOrders)
-        .where(
-          sql`${acceptedOrders.purchaseId}=ANY(${textArrayParam(purchaseIds)}::uuid[])`,
+        .from(
+          acceptedOrdersBoundTo(
+            (id) => sql`${id}=ANY(${textArrayParam(purchaseIds)}::uuid[])`,
+          ),
         ),
   );
   await reads.bindings({

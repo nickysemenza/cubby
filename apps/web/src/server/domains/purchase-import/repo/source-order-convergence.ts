@@ -44,6 +44,7 @@ import {
 } from "~/server/domains/purchase-import/policy/payment-keys";
 import {
   acceptedOrders,
+  acceptedOrdersBoundTo,
   acceptedOrderLinesSql,
 } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import { createAppError } from "~/server/errors/app-error";
@@ -208,8 +209,9 @@ export async function convergeDuplicateSourceOrder(
     if (!survivor || !duplicate) throw new Error("Review two live Purchases");
     const sources = await q
       .select()
-      .from(acceptedOrders)
-      .where(inArray(acceptedOrders.purchaseId, [survivorId, duplicateId]));
+      .from(
+        acceptedOrdersBoundTo((id) => inArray(id, [survivorId, duplicateId])),
+      );
     const duplicateSources = sources.filter(
       (row) => row.purchaseId === duplicateId,
     );

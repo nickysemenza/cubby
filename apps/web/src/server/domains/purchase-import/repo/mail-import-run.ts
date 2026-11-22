@@ -78,7 +78,7 @@ import {
 } from "~/server/domains/mail/repo/retained-mail";
 import {
   acceptedOrders,
-  acceptedOrderPurchasesSql,
+  acceptedOrdersBoundToSql,
 } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import {
   findControlledMailImport,
@@ -1113,8 +1113,7 @@ const awaitedOrderKeySql = normalizedOrderIdSql(
  * was imported or linked. Null while it has not.
  */
 const waitedSourceSettledSql = sql`SELECT max(at) AS at FROM (
-  SELECT greatest(x.created, (SELECT max(accepted."createdAt") FROM ${acceptedOrderPurchasesSql} accepted
-      WHERE accepted."boundPurchaseId" = x.id)) AS at
+  SELECT greatest(x.created, (SELECT max(accepted."createdAt") FROM ${acceptedOrdersBoundToSql((id) => sql`${id} = x.id`)} accepted)) AS at
   FROM unnest(keyed.ids, keyed.created, keyed.vendor_ids, keyed.parties) AS x(id, created, vendor_id, party)
   WHERE newest.result #>> '{mailOutcome,judgment,waitingOn,kind}' = ${"order"}
     AND (newest.result #>> '{mailOutcome,judgment,waitingOn,vendorId}' IS NULL

@@ -31,7 +31,7 @@ import {
   type ProductHit,
 } from "~/server/domains/product/repo/find-by-external-ids";
 import { lookupProductIdentifierSources } from "~/server/domains/product/repo/product-identifier-source";
-import { acceptedOrders } from "~/server/domains/purchase-import/repo/accepted-order-read";
+import { acceptedOrdersBoundTo } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import {
   carrierFromHost,
   carrierFromNumber,
@@ -408,21 +408,21 @@ export async function readMailRuleCandidates(
         notDeleted(purchase),
       ),
     );
+  const boundOrders = acceptedOrdersBoundTo((id) =>
+    inArray(
+      id,
+      rows.map((row) => row.id),
+    ),
+  );
   const accepted = rows.length
     ? await getDb(db)
         .select({
-          purchaseId: acceptedOrders.purchaseId,
-          checksum: acceptedOrders.checksum,
-          sourceClaimId: acceptedOrders.sourceClaimId,
-          orderKey: acceptedOrders.orderKey,
+          purchaseId: boundOrders.purchaseId,
+          checksum: boundOrders.checksum,
+          sourceClaimId: boundOrders.sourceClaimId,
+          orderKey: boundOrders.orderKey,
         })
-        .from(acceptedOrders)
-        .where(
-          inArray(
-            acceptedOrders.purchaseId,
-            rows.map((row) => row.id),
-          ),
-        )
+        .from(boundOrders)
     : [];
   const imported = new Set(accepted.map((row) => row.purchaseId));
   return rows.flatMap(
