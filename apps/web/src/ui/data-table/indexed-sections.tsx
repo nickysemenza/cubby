@@ -81,8 +81,6 @@ export interface IndexedSection {
   wideable?: boolean;
   /** Record pages: a workspace that always spans every body column. */
   span?: boolean;
-  /** Record pages: a workspace that always spans every body column. */
-  span?: boolean;
 }
 
 /**
