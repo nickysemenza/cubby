@@ -2,7 +2,7 @@
   "type": "diff",
   "version": "9",
   "dialect": "postgres",
-  "id": "c45b1cf0-86d9-4afe-a8f0-cdb1c8ad5eb7",
+  "id": "6ad2448d-2172-40b4-ac0c-e3b77349358d",
   "prevIds": [
     "316731cc-6c6c-40d8-aaea-4b35391afdb6"
   ],
@@ -38,14 +38,14 @@
         "nameExplicit": true,
         "columns": [
           {
-            "value": "(\"result\" #>> '{target,entityId}')",
+            "value": "left(\"result\" #>> '{target,entityId}', 64)",
             "isExpression": true,
             "asc": true,
             "nullsFirst": false,
             "opclass": null
           },
           {
-            "value": "(\"result\" #>> '{target,entityKind}')",
+            "value": "left(\"result\" #>> '{target,entityKind}', 64)",
             "isExpression": true,
             "asc": true,
             "nullsFirst": false,

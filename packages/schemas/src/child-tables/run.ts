@@ -330,10 +330,12 @@ export const runChildren = [
       {
         // Run subject history finds the Runs that recorded an outcome for one
         // Purchase or Product; the mail index above covers only mail outcomes.
+        // Keys are bounded prefixes: the receipt is free-form JSON, and an
+        // oversized value must not exceed the index entry limit.
         name: "RunOperation_completed_target_idx",
         on: [
-          { sql: "({result} #>> '{target,entityId}')" },
-          { sql: "({result} #>> '{target,entityKind}')" },
+          { sql: "left({result} #>> '{target,entityId}', 64)" },
+          { sql: "left({result} #>> '{target,entityKind}', 64)" },
           "runId",
         ],
         where: "{kind} = 'target_outcome' AND {state} = 'completed'",

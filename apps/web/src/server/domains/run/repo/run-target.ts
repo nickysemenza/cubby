@@ -162,6 +162,8 @@ const runSubjectHistory = (subject: EntityRef<"purchase" | "product">) =>
     UNION
     SELECT ${runOperation.runId} FROM ${runOperation}
     WHERE ${runOperation.kind} = ${"target_outcome"} AND ${runOperation.state} = ${"completed"}
+      AND left(${runOperation.result} #>> '{target,entityId}', 64) = ${subject.id}
+      AND left(${runOperation.result} #>> '{target,entityKind}', 64) = ${subject.entity}
       AND (${runOperation.result} #>> '{target,entityId}') = ${subject.id}
       AND (${runOperation.result} #>> '{target,entityKind}') = ${subject.entity}
   )`;
