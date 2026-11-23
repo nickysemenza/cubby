@@ -4,26 +4,27 @@ import { describe, expect, it, vi } from "vitest";
 import * as cfEnv from "~/server/cf-env";
 import { runWithExecutionCtx } from "~/server/cf-env";
 
-import { coalesceBackgroundWakes, wakeAt, wakeKernel } from "./publish";
+import { collectDeliveryWakes, wakeAt, wakeKernel } from "./publish";
 
 describe("Job wake transport", () => {
-  it("collapses a page's dirty, recovery and successor wakes into one permit", async () => {
+  it("sends nothing inside a delivery and returns its earliest future wake", async () => {
     const sendBatch = vi.fn().mockResolvedValue(undefined);
     const getQueue = vi
       .spyOn(cfEnv, "getBackgroundQueue")
       .mockReturnValue({ sendBatch });
     try {
-      await coalesceBackgroundWakes(async () => {
+      const recovery = new Date(Date.now() + 90_000);
+      const { future } = await collectDeliveryWakes(async () => {
         for (let i = 0; i < 256; i++) {
           await wakeKernel({ source: "synthetic.dirty" });
-          await wakeAt(new Date(Date.now() + 90_000), {
+          await wakeAt(new Date(recovery.getTime() + i), {
             source: "synthetic.recovery",
           });
         }
-        await wakeAt(new Date(), { source: "synthetic.successor" });
-        expect(sendBatch).not.toHaveBeenCalled();
+        await wakeAt(new Date(), { source: "synthetic.due" });
       });
-      expect(sendBatch).toHaveBeenCalledTimes(1);
+      expect(future).toEqual(recovery);
+      expect(sendBatch).not.toHaveBeenCalled();
     } finally {
       getQueue.mockRestore();
     }
@@ -112,7 +113,7 @@ describe("Job wake transport", () => {
     }
   });
 
-  it("retries a delayed wake with the delay still owed", async () => {
+  it("retries a delayed ring wake with the delay still owed", async () => {
     vi.useFakeTimers();
     try {
       const sendBatch = vi
@@ -124,6 +125,7 @@ describe("Job wake transport", () => {
       );
       const wake = wakeAt(new Date(Date.now() + 60_000), {
         source: "synthetic-due",
+        ring: true,
       });
       await vi.runAllTimersAsync();
       await wake;

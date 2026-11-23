@@ -7,7 +7,8 @@
  * active and hourly otherwise, and a Pass that fails its last attempt brings
  * it forward.
  */
-import { runStatus } from "@cubby/schemas/run-fields";
+import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
+import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -19,6 +20,8 @@ import {
 import { reconcileCoordinatorDispatches } from "~/server/domains/run/repo/coordinator-dispatch";
 import { RUN_EXECUTE_PASS } from "~/server/domains/run/repo/run-execution";
 import { definePass, startPass } from "~/server/kernel/api";
+
+import { announceMailDiscoveryVacancy } from "./lifecycle";
 
 const RUNS_RECONCILE_PASS = "runs.reconcile";
 
@@ -56,10 +59,22 @@ function failureTextOf(raw: string | null): string {
 async function reconcileStuckRunPasses(db: Database): Promise<number> {
   return repositoryTransactionDatabase(db, async (tx) => {
     const q = repositoryQueries(tx);
-    const stuck = await q.execute<{ id: string; lastError: string | null }>(sql`
-    SELECT r.id, p."lastError" FROM "Run" r
-    JOIN "Pass" p ON p.name = ${RUN_EXECUTE_PASS} AND p.key = r.id::text
-    WHERE p."doneAt" IS NULL AND p."cancelledAt" IS NULL AND p.attempts >= p."maxAttempts"
+    // Exhausted unfinished Passes first, then their Runs by primary key. The
+    // text comparison keeps the join to the Run whose canonical id is the key.
+    const stuck = await q.execute<{
+      id: string;
+      lastError: string | null;
+      attempt: string | null;
+      mailbox: string | null;
+    }>(sql`
+    SELECT r.id, p."lastError", r.progress->>'attempt' AS attempt,
+      CASE WHEN r.purpose = ${runPurpose.enum.mail_discovery}
+        THEN r."ledgerPartyId"::text || ':' || (r.input->>'mailboxId') END AS mailbox
+    FROM "Pass" p
+    JOIN "Run" r ON r.id = CASE WHEN pg_input_is_valid(p.key, ${"uuid"}) THEN p.key::uuid END
+      AND r.id::text = p.key
+    WHERE p.name = ${RUN_EXECUTE_PASS}
+      AND p."doneAt" IS NULL AND p."cancelledAt" IS NULL AND p.attempts >= p."maxAttempts"
       AND (p."claimToken" IS NULL OR p."claimDeadline" <= now())
       AND (r.status = ${runStatus.enum.running}
         OR (r.status = ${runStatus.enum.paused_auth} AND r."failureCode" = 'execution_limit'))
@@ -72,20 +87,30 @@ async function reconcileStuckRunPasses(db: Database): Promise<number> {
       columns: ["status", "endedAt", "failureCode"],
     };
     // Revisions before the Run rows, the order a kernel apply takes; each
-    // update re-checks the status it reads.
+    // update re-checks the status it reads. A relaunch writes the next
+    // generation into the Run's attempt with its fresh Pass, so the attempt
+    // check leaves a Run relaunched after the probe running.
     await kernel.lockWrites(tx, write);
     let failed = 0;
+    const vacated = new Map<string, RunId>();
     for (const row of stuck.rows) {
       const updated = await q.execute<{ id: string }>(sql`
       UPDATE "Run" SET status = ${runStatus.enum.failed}, "failureCode" = 'job_failed',
         "dispatchError" = ${failureTextOf(row.lastError)}, "endedAt" = now(), "updatedAt" = now()
       WHERE id = ${row.id}::uuid AND (status = ${runStatus.enum.running}
         OR (status = ${runStatus.enum.paused_auth} AND "failureCode" = 'execution_limit'))
+        AND progress->>'attempt' IS NOT DISTINCT FROM ${row.attempt}::text
       RETURNING id`);
-      if (updated.rows.length)
+      if (updated.rows.length) {
         await kernel.emitWrites(tx, { ...write, ids: [row.id] });
+        if (row.mailbox) vacated.set(row.mailbox, runEntityId.parse(row.id));
+      }
       failed += updated.rows.length;
     }
+    // One announcement per mailbox, after commit: the gate is this
+    // transaction's first lock, so it cannot take the admission lock.
+    for (const runId of vacated.values())
+      await announceMailDiscoveryVacancy(tx, runId);
     return failed;
   });
 }

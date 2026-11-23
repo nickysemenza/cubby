@@ -1,0 +1,1 @@
+CREATE INDEX "ImageProcessingEvent_prune_idx" ON "ImageProcessingEvent" ("occurredAt","id") WHERE "event" <> 'image.answer';

@@ -2586,9 +2586,10 @@ describe("evidence-facts kernel", () => {
       sql`UPDATE "Ask" SET "availableAt" = now() WHERE id = ${ids[1]!}::uuid`,
     );
     expect(await claimAsk(ctx.db, ids[1]!, limit)).toBeNull();
-    expect(recover).toHaveBeenCalledWith(expect.any(Date), {
-      source: "kernel.claim-recovery",
-    });
+    expect(recover).toHaveBeenCalledWith(
+      expect.any(Date),
+      expect.objectContaining({ source: "kernel.claim-recovery" }),
+    );
     const [when] = recover.mock.calls[0]!;
     expect(when.getTime() - Date.now()).toBeGreaterThan(0);
     expect(when.getTime() - Date.now()).toBeLessThanOrEqual(15_000);
@@ -2691,7 +2692,10 @@ describe("evidence-facts kernel", () => {
         { runId: second, cancelled: false },
       ]),
     );
-    await retryRunAsks(ctx.db, first);
+    const wake = vi.spyOn(backgroundTasks, "wakeKernel").mockResolvedValue();
+    await retryRunAsks(ctx.db, first, { wake: true });
+    expect(wake).toHaveBeenCalledTimes(1);
+    wake.mockRestore();
     expect((await kernel.runWork(ctx.db, first)).asks).toEqual(
       expect.arrayContaining([expect.objectContaining({ state: "answered" })]),
     );

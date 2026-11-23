@@ -167,6 +167,11 @@ export const imageProcessingChildren = [
         name: "ImageProcessingEvent_job_time_idx",
         on: ["jobId", "occurredAt", "id"],
       },
+      {
+        name: "ImageProcessingEvent_prune_idx",
+        on: ["occurredAt", "id"],
+        where: "{event} <> 'image.answer'",
+      },
     ],
   }),
   defineChildTable({

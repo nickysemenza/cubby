@@ -17,13 +17,19 @@ import {
 } from "~/lib/error-diagnostics";
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
+import { textArrayParam } from "~/server/db/helpers/array-param";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers/core";
 import { related, outer } from "~/server/db/helpers/related";
+import {
+  repositoryAfterCommit,
+  repositoryQueries,
+} from "~/server/db/repository-access.boundary";
 import { run as runTable } from "~/server/db/retained-tables";
 import {
   lockMailDiscoveryRunAdmission,
   mailDiscoveryAdmission,
   mailDiscoveryShouldYield,
+  mailDiscoveryWaitersToRelease,
   retainedMailDiscoveryScope,
 } from "~/server/domains/purchase-import/repo/gmail/discovery-admission";
 import {
@@ -34,7 +40,9 @@ import {
 import { recordRunProgress as recordProgress } from "~/server/domains/run/repo/run-progress";
 import { createAppError } from "~/server/errors/app-error";
 import { findPgError } from "~/server/errors/db-errors";
+import { reportServerError } from "~/server/errors/report-error";
 import { classifyWorkFailure, stopsPage } from "~/server/kernel/failure";
+import { wakeAfterCommit } from "~/server/kernel/wake";
 import {
   WorkDeferredError,
   WorkRetryableError,
@@ -47,6 +55,81 @@ import {
 import { type WorkflowRunParams } from "./contract";
 
 const log = createLogger("workflow");
+
+/**
+ * A Run waiting for a mailbox slot is brought forward by the transition that
+ * frees one. Its own deadline only recovers a vacancy nothing announced: a
+ * queued owner leaving the queue without a status write, an announcement lost
+ * between the transition's commit and its own transaction, or a funding pause
+ * whose worker stops before announcing.
+ */
+const MAIL_ADMISSION_RECOVERY_MS = 5 * 60_000;
+
+/**
+ * Bring forward the admission waiters a vacancy on this mailbox admits.
+ *
+ * Call only holding the mailbox admission lock, after the releasing Run's
+ * status write is committed or made earlier in the same transaction. Waiters
+ * check and park under the same lock and read committed status, so either the
+ * waiter's check sees the vacancy or this scan sees its committed wait. The
+ * transaction never takes the household gate: the gate must be a
+ * transaction's first lock, and a gated transition announces through
+ * `announceMailDiscoveryVacancy` instead. Waiter Pass rows come last.
+ * A waiter whose page is still publishing its wait loses to this wake: its
+ * wake version no longer matches, so its publication leaves the Pass due.
+ * The status trigger never takes this lock first; it follows the Run lock.
+ */
+export async function releaseMailDiscoveryAdmission(
+  tx: Database,
+  mailbox: { ledgerPartyId: string; mailboxId: string; except?: RunId },
+): Promise<void> {
+  const waiters = await mailDiscoveryWaitersToRelease(tx, mailbox);
+  if (!waiters.length) return;
+  // startPass's live-row wake, limited to live Passes: a finished or cancelled
+  // Pass is never restarted. The waiter's committed admission wait is the
+  // authority, so a funding marker left by a page claimed at its funding
+  // deadline does not hold the wake back, and the wake clears it: a funding
+  // marker found after this wake was written by a later funding pause, whose
+  // deadline the holder's publication keeps. The bumped version discards an
+  // in-flight holder's cursor and wait; Run progress is the discovery
+  // checkpoint, so the page only repeats from it.
+  const woken = await repositoryQueries(tx).execute<{ key: string }>(sql`
+    UPDATE "Pass" SET "availableAt" = least("availableAt", now()),
+      "waitCause" = NULL, "wakeVersion" = "wakeVersion" + 1, "updatedAt" = now()
+    WHERE name = ${RUN_EXECUTE_PASS} AND key = ANY(${textArrayParam(waiters)})
+      AND "doneAt" IS NULL AND "cancelledAt" IS NULL
+      AND ("availableAt" > now() OR "claimToken" IS NOT NULL)
+    RETURNING key`);
+  if (woken.rows.length) await wakeAfterCommit(tx);
+}
+
+/**
+ * Announce the vacancy a transition of this Run out of `running` leaves, once
+ * the caller's transaction commits (the outermost one when nested; nothing on
+ * rollback), in a transaction of its own: admission lock, waiters, their
+ * Passes. A transition under the household gate cannot take the admission
+ * lock itself. A failed announcement is reported, never thrown into the
+ * caller; the waiters' recovery deadline covers it.
+ */
+export async function announceMailDiscoveryVacancy(
+  db: Database,
+  runId: RunId,
+): Promise<void> {
+  await repositoryAfterCommit(db, async (committed) => {
+    try {
+      await withTransactionDatabase(committed, async (tx) => {
+        const mailbox = await lockMailDiscoveryRunAdmission(tx, runId);
+        if (mailbox) await releaseMailDiscoveryAdmission(tx, mailbox);
+      });
+    } catch (error) {
+      log.warn("Mail discovery vacancy announcement failed", {
+        runId,
+        error: String(error),
+      });
+      reportServerError(error, { operation: "mail_discovery.vacancy" });
+    }
+  });
+}
 
 export const runFailureText = (
   error: Error | string,
@@ -282,7 +365,11 @@ async function runOwesWork(tx: Database, runId: RunId) {
 
 /** Items parked while a Run was stopped return when a member relaunches it. */
 async function reviveRunAsks(tx: Database, runId: RunId) {
-  await (await import("~/server/kernel/api")).retryRunAsks(tx, runId);
+  await (
+    await import("~/server/kernel/api")
+  ).retryRunAsks(tx, runId, {
+    wake: true,
+  });
 }
 
 /**
@@ -414,15 +501,18 @@ export async function yieldClaimedMailDiscovery(
       .where(and(eq(runTable.id, runId), not(successor)))
       .returning({ id: runTable.id });
     // A concurrent stop, lease loss or new generation rolls back the yield.
-    if (queued) await assertWorkflowEffect(tx);
-    return Boolean(queued);
+    if (!queued) return false;
+    await assertWorkflowEffect(tx);
+    // Older waiters own the vacancy; this Run queues behind them.
+    await releaseMailDiscoveryAdmission(tx, { ...mailbox, except: runId });
+    return true;
   }).catch((error: unknown) => {
     throw mailDiscoveryBackpressure(error) ?? error;
   });
   if (yielded)
     throw new WorkDeferredError(
       "Mail discovery yielded shared search capacity",
-      new Date(Date.now() + 15_000),
+      new Date(Date.now() + MAIL_ADMISSION_RECOVERY_MS),
       "provider_capacity",
     );
 }
@@ -562,7 +652,7 @@ export async function resumeClaimedWorkflowRun(
     if (waiting)
       throw new WorkDeferredError(
         "Mail discovery is queued for shared search capacity",
-        new Date(Date.now() + 15_000),
+        new Date(Date.now() + MAIL_ADMISSION_RECOVERY_MS),
         "provider_capacity",
       );
   } catch (error) {

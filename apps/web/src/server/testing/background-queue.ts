@@ -242,11 +242,11 @@ export function captureBackgroundQueue() {
       options: { maxTasks?: number } = {},
     ): Promise<number> {
       const { runProductionKernel } = await import("~/server/kernel/api");
-      const result = await runProductionKernel(db, {
+      const { ran } = await runProductionKernel(db, {
         budgetMs: options.maxTasks ?? 20_000,
       });
       messages.length = 0;
-      return result;
+      return ran;
     },
     restore: () => setCfEnv(undefined),
   };

@@ -11,6 +11,8 @@ export const backgroundTaskMessageSchema = z.strictObject({
   version: z.literal(BACKGROUND_TASK_MESSAGE_VERSION),
   queueType: z.literal("background"),
   ring: z.literal(true).optional(),
+  /** The pending `KernelWake.at` a delayed permit was sent for; absent on immediate and ring permits. */
+  at: z.iso.datetime().optional(),
 });
 export type BackgroundTaskMessage = z.infer<typeof backgroundTaskMessageSchema>;
 export type BackgroundTaskMessageInput = z.input<

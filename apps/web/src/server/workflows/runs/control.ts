@@ -17,7 +17,11 @@ import { reopenRunStep } from "~/server/domains/run/repo/run-step";
 import { runControlRefusal } from "~/server/domains/run/run-control-rules";
 import { createAppError } from "~/server/errors/app-error";
 
-import { launchWorkflowRun, recordRunProgress } from "./lifecycle";
+import {
+  announceMailDiscoveryVacancy,
+  launchWorkflowRun,
+  recordRunProgress,
+} from "./lifecycle";
 import { cancelRunPass } from "./run-pass";
 
 /**
@@ -114,7 +118,10 @@ export async function controlWorkflowRun(
               ),
             )
         : [];
-    await (await import("~/server/kernel/api")).retryRunAsks(db, row.id);
+    // The relaunch below revives again inside its transaction and wakes there.
+    await (
+      await import("~/server/kernel/api")
+    ).retryRunAsks(db, row.id, { wake: false });
     if (row.failureCode === "user_cancelled") {
       // Re-admitted items still need their interrupted evaluate step to wait for them.
       for (const step of stoppedSteps)
@@ -183,6 +190,11 @@ export async function controlWorkflowRun(
         ),
       );
     await kernel.cancelRunAsks(tx, row.id);
+    // A cancelled discovery frees its slot or its place in line, either of
+    // which can admit a waiter; announced under the admission lock after
+    // commit, since the gate is this transaction's first lock.
+    if (purpose === "mail_discovery")
+      await announceMailDiscoveryVacancy(tx, row.id);
   });
   await recordRunProgress(db, row.id, "cancelled", MEMBER_CANCELLED_AI_WORK, {
     attempt: row.attempt,

@@ -826,7 +826,7 @@ export async function renewExternalAsk(
   const row = result.rows[0];
   if (!row) return null;
   const deadline = new Date(row.deadline);
-  await wakeClaimRecovery(deadline);
+  await wakeClaimRecovery(deadline, db);
   return deadline;
 }
 

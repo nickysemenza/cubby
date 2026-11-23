@@ -8,47 +8,44 @@ import {
 import { BACKGROUND_TASK_MESSAGE_VERSION } from "@cubby/schemas/queue-messages";
 import { retryWithBackoff } from "@cubby/shared/retry";
 import { createLogger } from "@cubby/worker-tracing";
+import { sql } from "drizzle-orm";
 
 import { afterResponse, getBackgroundQueue } from "~/server/cf-env";
 import type { Database } from "~/server/db";
+import { textArrayParam } from "~/server/db/helpers/array-param";
 import { runAfterCommit } from "~/server/db/helpers/core";
-import { repositoryTransactionDatabase } from "~/server/db/repository-access.boundary";
+import {
+  repositoryAfterCommit,
+  repositoryQueries,
+  repositoryTransactionDatabase,
+} from "~/server/db/repository-access.boundary";
+import { isoText } from "~/server/kernel/sql-time";
 
 import type { BackgroundQueueProducer } from "../background-queue-types";
 
 const logger = createLogger("jobs");
-type PendingWake = {
-  at: Date;
-  source: string;
-  ring?: boolean;
-  queue?: BackgroundQueueProducer;
-};
-type WakeBatch = { wake: PendingWake | null };
-const pendingWakes = new AsyncLocalStorage<WakeBatch>();
-function enrollWake(state: { wake: PendingWake | null }, request: PendingWake) {
-  const first = state.wake;
-  state.wake =
-    !first || request.at < first.at
-      ? { ...request, ring: request.ring || first?.ring }
-      : { ...first, ring: first.ring || request.ring };
+
+/** The earliest future wake requested while a delivery runs. */
+type DeliveryWakes = { future: Date | null };
+const deliveryWakes = new AsyncLocalStorage<DeliveryWakes>();
+
+/**
+ * Run a delivery's work. Its immediate wakes are dropped: the runner drains
+ * until an empty round, and the delivery itself continues when its budget
+ * ends with work due. Its future wakes join the delivery's one offer.
+ */
+export async function collectDeliveryWakes<T>(
+  work: () => Promise<T>,
+): Promise<{ result: T; future: Date | null }> {
+  const wakes: DeliveryWakes = { future: null };
+  const result = await deliveryWakes.run(wakes, work);
+  return { result, future: wakes.future };
 }
 
-/** One delivered batch produces at most one successor, including recovery deadlines. */
-export async function coalesceBackgroundWakes<T>(
-  work: () => Promise<T>,
-): Promise<T> {
-  if (pendingWakes.getStore()) return work();
-  const pending: WakeBatch = { wake: null };
-  const result = await pendingWakes.run(pending, work);
-  const earliest = pending.wake;
-  if (earliest) {
-    const ring = earliest.ring;
-    if (earliest.at.getTime() <= Date.now() && !ring)
-      await wakeKernel({ source: earliest.source, queue: earliest.queue });
-    else await wakeAt(earliest.at, { source: earliest.source, ring });
-  }
-  return result;
-}
+/** Inside a delivery, redelivery of the unacknowledged permit recovers a crash. */
+export const withinDelivery = (): boolean =>
+  deliveryWakes.getStore() !== undefined;
+
 export interface PublishOptions {
   readonly source: string;
 }
@@ -71,6 +68,7 @@ async function sendWake(
   queue: BackgroundQueueProducer,
   message: () => WakeMessage,
   log: { source: string; exhausted: string },
+  onExhausted?: () => Promise<void>,
 ) {
   try {
     await retryWithBackoff(() => queue.sendBatch([message()]), {
@@ -79,6 +77,12 @@ async function sendWake(
     });
   } catch (error) {
     logger.error(log.exhausted, { source: log.source, error });
+    await onExhausted?.().catch((reset: unknown) =>
+      logger.error("pending wake reset failed", {
+        source: log.source,
+        error: reset,
+      }),
+    );
   }
 }
 
@@ -86,11 +90,7 @@ async function sendWake(
 export async function wakeKernel(
   options: PublishOptions & { queue?: BackgroundQueueProducer },
 ) {
-  const pending = pendingWakes.getStore();
-  if (pending) {
-    enrollWake(pending, { at: new Date(), ...options });
-    return;
-  }
+  if (withinDelivery()) return;
   const queue = options.queue ?? getBackgroundQueue();
   if (!queue) return;
   // Only the wake is deferred: callers commit durable intent before getting here.
@@ -114,25 +114,41 @@ export async function wakeKernel(
 
 /** Cloudflare Queues' longest delivery delay; anything later waits for the hourly cron. */
 const MAX_WAKE_DELAY_SECONDS = 12 * 3_600;
+const delaySecondsUntil = (at: Date) =>
+  Math.max(0, Math.ceil((at.getTime() - Date.now()) / 1000));
 
 /**
- * A best-effort wake when known work falls due. Delivery can't be cancelled, so a
- * stale wake touches Postgres once and finds nothing. Work past the delay, and a
- * lost message, are the hourly cron's. `ring` also rings companions for parked
- * device work (`ringDueDeviceWork`).
+ * A best-effort wake when known work falls due. Inside a delivery a future
+ * `at` joins the delivery's offer and a due one is dropped. Otherwise nothing
+ * is decided or sent until the caller's transaction on `db` (default: the
+ * invocation database) commits: a consumer must not drain before the rows it
+ * wakes for are visible, and a rollback must send nothing. Then a due `at` is
+ * an immediate wake and a future one is offered (`offerWake`). `ring` also
+ * rings companions for parked device work (`ringDueDeviceWork`): a ring permit
+ * is always sent, so it never merges into a wake without it, and its callers
+ * send it after their commit.
  */
 export async function wakeAt(
   at: Date,
-  options: PublishOptions & { ring?: boolean },
+  options: PublishOptions & { ring?: boolean; db?: Database },
 ) {
-  const pending = pendingWakes.getStore();
-  if (pending) {
-    enrollWake(pending, { at, ...options });
+  if (options.ring) return sendRing(at, options.source);
+  const delivery = deliveryWakes.getStore();
+  if (delivery) {
+    if (at.getTime() > Date.now() && (!delivery.future || at < delivery.future))
+      delivery.future = at;
     return;
   }
-  const delayFromNow = () =>
-    Math.max(0, Math.ceil((at.getTime() - Date.now()) / 1000));
-  if (delayFromNow() > MAX_WAKE_DELAY_SECONDS) return;
+  const db = options.db ?? (await import("~/server/db")).db;
+  await repositoryAfterCommit(db, (committed) =>
+    at.getTime() <= Date.now()
+      ? wakeKernel({ source: options.source })
+      : offerWake(committed, at, options.source),
+  );
+}
+
+async function sendRing(at: Date, source: string) {
+  if (delaySecondsUntil(at) > MAX_WAKE_DELAY_SECONDS) return;
   const queue = getBackgroundQueue();
   if (!queue) return;
   await afterResponse(
@@ -142,17 +158,99 @@ export async function wakeAt(
         body: {
           version: BACKGROUND_TASK_MESSAGE_VERSION,
           queueType: "background",
-          ...(options.ring ? { ring: true as const } : {}),
+          ring: true,
         },
         // A retry still lands when the work is due.
-        delaySeconds: delayFromNow(),
+        delaySeconds: delaySecondsUntil(at),
       }),
       {
-        source: options.source,
-        exhausted: "delayed wake failed; the hourly cron will reach this work",
+        source,
+        exhausted: "device ring wake failed; the hourly cron will ring",
       },
     ),
   );
+}
+
+/**
+ * Exactly one future wake is pending (ADR 0029 section 7). An offer for T
+ * sends a delayed permit carrying T only when it moves `KernelWake.at` to T,
+ * which it may when the row is empty, already due, or later than T. Every
+ * other offer is covered by the pending wake, whose delivery clears the row
+ * while it still holds that permit's `at` (`clearDeliveredWakes`) and offers
+ * the global next deadline. Stale and duplicate permits therefore end without
+ * a successor. The statement runs alone after the caller's commit, so it never
+ * holds the row inside a gated transaction.
+ *
+ * Offers refused while a permit is pending are not remembered: their deadlines
+ * rely on that permit's delivery offering the global next deadline. So a lost
+ * permit leaves them waiting until its `at` passes and another offer wins, or
+ * the hourly cron; a send that exhausts its retries empties the row so a later
+ * offer can win, but the deadlines it refused meanwhile wait the same way.
+ * Deadline writers that send no wake of their own are bounded the same way:
+ * settlements, backoffs and waits written inside a delivery (its offer covers
+ * them), failures settled by a member's `reconcileNow` (its claim-recovery
+ * wake's delivery covers them), and any other write of a future `availableAt`
+ * without `wakeAt`, such as a Run's funding pause or an external executor's
+ * delayed release.
+ */
+export async function offerWake(
+  db: Database,
+  at: Date,
+  source: string,
+): Promise<void> {
+  if (delaySecondsUntil(at) > MAX_WAKE_DELAY_SECONDS) return;
+  const queue = getBackgroundQueue();
+  if (!queue) return;
+  await afterResponse(
+    (async () => {
+      let pending: string | undefined;
+      try {
+        const won = await repositoryQueries(db).execute<{ at: string }>(sql`
+          INSERT INTO "KernelWake" (at) VALUES (${at.toISOString()}::timestamp)
+          ON CONFLICT (singleton) DO UPDATE SET at = excluded.at
+          WHERE "KernelWake".at IS NULL OR "KernelWake".at <= now() OR "KernelWake".at > excluded.at
+          RETURNING ${isoText(sql`"KernelWake".at`)} AS at`);
+        pending = won.rows[0]?.at;
+        if (!pending) return;
+      } catch (error) {
+        // The wake is still owed; without the row it only cannot be deduplicated.
+        logger.error("wake offer failed; sending unrecorded", {
+          source,
+          error,
+        });
+      }
+      await sendWake(
+        queue,
+        () => ({
+          body: {
+            version: BACKGROUND_TASK_MESSAGE_VERSION,
+            queueType: "background",
+            ...(pending ? { at: pending } : {}),
+          },
+          // A retry still lands when the work is due.
+          delaySeconds: delaySecondsUntil(at),
+        }),
+        {
+          source,
+          exhausted:
+            "delayed wake failed; the hourly cron will reach this work",
+        },
+        // Nothing carries this `at`, so a later offer must be able to win.
+        pending ? () => clearDeliveredWakes(db, [pending]) : undefined,
+      );
+    })(),
+  );
+}
+
+/** Empty the pending wake when it is the one these permits carried. */
+export async function clearDeliveredWakes(
+  db: Database,
+  delivered: readonly string[],
+): Promise<void> {
+  if (!delivered.length) return;
+  await repositoryQueries(db).execute(sql`
+    UPDATE "KernelWake" SET at = NULL
+    WHERE at = ANY(${textArrayParam(delivered)}::timestamp[])`);
 }
 
 /** Persist using the caller's transaction; the transport carries only a wake. */

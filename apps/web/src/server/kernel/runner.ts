@@ -2,8 +2,8 @@
  * The kernel runner (ADR 0029 section 7): drains dirty scopes in batches,
  * kinds taking turns in claim order; runs queued asks; runs due passes; and
  * expires lapsed ask claims. Queue permits and the hourly cron wake it
- * directly; the next wake is the least
- * `availableAt` across `ScopeDirty`, `Ask` and `Pass`.
+ * directly; a delivery then offers the least `availableAt` across
+ * `ScopeDirty`, `Ask` and `Pass` as the single pending wake (`offerWake`).
  */
 import { kernelLane } from "@cubby/schemas/kernel/machinery";
 import { sleep } from "@cubby/shared/retry";
@@ -32,6 +32,7 @@ import { markDirty } from "./dirty";
 import { hasStaleScopes, VERSION_SWEEP } from "./drift";
 import { startPass, runOnePass } from "./pass";
 import type { KernelRegistry } from "./registry";
+import { wakeClaimRecovery } from "./wake";
 
 const SCOPE_BATCH = 64;
 const ASK_BATCH = 4;
@@ -81,14 +82,17 @@ async function runScopeBatch(
 }
 
 /**
- * Run kernel work until nothing is due or the budget is spent. Returns how
- * many units it ran: scopes, asks and pass pages.
+ * How a runner invocation ended: `ran` counts scopes, asks and pass pages;
+ * `exhausted` means the budget ended it, not an empty round.
  */
+export type KernelRun = { ran: number; exhausted: boolean };
+
+/** Run kernel work until a round finds nothing to claim or the budget is spent. */
 export async function runKernel(
   db: Database,
   registry: KernelRegistry,
   options: { budgetMs: number },
-): Promise<number> {
+): Promise<KernelRun> {
   return withWorkContext(async () => {
     const deadline = Date.now() + options.budgetMs;
     await stopUnregisteredWork(db, registry);
@@ -100,10 +104,10 @@ export async function runKernel(
       const asks = await runQueuedAsks(db, registry, ASK_BATCH);
       const passes = (await runOnePass(db, registry)) ? 1 : 0;
       const round = scopes + asks + passes;
-      if (!round) break;
+      if (!round) return { ran, exhausted: false };
       ran += round;
     }
-    return ran;
+    return { ran, exhausted: true };
   });
 }
 
@@ -143,6 +147,7 @@ export async function reconcileNow(
       if (claimed.length) break;
     }
     if (claimed.length) {
+      await wakeClaimRecovery(claimed[0]!.deadline, db);
       const reconciler = registry.reconcilers.get(claimed[0]!.kind)!;
       for (const outcome of await runClaimedScopes(
         db,

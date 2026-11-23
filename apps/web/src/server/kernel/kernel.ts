@@ -65,7 +65,7 @@ import { loadMachineryRows, type MachineryListRow } from "./projection";
 import { idColumn } from "./reads";
 import { buildRegistry, ownedColumns, type KernelRegistry } from "./registry";
 import { repointOwnedReference, type OwnedReferenceRepoint } from "./repoint";
-import { reconcileNow, runKernel } from "./runner";
+import { reconcileNow, runKernel, type KernelRun } from "./runner";
 import { wakeAfterCommit } from "./wake";
 import { readNeedsYou, readRunWork, type NeedsYouOptions } from "./work";
 
@@ -192,7 +192,7 @@ export type Kernel = {
     ids: readonly string[],
   ): Promise<Map<string, MachineryListRow>>;
   /** Run due kernel work within a time budget; returns units run. */
-  run(db: Database, options: { budgetMs: number }): Promise<number>;
+  run(db: Database, options: { budgetMs: number }): Promise<KernelRun>;
 };
 
 export function createKernel(modules: readonly DomainModule[]): Kernel {

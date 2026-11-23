@@ -5,6 +5,8 @@ import { sql } from "drizzle-orm";
 import type { Database } from "~/server/db/database";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 
+import { wakeAfterCommit } from "./wake";
+
 export async function cancelRunAsks(db: Database, runId: string) {
   const result = await repositoryQueries(db).execute<{ askId: string }>(sql`
     UPDATE "AskScope" SET "cancelledAt" = coalesce("cancelledAt", now())
@@ -12,14 +14,25 @@ export async function cancelRunAsks(db: Database, runId: string) {
   return result.rows.length;
 }
 
-/** Explicit Run retry revives its demand and exhausted unsent calls, never unknown calls. */
-export async function retryRunAsks(db: Database, runId: string) {
+/**
+ * Explicit Run retry revives its demand and exhausted unsent calls, never
+ * unknown calls. Revived Asks are due now while the Run's Pass may keep a
+ * later funding deadline, so the relaunch transaction asks for a commit wake
+ * here. A caller that revives ahead of the relaunch asks for none: a consumer
+ * woken before the Run is running would execute its Asks without their Run.
+ */
+export async function retryRunAsks(
+  db: Database,
+  runId: string,
+  options: { wake: boolean },
+) {
   const q = repositoryQueries(db);
-  const result = await q.execute<{ askId: string }>(sql`
-    UPDATE "AskScope" SET "cancelledAt" = NULL WHERE "runId" = ${runId}::uuid RETURNING "askId"`);
+  await q.execute(sql`
+    UPDATE "AskScope" SET "cancelledAt" = NULL
+    WHERE "runId" = ${runId}::uuid AND "cancelledAt" IS NOT NULL`);
   await q.execute(sql`
     UPDATE "Ask" a SET attempts = 0, "availableAt" = now(), "lastError" = NULL
     WHERE a.state = ${askState.enum.queued} AND a.attempts >= a."maxAttempts"
       AND EXISTS (SELECT 1 FROM "AskScope" s WHERE s."askId" = a.id AND s."runId" = ${runId}::uuid)`);
-  return result.rows.length;
+  if (options.wake) await wakeAfterCommit(db);
 }

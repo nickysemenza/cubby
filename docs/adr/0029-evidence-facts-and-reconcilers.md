@@ -537,7 +537,27 @@ store the error in one statement under the same claim tokens. They keep their
 attempt counts and use their own retry delays. A claim that outlives its
 deadline cannot publish. Queue permits
 and the hourly cron stay as the wake and the backstop (ADR 0025 item 2); the
-next wake is the least `availableAt` across the three tables. Commit wakes and
+next wake is the least `availableAt` across the three tables. Exactly one
+future wake is pending, in the single `KernelWake` row: an offer for time T
+sends a delayed permit carrying T only when it sets the row's `at` to T, which
+it may when the row is empty, already due or later than T. A delivery clears
+the row while it still holds its own permit's `at`, runs, and offers the global
+next deadline (with the alert minimum) by the same rule, so duplicate and stale
+permits end without a successor. A wake for a deadline is classified as due or
+future only after the caller's commit, and the offer is one statement after
+that commit, never inside a gated transaction. Immediate commit wakes and
+device ring wakes do not touch the row. A delivery whose runner stopped on its
+budget with work due sends an immediate continuation; one whose runner found
+an empty round but still sees due work offers a short retry instead. Offers
+refused while a permit is pending rely on its delivery, so a lost permit, or a
+send whose retries are exhausted, leaves their deadlines to the next offer
+after its `at` passes, or the hourly cron. Deadline writers that send no wake
+of their own are bounded the same way: writes inside a delivery (its offer
+covers them), failures settled by a member's `reconcileNow` (its
+claim-recovery wake covers them), and any other future `availableAt` written
+without a wake, such as a Run's funding pause or an external executor's
+delayed release. Writes that make work due now send a commit wake, including
+a Run retry or relaunch that revives its Asks. Commit wakes and
 `household.changed` freshness notifications stay with `generic/changes`, and a
 kernel apply emits the same change record as any other write.
 

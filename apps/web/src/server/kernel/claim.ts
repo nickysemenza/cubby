@@ -398,7 +398,7 @@ async function withPartition<T>(
     parked = (await full?.(q)) ?? false;
     return empty;
   });
-  if (parked) await wakeClaimRecovery(new Date(Date.now() + 15_000));
+  if (parked) await wakeClaimRecovery(new Date(Date.now() + 15_000), db);
   return result;
 }
 
@@ -458,7 +458,7 @@ export async function claimAsk(
   );
   if (!row) return null;
   const deadline = new Date(row.deadline);
-  await wakeClaimRecovery(deadline);
+  await wakeClaimRecovery(deadline, db);
   return { ...row, token, deadline };
 }
 
@@ -516,7 +516,7 @@ export async function claimExternalAskRow(
   );
   if (!row) return null;
   const deadline = new Date(row.deadline);
-  await wakeClaimRecovery(deadline);
+  await wakeClaimRecovery(deadline, db);
   return { ...row, token, deadline };
 }
 
@@ -558,7 +558,7 @@ export async function claimAsks(
       limit - claimed.length,
       group.limit,
     );
-    if (page[0]) await wakeClaimRecovery(page[0].deadline);
+    if (page[0]) await wakeClaimRecovery(page[0].deadline, db);
     claimed.push(...page);
   }
   return claimed;
@@ -650,7 +650,7 @@ export async function claimPass(
     if (!pass) continue;
     const claimed = await claimPassGroup(db, pass);
     if (claimed) {
-      await wakeClaimRecovery(claimed.deadline);
+      await wakeClaimRecovery(claimed.deadline, db);
       return claimed;
     }
   }

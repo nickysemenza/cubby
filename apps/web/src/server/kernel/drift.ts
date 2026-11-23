@@ -11,7 +11,7 @@
  */
 import type { ActorContext } from "@cubby/schemas/context";
 import { resolveStage, nextActor } from "@cubby/schemas/kernel/stage";
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
@@ -95,9 +95,12 @@ function semanticallyEmpty(diff: Difference): boolean {
   });
 }
 
-/** The stale-scope predicate the sweep and its trigger share. */
-const stale = (reconciler: Reconciler) => sql`
-  s."scopeKind" = ${reconciler.scope} AND s.rules <> ${reconciler.rules}
+/**
+ * The stale-scope predicate the sweep and its trigger share. The trigger asks
+ * with `<` and `>` separately so each probe is one index range.
+ */
+const stale = (reconciler: Reconciler, differs: SQL = sql`<>`) => sql`
+  s."scopeKind" = ${reconciler.scope} AND s.rules ${differs} ${reconciler.rules}
   AND NOT EXISTS (SELECT 1 FROM "ScopeDirty" d
     WHERE d."scopeKind" = s."scopeKind" AND d."scopeKey" = s."scopeKey")
   AND NOT EXISTS (SELECT 1 FROM "Drift" p
@@ -349,7 +352,7 @@ export function versionSweepPass(registry: () => KernelRegistry): Pass {
   });
 }
 
-/** Whether any scope is derived under rules older than its reconciler's. */
+/** Whether any eligible scope was derived under different rules. */
 export async function hasStaleScopes(
   db: Database,
   registry: KernelRegistry,
@@ -358,9 +361,11 @@ export async function hasStaleScopes(
   if (!reconcilers.length) return false;
   const result = await repositoryQueries(db).execute<{ stale: boolean }>(sql`
     SELECT ${sql.join(
-      reconcilers.map(
-        (reconciler) =>
-          sql`EXISTS (SELECT 1 FROM "ScopeState" s WHERE ${stale(reconciler)})`,
+      reconcilers.flatMap((reconciler) =>
+        [sql`<`, sql`>`].map(
+          (range) =>
+            sql`EXISTS (SELECT 1 FROM "ScopeState" s WHERE ${stale(reconciler, range)})`,
+        ),
       ),
       sql` OR `,
     )} AS stale`);

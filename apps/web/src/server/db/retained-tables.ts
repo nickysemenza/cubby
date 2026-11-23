@@ -8,6 +8,7 @@ export {
   evidenceBinding,
   factKey,
   kernelPass,
+  kernelWake,
   keyRev,
   manualEntry,
   recordKey,

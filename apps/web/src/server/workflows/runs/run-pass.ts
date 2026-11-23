@@ -47,6 +47,7 @@ import { WorkSupersededError } from "~/server/kernel/work-errors";
 
 import { withWorkflowExecution } from "./execution";
 import {
+  announceMailDiscoveryVacancy,
   mailDiscoveryBackpressure,
   yieldClaimedMailDiscovery,
   resumeClaimedWorkflowRun,
@@ -230,6 +231,7 @@ async function reconcileIfLastAttempt(
 
 /** A funding or provider stop is a wait with its cause, never a spent attempt. */
 async function asWait(
+  db: Database,
   claim: Claim,
   runId: RunId,
   error: unknown,
@@ -253,6 +255,11 @@ async function asWait(
         })
         .where(and(eq(run.id, runId), eq(run.status, "running")));
     });
+  // `pauseForFunding` committed the paused discovery without the mailbox
+  // lock. The announcement reports its own failure, so the funding wait is
+  // always returned and keeps its deadline.
+  if (funding && cursor.purpose === "mail_discovery")
+    await announceMailDiscoveryVacancy(db, runId);
   return waitResult(cursor, wait.until, wait.reason);
 }
 
@@ -296,7 +303,7 @@ export const runExecutePass = definePass({
       }
       return result;
     } catch (error) {
-      const wait = await asWait(claim, runId, error, cursor);
+      const wait = await asWait(db, claim, runId, error, cursor);
       if (wait) return wait;
       const failure = classifyWorkFailure(
         mailDiscoveryBackpressure(error) ?? error,
