@@ -785,8 +785,18 @@ async function stopRunForReviewOnce(
         ),
       )
       .returning({ purpose: runTable.purpose, input: runTable.input });
-    if (stopped)
+    if (stopped) {
       await recordChange(tx, { kind: "source", categories: ["run"] });
+      // An Email kept on the stopped Run reads its outcome from the Run's status.
+      await (
+        await import("~/server/kernel/api")
+      ).emitWrites(databaseForTransaction(tx), {
+        table: runTable,
+        entity: "run",
+        ids: [runId],
+        columns: ["status", "endedAt"],
+      });
+    }
     // A Run without a roster (erased, or a legacy/manual Mail import) has no
     // Email to return, and stopping it for review must never fail on parsing one.
     if (current.purpose === "mail_import" && current.input !== null)
