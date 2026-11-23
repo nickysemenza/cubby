@@ -1,0 +1,96 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "316731cc-6c6c-40d8-aaea-4b35391afdb6",
+  "prevIds": [
+    "776a97ec-e3d0-4280-8851-4adac696c906"
+  ],
+  "footprints": [
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "KernelWake"
+      ],
+      "writes": [
+        "s|tbl|public.KernelWake",
+        "n|tbl|public.KernelWake",
+        "e|tbl|public.KernelWake",
+        "n|rel|public.KernelWake",
+        "n|type|public.KernelWake",
+        "n|rel|public.KernelWake_pkey"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "name": "KernelWake",
+        "isRlsEnabled": false,
+        "entityType": "tables"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "KernelWake",
+        "name": "singleton",
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "true",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "KernelWake",
+        "name": "at",
+        "type": "timestamp(3)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "KernelWake",
+        "name": "KernelWake_pkey",
+        "columns": [
+          "singleton"
+        ],
+        "nameExplicit": false,
+        "entityType": "pks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "KernelWake",
+        "name": "KernelWake_singleton_check",
+        "value": "\"singleton\"",
+        "entityType": "checks"
+      }
+    }
+  ]
+}

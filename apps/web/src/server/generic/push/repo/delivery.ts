@@ -34,7 +34,6 @@ import {
 } from "~/server/db/schema";
 import { resolveEntityDisplayCovers } from "~/server/entity-kernel/repo/entity-display-image";
 import { kernelScaffold } from "~/server/entity-kernel/scaffolds";
-import { wakeAt } from "~/server/workflows/background-tasks/publish";
 
 import {
   apnsJwt,
@@ -268,11 +267,15 @@ async function resultContent(
   };
 }
 
-/** Frozen batch membership and a fenced lease survive a crash before or after APNs acceptance. */
+/**
+ * Frozen batch membership and a fenced lease survive a crash before or after
+ * APNs acceptance. Returns when the next claim or retry falls due, which the
+ * delivery offers with the kernel's next deadline.
+ */
 export async function dispatchBackgroundAlerts(
   db: Database,
   ports: PushPorts = {},
-) {
+): Promise<Date | null> {
   for (let page = 0; page < 8; page++) {
     const token = crypto.randomUUID();
     const claimed = await withTransactionDatabase(db, async (tx) => {
@@ -352,5 +355,5 @@ export async function dispatchBackgroundAlerts(
     })
     .from(device)
     .where(and(eq(device.backgroundAlerts, true), notDeleted(device)));
-  if (next[0]?.at) await wakeAt(next[0].at, { source: "push.results.retry" });
+  return next[0]?.at ?? null;
 }

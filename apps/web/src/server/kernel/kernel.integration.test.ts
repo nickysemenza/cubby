@@ -2586,9 +2586,10 @@ describe("evidence-facts kernel", () => {
       sql`UPDATE "Ask" SET "availableAt" = now() WHERE id = ${ids[1]!}::uuid`,
     );
     expect(await claimAsk(ctx.db, ids[1]!, limit)).toBeNull();
-    expect(recover).toHaveBeenCalledWith(expect.any(Date), {
-      source: "kernel.claim-recovery",
-    });
+    expect(recover).toHaveBeenCalledWith(
+      expect.any(Date),
+      expect.objectContaining({ source: "kernel.claim-recovery" }),
+    );
     const [when] = recover.mock.calls[0]!;
     expect(when.getTime() - Date.now()).toBeGreaterThan(0);
     expect(when.getTime() - Date.now()).toBeLessThanOrEqual(15_000);

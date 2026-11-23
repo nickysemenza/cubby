@@ -245,8 +245,11 @@ export async function logAuditEntry(
       ) &&
       (await admitBackgroundAlerts(db, [inserted.id]))
     )
-      await runAfterCommit(db, () =>
-        wakeAt(new Date(Date.now() + 120_000), { source: "push.results" }),
+      await runAfterCommit(db, (committed) =>
+        wakeAt(new Date(Date.now() + 120_000), {
+          source: "push.results",
+          db: committed,
+        }),
       );
     await recordChange(db, {
       kind: "source",
@@ -327,8 +330,11 @@ export async function logAuditEntries(
       inserted.map((row) => row.id),
     ))
   )
-    await runAfterCommit(db, () =>
-      wakeAt(new Date(Date.now() + 120_000), { source: "push.results" }),
+    await runAfterCommit(db, (committed) =>
+      wakeAt(new Date(Date.now() + 120_000), {
+        source: "push.results",
+        db: committed,
+      }),
     );
   await recordChange(db, {
     kind: "source",

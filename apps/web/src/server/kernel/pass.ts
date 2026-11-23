@@ -25,7 +25,8 @@ import {
 import type { Claim, Json, Pass } from "./define";
 import { enterHouseholdGate } from "./gate";
 import type { KernelRegistry } from "./registry";
-import { wakeAfterCommit } from "./wake";
+import { isoText } from "./sql-time";
+import { wakeAfterCommit, wakeAtDeadline } from "./wake";
 
 /** Start (or restart a finished) pass instance; a pending one keeps its cursor. */
 export async function startPass(
@@ -42,7 +43,10 @@ export async function startPass(
   const at = options.availableAt
     ? sql`${options.availableAt.toISOString()}::timestamp`
     : sql`now()`;
-  await repositoryQueries(db).execute(sql`
+  const started = await repositoryQueries(db).execute<{
+    at: string;
+    due: boolean;
+  }>(sql`
     INSERT INTO "Pass" (name, key, cursor, "runId", "availableAt")
     VALUES (${pass.name}, ${options.key ?? "default"}, ${JSON.stringify(options.cursor ?? null)}::jsonb,
       ${options.runId ?? null}::uuid, ${at})
@@ -65,8 +69,13 @@ export async function startPass(
       "runId" = coalesce(excluded."runId", "Pass"."runId"),
       "doneAt" = NULL, "cancelledAt" = NULL,
       "availableAt" = CASE WHEN "Pass"."waitCause" = ${kernelWaitCause.enum.funding} AND "Pass"."doneAt" IS NULL AND "Pass"."cancelledAt" IS NULL THEN "Pass"."availableAt" ELSE least("Pass"."availableAt", excluded."availableAt") END,
-      "wakeVersion" = CASE WHEN "Pass"."waitCause" = ${kernelWaitCause.enum.funding} AND "Pass"."doneAt" IS NULL AND "Pass"."cancelledAt" IS NULL THEN "Pass"."wakeVersion" ELSE "Pass"."wakeVersion" + 1 END, "updatedAt" = now()`);
-  await wakeAfterCommit(db);
+      "wakeVersion" = CASE WHEN "Pass"."waitCause" = ${kernelWaitCause.enum.funding} AND "Pass"."doneAt" IS NULL AND "Pass"."cancelledAt" IS NULL THEN "Pass"."wakeVersion" ELSE "Pass"."wakeVersion" + 1 END, "updatedAt" = now()
+    RETURNING ${isoText(sql`"availableAt"`)} AS at, "availableAt" <= now() AS due`);
+  const row = started.rows[0];
+  // A future start owns its deadline; an immediate wake would find nothing due.
+  if (row && !row.due)
+    await wakeAtDeadline(db, new Date(row.at), "kernel.pass-start");
+  else await wakeAfterCommit(db);
 }
 
 /**
@@ -130,13 +139,17 @@ export async function runOnePass(
         key: claimed.key,
       };
       const claim = passClaim(db, claimed);
+      let wait: { at: string; wait: boolean } | undefined;
       try {
         // SAFETY: the cursor column holds the JSON the pass last returned.
         const result = await pass.run(db, claimed.cursor as Json | null, claim);
         span.setAttribute("kernel.pass.result_done", result.done);
-        await claim.fenced(async (tx) => {
+        const published = await claim.fenced(async (tx) => {
           await result.publish?.(tx);
-          await repositoryQueries(tx).execute(sql`
+          return repositoryQueries(tx).execute<{
+            at: string;
+            wait: boolean;
+          }>(sql`
         UPDATE "Pass" SET cursor = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN
             CASE WHEN cursor ? ${"legacyJobs"} THEN
               coalesce(nullif(${JSON.stringify(result.cursor)}::jsonb, 'null'::jsonb), '{}'::jsonb) || jsonb_build_object(${"legacyJobs"}::text, cursor->${"legacyJobs"})
@@ -146,8 +159,10 @@ export async function runOnePass(
           "availableAt" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${result.availableAt ? sql`${result.availableAt.toISOString()}::timestamp` : sql`now()`} ELSE least("availableAt", now()) END,
           attempts = 0, "claimToken" = NULL, "claimDeadline" = NULL,
           "waitCause" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${result.done ? null : (result.waitCause ?? null)} ELSE NULL END, "lastError" = NULL, "updatedAt" = now()
-        WHERE name = ${claimed.name} AND key = ${claimed.key}`);
+        WHERE name = ${claimed.name} AND key = ${claimed.key}
+        RETURNING ${isoText(sql`"availableAt"`)} AS at, "doneAt" IS NULL AND "availableAt" > now() AS wait`);
         });
+        wait = published.rows[0];
       } catch (error) {
         span.setError("Pass page failed");
         await settleFailure(
@@ -159,6 +174,9 @@ export async function runOnePass(
           claimed.wakeVersion,
         );
       }
+      // The page's wait is a deadline it set; a delivery's own offer also covers it.
+      if (wait?.wait)
+        await wakeAtDeadline(db, new Date(wait.at), "kernel.pass-wait");
       return true;
     }),
   );

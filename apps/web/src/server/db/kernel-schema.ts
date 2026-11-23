@@ -496,6 +496,20 @@ export const kernelPass = pgTable(
   ],
 );
 
+/**
+ * The one pending future kernel wake (ADR 0029 section 7). A delayed queue
+ * permit carries this `at` and is sent only by the offer that set it; see
+ * `wakeAt`. Its single statements run outside every transaction.
+ */
+export const kernelWake = pgTable(
+  "KernelWake",
+  {
+    singleton: boolean("singleton").primaryKey().default(true),
+    at: timestamp("at", { mode: "date", precision: 3 }),
+  },
+  (table) => [check("KernelWake_singleton_check", sql`${table.singleton}`)],
+);
+
 /** One proposal per scope that a version change alone would alter. */
 export const drift = pgTable(
   "Drift",
