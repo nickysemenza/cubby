@@ -271,11 +271,12 @@ export function DetailPageHeader({
 }
 
 /**
- * A record's identity at the top of its rail: breadcrumb, cover beside the
- * title, then code, kind and state, the commands, and the record's summary
- * (machinery lines, AI-written summary). Stacked pages read the same block.
+ * A record page's title bar: breadcrumb, cover beside the large title with
+ * the mono code, kind, state and Needs you badges after it, Edit and the
+ * overflow on the right, then the record's summary lines (machinery, the
+ * AI-written summary). It scrolls with the page.
  */
-export function RecordIdentity({
+export function RecordTitleBar({
   entity,
   wayfinding,
   title,
@@ -301,7 +302,7 @@ export function RecordIdentity({
     <header
       data-slot="record-identity"
       data-testid="detail-spec-plate"
-      className="min-w-0 space-y-2"
+      className="min-w-0 space-y-1"
     >
       {wayfinding !== false ? (
         <div className="text-xs/4 text-muted-foreground">
@@ -312,41 +313,49 @@ export function RecordIdentity({
           />
         </div>
       ) : null}
-      {/* The title wraps around the cover, so a thin rail keeps its width. */}
-      <div className="flow-root min-w-0">
+      <div className="flex min-w-0 flex-wrap items-start gap-x-3 gap-y-2">
         {heroNo && (cover || heroDisplayImage) ? (
-          <div className="float-left mr-2 mb-0.5">
-            <ImageChainPopover entity={entity} id={heroNo}>
-              <EntityCover
-                images={
-                  heroImages?.length
-                    ? heroImages
-                    : heroDisplayImage
-                      ? [heroDisplayImage]
-                      : []
-                }
-                entity={entity}
-                alt="Record cover"
-                size={40}
-              />
-            </ImageChainPopover>
+          <ImageChainPopover entity={entity} id={heroNo}>
+            <EntityCover
+              images={
+                heroImages?.length
+                  ? heroImages
+                  : heroDisplayImage
+                    ? [heroDisplayImage]
+                    : []
+              }
+              entity={entity}
+              alt="Record cover"
+              size={40}
+            />
+          </ImageChainPopover>
+        ) : null}
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2.5 gap-y-1">
+          <h1 className="min-w-0 text-2xl/8 font-semibold break-words text-foreground-strong">
+            {title}
+          </h1>
+          {heroNo || status ? (
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs">
+              {heroNo ? (
+                <CopyableShortcode
+                  code={heroNo}
+                  className="min-h-11 rounded-full bg-muted px-2 font-mono text-muted-foreground md:min-h-(--pill-height)"
+                />
+              ) : null}
+              {status}
+            </div>
+          ) : null}
+        </div>
+        {heroActions?.primary || heroActions?.secondary ? (
+          <div
+            data-record-commands
+            className="flex max-w-full flex-wrap items-center gap-1 print:hidden"
+          >
+            {heroActions.primary}
+            {heroActions.secondary}
           </div>
         ) : null}
-        <h1 className="min-w-0 text-lg/5 font-semibold break-words text-foreground-strong">
-          {title}
-        </h1>
       </div>
-      {heroNo || status ? (
-        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-          {heroNo ? (
-            <CopyableShortcode
-              code={heroNo}
-              className="min-h-11 font-mono text-foreground md:min-h-0"
-            />
-          ) : null}
-          {status}
-        </div>
-      ) : null}
       {when || validCreatedAt ? (
         <p className="flex min-w-0 flex-wrap gap-x-1 text-xs/4 text-muted-foreground">
           {when ? (
@@ -364,15 +373,6 @@ export function RecordIdentity({
             </span>
           ) : null}
         </p>
-      ) : null}
-      {heroActions?.primary || heroActions?.secondary ? (
-        <div
-          data-record-commands
-          className="flex max-w-full flex-wrap items-center gap-1 print:hidden"
-        >
-          {heroActions.primary}
-          {heroActions.secondary}
-        </div>
       ) : null}
       {summary}
     </header>

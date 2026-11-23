@@ -47,6 +47,7 @@ import {
 } from "~/entity/relationships/connection-paths";
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { entityList } from "~/integrations/tanstack-query/generated/domains/entityList.gen";
+import { formatCount, formatCurrency } from "~/lib/number-format";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { QuerySection } from "~/ui/feedback/query-section";
 import { Button } from "~/ui/primitives/button";
@@ -54,6 +55,7 @@ import { Description } from "~/ui/text/description";
 
 import {
   useSectionCount,
+  useSectionDigest,
   useSectionEmpty,
 } from "../../ui/data-table/detail-section-state";
 import {
@@ -63,6 +65,7 @@ import {
 } from "../../ui/data-table/table-features";
 import { type BaseListRow, useEntityList } from "../hooks/use-entity-list";
 import { useEntityFieldSave } from "../hooks/use-update-mutation";
+import { readPathValue } from "../read-path";
 import { ListQueryProvider } from "../table/list-query-context";
 import { ListWorkbench } from "../table/list-workbench";
 import type { ListQueryOptionsFn } from "../table/use-paginated-table-core";
@@ -333,6 +336,41 @@ function RelationLoadingSkeleton<TItem extends RowData>({
 }
 
 type RelationRow = BaseListRow;
+
+const DIGEST_NAMES = 3;
+
+/**
+ * A relation in one line while its section is closed: its money total (the
+ * server's sum of the first summed money column) and the first few names.
+ */
+function relationDigest(
+  queryClient: QueryClient,
+  target: BrowserRoutedEntity,
+  table: CubbyTable<RelationRow>,
+  count: number | undefined,
+) {
+  const sums = table.options.meta?.serverTotals?.sums;
+  const money = table
+    .getAllLeafColumns()
+    .find(
+      (column) =>
+        column.columnDef.meta?.valueKind === "money" &&
+        sums?.[column.id] !== undefined,
+    );
+  const total = money ? sums?.[money.id] : undefined;
+  const { titleField } = entityMetadata(queryClient, target).summary;
+  const rows = table.getCoreRowModel().rows;
+  const names = rows.slice(0, DIGEST_NAMES).flatMap((row) => {
+    const name = readPathValue(row.original, titleField);
+    return typeof name === "string" && name !== "" ? [name] : [];
+  });
+  const rest = (count ?? rows.length) - names.length;
+  const more = rest > 0 ? ` +${formatCount(rest)}` : "";
+  return [
+    ...(total !== undefined ? [formatCurrency(total)] : []),
+    ...(names.length ? [`${names.join(", ")}${more}`] : []),
+  ].join(" · ");
+}
 /** One descriptor key → the record's shortcode; the target's schema parses it. */
 type RelationFilters = Partial<Record<string, string | boolean>>;
 
@@ -658,6 +696,16 @@ function LiveEntityRelationTable({
   const resolvedEmpty =
     !list.workbench.error && !filtered && list.totalCount === 0;
   useSectionEmpty(resolvedEmpty);
+  useSectionDigest(
+    filtered || list.workbench.isLoading
+      ? undefined
+      : relationDigest(
+          queryClient,
+          target,
+          list.workbench.table,
+          unfilteredCount,
+        ),
+  );
 
   if (list.workbench.error && list.data.length === 0) {
     return (

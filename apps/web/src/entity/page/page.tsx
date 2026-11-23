@@ -17,7 +17,7 @@ import {
   DetailPageHeader,
   type DetailWayfinding,
   ListPageHeader,
-  RecordIdentity,
+  RecordTitleBar,
 } from "~/entity/page/entity-page-header";
 import { ListLoadingSkeleton } from "~/ui/feedback/loading-skeletons";
 import { type PageLayout, PageWrapper } from "~/ui/layout/page-wrapper";
@@ -81,8 +81,8 @@ export function usePageIdentity(): PageIdentity | null {
 
 /**
  * Detail-only context keeps shared body sections aware of their owner. A
- * workspace page hands its identity down: the record workspace draws it at the
- * top of its rail instead of a header block above the page.
+ * workspace page hands its identity down: the record workspace draws it as its
+ * title bar instead of a header block above the page.
  */
 const PageDetailContext = createContext<
   { entity: Entity; rawData: unknown; identity?: ReactNode } | undefined
@@ -151,6 +151,11 @@ interface PageListProps extends PageBaseProps {
    * table renderers stay flush so their rules can reach the viewport edge.
    */
   bodyGutter?: "none" | "standard";
+  /**
+   * The page lays white cards on the grey page canvas (Settings, Account)
+   * instead of sitting on the white surface.
+   */
+  canvas?: boolean;
 }
 
 interface PageDetailProps extends PageBaseProps {
@@ -168,9 +173,9 @@ interface PageDetailProps extends PageBaseProps {
   heroActions?: DetailHeroActions;
   rawData?: unknown;
   /**
-   * The children render the record workspace (`DetailSections`), whose rail
-   * owns the record's identity. Without it the page keeps a header block, for
-   * a body that is one form.
+   * The children render the record workspace (`DetailSections`), whose title
+   * bar owns the record's identity. Without it the page keeps a header block,
+   * for a body that is one form.
    */
   workspace?: boolean;
 }
@@ -211,7 +216,7 @@ function ListPageShell(props: PageListProps) {
     listChrome === "workbench"
       ? { title, eyebrow, entity, count, actions: props.actions }
       : null;
-  return (
+  const page = (
     <PageWrapper layout={layout}>
       <div>
         <ListPageHeader
@@ -237,6 +242,16 @@ function ListPageShell(props: PageListProps) {
         </PageIdentityContext.Provider>
       </div>
     </PageWrapper>
+  );
+  return props.canvas ? (
+    <div
+      data-page-canvas
+      className="min-h-[calc(100dvh-var(--app-chrome-top))] bg-page-canvas pb-6"
+    >
+      {page}
+    </div>
+  ) : (
+    page
   );
 }
 
@@ -305,7 +320,7 @@ function DetailPageShell(props: PageDetailProps) {
               entity: props.entity,
               rawData: props.rawData,
               identity: props.workspace ? (
-                <RecordIdentity {...header} />
+                <RecordTitleBar {...header} />
               ) : undefined,
             }}
           >

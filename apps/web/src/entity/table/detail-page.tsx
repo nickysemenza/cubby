@@ -64,6 +64,10 @@ export interface DetailSection extends IndexedSection {
   surface?: "card" | "plain";
 }
 
+/** Where a record type's open and closed sections are remembered. */
+export const recordSectionsStorageKey = (entity: string) =>
+  `cubby.record-sections.${entity}`;
+
 type DetailGroup = { readonly id: string; readonly title: string };
 
 interface DetailSectionsProps {
@@ -71,12 +75,17 @@ interface DetailSectionsProps {
   rawData: unknown;
   /** The record's section groups, in order; `DEFAULT_DETAIL_GROUPS` when omitted. */
   groups?: readonly DetailGroup[];
-  /** Every singular fact, under the record's identity in the rail. */
+  /** Every singular fact: the facts card. */
   facts?: ReactNode;
-  /** Needs you and the summary figures, pinned above the sections. */
-  signals?: ReactNode;
-  /** Sections with something waiting on the member. */
+  /** The record's key figures: the summary card. */
+  summary?: ReactNode;
+  /** Needs you and the record's quality checks. */
+  checklist?: ReactNode;
+  /** Sections with something waiting on the member: they open as cards. */
   attention?: ReadonlySet<string>;
+  /** Where the member's open and closed sections are remembered. */
+  storageKey?: string;
+  variant?: "page" | "inspector";
 }
 
 /**
@@ -111,11 +120,7 @@ function groupSections(
             id: `detail-group-${tab.id}`,
             title: tab.title,
             // A `full` section is a workspace: it takes a whole row.
-            sections: members.map((section) =>
-              section.placement === "full"
-                ? { ...section, span: true }
-                : section,
-            ),
+            sections: members,
           },
         ]
       : [];
@@ -213,20 +218,26 @@ function contextSourceId(
 }
 
 /**
- * A record's body: its identity and singular facts in the rail, signals above
- * its section groups, and Activity beside them, plus the
- * generic Relationships explorer and History when the page brings neither.
+ * A record's cards: its title bar, summary, Needs you, facts, section cards
+ * and ledger rows, and Activity, plus the generic Relationships explorer and
+ * History when the page brings neither.
  */
 export const DetailSections: FC<DetailSectionsProps> = ({
   sections,
   rawData,
   groups = DEFAULT_DETAIL_GROUPS,
   facts,
-  signals,
+  summary,
+  checklist,
   attention,
+  storageKey,
+  variant = "page",
 }) => {
   const { isDebugEnabled } = useDebug();
-  const pageDetail = usePageDetailContext();
+  // An inspector beside a list (or a record page's own table) never takes on
+  // the enclosing page's record.
+  const enclosing = usePageDetailContext();
+  const pageDetail = variant === "page" ? enclosing : undefined;
   const parsedDetailRecord = pageDetail
     ? detailRecordSchema.safeParse(rawData)
     : undefined;
@@ -252,19 +263,21 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   ]);
   return (
     <RecordWorkspace
+      title={pageDetail?.identity}
       groups={indexed}
       activityId={ACTIVITY_SECTION_ID}
-      rail={
-        <div className="record-rail-content space-y-3">
-          {pageDetail?.identity}
-          {facts}
-        </div>
-      }
-      signals={signals}
+      facts={facts}
+      summary={summary}
+      checklist={checklist}
       attention={attention}
+      storageKey={
+        storageKey ??
+        (pageDetail ? recordSectionsStorageKey(pageDetail.entity) : undefined)
+      }
+      variant={variant}
       footer={
         isDebugEnabled && (
-          <Section headingAs="h2" title="Raw details">
+          <Section headingAs="h2" title="Raw details" className="record-card">
             <JsonRenderer input={rawData} pretty />
           </Section>
         )

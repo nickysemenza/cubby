@@ -8,7 +8,7 @@ import { usePageWorkbenchTarget } from "~/entity/page/page";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 
-import { ListPageHeader, RecordIdentity } from "./entity-page-header";
+import { ListPageHeader, RecordTitleBar } from "./entity-page-header";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 beforeEach(() => {
@@ -33,7 +33,7 @@ it.each([
   },
 ])("hero time: $name", ({ entity, rawData, expected }) => {
   render(
-    <RecordIdentity
+    <RecordTitleBar
       entity={entity}
       title="Example record"
       rawData={{ createdAt: "2026-10-15T02:26:59Z", ...rawData }}

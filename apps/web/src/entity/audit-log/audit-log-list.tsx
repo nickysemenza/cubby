@@ -11,7 +11,10 @@ import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-o
 import { auditLog } from "~/integrations/tanstack-query/generated/domains/auditLog.gen";
 import { authClient } from "~/lib/auth-client";
 import { householdLocalDate } from "~/lib/household-date";
-import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
+import {
+  useSectionDigest,
+  useSectionEmpty,
+} from "~/ui/data-table/detail-section-state";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row } from "~/ui/layout";
@@ -126,6 +129,11 @@ export function AuditLogList({
     return AUDIT_COLUMNS.filter((column) => present.has(column.id));
   }, [days]);
 
+  useSectionDigest(
+    entries.length
+      ? `${entries.length}${hasNextPage ? "+" : ""} ${entries.length === 1 ? "change" : "changes"}`
+      : undefined,
+  );
   useSectionEmpty(
     data !== undefined &&
       !isError &&

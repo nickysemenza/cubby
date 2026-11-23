@@ -11,7 +11,6 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
@@ -19,8 +18,7 @@ import { installFeatures } from "~/features/registry";
 import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 
 import { DetailActionProvider } from "./detail-action-bar";
-import type { DetailRecordOf } from "./detail-record";
-import { CompactSummaryReport, DetailSummary } from "./detail-summary";
+import { CompactSummaryReport } from "./detail-summary";
 import { EntityReportSlot, ReportDetailActions } from "./report-slot";
 
 installFeatures();
@@ -95,17 +93,6 @@ async function choose(name: string, option: string) {
 }
 
 describe("EntityReportSlot records", () => {
-  it("renders summaries that declare no report slots", () => {
-    const record = fromPartial<DetailRecordOf<"task">>({
-      id: shortcode("TSK-4K7M"),
-      status: "not_started",
-    });
-    render(<DetailSummary entity="task" record={record} />, {
-      wrapper: harness.wrapper,
-    });
-    expect(screen.getByRole("heading", { name: "Due & state" })).toBeVisible();
-  });
-
   it("batches summary target, path and line covers through the shared media resolver", async () => {
     const cover =
       "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";

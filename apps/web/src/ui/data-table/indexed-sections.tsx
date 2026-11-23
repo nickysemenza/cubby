@@ -1,5 +1,6 @@
-import { ArrowsHorizontalIcon } from "@phosphor-icons/react/dist/csr/ArrowsHorizontal";
+import { Collapsible } from "@base-ui/react/collapsible";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { cn } from "cn";
 import {
@@ -10,14 +11,18 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
+import { z } from "zod";
 
 import { formatCount } from "~/lib/number-format";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
+import { useLocalStorage } from "~/ui/hooks/use-local-storage";
 import { useSlidingIndicator } from "~/ui/hooks/use-sliding-indicator";
+import { EagerContentContext } from "~/ui/hooks/visible-content";
 import { Section } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -31,10 +36,13 @@ import {
 import {
   ContinuousDetailContext,
   SectionCountContext,
+  SectionDigestContext,
   SectionEmptyContext,
   SectionIndexRegistryContext,
   type SectionIndexState,
 } from "./detail-section-state";
+
+import "./record-workspace.css";
 
 /** One titled, anchored section in an indexed page. */
 export interface IndexedSection {
@@ -75,28 +83,83 @@ export interface IndexedSection {
   countPending?: boolean;
   /** The declared section has no title of its own: it renders no heading. */
   bare?: boolean;
-  /** Record pages: one quiet line that stands for the body while folded. */
-  digest?: ReactNode;
-  /** Record pages: a table, which asks for a table's width and can take the whole row. */
-  wideable?: boolean;
-  /** Record pages: a workspace that always takes a whole row. */
-  span?: boolean;
+  /**
+   * Ledger rows: the line that stands for the body while it is closed, until
+   * the mounted body reports its own through `useSectionDigest`.
+   */
+  digest?: string;
 }
 
 /**
- * A record page's per-section fold and width, owned by its workspace. Absent
- * on Settings and the analytical pages, whose sections neither fold nor span.
+ * Which sections are open, owned by a record workspace or a ledger page. A
+ * section without controls (the analytical pages) is always open.
  */
 export interface RecordSectionControls {
-  folded: ReadonlySet<string>;
-  toggleFold: (id: string) => void;
-  wide: ReadonlySet<string>;
-  toggleWide: (id: string) => void;
-  /** Whether the body lets sections share a row. */
-  columns: boolean;
+  isOpen: (id: string) => boolean;
+  setOpen: (id: string, open: boolean) => void;
+  /**
+   * A closed ledger row keeps its body mounted, hidden, so its count and
+   * digest report; off where every record would pay for its whole page.
+   */
+  eager: boolean;
 }
 export const RecordSectionControlsContext =
   createContext<RecordSectionControls | null>(null);
+
+const openChoicesSchema = z.record(z.string(), z.boolean());
+const NO_CHOICES: Readonly<Record<string, boolean>> = {};
+
+/**
+ * Open and closed sections: the member's remembered choice per section (in
+ * localStorage under `storageKey`), else a session reveal (a link to the
+ * section), else `defaultOpen`. A choice that matches the default is dropped,
+ * so a changed default reaches every section the member never touched.
+ */
+export function useSectionOpenState(
+  storageKey: string | null,
+  defaultOpen: (id: string) => boolean,
+  eager: boolean,
+) {
+  const [stored, setStored] = useLocalStorage(
+    storageKey ?? "cubby.sections.unsaved",
+    openChoicesSchema,
+    NO_CHOICES,
+  );
+  const [local, setLocal] = useState<Readonly<Record<string, boolean>>>({});
+  const choices = storageKey ? stored : local;
+  const setChoices = storageKey ? setStored : setLocal;
+  const [revealed, setRevealed] = useState<ReadonlySet<string>>(new Set());
+  const latest = useRef(defaultOpen);
+  latest.current = defaultOpen;
+  const controls = useMemo<RecordSectionControls>(
+    () => ({
+      isOpen: (id) => revealed.has(id) || (choices[id] ?? latest.current(id)),
+      setOpen: (id, open) => {
+        setRevealed((previous) => {
+          if (!previous.has(id)) return previous;
+          const next = new Set(previous);
+          next.delete(id);
+          return next;
+        });
+        setChoices((previous) => {
+          const next = { ...previous };
+          if (open === latest.current(id)) delete next[id];
+          else next[id] = open;
+          return next;
+        });
+      },
+      eager,
+    }),
+    [choices, revealed, setChoices, eager],
+  );
+  /** Opens a section for this visit without recording a choice. */
+  const reveal = useCallback((id: string) => {
+    setRevealed((previous) =>
+      previous.has(id) ? previous : new Set([...previous, id]),
+    );
+  }, []);
+  return { controls, reveal };
+}
 
 /** A group heading and its sections. Ids use `detail-group-<key>`, so `#<key>` reaches it. */
 export interface IndexedSectionGroup {
@@ -112,7 +175,7 @@ function normalizedHash(hash: string) {
 /**
  * Two sections side by side at 1000px of available workspace, else stacked.
  * Auto-placed columns let the survivor take the full width when its partner is
- * hidden (an empty Needs you, a folded section), with no reflow code.
+ * hidden, with no reflow code.
  */
 export function SectionPair({ children }: { children: ReactNode }) {
   return (
@@ -132,33 +195,15 @@ const sectionIsFolded = (
   section.foldWhenEmpty === true &&
   (section.knownEmpty === true || state?.empty === true);
 
-function SectionCard({
-  section,
-  className,
-  unfolded = false,
-}: {
-  section: IndexedSection;
-  className?: string;
-  /** The member asked for this folded section by name or by link. */
-  unfolded?: boolean;
-}) {
-  const hash = useLocation({ select: (location) => location.hash });
-  const [open, setOpen] = useState(
-    !section.collapsed || normalizedHash(hash) === section.id,
-  );
-  useEffect(() => {
-    if (normalizedHash(hash) === section.id) setOpen(true);
-  }, [hash, section.id]);
+/**
+ * A section's reported state: the count and emptiness its body reports (or the
+ * batched read knew), its digest, and the providers its body reports through.
+ */
+function useSectionReport(section: IndexedSection, unfolded: boolean) {
   const [reportedCount, setCount] = useState<number | undefined>(undefined);
   const [reportedEmpty, setEmpty] = useState(false);
+  const [reportedDigest, setDigest] = useState<string | undefined>(undefined);
   const register = useContext(SectionIndexRegistryContext);
-  const continuous = useContext(ContinuousDetailContext);
-  const controls = useContext(RecordSectionControlsContext);
-  const foldable = controls !== null && !section.bare;
-  const closed = foldable && controls.folded.has(section.id);
-  const wide =
-    controls !== null &&
-    (section.span === true || controls.wide.has(section.id));
   const count = section.count ?? reportedCount ?? section.knownCount;
   const empty =
     section.empty === true ||
@@ -171,125 +216,299 @@ function SectionCard({
     register?.(section.id, { empty, count });
     return () => register?.(section.id, undefined);
   }, [register, section.id, empty, count]);
+  // A proven-empty relation mounts nothing: no skeleton and no later collapse.
+  // A section that reported empty itself stays mounted so it can report again.
+  const placeholder =
+    (folded && section.knownEmpty) || (section.countPending && !unfolded);
+  const provide = (node: ReactNode) => (
+    <SectionEmptyContext.Provider value={setEmpty}>
+      <SectionCountContext.Provider value={setCount}>
+        <SectionDigestContext.Provider value={setDigest}>
+          {node}
+        </SectionDigestContext.Provider>
+      </SectionCountContext.Provider>
+    </SectionEmptyContext.Provider>
+  );
+  return {
+    count,
+    empty,
+    folded,
+    placeholder,
+    digest: reportedDigest ?? section.digest,
+    provide,
+  };
+}
+
+const SectionPlaceholder = ({ id }: { id: string }) => (
+  <span id={id} tabIndex={-1} hidden data-detail-section />
+);
+
+/**
+ * One section with its heading: on a record page a card whose heading folds
+ * it, elsewhere an open section in the page's column.
+ */
+function SectionCard({
+  section,
+  className,
+  unfolded = false,
+  card = false,
+}: {
+  section: IndexedSection;
+  className?: string;
+  /** The member asked for this folded section by name or by link. */
+  unfolded?: boolean;
+  /** A record card: its own bordered box. */
+  card?: boolean;
+}) {
+  const hash = useLocation({ select: (location) => location.hash });
+  const [open, setOpen] = useState(
+    !section.collapsed || normalizedHash(hash) === section.id,
+  );
+  useEffect(() => {
+    if (normalizedHash(hash) === section.id) setOpen(true);
+  }, [hash, section.id]);
+  const continuous = useContext(ContinuousDetailContext);
+  const controls = useContext(RecordSectionControlsContext);
+  const report = useSectionReport(section, unfolded);
+  const foldable = controls !== null && !section.bare;
+  const closed = foldable && !controls.isOpen(section.id);
   const heading: ComponentProps<typeof Section> = section.bare
     ? {}
     : {
         headingAs: continuous ? "h3" : "h2",
         title: section.title,
       };
-  // A proven-empty relation mounts nothing: no skeleton and no later collapse.
-  // A section that reported empty itself stays mounted so it can report again.
-  if ((folded && section.knownEmpty) || (section.countPending && !unfolded))
-    return <span id={section.id} tabIndex={-1} hidden data-detail-section />;
-  return (
-    <SectionEmptyContext.Provider value={setEmpty}>
-      <SectionCountContext.Provider value={setCount}>
-        <Section
-          id={section.id}
-          tabIndex={-1}
-          onFocus={(event) => {
-            if (section.collapsed && event.target === event.currentTarget)
-              setOpen(true);
-          }}
-          data-empty={empty || undefined}
-          data-detail-section
-          data-section-title={section.title}
-          data-wide={wide || undefined}
-          data-wideable={section.wideable || undefined}
-          data-folded={closed || undefined}
-          hidden={folded}
-          className={cn(
-            "scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-            // Sections sharing a row size on real heights, never a reserved one.
-            section.overflowVisible || controls !== null
-              ? "overflow-visible"
-              : "[contain-intrinsic-size:auto_320px] [content-visibility:auto]",
-            className,
-          )}
-          aria-label={section.bare ? section.title : undefined}
-          {...heading}
-          disclosure={
-            foldable
-              ? {
-                  open: !closed,
-                  onOpenChange: () => controls.toggleFold(section.id),
-                  // Folding is a view, never a discard: editors keep drafts.
-                  // Evidence that starts folded still mounts only once open.
-                  keepMounted: !section.collapsed,
-                }
-              : section.collapsed
-                ? { open, onOpenChange: setOpen }
-                : undefined
-          }
-          empty={empty}
-          count={
-            section.bare ? undefined : (
-              <>
-                <SectionIndexMarker
-                  id={`${section.id}-marker`}
-                  state={{ empty, count }}
-                />
-                {closed && section.digest != null ? (
-                  <span
-                    data-section-digest
-                    className="ml-1.5 min-w-0 truncate font-sans text-muted-foreground"
-                  >
-                    {section.digest}
-                  </span>
-                ) : null}
-              </>
-            )
-          }
-          caption={section.description}
-          actions={
-            controls?.columns &&
-            section.wideable &&
-            !section.span &&
-            !closed ? (
-              <>
-                {section.headerAction}
-                <button
-                  type="button"
-                  aria-pressed={wide}
-                  aria-label={
-                    wide
-                      ? `Return ${section.title} to its own width`
-                      : `Widen ${section.title} to the full row`
-                  }
-                  title={wide ? "Return to its width (W)" : "Widen (W)"}
-                  onClick={() => controls.toggleWide(section.id)}
-                  className="inline-flex size-4.5 items-center justify-center rounded-sm outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-pressed:bg-row-current aria-pressed:text-foreground"
-                >
-                  <ArrowsHorizontalIcon aria-hidden className="size-3" />
-                </button>
-              </>
-            ) : (
-              section.headerAction
-            )
-          }
-        >
-          {section.content ?? <EmptyState size="inline">No items.</EmptyState>}
-        </Section>
-      </SectionCountContext.Provider>
-    </SectionEmptyContext.Provider>
+  if (report.placeholder) return <SectionPlaceholder id={section.id} />;
+  return report.provide(
+    <Section
+      id={section.id}
+      tabIndex={-1}
+      onFocus={(event) => {
+        if (section.collapsed && event.target === event.currentTarget)
+          setOpen(true);
+      }}
+      data-empty={report.empty || undefined}
+      data-detail-section
+      data-record-card={card || undefined}
+      data-section-title={section.title}
+      data-folded={closed || undefined}
+      hidden={report.folded}
+      className={cn(
+        "scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+        // Record cards size on real heights, never a reserved one.
+        section.overflowVisible || controls !== null
+          ? "overflow-visible"
+          : "[contain-intrinsic-size:auto_320px] [content-visibility:auto]",
+        card && "record-card",
+        className,
+      )}
+      aria-label={section.bare ? section.title : undefined}
+      {...heading}
+      disclosure={
+        foldable
+          ? {
+              open: !closed,
+              onOpenChange: (next) => controls.setOpen(section.id, next),
+              // Folding is a view, never a discard: editors keep drafts.
+              // Evidence that starts folded still mounts only once open.
+              keepMounted: !section.collapsed,
+            }
+          : section.collapsed
+            ? { open, onOpenChange: setOpen }
+            : undefined
+      }
+      empty={report.empty}
+      count={
+        section.bare ? undefined : (
+          <>
+            <SectionIndexMarker
+              id={`${section.id}-marker`}
+              state={{ empty: report.empty, count: report.count }}
+            />
+            {closed && report.digest ? (
+              <span
+                data-section-digest
+                className="ml-1.5 min-w-0 truncate font-sans text-muted-foreground"
+              >
+                {report.digest}
+              </span>
+            ) : null}
+          </>
+        )
+      }
+      caption={section.description}
+      actions={section.headerAction}
+    >
+      {section.content ?? <EmptyState size="inline">No items.</EmptyState>}
+    </Section>,
   );
 }
 
-/** Sections in order. */
+/**
+ * One line of a ledger card: chevron, name, a one-line digest and its count.
+ * Opening it shows the body in place at the card's width, with the section's
+ * own actions; closed, the body stays mounted (hidden) where the page is eager
+ * so its count and digest keep reporting.
+ */
+function LedgerSectionRow({
+  section,
+  unfolded = false,
+}: {
+  section: IndexedSection;
+  unfolded?: boolean;
+}) {
+  const controls = useContext(RecordSectionControlsContext);
+  const report = useSectionReport(section, unfolded);
+  const open = controls?.isOpen(section.id) ?? false;
+  const titleId = `${section.id}-title`;
+  if (report.placeholder) return <SectionPlaceholder id={section.id} />;
+  return report.provide(
+    <section
+      id={section.id}
+      tabIndex={-1}
+      aria-labelledby={titleId}
+      data-detail-section
+      data-ledger-section
+      data-section-title={section.title}
+      data-empty={report.empty || undefined}
+      data-folded={!open || undefined}
+      hidden={report.folded}
+      className="record-ledger-row focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+    >
+      <Collapsible.Root
+        open={open}
+        onOpenChange={(next) => controls?.setOpen(section.id, next)}
+      >
+        <div className="record-ledger-head">
+          <h3 id={titleId} className="min-w-0 flex-1">
+            <Collapsible.Trigger className="record-ledger-trigger group/ledger">
+              <CaretRightIcon
+                aria-hidden
+                weight="bold"
+                className="size-3 shrink-0 text-muted-foreground transition-transform duration-(--brand-motion-fast) ease-cozy group-data-[panel-open]/ledger:rotate-90"
+              />
+              <span
+                className={cn(
+                  "record-ledger-name",
+                  report.empty && "text-muted-foreground",
+                )}
+              >
+                {section.title}
+              </span>
+              <span data-section-digest className="record-ledger-digest">
+                {report.digest}
+              </span>
+              <span className="record-ledger-figure">
+                <SectionIndexMarker
+                  id={`${section.id}-marker`}
+                  state={{ empty: report.empty, count: report.count }}
+                />
+              </span>
+            </Collapsible.Trigger>
+          </h3>
+          {open && section.headerAction != null ? (
+            <div className="record-ledger-actions">{section.headerAction}</div>
+          ) : null}
+        </div>
+        <Collapsible.Panel
+          keepMounted={(controls?.eager ?? false) && !section.collapsed}
+          className="record-ledger-body"
+        >
+          {section.description != null ? (
+            <p className="text-xs/4.5 text-muted-foreground">
+              {section.description}
+            </p>
+          ) : null}
+          <EagerContentContext value={!open}>
+            {section.content ?? (
+              <EmptyState size="inline">No items.</EmptyState>
+            )}
+          </EagerContentContext>
+        </Collapsible.Panel>
+      </Collapsible.Root>
+    </section>,
+  );
+}
+
+/** Sections in order: open sections, or record cards. */
 export function SectionStack({
   sections,
   unfolded,
+  card = false,
 }: {
   sections: IndexedSection[];
   unfolded?: ReadonlySet<string>;
+  card?: boolean;
 }) {
   return sections.map((section) => (
     <SectionCard
       key={section.id}
       section={section}
+      card={card}
       unfolded={unfolded?.has(section.id)}
     />
   ));
+}
+
+/**
+ * A card of one-line sections ("More on this record", a Settings group): each
+ * row opens in place, and the known-empty ones close the card as one "Nothing
+ * recorded" line.
+ */
+export function LedgerCard({
+  id,
+  title,
+  caption,
+  sections,
+  folded,
+  pending,
+  unfolded,
+  onUnfold,
+}: {
+  id?: string;
+  title: string;
+  caption?: ReactNode;
+  sections: IndexedSection[];
+  /** Known-empty sections, named on the card's closing line. */
+  folded: IndexedSection[];
+  /** Sections still waiting on their batched count. */
+  pending: number;
+  unfolded?: ReadonlySet<string>;
+  onUnfold: (id: string) => void;
+}) {
+  if (sections.length === 0 && folded.length === 0 && pending === 0)
+    return null;
+  return (
+    <section
+      id={id}
+      tabIndex={id ? -1 : undefined}
+      aria-label={title}
+      data-detail-group={id ? "" : undefined}
+      data-ledger-card
+      className="record-card scroll-mt-[calc(var(--app-chrome-top)+1rem)] focus:outline-none focus-visible:outline-2 focus-visible:outline-ring"
+    >
+      <div className="record-card-heading">
+        <h2 className="text-base/5 font-semibold text-foreground">{title}</h2>
+        {caption != null ? (
+          <p className="text-xs/4.5 text-muted-foreground">{caption}</p>
+        ) : null}
+      </div>
+      <div className="record-ledger">
+        {sections.map((section) => (
+          <LedgerSectionRow
+            key={section.id}
+            section={section}
+            unfolded={unfolded?.has(section.id)}
+          />
+        ))}
+        <FoldedSectionsLine
+          sections={folded}
+          pending={pending}
+          onUnfold={onUnfold}
+        />
+      </div>
+    </section>
+  );
 }
 
 /**
@@ -642,9 +861,8 @@ function SectionIndex({
 }
 
 /**
- * The section the reading line is in. Paired sections share a top, so document
- * order alone would always report the right-hand one: of those sharing the
- * lowest top above the line, prefer the first still running past it.
+ * The section the reading line is in: of those sharing the lowest top above
+ * the line, prefer the first still running past it.
  */
 function currentAtLine(targets: readonly HTMLElement[], line: number) {
   const above = targets
@@ -664,8 +882,11 @@ function currentAtLine(targets: readonly HTMLElement[], line: number) {
  */
 export function useIndexedSections(
   groups: IndexedSectionGroup[],
-  /** Called before a section is focused, so its owner can reveal it. */
-  onReveal?: (id: string) => void,
+  /**
+   * Called when a link names something inside a closed section or a folded
+   * list, so its owner can open it before it is focused.
+   */
+  onReveal?: (target: HTMLElement) => void,
 ) {
   const hydrated = useHydrated();
   const revealRef = useRef(onReveal);
@@ -731,17 +952,21 @@ export function useIndexedSections(
     return group && workspaceRef.current?.contains(group) ? group.id : id;
   }, []);
   const pendingFocus = useRef<string | undefined>(undefined);
+  const [revealed, setRevealed] = useState(0);
   const focusTarget = useCallback(
     (id: string) => {
       const target = document.getElementById(id);
       if (!target || !workspaceRef.current?.contains(target)) return;
-      revealRef.current?.(id);
-      // A link to a folded section unfolds it, then focuses it once it renders.
-      if (target.hidden) {
+      // A link to or into a closed section or a folded list opens it, then
+      // focuses the target once it renders.
+      if (target.closest("[hidden]") || target.matches("[data-folded]")) {
         pendingFocus.current = id;
-        unfold(id);
+        revealRef.current?.(target);
+        if (target.hidden) unfold(id);
+        setRevealed((tick) => tick + 1);
         return;
       }
+      pendingFocus.current = undefined;
       target.scrollIntoView({ behavior: "instant", block: "start" });
       target.focus({ preventScroll: true });
       // The instant jump needs a landmark: its destination fades from the info tint.
@@ -768,10 +993,16 @@ export function useIndexedSections(
   );
   useEffect(() => {
     const id = pendingFocus.current;
-    if (id === undefined || !unfolded.has(id)) return;
-    pendingFocus.current = undefined;
+    if (id === undefined) return;
+    const target = document.getElementById(id);
+    if (
+      !target ||
+      target.closest("[hidden]") ||
+      target.matches("[data-folded]")
+    )
+      return;
     focusTarget(id);
-  }, [unfolded, focusTarget]);
+  }, [unfolded, revealed, focusTarget]);
   const selectSection = (id: string) => {
     focusTarget(id);
     void navigate({
@@ -946,17 +1177,39 @@ export function useIndexedSections(
 /**
  * One continuous, mounted page of grouped sections with a sticky contents
  * index on a wide surface (a "Jump to" menu below 800px), scroll-tracked
- * current entry, and URL fragments that keep Back/Forward. Record details,
- * Settings and the long analytical pages render through it.
+ * current entry, and URL fragments that keep Back/Forward: the long
+ * analytical pages, every section open.
+ *
+ * `layout="ledger"` (Settings, Account) draws each group as a card of
+ * one-line rows on the page canvas instead: each row states its section's
+ * current setting and opens in place, remembered under `storageKey`.
  */
 export function IndexedSections({
   groups,
   footer,
+  layout = "open",
+  storageKey,
 }: {
   groups: IndexedSectionGroup[];
   /** Rendered after the last group, outside the index. */
   footer?: ReactNode;
+  layout?: "open" | "ledger";
+  /** Ledger: where the member's open rows are remembered. */
+  storageKey?: string;
 }) {
+  const ledger = layout === "ledger";
+  const { controls, reveal } = useSectionOpenState(
+    ledger ? (storageKey ?? null) : null,
+    () => false,
+    true,
+  );
+  const revealSection = useCallback(
+    (target: HTMLElement) => {
+      const section = target.closest<HTMLElement>("[data-ledger-section]");
+      if (section) reveal(section.id);
+    },
+    [reveal],
+  );
   const {
     workspaceRef,
     bodyRef,
@@ -970,7 +1223,33 @@ export function IndexedSections({
     activeId,
     selectSection,
     focusTarget,
-  } = useIndexedSections(groups);
+  } = useIndexedSections(groups, revealSection);
+  if (ledger)
+    return (
+      <div ref={workspaceRef} className="@container/record min-w-0">
+        <ContinuousDetailContext.Provider value>
+          <SectionIndexRegistryContext.Provider value={registerSection}>
+            <RecordSectionControlsContext.Provider value={controls}>
+              <div ref={bodyRef} className="record-cards text-sm">
+                {groups.map((group) => (
+                  <LedgerCard
+                    key={group.id}
+                    id={group.id}
+                    title={group.title}
+                    sections={group.sections}
+                    folded={group.sections.filter(isFolded)}
+                    pending={group.sections.filter(isPending).length}
+                    unfolded={unfolded}
+                    onUnfold={unfold}
+                  />
+                ))}
+                {footer}
+              </div>
+            </RecordSectionControlsContext.Provider>
+          </SectionIndexRegistryContext.Provider>
+        </ContinuousDetailContext.Provider>
+      </div>
+    );
   return (
     <div ref={workspaceRef} className="@container/record min-w-0">
       <div className="space-y-3 @min-[800px]/record:flex @min-[800px]/record:items-start @min-[800px]/record:gap-6 @min-[800px]/record:space-y-0">

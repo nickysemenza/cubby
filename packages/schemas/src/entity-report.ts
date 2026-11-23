@@ -516,6 +516,12 @@ export const entityReportOut = z.object({
   status: z.string().optional(),
   /** More of the same report; pass it back as `cursor`. */
   nextCursor: z.string().optional(),
+  /**
+   * One line that stands for the whole report where it is folded or summed up
+   * ("3 locations · 12 on hand"), worded by the server. Absent when no line
+   * says it well.
+   */
+  digest: z.string().optional(),
 });
 export type EntityReportOut = z.infer<typeof entityReportOut>;
 

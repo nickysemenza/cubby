@@ -6,6 +6,7 @@ import { entityListHref } from "~/entity/entity-list-href";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { entityMetadataQueryOptions } from "~/entity/metadata";
 import { run } from "~/integrations/tanstack-query/generated/domains/run.gen";
+import { useSectionDigest } from "~/ui/data-table/detail-section-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";
 import { Switch } from "~/ui/primitives/switch";
@@ -66,6 +67,14 @@ export function MailImportSettings() {
     },
   });
   const mailboxes = status.data?.mailboxes ?? [];
+  const on = mailboxes.filter((mailbox) => mailbox.enabled).length;
+  useSectionDigest(
+    status.data === undefined
+      ? undefined
+      : mailboxes.length === 0
+        ? "No mailboxes connected"
+        : `On for ${on} of ${mailboxes.length} ${mailboxes.length === 1 ? "mailbox" : "mailboxes"}`,
+  );
   return (
     <div className="space-y-3">
       <Description size="xs">

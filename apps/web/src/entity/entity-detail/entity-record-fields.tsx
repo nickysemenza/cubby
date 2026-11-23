@@ -114,7 +114,7 @@ const hasValue = (value: unknown) =>
  * drawn by its renderer and always counts. A list field reads its display
  * items.
  */
-export function fieldRecorded<E extends GenericDetailEntity>(
+function fieldRecorded<E extends GenericDetailEntity>(
   entity: E,
   record: DetailRecordOf<E>,
   field: Field,
@@ -139,7 +139,7 @@ export function fieldRecorded<E extends GenericDetailEntity>(
  * sections and summary cells so a fact keeps its interaction wherever it is
  * placed.
  */
-export function useDetailFieldOverrides<E extends GenericDetailEntity>(
+function useDetailFieldOverrides<E extends GenericDetailEntity>(
   entity: E,
   record: DetailRecordOf<E>,
   fields: readonly string[],
@@ -199,7 +199,7 @@ export function EntityRecordFields<E extends GenericDetailEntity>({
       Object.entries(overrides).filter(([key]) => keys.includes(key)),
     );
   return (
-    <div className="grid min-w-0 gap-1">
+    <div data-facts-group className="grid min-w-0 gap-1">
       {shown.length > 0 ? (
         <EntityBasicInfo
           entity={entity}

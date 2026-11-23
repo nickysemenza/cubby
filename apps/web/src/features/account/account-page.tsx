@@ -24,6 +24,7 @@ import { oauth } from "~/integrations/tanstack-query/generated/domains/oauth.gen
 import { authClient } from "~/lib/auth-client";
 import { hasGmailReadonlyScope } from "~/lib/google-auth";
 import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
+import { useSectionDigest } from "~/ui/data-table/detail-section-state";
 import { IndexedSections } from "~/ui/data-table/indexed-sections";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { FormFieldGroup } from "~/ui/forms/form-field-group";
@@ -51,8 +52,10 @@ export function AccountPage() {
   const apiKeys = useQuery(authApiKeysQuery);
 
   return (
-    <Page variant="list" title="Account">
+    <Page variant="list" title="Account" canvas>
       <IndexedSections
+        layout="ledger"
+        storageKey="cubby.account-sections"
         groups={[
           {
             id: "detail-group-identity",
@@ -83,6 +86,9 @@ export function AccountPage() {
                 icon: DesktopIcon,
                 description: "Browsers and apps signed in as you.",
                 count: sessions.data?.length,
+                digest: sessions.data
+                  ? `${sessions.data.length} signed in`
+                  : undefined,
                 content: <SessionSettings sessions={sessions} />,
               },
               {
@@ -92,6 +98,9 @@ export function AccountPage() {
                 description:
                   "MCP clients you authorized over OAuth. Revoking ends their tokens at once; they can reconnect by signing in again.",
                 count: apps.data?.length,
+                digest: apps.data
+                  ? `${apps.data.length} authorized`
+                  : undefined,
                 content: <ConnectedAppsSettings apps={apps} />,
               },
               {
@@ -101,6 +110,9 @@ export function AccountPage() {
                 description:
                   "Keys for scripts and the HTTP API. Each key acts as you.",
                 count: apiKeys.data?.length,
+                digest: apiKeys.data
+                  ? `${apiKeys.data.length} ${apiKeys.data.length === 1 ? "key" : "keys"}`
+                  : undefined,
                 overflowVisible: true,
                 content: <ApiKeySettings apiKeys={apiKeys} />,
               },
@@ -139,6 +151,7 @@ function ProfileSettings() {
     },
   });
 
+  useSectionDigest(user ? `${user.name} · ${user.email}` : undefined);
   if (!user) return null;
   return (
     <Row align="start" gap="lg" className="max-md:flex-col">
@@ -182,6 +195,14 @@ function ProfileSettings() {
 
 function SignInSettings() {
   const accounts = useQuery(authAccountsQuery);
+  const methods = (accounts.data ?? []).flatMap((account) =>
+    account.providerId === "google"
+      ? ["Google"]
+      : account.providerId === "credential"
+        ? ["Password"]
+        : [],
+  );
+  useSectionDigest(accounts.data ? methods.join(" · ") : undefined);
   if (accounts.isError)
     return (
       <ErrorDisplay

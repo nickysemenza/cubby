@@ -24,7 +24,9 @@ heading for the surface you are changing.
   on the surface, sidebar and row hover needs 4.5:1 and every mark 3:1; check a
   new pair numerically. `:root[data-hosted-workspace]` pins every colour that
   palette sets, so hosted native workspaces keep their shipped look; a palette
-  change edits both blocks.
+  change edits both blocks. `page-canvas` is the grey canvas record pages, the
+  inspector, Settings and Account lay their cards on; hosted workspaces pin it
+  to the card colour.
 - Type has no step under 11px: `text-2xs` and `text-3xs` are both 11px, and
   desktop leading is at least 1.3x.
 - A new semantic color gets its primitive in `brand.css` and a `--color-*`
@@ -456,6 +458,10 @@ jump; section headers match it. `DesktopDataRow` clips every cell to the height.
 
 `RTable`'s `inspector` composes `SidePanelLayout`: a right column at wide widths
 and the shared sheet below, with row stepping over the filtered, sorted model.
+The record inside it (`InspectorRecord`) renders `RecordDetailBody` with
+`variant="inspector"`, the record page's own cards in one column: no second
+inspector layout exists. The inspector never takes on an enclosing record
+page's identity, and its ledger lines mount a section only once opened.
 `desktopInspector` is the docked slot for hosts whose inspection owner already
 handles responsive presentation. Responsive layouts that move an editor between
 sidebar and sheet keep selected values with the page's selection owner.
@@ -516,15 +522,30 @@ never call `PageWrapper` directly. Detail bodies use `DetailSections`
 (`~/entity/table/detail-page`) as children.
 
 - A record page passes `workspace` to `Page`: its identity (breadcrumb, cover,
-  title, code, `KindTag`, `StateBadge` or the machinery lines, commands and the
-  AI summary) draws at the top of the record rail instead of a header block. A
-  detail page whose body is one form omits `workspace` and keeps the header.
-- `DetailSections` renders `RecordWorkspace`: the 172px rail with the page's
-  `facts` and the contents index, the pinned `signals` bar, the section groups
-  with the sections on one shared set of tracks, and the Activity column. Without `detail.groups` an entity
-  gets Overview, Work, Evidence, Relations and Activity. Every section stays
-  mounted; a group or section is a URL fragment, and a fragment naming a folded
-  section opens it. [DESIGN.md](../DESIGN.md#layout) owns the widths and keys.
+  title, code, `KindTag`, `StateBadge` or the machinery lines, Needs you,
+  commands and the AI summary) draws as the record's title bar
+  (`RecordTitleBar`) instead of a header block. A detail page whose body is one
+  form omits `workspace` and keeps the header.
+- `DetailSections` renders `RecordWorkspace`: the title bar, the `summary`,
+  `checklist` and Activity cards in the summary column, and the `facts` card,
+  the open section cards and the "More on this record" ledger card in the main
+  column. The first section of the first group and the sections in `attention`
+  (those holding a quality gap) are cards; the rest are ledger lines. Without
+  `detail.groups` an entity gets Overview, Work, Evidence, Relations and
+  Activity, which set the order. Open and closed choices persist per entity
+  under `recordSectionsStorageKey` (`useSectionOpenState`). On a fine-pointer
+  desktop page a closed ledger line keeps its body mounted and hidden
+  (`EagerContentContext` admits its `VisibleContent` at once) so it can report
+  its count and digest; phones and the inspector mount it only once opened;
+  a section or field fragment opens what holds it before focusing it.
+  [DESIGN.md](../DESIGN.md#layout) owns the widths and keys.
+- A ledger line's digest is the section's own words: `IndexedSection.digest`
+  when the page knows it, else what its mounted body reports through
+  `useSectionDigest` (relation tables: money total and first names; custom
+  slots: their state; report slots: the report's server-composed `digest`,
+  which `withDigest` in `server/generic/entity-report/repo/digest.ts` fills
+  from the first block that reads well in one line). Settings and Account
+  sections report their current setting the same way.
 - A fact appears once: header lines, state, kind, the AI summary, the side
   column's needs field and its summary cells leave the field sections, and an
   embedded table omits the parent-reference column.

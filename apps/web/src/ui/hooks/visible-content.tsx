@@ -1,4 +1,17 @@
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
+/**
+ * Inside a closed ledger row the body has no box, so it can never scroll into
+ * view: the row mounts it at once instead, so its count and digest report.
+ */
+export const EagerContentContext = createContext(false);
 
 /** Admit a lower section once, then keep editors mounted when it scrolls away. */
 export function VisibleContent({
@@ -8,11 +21,12 @@ export function VisibleContent({
   children: ReactNode;
   fallback: ReactNode;
 }) {
+  const eager = useContext(EagerContentContext);
   const host = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(eager);
   useEffect(() => {
     const element = host.current;
-    if (!element) return;
+    if (!element || visible) return;
     if (typeof IntersectionObserver === "undefined") {
       setVisible(true);
       return;
@@ -27,6 +41,6 @@ export function VisibleContent({
     );
     observer.observe(element);
     return () => observer.disconnect();
-  }, []);
-  return <div ref={host}>{visible ? children : fallback}</div>;
+  }, [visible]);
+  return <div ref={host}>{visible || eager ? children : fallback}</div>;
 }

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { run } from "~/integrations/tanstack-query/generated/domains/run.gen";
 import { formatTimestamp } from "~/lib/date-format";
+import { useSectionDigest } from "~/ui/data-table/detail-section-state";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/text/description";
@@ -16,6 +17,13 @@ export function PurchaseImportAgentConnection({
   feedback?: PurchaseAgentConnectionStatus;
 }) {
   const access = useQuery(run.agentConnection.queryOptions());
+  useSectionDigest(
+    access.data === undefined
+      ? undefined
+      : access.data.authorized
+        ? "Authorized"
+        : "Not authorized",
+  );
   const disconnect = useMutation(
     run.disconnectAgent.mutationOptions({
       onSuccess: () => toast.success("Purchase import agent disconnected"),

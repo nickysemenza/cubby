@@ -778,7 +778,7 @@ field placed once, so it leaves later field sections:
   rail's facts. A field is text, a `labelField` or a `displayItem`; references stay links. Runs declare
   Why, What and Outcome.
 - `detail.aiSummary` names a stored AI-written summary drawn in the rail under the commands, absent until written.
-- `detail.side: { needs? }` fills the signals bar's Needs you. `needs` is a `displayItems` field
+- `detail.side: { needs? }` fills the record's Needs you card. `needs` is a `displayItems` field
   listing what waits on a member and shows only when non-empty. The `fields` summary cells join
   the rail's facts.
 
