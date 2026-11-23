@@ -10,16 +10,15 @@ import { notDeleted } from "~/server/db/helpers/predicates";
 import {
   emailLinkDecisionsForEmailSql,
   emailLinkDecisionsForPurchasesSql,
+  emailReviewsForEmailSql,
 } from "~/server/domains/email/repo/email-decision-sql";
-import { emailReviewsSql } from "~/server/domains/email/repo/email-decision-sql";
+import {
+  acceptedOrdersBoundToSql,
+  acceptedOrdersForEmailSql,
+} from "~/server/domains/purchase-import/repo/accepted-order-read";
 
 const { rule, decision, model, resolution } = mailboxClassificationStage.enum;
 const automatedStagesSql = sql`(${rule}, ${decision}, ${model})`;
-
-import {
-  acceptedOrderPurchasesSql,
-  acceptedOrdersBoundToSql,
-} from "~/server/domains/purchase-import/repo/accepted-order-read";
 
 export const emailAcceptedEvidenceSql = (
   includeDeleted = false,
@@ -28,12 +27,11 @@ export const emailAcceptedEvidenceSql = (
 ): SQL => sql`
  SELECT accepted.id AS "sourceOrderId", p.id AS "purchaseId", accepted.checksum AS "evidenceChecksum",
    accepted."createdAt" AS "acceptedAt", accepted.checksum IS DISTINCT FROM "Email".checksum AS changed
- FROM ${acceptedOrderPurchasesSql} accepted
+ FROM ${acceptedOrdersForEmailSql(sql`"Email".id`, sql`"Email"."ledgerPartyId"`)} accepted
  JOIN "Purchase" p ON p.id=${includeDeleted ? sql`accepted."acceptedPurchaseId"` : sql`accepted."boundPurchaseId"`} AND ${includeDeleted ? sql`true` : notDeleted("p")}
  LEFT JOIN "VendorAccount" account ON account.id=p."vendorAccountId" AND ${notDeleted("account")}
- WHERE accepted."emailId"="Email".id AND accepted."ledgerPartyId"="Email"."ledgerPartyId"
+ WHERE ${accountOwnerScope === "respect" ? sql`(account."ledgerPartyId" IS NULL OR account."ledgerPartyId"="Email"."ledgerPartyId")` : sql`true`}
    ${purchaseIds ? sql`AND p.id IN (${purchaseIds})` : sql``}
-   AND ${accountOwnerScope === "respect" ? sql`(account."ledgerPartyId" IS NULL OR account."ledgerPartyId"="Email"."ledgerPartyId")` : sql`true`}
 `;
 
 const emailLinkedDecisionPurchasesSql = (
@@ -97,10 +95,9 @@ export const emailMemberClassificationSql = () =>
     sql`"Email"`,
     sql`(
     SELECT label.classification
-    FROM ${emailReviewsSql} label
+    FROM ${emailReviewsForEmailSql(sql`"Email".id`)} label
     INNER JOIN "LedgerParty" owner ON owner."id" = "Email"."ledgerPartyId"
-    WHERE label."emailId" = "Email"."id"
-      AND label."checksum" = "Email"."checksum"
+    WHERE label."checksum" = "Email"."checksum"
       AND label."actorUserId" = owner."userId" AND label.authority = ${feedbackAuthority.enum.member}
       AND label.classification IS NOT NULL
     ORDER BY label."createdAt" DESC, label."id" DESC

@@ -43,7 +43,7 @@ import {
   vendor,
   orderMail,
 } from "~/server/db/schema";
-import { emailFinancialAssociationsSql } from "~/server/domains/email/repo/email-decision-sql";
+import { emailFinancialAssociationsForEmailSql } from "~/server/domains/email/repo/email-decision-sql";
 import { emailReviewsRead } from "~/server/domains/email/repo/email-decision-sql";
 import { readEmailFinancialAssociations } from "~/server/domains/email/repo/email-financial-associations";
 import { readEmailPurchaseAssociations } from "~/server/domains/email/repo/email-purchase-associations";
@@ -197,8 +197,7 @@ export async function hasAcceptedEmailAssociation(
   const [record] = await unwrapDb(db)
     .select({
       linked: sql<boolean>`(${emailLinkedSql()} OR EXISTS (
-      SELECT 1 FROM ${emailFinancialAssociationsSql} reviewed_financial_evidence
-      WHERE reviewed_financial_evidence."emailId" = "Email"."id"
+      SELECT 1 FROM ${emailFinancialAssociationsForEmailSql(sql`"Email"."id"`)} reviewed_financial_evidence
     ) OR EXISTS (
       SELECT 1 FROM ${shipmentSourceCapture} shipment_evidence
       WHERE shipment_evidence."emailId" = "Email"."id"

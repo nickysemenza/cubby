@@ -486,9 +486,9 @@ Order inside an apply is the gate, admitted in the transaction's first
 statement, then the revision read in a later statement, then the `ScopeDirty`
 row lock, then the record rows. A writer that takes the gate
 ahead of its row locks takes it as its first lock, and the gate entry refuses a
-transaction that already holds a row or advisory lock. A Pass publication, a
-member publication and an external Ask settlement take the gate before their
-Pass, record or Ask row; a Run transaction locks the Run row before its Pass
+transaction that already holds a row or advisory lock. A Pass output publication,
+a member publication and an external Ask settlement take the gate before their
+Pass, record or Ask row. A Run transaction locks the Run row before its Pass
 row. Money writes read after the gate at read committed, so they see every
 writer the gate serialized before them. The gate binds that order: a
 transaction holding it may raise revisions after dirty or record locks
@@ -535,7 +535,11 @@ for all three: a claim token, a deadline with renewal, an attempt count,
 classifier. Scopes that share a transient failure release their claims and
 store the error in one statement under the same claim tokens. They keep their
 attempt counts and use their own retry delays. A claim that outlives its
-deadline cannot publish. Queue permits
+deadline cannot publish. A Pass page with a publish callback takes the gate,
+fences its claim and commits the callback with its cursor and completion.
+A page without a callback fences its claim and settles only its own Pass row
+in a transaction without the gate. The wake version governs cursor and
+completion updates in both cases. Queue permits
 and the hourly cron stay as the wake and the backstop (ADR 0025 item 2); the
 next wake is the least `availableAt` across the three tables. Exactly one
 future wake is pending, in the single `KernelWake` row: an offer for time T

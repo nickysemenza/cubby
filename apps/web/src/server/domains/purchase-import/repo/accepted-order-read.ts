@@ -34,6 +34,11 @@ const acceptedOrderProjection = (observationScope?: SQL) => sql`(
 /** Accepted observations point at the reconciler's canonical Purchase identity. */
 export const acceptedOrderPurchasesSql = acceptedOrderProjection();
 
+/** Resolve bindings only for observations belonging to the requested Email and party. */
+export const acceptedOrdersForEmailSql = (emailId: SQL, ledgerPartyId: SQL) =>
+  acceptedOrderProjection(sql`observation."emailId"=${emailId}
+    AND observation."ledgerPartyId"=${ledgerPartyId}`);
+
 /**
  * Accepted observations whose bound Purchase satisfies `bound`. The ranked
  * binding and `boundPurchaseId` are computed per observation and cannot be
