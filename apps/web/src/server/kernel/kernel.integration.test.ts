@@ -2693,7 +2693,7 @@ describe("evidence-facts kernel", () => {
       ]),
     );
     const wake = vi.spyOn(backgroundTasks, "wakeKernel").mockResolvedValue();
-    await retryRunAsks(ctx.db, first);
+    await retryRunAsks(ctx.db, first, { wake: true });
     expect(wake).toHaveBeenCalledTimes(1);
     wake.mockRestore();
     expect((await kernel.runWork(ctx.db, first)).asks).toEqual(

@@ -365,7 +365,11 @@ async function runOwesWork(tx: Database, runId: RunId) {
 
 /** Items parked while a Run was stopped return when a member relaunches it. */
 async function reviveRunAsks(tx: Database, runId: RunId) {
-  await (await import("~/server/kernel/api")).retryRunAsks(tx, runId);
+  await (
+    await import("~/server/kernel/api")
+  ).retryRunAsks(tx, runId, {
+    wake: true,
+  });
 }
 
 /**

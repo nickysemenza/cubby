@@ -16,18 +16,23 @@ export async function cancelRunAsks(db: Database, runId: string) {
 
 /**
  * Explicit Run retry revives its demand and exhausted unsent calls, never
- * unknown calls. Revived Asks are due now, so this sends its own commit wake:
- * the Run's Pass may keep a later funding deadline.
+ * unknown calls. Revived Asks are due now while the Run's Pass may keep a
+ * later funding deadline, so the relaunch transaction asks for a commit wake
+ * here. A caller that revives ahead of the relaunch asks for none: a consumer
+ * woken before the Run is running would execute its Asks without their Run.
  */
-export async function retryRunAsks(db: Database, runId: string) {
+export async function retryRunAsks(
+  db: Database,
+  runId: string,
+  options: { wake: boolean },
+) {
   const q = repositoryQueries(db);
-  const revived = await q.execute<{ askId: string }>(sql`
+  await q.execute(sql`
     UPDATE "AskScope" SET "cancelledAt" = NULL
-    WHERE "runId" = ${runId}::uuid AND "cancelledAt" IS NOT NULL RETURNING "askId"`);
-  const reset = await q.execute<{ id: string }>(sql`
+    WHERE "runId" = ${runId}::uuid AND "cancelledAt" IS NOT NULL`);
+  await q.execute(sql`
     UPDATE "Ask" a SET attempts = 0, "availableAt" = now(), "lastError" = NULL
     WHERE a.state = ${askState.enum.queued} AND a.attempts >= a."maxAttempts"
-      AND EXISTS (SELECT 1 FROM "AskScope" s WHERE s."askId" = a.id AND s."runId" = ${runId}::uuid)
-    RETURNING a.id`);
-  if (revived.rows.length || reset.rows.length) await wakeAfterCommit(db);
+      AND EXISTS (SELECT 1 FROM "AskScope" s WHERE s."askId" = a.id AND s."runId" = ${runId}::uuid)`);
+  if (options.wake) await wakeAfterCommit(db);
 }

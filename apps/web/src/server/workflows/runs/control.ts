@@ -118,7 +118,10 @@ export async function controlWorkflowRun(
               ),
             )
         : [];
-    await (await import("~/server/kernel/api")).retryRunAsks(db, row.id);
+    // The relaunch below revives again inside its transaction and wakes there.
+    await (
+      await import("~/server/kernel/api")
+    ).retryRunAsks(db, row.id, { wake: false });
     if (row.failureCode === "user_cancelled") {
       // Re-admitted items still need their interrupted evaluate step to wait for them.
       for (const step of stoppedSteps)
