@@ -82,7 +82,12 @@ export function retainedMailDiscoveryScope(
 type MailDiscoveryOwner = Pick<
   typeof run.$inferSelect,
   "id" | "status" | "failureCode"
-> & { progress: MailboxDiscoveryProgress | null; historyOnly: boolean };
+> & {
+  progress: MailboxDiscoveryProgress | null;
+  historyOnly: boolean;
+  controlled: boolean;
+  pageScopedKey: string | null;
+};
 
 async function readMailDiscoveryOwners(
   db: Database,
@@ -198,18 +203,25 @@ export async function findQueuedAutomaticMailboxDiscovery(
   );
 }
 
+type AdmissionRequest = {
+  scope: MailboxDiscoveryScope;
+  runId?: RunId;
+  recovery: boolean;
+};
+type AdmissionDecision = "available" | "scope_busy" | "capacity";
+
 /** Call only while holding this mailbox's admission lock in the same transaction. */
 export async function mailDiscoveryAdmission(
   db: Database,
-  input: {
-    ledgerPartyId: string;
-    mailboxId: string;
-    scope: MailboxDiscoveryScope;
-    runId?: RunId;
-    recovery: boolean;
-  },
-): Promise<"available" | "scope_busy" | "capacity"> {
-  const owners = await readMailDiscoveryOwners(db, input);
+  input: AdmissionRequest & { ledgerPartyId: string; mailboxId: string },
+): Promise<AdmissionDecision> {
+  return admissionDecision(await readMailDiscoveryOwners(db, input), input);
+}
+
+function admissionDecision(
+  owners: MailDiscoveryOwner[],
+  input: AdmissionRequest,
+): AdmissionDecision {
   const active = owners.filter(
     (owner) => owner.id !== input.runId && owner.status === "running",
   );
@@ -280,6 +292,71 @@ export async function mailDiscoveryAdmission(
     active.length < MAIL_DISCOVERY_CAPACITY - 1
     ? "available"
     : "capacity";
+}
+
+/**
+ * The admission waiters a freed slot admits now, in queue order. Each is
+ * judged by the decision its own resume makes, against owners in which every
+ * earlier pick already runs, so release follows priority and fairness and
+ * never brings forward more waiters than the freed slots admit. Call only
+ * while holding this mailbox's admission lock, after the releasing Run's
+ * status write in the same transaction.
+ */
+export async function mailDiscoveryWaitersToRelease(
+  db: Database,
+  input: { ledgerPartyId: string; mailboxId: string; except?: RunId },
+): Promise<RunId[]> {
+  let owners = await readMailDiscoveryOwners(db, input);
+  const requestTime = (owner: MailDiscoveryOwner) =>
+    owner.progress?.admissionRequestedAt ?? "";
+  const waiters = owners
+    .filter(
+      (owner) =>
+        owner.id !== input.except &&
+        owner.status === "paused" &&
+        owner.failureCode === MAIL_DISCOVERY_ADMISSION_WAIT,
+    )
+    .sort((left, right) =>
+      requestTime(left) === requestTime(right)
+        ? left.id < right.id
+          ? -1
+          : 1
+        : requestTime(left) < requestTime(right)
+          ? -1
+          : 1,
+    );
+  const released: RunId[] = [];
+  for (const waiter of waiters) {
+    // The scope and class `resumeClaimedWorkflowRun` admits this waiter with.
+    const scope: MailboxDiscoveryScope = waiter.controlled
+      ? { kind: "mailbox" }
+      : (waiter.progress?.discoveryScope ??
+        (waiter.pageScopedKey
+          ? { kind: "query", key: waiter.pageScopedKey }
+          : { kind: "mailbox" }));
+    const recovery = waiter.progress?.admissionClass !== "automatic";
+    if (
+      admissionDecision(owners, { scope, runId: waiter.id, recovery }) !==
+      "available"
+    )
+      continue;
+    released.push(waiter.id);
+    owners = owners.map((owner) =>
+      owner.id === waiter.id
+        ? {
+            ...owner,
+            status: "running",
+            failureCode: null,
+            progress: owner.progress && {
+              ...owner.progress,
+              discoveryScope: scope,
+              admissionClass: recovery ? "recovery" : "automatic",
+            },
+          }
+        : owner,
+    );
+  }
+  return released;
 }
 
 /** A parked partial query must retain its own position against later demand. */

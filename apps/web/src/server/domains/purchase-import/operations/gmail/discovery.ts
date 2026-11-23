@@ -40,6 +40,7 @@ import {
 } from "~/server/domains/purchase-import/repo/controlled-mail-import";
 import {
   lockMailDiscoveryAdmission,
+  lockMailDiscoveryRunAdmission,
   mailDiscoveryAdmission,
   findQueuedAutomaticMailboxDiscovery,
 } from "~/server/domains/purchase-import/repo/gmail/discovery-admission";
@@ -61,6 +62,7 @@ import {
   claimWorkflowRun,
   launchWorkflowRun,
   mailDiscoveryBackpressure,
+  releaseMailDiscoveryAdmission,
   runFailureText,
 } from "~/server/workflows/runs/lifecycle";
 import { startRunPass } from "~/server/workflows/runs/run-pass";
@@ -389,15 +391,24 @@ const pauseAuthorization = async (
   error: UnparsedError,
 ): Promise<boolean> => {
   if (!isGmailAuthorizationFailure(error)) return false;
-  await getDb(db)
-    .update(runTable)
-    .set({
-      status: "paused_auth",
-      failureCode: "gmail_reconnect_required",
-      dispatchError: runFailureText(error),
-      progress: patchProgress({ phase: "paused" }),
-    })
-    .where(eligibleAttempt(params));
+  await withTransactionDatabase(db, async (tx) => {
+    // Admission before the Run row; the paused Run frees its slot.
+    const mailbox = await lockMailDiscoveryRunAdmission(
+      tx,
+      runEntityId.parse(params.runId),
+    );
+    const [paused] = await getDb(tx)
+      .update(runTable)
+      .set({
+        status: "paused_auth",
+        failureCode: "gmail_reconnect_required",
+        dispatchError: runFailureText(error),
+        progress: patchProgress({ phase: "paused" }),
+      })
+      .where(eligibleAttempt(params))
+      .returning({ id: runTable.id });
+    if (paused && mailbox) await releaseMailDiscoveryAdmission(tx, mailbox);
+  });
   return true;
 };
 
@@ -900,7 +911,12 @@ export async function finishMailDiscovery(
     columns: ["status", "endedAt"],
   };
   const finished = await withTransactionDatabase(db, async (tx) => {
-    // The gate before the Run row, the order a kernel apply takes.
+    // Admission, then the gate before the Run row, the order a kernel apply
+    // takes; the freed slot admits its waiters in this transaction.
+    const mailbox = await lockMailDiscoveryRunAdmission(
+      tx,
+      runEntityId.parse(params.runId),
+    );
     await kernel.lockWrites(tx, write);
     const [row] = await getDb(tx)
       .update(runTable)
@@ -913,7 +929,10 @@ export async function finishMailDiscovery(
       })
       .where(eligibleAttempt(params))
       .returning({ id: runTable.id });
-    if (row) await kernel.emitWrites(tx, write);
+    if (row) {
+      await kernel.emitWrites(tx, write);
+      if (mailbox) await releaseMailDiscoveryAdmission(tx, mailbox);
+    }
     return row;
   });
   if (finished)

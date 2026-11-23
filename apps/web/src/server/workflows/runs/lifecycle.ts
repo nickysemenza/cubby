@@ -1,5 +1,5 @@
 import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
-import { askState } from "@cubby/schemas/kernel/machinery";
+import { askState, kernelWaitCause } from "@cubby/schemas/kernel/machinery";
 import {
   mailboxDiscoveryInput,
   mailboxDiscoveryProgress,
@@ -17,13 +17,16 @@ import {
 } from "~/lib/error-diagnostics";
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
+import { textArrayParam } from "~/server/db/helpers/array-param";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers/core";
 import { related, outer } from "~/server/db/helpers/related";
+import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { run as runTable } from "~/server/db/retained-tables";
 import {
   lockMailDiscoveryRunAdmission,
   mailDiscoveryAdmission,
   mailDiscoveryShouldYield,
+  mailDiscoveryWaitersToRelease,
   retainedMailDiscoveryScope,
 } from "~/server/domains/purchase-import/repo/gmail/discovery-admission";
 import {
@@ -35,6 +38,7 @@ import { recordRunProgress as recordProgress } from "~/server/domains/run/repo/r
 import { createAppError } from "~/server/errors/app-error";
 import { findPgError } from "~/server/errors/db-errors";
 import { classifyWorkFailure, stopsPage } from "~/server/kernel/failure";
+import { wakeAfterCommit } from "~/server/kernel/wake";
 import {
   WorkDeferredError,
   WorkRetryableError,
@@ -47,6 +51,60 @@ import {
 import { type WorkflowRunParams } from "./contract";
 
 const log = createLogger("workflow");
+
+/**
+ * A Run waiting for a mailbox slot is brought forward by the transition that
+ * frees one (`releaseMailDiscoveryAdmission`). Its own deadline only recovers
+ * a vacancy no transition announced: a queued owner leaving the queue without
+ * a status write, or a funding pause whose separate announcement was lost.
+ */
+const MAIL_ADMISSION_RECOVERY_MS = 5 * 60_000;
+
+/**
+ * Bring forward the admission waiters a vacancy on this mailbox admits.
+ *
+ * Lock order contract: every transition of a mail_discovery Run out of
+ * `running` (completion, yield, cancellation, authorization pause, exhausted
+ * Pass failure) takes `lockMailDiscoveryRunAdmission` first, before
+ * `lockWrites`, the household gate and the Run row, then calls this after its
+ * Run write in the same transaction. Waiter Pass rows come last. Waiters
+ * check and park under the same lock, so either the waiter's check sees the
+ * vacancy or this scan sees the committed wait.
+ * A waiter whose page is still publishing its wait loses to this wake: its
+ * wake version no longer matches, so its publication leaves the Pass due.
+ * The status trigger never takes this lock first; it follows the Run lock.
+ */
+export async function releaseMailDiscoveryAdmission(
+  tx: Database,
+  mailbox: { ledgerPartyId: string; mailboxId: string; except?: RunId },
+): Promise<void> {
+  const waiters = await mailDiscoveryWaitersToRelease(tx, mailbox);
+  if (!waiters.length) return;
+  // startPass's live-row wake, limited to live waiting Passes: a finished or
+  // cancelled Pass is never restarted, and a funding wait keeps its deadline.
+  // The bumped version discards an in-flight holder's cursor; Run progress is
+  // the discovery checkpoint, so the page only repeats from it.
+  const woken = await repositoryQueries(tx).execute<{ key: string }>(sql`
+    UPDATE "Pass" SET "availableAt" = least("availableAt", now()),
+      "wakeVersion" = "wakeVersion" + 1, "updatedAt" = now()
+    WHERE name = ${RUN_EXECUTE_PASS} AND key = ANY(${textArrayParam(waiters)})
+      AND "doneAt" IS NULL AND "cancelledAt" IS NULL
+      AND "waitCause" IS DISTINCT FROM ${kernelWaitCause.enum.funding}
+      AND ("availableAt" > now() OR "claimToken" IS NOT NULL)
+    RETURNING key`);
+  if (woken.rows.length) await wakeAfterCommit(tx);
+}
+
+/** A funding pause frees its slot outside this lock; announce it afterwards. */
+export async function releaseMailDiscoveryRunAdmission(
+  db: Database,
+  runId: RunId,
+): Promise<void> {
+  await withTransactionDatabase(db, async (tx) => {
+    const mailbox = await lockMailDiscoveryRunAdmission(tx, runId);
+    if (mailbox) await releaseMailDiscoveryAdmission(tx, mailbox);
+  });
+}
 
 export const runFailureText = (
   error: Error | string,
@@ -414,15 +472,18 @@ export async function yieldClaimedMailDiscovery(
       .where(and(eq(runTable.id, runId), not(successor)))
       .returning({ id: runTable.id });
     // A concurrent stop, lease loss or new generation rolls back the yield.
-    if (queued) await assertWorkflowEffect(tx);
-    return Boolean(queued);
+    if (!queued) return false;
+    await assertWorkflowEffect(tx);
+    // Older waiters own the vacancy; this Run queues behind them.
+    await releaseMailDiscoveryAdmission(tx, { ...mailbox, except: runId });
+    return true;
   }).catch((error: unknown) => {
     throw mailDiscoveryBackpressure(error) ?? error;
   });
   if (yielded)
     throw new WorkDeferredError(
       "Mail discovery yielded shared search capacity",
-      new Date(Date.now() + 15_000),
+      new Date(Date.now() + MAIL_ADMISSION_RECOVERY_MS),
       "provider_capacity",
     );
 }
@@ -562,7 +623,7 @@ export async function resumeClaimedWorkflowRun(
     if (waiting)
       throw new WorkDeferredError(
         "Mail discovery is queued for shared search capacity",
-        new Date(Date.now() + 15_000),
+        new Date(Date.now() + MAIL_ADMISSION_RECOVERY_MS),
         "provider_capacity",
       );
   } catch (error) {

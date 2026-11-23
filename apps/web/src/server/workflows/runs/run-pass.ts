@@ -48,6 +48,7 @@ import { WorkSupersededError } from "~/server/kernel/work-errors";
 import { withWorkflowExecution } from "./execution";
 import {
   mailDiscoveryBackpressure,
+  releaseMailDiscoveryRunAdmission,
   yieldClaimedMailDiscovery,
   resumeClaimedWorkflowRun,
 } from "./lifecycle";
@@ -230,6 +231,7 @@ async function reconcileIfLastAttempt(
 
 /** A funding or provider stop is a wait with its cause, never a spent attempt. */
 async function asWait(
+  db: Database,
   claim: Claim,
   runId: RunId,
   error: unknown,
@@ -253,6 +255,10 @@ async function asWait(
         })
         .where(and(eq(run.id, runId), eq(run.status, "running")));
     });
+  // `pauseForFunding` committed the paused discovery without the mailbox
+  // lock; the release that follows is a no-op unless the slot is free.
+  if (funding && cursor.purpose === "mail_discovery")
+    await releaseMailDiscoveryRunAdmission(db, runId);
   return waitResult(cursor, wait.until, wait.reason);
 }
 
@@ -296,7 +302,7 @@ export const runExecutePass = definePass({
       }
       return result;
     } catch (error) {
-      const wait = await asWait(claim, runId, error, cursor);
+      const wait = await asWait(db, claim, runId, error, cursor);
       if (wait) return wait;
       const failure = classifyWorkFailure(
         mailDiscoveryBackpressure(error) ?? error,

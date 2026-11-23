@@ -58,6 +58,8 @@ The kernel also registers its version sweep. Model, embedding and image calls ar
 
 Funding waits are `funding` waits on Asks and Passes. Resetting funding makes waits due in database time and increments their wake versions in one statement, so a holder cannot publish an older wait over the reset. Provider capacity, rate limits, in-flight producers and device waits keep their causes and deadlines. A member pause or cancellation revokes the execution claim; retaining paid Answers does not authorize another model call.
 
+A mailbox-discovery Run that finds no free mailbox slot pauses as `mail_discovery_queued` and its Pass waits five minutes. Every transition that takes a discovery Run out of `running` (completion, yield, cancellation, authorization pause, an exhausted Pass) takes the mailbox admission lock before the write gate and Run row and, in the same transaction, makes due the waiting Passes the vacancy admits in queue order, incrementing their wake versions. A funding pause announces its vacancy in a following transaction. The five-minute deadline only recovers a vacancy nothing announced; database lock or capacity errors retry after 15 seconds.
+
 `purchase.dispatch` uses the `household.agent-turns` ClaimLimit partition with six slots. Its live Pass holds one slot across a coordinator turn, its tools and its hosted model Asks. A hosted Ask borrows that live Pass's slot; independent Asks acquire their own slot in the same partition. At most six live turns run household-wide. The mail agent's Durable Object retains its alarms.
 
 ## Wakes and progress
