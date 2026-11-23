@@ -9,6 +9,7 @@ import { z } from "zod";
 import {
   gotoAuthenticatedPage,
   selectComboboxItem,
+  showAllFacts,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 import { dispatchesOperation } from "./support/dispatch-wire";
@@ -59,8 +60,9 @@ test("reviews spending in the browser with stale and replay guards", async ({
   await gotoAuthenticatedPage(
     page,
     `/financial-transactions/${transactionId}`,
-    page.getByRole("button", { name: "Review Expense", exact: true }),
+    page.getByRole("region", { name: "Facts", exact: true }),
   );
+  await showAllFacts(page);
   await selectComboboxItem(
     page,
     page.getByRole("combobox", { name: "Vendor", exact: true }),

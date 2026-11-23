@@ -431,6 +431,3 @@ export function RecordQualityProvider(props: RecordQualityProps) {
     <>{props.children}</>
   );
 }
-
-/** Whether the entity's records carry quality checks at all. */
-export const isScoredEntity = (entity: Entity) => scored.has(entity);

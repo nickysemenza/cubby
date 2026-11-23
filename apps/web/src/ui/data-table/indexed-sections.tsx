@@ -515,7 +515,7 @@ export function LedgerCard({
  * Known-empty sections read as one quiet line at the end of their group. A
  * name unfolds its section, which keeps the section's own Add and Open all.
  */
-export function FoldedSectionsLine({
+function FoldedSectionsLine({
   sections,
   pending,
   onUnfold,
@@ -551,7 +551,7 @@ export function FoldedSectionsLine({
   );
 }
 
-export function hashForDetailTarget(id: string, groups: IndexedSectionGroup[]) {
+function hashForDetailTarget(id: string, groups: IndexedSectionGroup[]) {
   const alias = id.replace("detail-group-", "");
   // A group whose id is also a section's keeps its prefixed anchor.
   return groups.some(
@@ -611,7 +611,7 @@ const sectionMarkerId = (
 };
 
 /** The narrow page's contents: one "Jump to" menu naming the current section. */
-export function SectionJumpMenu({
+function SectionJumpMenu({
   groups,
   sectionStates,
   activeId,
@@ -944,12 +944,20 @@ export function useIndexedSections(
   const locationHash = useLocation({ select: (location) => location.hash });
   const scrollIntentRef = useRef(false);
   const navigate = useNavigate();
+  const groupsRef = useRef(groups);
+  groupsRef.current = groups;
   const targetForHash = useCallback((hash: string) => {
     const id = normalizedHash(hash);
     const direct = document.getElementById(id);
     if (direct && workspaceRef.current?.contains(direct)) return id;
-    const group = document.getElementById(`detail-group-${id}`);
-    return group && workspaceRef.current?.contains(group) ? group.id : id;
+    const groupId = id.startsWith("detail-group-") ? id : `detail-group-${id}`;
+    const group = document.getElementById(groupId);
+    if (group && workspaceRef.current?.contains(group)) return group.id;
+    // Record cards draw no group box: a group's link lands on its first section.
+    return (
+      groupsRef.current.find((candidate) => candidate.id === groupId)
+        ?.sections[0]?.id ?? id
+    );
   }, []);
   const pendingFocus = useRef<string | undefined>(undefined);
   const [revealed, setRevealed] = useState(0);

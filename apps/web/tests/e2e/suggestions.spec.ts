@@ -19,6 +19,8 @@ import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolv
 import {
   gotoAuthenticatedPage,
   openFoldedFacts,
+  showAllFacts,
+  showDetailSection,
   uniqueName,
   waitForAppHydration,
 } from "./support/e2e-helpers";
@@ -229,7 +231,7 @@ test("Cubby's values read as plain values, edits persist, and the picker offers 
   // The empty field's picker lists Cubby's guess first, never selected.
   await gotoAuthenticatedPage(page, `/products/${openProduct.id}`);
   await expect(page.getByText(guessedName, { exact: true })).toHaveCount(0);
-  // An absent fact folds under the rail's not-recorded list.
+  // An absent fact folds under the facts card's not-recorded list.
   await openFoldedFacts(page.getByRole("region", { name: "Facts" }), "Brand");
   await page.getByRole("button", { name: "Edit vendor", exact: true }).click();
   const guess = page.getByRole("option", {
@@ -281,6 +283,7 @@ test("prunes real Product tags and retains the assignment Decision", async ({
   });
   // The detail fact lists the stored proposal beneath the field.
   await gotoAuthenticatedPage(page, `/products/${product.id}`);
+  await showAllFacts(page);
   await page
     .getByText("Tags", { exact: true })
     .first()
@@ -326,9 +329,16 @@ test("shows kernel diagnostics on Image and Location and follows a field Sweep R
     name: uniqueName(testInfo, "Synthetic workshop"),
     type: "room",
   });
-  for (const path of [`/images/${image.id}`, `/locations/${location.id}`]) {
+  for (const [path, section] of [
+    [`/images/${image.id}`, "linked-records"],
+    [`/locations/${location.id}`, "ai-description"],
+  ] as const) {
     await gotoAuthenticatedPage(page, path);
-    await page.getByText("Worker diagnostics", { exact: true }).first().click();
+    await (
+      await showDetailSection(page, section)
+    )
+      .getByText("Worker diagnostics", { exact: true })
+      .click();
     await page.screenshot({
       path: testInfo.outputPath(
         path.startsWith("/images")

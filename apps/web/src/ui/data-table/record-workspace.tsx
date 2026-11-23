@@ -494,7 +494,32 @@ export function RecordWorkspace({
               </div>
               <div ref={bodyRef} className="record-main">
                 {facts}
-                <SectionStack card sections={cards} unfolded={unfolded} />
+                {hosted ? (
+                  // The native app opens a record at a group (`#evidence`), so
+                  // a hosted workspace keeps each group as an anchor.
+                  groups.map((group) => {
+                    const members = cards.filter((section) =>
+                      group.sections.includes(section),
+                    );
+                    return members.length > 0 ? (
+                      <div
+                        key={group.id}
+                        id={group.id}
+                        data-detail-group
+                        tabIndex={-1}
+                        className="focus:outline-none"
+                      >
+                        <SectionStack
+                          card
+                          sections={members}
+                          unfolded={unfolded}
+                        />
+                      </div>
+                    ) : null;
+                  })
+                ) : (
+                  <SectionStack card sections={cards} unfolded={unfolded} />
+                )}
                 <LedgerCard
                   title="More on this record"
                   caption={

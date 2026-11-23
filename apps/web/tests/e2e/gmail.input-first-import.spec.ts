@@ -24,6 +24,7 @@ import {
 import {
   gotoAuthenticatedPage,
   selectComboboxItem,
+  showDetailSection,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
@@ -90,6 +91,7 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
     },
   });
   await gotoAuthenticatedPage(page, "/settings");
+  await showDetailSection(page, "purchase-email");
   const disconnect = page.getByRole("button", {
     name: "Disconnect Google & Gmail",
     exact: true,
@@ -233,6 +235,7 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
     subject: "Synthetic seller receipt",
   });
   await gotoAuthenticatedPage(page, "/settings");
+  await showDetailSection(page, "mail-import");
   const coverageLink = page.getByRole("link", {
     name: "View Mail coverage and import a Vendor",
   });

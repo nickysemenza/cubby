@@ -6,8 +6,9 @@ import { upsertAgentProductMatch } from "~/server/domains/product/repo/match/pro
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
-  gotoDetailActions,
+  gotoAuthenticatedPage,
   selectComboboxItem,
+  showDetailSection,
   uniqueName,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
@@ -78,12 +79,13 @@ test("receiving after a photo import writes nothing until additional units are c
       .where(eq(inventoryEntry.productId, boughtUuid))
       .then((rows) => rows.filter((row) => row.deletedAt === null));
 
-  const receiveButton = page.getByRole("button", {
-    name: "Receive into inventory...",
-  });
   const dialog = page.getByRole("dialog", { name: "Receive into Inventory" });
-  await gotoDetailActions(page, `/purchases/${purchase.id}`, receiveButton);
-  await receiveButton.click();
+  await gotoAuthenticatedPage(page, `/purchases/${purchase.id}`);
+  await (
+    await showDetailSection(page, "receiving")
+  )
+    .getByRole("button", { name: "Receive into inventory..." })
+    .click();
 
   // The photo-counted match comes first, with a link to the directed review.
   await expect(

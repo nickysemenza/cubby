@@ -177,23 +177,55 @@ export async function inlineExplanation(page: Page, control: Locator) {
   return page.locator(`[id="${panelId}"]`);
 }
 
-/** Scroll the record section with this id into view and return it. */
-export async function showDetailSection(page: Page, id: string) {
-  const section = page.locator(`[id="${id}"]`);
+/**
+ * Open the record or Settings section with this id (or title, for a generated
+ * relation section) the way a member does, wherever it starts: a closed ledger
+ * row or card opens from its heading, and a known-empty section from its name
+ * on the "Nothing recorded" line. Returns the open section, scrolled into view.
+ */
+export async function showDetailSection(
+  page: Page,
+  target: string | { title: string },
+) {
+  const section = page.locator(
+    typeof target === "string"
+      ? `[id="${target}"][data-detail-section]`
+      : `[data-detail-section][data-section-title="${target.title}"]`,
+  );
+  // A section still waiting on its batched count renders untitled.
+  await expect(section).toHaveAttribute("data-section-title");
+  if (await section.isHidden()) {
+    const title = await section.getAttribute("data-section-title");
+    await page
+      .getByRole("button", { name: `Show ${title}, nothing recorded` })
+      .click();
+  }
+  const trigger = section
+    .getByRole("heading")
+    .first()
+    .getByRole("button", { expanded: false });
+  if ((await section.getAttribute("data-folded")) !== null)
+    await trigger.click();
+  await expect(section).not.toHaveAttribute("data-folded");
   await section.scrollIntoViewIfNeeded();
   await expect(section).toBeVisible();
   return section;
 }
 
+/** Show every fact on the record's facts card, past its "All N facts". */
+export async function showAllFacts(scope: Page | Locator) {
+  const all = scope.getByRole("button", { name: /^All \d+ facts$/ });
+  if (await all.isVisible()) await all.click();
+}
+
 /** Open the folded "N fields not recorded" list that names this field label. */
 export async function openFoldedFacts(scope: Page | Locator, label: string) {
   // The summary alone: the folded body's text runs on from its labels.
-  await scope
-    .locator("summary")
-    .filter({
-      hasText: new RegExp(`not recorded:.*\\b${escapeRegExp(label)}\\b`),
-    })
-    .click();
+  const summary = scope.locator("summary").filter({
+    hasText: new RegExp(`not recorded:.*\\b${escapeRegExp(label)}\\b`),
+  });
+  if (!(await summary.isVisible())) await showAllFacts(scope);
+  await summary.click();
 }
 
 /** Explicitly enter the contextual record overflow before using a secondary action. */

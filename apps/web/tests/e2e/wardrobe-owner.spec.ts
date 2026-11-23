@@ -5,7 +5,11 @@ import {
   seedWardrobePrerequisites,
 } from "./fixtures/catalog";
 import { createEntityFixture } from "./fixtures/core";
-import { gotoAuthenticatedPage, openFoldedFacts } from "./support/e2e-helpers";
+import {
+  gotoAuthenticatedPage,
+  openFoldedFacts,
+  showAllFacts,
+} from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
 // Wardrobe is the generic Inventory list narrowed to an owner and the apparel
@@ -51,8 +55,9 @@ test("wardrobe lists only the owner's entries and follows explicit ownership edi
   await gotoAuthenticatedPage(
     page,
     `/inventory/${entry.id}`,
-    page.getByRole("button", { name: "How owner is determined", exact: true }),
+    page.getByRole("region", { name: "Facts", exact: true }),
   );
+  await showAllFacts(page);
   await page
     .getByRole("button", { name: "How owner is determined", exact: true })
     .click();

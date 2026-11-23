@@ -6,6 +6,7 @@ import {
   expectViewportBounded,
   gotoAuthenticatedPage,
   readExpense,
+  showAllFacts,
 } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
@@ -26,9 +27,12 @@ export function inheritanceContract() {
     const useInherited = page
       .getByRole("button", { name: "Let Cubby decide", exact: true })
       .first();
-    const open = () =>
-      gotoAuthenticatedPage(page, `/expenses/${fixture.expense.id}`);
-    await open();
+    await gotoAuthenticatedPage(
+      page,
+      `/expenses/${fixture.expense.id}`,
+      page.getByRole("region", { name: "Facts", exact: true }),
+    );
+    await showAllFacts(page);
     await page
       .getByRole("button", { name: "How project is determined", exact: true })
       .click();
