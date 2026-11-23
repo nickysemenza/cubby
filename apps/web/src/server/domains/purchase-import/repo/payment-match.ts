@@ -1,6 +1,7 @@
 import { cardLastFoursOn } from "@cubby/schemas/financial-account";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { decisionChannel } from "@cubby/schemas/kernel/stage";
+import { statementMerchantKey } from "@cubby/schemas/statement-answers";
 import { moneyToMinor } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
@@ -20,7 +21,6 @@ import {
 import { allocationSetViolation } from "~/server/domains/financial-transaction/policy/allocation-set";
 import {
   amountPayments,
-  merchantKey,
   orderPayments,
   purchasePayments,
   transactionAmounts,
@@ -62,6 +62,7 @@ import {
   type Reconciler,
   type ScopeReads,
 } from "~/server/kernel/api";
+import { entityShortcodes } from "~/server/kernel/identity-keys";
 
 type Order = typeof sourceOrderObservation.$inferSelect;
 type Payment = typeof purchasePaymentEvidence.$inferSelect;
@@ -346,7 +347,7 @@ function paymentChoices(
         subject: recordSubject("financialTransaction", transaction.id),
         vendors:
           input.vendorsByMerchant.get(
-            merchantKey(transaction.merchant ?? ""),
+            statementMerchantKey(transaction.merchant ?? ""),
           ) ?? new Set<string>(),
         bindings: bindings.get(paymentBankEventKey(transaction.id)) ?? [],
         choice: {
@@ -632,12 +633,11 @@ export const paymentMatching: Pick<
     ]),
     source.table(vendor, ["name", "aliases", "deletedAt"], [vendorMerchants]),
     source.table(recordKey, ["scopeKind", "scopeKey", "entity", "entityId"]),
-    source.table(entityIdentity, [
-      "kind",
-      "shortcode",
-      "deletedAt",
-      "mergedIntoId",
-    ]),
+    source.table(
+      entityIdentity,
+      ["kind", "shortcode", "deletedAt", "mergedIntoId"],
+      [entityShortcodes],
+    ),
     source.table(manualEntry, ["entity", "payload"], [manualAllocations]),
     source.table(
       decision,
@@ -883,31 +883,26 @@ export const paymentMatching: Pick<
           closure.scoped.rows(entityIdentity, choiceIdsOf[index]!),
         ),
       ),
-      // A shortcode never changes; the choice's decision key fences it.
-      reads.selectEach(
-        entityIdentity,
-        new Map(
-          closures.map((closure, index) => [
-            closure.key,
-            choiceCodesOf[index]!.length
-              ? [...subjectsOf[index]!].map(decisionKey)
-              : [],
-          ]),
+      // A shortcode read records its key even when no identity holds it.
+      Promise.all(
+        closures.map((closure, index) =>
+          closure.scoped.lookup(
+            entityIdentity,
+            entityShortcodes,
+            choiceCodesOf[index]!,
+          ),
         ),
-        sql`${entityIdentity.shortcode} = ANY(${textArrayParam(choiceCodesOf.flat())})`,
       ),
     ]);
-    // Follow merge redirects to the survivor `c.reference` returns. Every id
-    // on a chain is fenced by its owner key: a merge raises both records'.
-    const chainsOf = closures.map((_, index) => {
-      const codes = new Set(choiceCodesOf[index]);
-      return [
-        ...namedById[index]!.values(),
-        ...namedByCode.filter(
-          (row) => row.shortcode && codes.has(row.shortcode),
-        ),
-      ];
-    });
+    // Follow merge redirects to the survivor `c.reference` returns. Each
+    // identity row and shortcode read here is fenced by the key a Purchase
+    // identity's insert, redirect or tombstone raises, so an identity change
+    // between this load and the reconcile's own reference read refuses the
+    // apply. Each id on a chain is also fenced by its owner key.
+    const chainsOf = closures.map((_, index) => [
+      ...namedById[index]!.values(),
+      ...namedByCode[index]!,
+    ]);
     let pending = chainsOf.map((rows) => [...rows]);
     while (pending.some((rows) => rows.some((row) => row.mergedIntoId))) {
       const next = await Promise.all(
@@ -969,7 +964,7 @@ export const paymentMatching: Pick<
             closure.scoped.lookup(vendor, vendorMerchants, [
               ...new Set(
                 transactions
-                  .map((row) => merchantKey(row.merchant ?? ""))
+                  .map((row) => statementMerchantKey(row.merchant ?? ""))
                   .filter(Boolean),
               ),
             ]),
@@ -1039,7 +1034,7 @@ export const paymentMatching: Pick<
         for (const row of vendors) {
           if (row.deletedAt) continue;
           for (const name of [row.name, ...row.aliases]) {
-            const merchant = merchantKey(name);
+            const merchant = statementMerchantKey(name);
             if (!merchant) continue;
             const ids = vendorsByMerchant.get(merchant) ?? new Set<string>();
             ids.add(row.id);

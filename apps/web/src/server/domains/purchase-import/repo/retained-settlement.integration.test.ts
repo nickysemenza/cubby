@@ -371,8 +371,10 @@ describe("settlement from retained order evidence", () => {
 
   it("dirties only the payment scope whose own amount gains a charge", async () => {
     const setup = await world();
-    await syntheticOrder(setup, "SYNTHETIC-FIRST", 27, "e");
-    await syntheticOrder(setup, "SYNTHETIC-SECOND", 41, "f");
+    // One running import Run per VendorAccount imports both Orders.
+    const run = await startImportRunFixture(ctx.db, setup.run);
+    await syntheticOrder(setup, run, "SYNTHETIC-FIRST", 27, "e");
+    await syntheticOrder(setup, run, "SYNTHETIC-SECOND", 41, "f");
     const keys = [paymentAmountKey(2700n), paymentAmountKey(4100n)];
     const dirty = async () =>
       (
@@ -399,6 +401,7 @@ describe("settlement from retained order evidence", () => {
     const setup = await world();
     const observation = await syntheticOrder(
       setup,
+      await startImportRunFixture(ctx.db, setup.run),
       "SYNTHETIC-CHOSEN",
       10,
       "a",
@@ -432,11 +435,11 @@ describe("settlement from retained order evidence", () => {
 
   async function syntheticOrder(
     setup: Awaited<ReturnType<typeof world>>,
+    run: Awaited<ReturnType<typeof startImportRunFixture>>,
     orderId: string,
     amount: number,
     checksum: string,
   ) {
-    const run = await startImportRunFixture(ctx.db, setup.run);
     const [observation] = await appendOrderEvidence(ctx.db, [
       {
         orderKey: `${setup.vendor.id}/order/${orderId}`,

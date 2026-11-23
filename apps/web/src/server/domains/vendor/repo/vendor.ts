@@ -63,6 +63,7 @@ import {
   shortcodeSetCondition,
   sqlEnumConstant,
   withTransaction,
+  withTransactionOn,
   withHouseholdWrite,
 } from "~/server/db/helpers";
 import { outer, related } from "~/server/db/helpers/related";
@@ -518,18 +519,21 @@ export const findOrCreateVendor = async (
       );
     return match.id;
   }
-  await enterVendorNameWrite(db);
-  const { row, created } = await findOrCreateWithShortcode(db, "vendor", {
-    where: and(
-      sql`lower(btrim(${vendor.name})) = lower(${trimmed})`,
-      notDeleted(vendor),
-    ),
-    values: () => ({
-      name: trimmed,
-    }),
+  // The gate, the creation and its key report commit together.
+  return withTransactionOn(db, async (tx) => {
+    await enterVendorNameWrite(tx);
+    const { row, created } = await findOrCreateWithShortcode(tx, "vendor", {
+      where: and(
+        sql`lower(btrim(${vendor.name})) = lower(${trimmed})`,
+        notDeleted(vendor),
+      ),
+      values: () => ({
+        name: trimmed,
+      }),
+    });
+    if (created) await reportVendorNameWrite(tx, row.id, ["name"]);
+    return row.id;
   });
-  if (created) await reportVendorNameWrite(db, row.id, ["name"]);
-  return row.id;
 };
 
 export const createVendor = vendorReader.createWriter(

@@ -84,6 +84,7 @@ import {
 } from "./gate";
 import { heldBaselineGap } from "./held-gap";
 import { mergeRecords, removeRecords } from "./identity";
+import { identityKeys } from "./identity-keys";
 import {
   membershipKeys,
   relatedMemberships,
@@ -999,6 +1000,14 @@ async function applyBatch(
             : [],
         );
         await insertRows(q, entityIdentity, identities);
+        for (const key of identityKeys(
+          identities.map((row) => ({
+            id: row.id,
+            kind: row.kind,
+            shortcode: typeof row.shortcode === "string" ? row.shortcode : null,
+          })),
+        ))
+          changed.add(key);
         for (const group of orderedInserts(combined.inserts)) {
           const rows = group.map((entry) => ({
             ...entry.values,

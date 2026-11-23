@@ -65,7 +65,11 @@ import {
 } from "~/server/generic/shortcode/repo/shortcode-utils";
 import type { ColumnValues } from "~/server/kernel/define";
 
-import { enterRemovalGate, reportRowWrites } from "./kernel-writes";
+import {
+  enterRemovalGate,
+  reportIdentityWrites,
+  reportRowWrites,
+} from "./kernel-writes";
 import { assertNoOrdinaryReferences } from "./ordinary-reference-guard";
 
 /** A table a `mode: "soft"` cascade can write `deletedAt` on. */
@@ -162,10 +166,13 @@ const removeRows = async (
   // Child dispositions can remove shortcode entities as well as plain rows.
   // Only rows actually removed receive a tombstone.
   if (Object.values(SHORTCODE_TABLE).some((table) => table === removal.table))
-    await tombstoneEntityIdentities(
+    await reportIdentityWrites(
       tx,
-      removed.map((row) => String(row.id)),
-      at,
+      await tombstoneEntityIdentities(
+        tx,
+        removed.map((row) => String(row.id)),
+        at,
+      ),
     );
   await reportRowWrites(
     tx,

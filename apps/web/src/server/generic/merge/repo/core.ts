@@ -28,6 +28,7 @@ import type { RemovableEntity } from "~/server/generic/removal/repo/core";
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
 import {
   enterRemovalGate,
+  reportIdentityWrites,
   reportRowWrites,
 } from "~/server/generic/removal/repo/kernel-writes";
 import { assertNoOrdinaryReferences } from "~/server/generic/removal/repo/ordinary-reference-guard";
@@ -237,10 +238,13 @@ export const finalizeMerge = async <E extends RemovableEntity>(
 
   // Old loser codes keep resolving (to the survivor) for reads; mutations
   // through them are refused. See ADR 0006.
-  await recordMergeRedirects(
+  await reportIdentityWrites(
     tx,
-    keepId,
-    removedRows.map((row) => String(row.id)),
+    await recordMergeRedirects(
+      tx,
+      keepId,
+      removedRows.map((row) => String(row.id)),
+    ),
   );
 
   // A merge with no actor context (`mergeIngredients`) still has to cascade, so

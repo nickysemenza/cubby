@@ -321,6 +321,8 @@ async function emitEntityWrite(
     id: string;
     columns: readonly string[];
     created: boolean;
+    /** The row before an update; its read-index keys are raised as it left them. */
+    before?: object;
   },
 ): Promise<void> {
   if (!write.table) return;
@@ -331,6 +333,7 @@ async function emitEntityWrite(
     columns: write.columns,
     entity: write.entity,
     created: write.created,
+    before: write.before ? [{ ...write.before }] : [],
   });
 }
 
@@ -463,6 +466,7 @@ export function createEntityCrud<
           id,
           columns: written,
           created: false,
+          before,
         });
       if (entityManifest[config.entity].auditable) {
         const relationsAfter: RelationSnapshot<TRelKey> =

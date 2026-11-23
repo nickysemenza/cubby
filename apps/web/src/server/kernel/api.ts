@@ -10,7 +10,10 @@ import type { NeedsYouPage, RunWork } from "@cubby/schemas/kernel/work";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db/database";
-import { repositoryQueries } from "~/server/db/repository-access.boundary";
+import {
+  repositoryQueries,
+  type RepositoryQueryClient,
+} from "~/server/db/repository-access.boundary";
 
 import type { AskWaiters } from "./ask";
 import { cancelClaimable } from "./claim";
@@ -24,6 +27,7 @@ import type {
   EvidenceRow,
   FactRef,
   Json,
+  Key,
   Outcome,
   Pass,
   ScopeRef,
@@ -183,6 +187,18 @@ export async function emitWrites(
   },
 ): Promise<number> {
   return (await productionKernel()).emitWrites(db, write);
+}
+
+/**
+ * Raise keys a writer derived from rows it changed, dirtying the scopes that
+ * read them. The transaction already holds the household write gate.
+ */
+export async function raiseKeys(
+  q: Pick<RepositoryQueryClient, "execute">,
+  keys: readonly Key[],
+  reason: string,
+): Promise<number> {
+  return (await productionKernel()).raiseKeys(q, keys, reason);
 }
 
 /** Take the household write gate before a writer locks the rows `emitWrites` will key. */

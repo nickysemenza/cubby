@@ -1,4 +1,5 @@
-import { sql, type SQL } from "drizzle-orm";
+import { statementMerchantKey } from "@cubby/schemas/statement-answers";
+import { sql } from "drizzle-orm";
 
 import {
   columnArrayParam,
@@ -131,40 +132,38 @@ export const orderPayments = defineReadIndex(purchasePaymentEvidence, {
   where: (values) =>
     sql`${purchasePaymentEvidence.orderObservationId} = ANY(${columnArrayParam(values)})`,
 });
+const UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const LOWER = "abcdefghijklmnopqrstuvwxyz";
+/** A key's ASCII letters and digits, A-Z lower-cased; every other character is dropped. */
+const coarse = (key: string) =>
+  key
+    .replace(/[A-Z]/gu, (letter) => LOWER[UPPER.indexOf(letter)]!)
+    .replace(/[^a-z0-9]/gu, "");
+/**
+ * Vendors with a name or alias that can carry a requested key: a superset of
+ * the rows whose `values` hold it, of which the kernel keeps only those. A
+ * name whose key equals a requested key is either all ASCII, where trimming,
+ * collapsing and lower-casing touch only characters the reduction lower-cases
+ * the same way or drops, so both reductions agree; or it holds a non-ASCII
+ * character (its UTF-8 byte length exceeds its length), which every lookup
+ * selects.
+ */
+const vendorNamesLike = (values: readonly string[]) =>
+  sql`EXISTS (SELECT 1 FROM unnest(array_prepend(${vendor.name}, ${vendor.aliases})) alias
+    WHERE octet_length(alias) <> char_length(alias)
+      OR regexp_replace(translate(alias, ${UPPER}, ${LOWER}), '[^abcdefghijklmnopqrstuvwxyz0123456789]', '', 'g') = ANY(${textArrayParam([...new Set(values.map(coarse))])}))`;
 export const vendorNames = defineReadIndex(vendor, {
   name: "vendor.name",
   values: (row) =>
     [row.name, ...row.aliases].map((name) => name.trim().toLowerCase()),
-  where: (values) =>
-    sql`EXISTS (SELECT 1 FROM unnest(ARRAY[${vendor.name}] || ${vendor.aliases}) name WHERE lower(trim(name)) = ANY(${textArrayParam(values)}))`,
+  where: vendorNamesLike,
 });
-/**
- * A merchant or Vendor name as payment matching compares it: the six ASCII
- * whitespace characters (space, tab, line feed, vertical tab, form feed,
- * carriage return) trimmed and each run collapsed to one space, and only A-Z
- * lower-cased. PostgreSQL evaluates the same patterns, passed as parameters,
- * and the same letter map, so every string has one key on both sides.
- */
-const MERCHANT_EDGES = "^[ \\t\\n\\v\\f\\r]+|[ \\t\\n\\v\\f\\r]+$";
-const MERCHANT_RUNS = "[ \\t\\n\\v\\f\\r]+";
-const UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-const LOWER = "abcdefghijklmnopqrstuvwxyz";
-const edges = new RegExp(MERCHANT_EDGES, "gu");
-const runs = new RegExp(MERCHANT_RUNS, "gu");
-export const merchantKey = (name: string) =>
-  name
-    .replace(edges, "")
-    .replace(runs, " ")
-    .replace(/[A-Z]/gu, (letter) => LOWER[UPPER.indexOf(letter)]!);
-/** The SQL spelling of {@link merchantKey}. */
-const merchantKeySql = (name: SQL) =>
-  sql`translate(regexp_replace(regexp_replace(${name}, ${MERCHANT_EDGES}, '', 'g'), ${MERCHANT_RUNS}, ' ', 'g'), ${UPPER}, ${LOWER})`;
-/** Vendor names and aliases by merchant key; an empty key is never stored or read. */
+/** Vendor names and aliases by statement merchant key; an empty key is never read. */
 export const vendorMerchants = defineReadIndex(vendor, {
   name: "vendor.merchant",
   values: (row) =>
-    [...new Set([row.name, ...row.aliases].map(merchantKey))].filter(Boolean),
-  where: (values) =>
-    sql`EXISTS (SELECT 1 FROM unnest(array_prepend(${vendor.name}, ${vendor.aliases})) alias
-      WHERE ${merchantKeySql(sql`alias`)} = ANY(${textArrayParam(values)}))`,
+    [...new Set([row.name, ...row.aliases].map(statementMerchantKey))].filter(
+      Boolean,
+    ),
+  where: vendorNamesLike,
 });

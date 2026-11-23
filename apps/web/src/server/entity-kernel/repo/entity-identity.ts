@@ -169,9 +169,9 @@ export async function recordMergeRedirects(
   tx: DrizzleTransaction,
   keepId: string,
   loserIds: readonly string[],
-): Promise<void> {
-  if (loserIds.length === 0) return;
-  await tx
+): Promise<{ id: string; kind: string; shortcode: string | null }[]> {
+  if (loserIds.length === 0) return [];
+  const redirected = await tx
     .update(entityIdentity)
     .set({
       mergedIntoId: keepId,
@@ -182,5 +182,11 @@ export async function recordMergeRedirects(
         inArray(entityIdentity.id, [...loserIds]),
         inArray(entityIdentity.mergedIntoId, [...loserIds]),
       ),
-    );
+    )
+    .returning({
+      id: entityIdentity.id,
+      kind: entityIdentity.kind,
+      shortcode: entityIdentity.shortcode,
+    });
+  return redirected;
 }

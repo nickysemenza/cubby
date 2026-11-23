@@ -88,8 +88,8 @@ export async function tombstoneEntityIdentities(
   tx: RepositoryQueryTransaction,
   ids: readonly string[],
   at = new Date(),
-): Promise<void> {
-  if (ids.length === 0) return;
+): Promise<{ id: string; kind: string; shortcode: string | null }[]> {
+  if (ids.length === 0) return [];
   // Publication locks its Job before projection rows; removal uses that order too.
   // A tombstone has no derived values; the drain never republishes one.
   const snapshots = new Set(
@@ -103,7 +103,7 @@ export async function tombstoneEntityIdentities(
     await tx.execute(
       sql`DELETE FROM ${sql.identifier(table)} WHERE "entityId" = ANY(${uuidArrayParam(ids)})`,
     );
-  await tx
+  const tombstoned = await tx
     .update(entityIdentity)
     .set({ deletedAt: at })
     .where(
@@ -111,5 +111,11 @@ export async function tombstoneEntityIdentities(
         inArray(entityIdentity.id, [...ids]),
         isNull(entityIdentity.deletedAt),
       ),
-    );
+    )
+    .returning({
+      id: entityIdentity.id,
+      kind: entityIdentity.kind,
+      shortcode: entityIdentity.shortcode,
+    });
+  return tombstoned;
 }

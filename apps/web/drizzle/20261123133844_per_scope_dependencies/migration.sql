@@ -1,23 +1,21 @@
 -- Plain reads are invisible to the runner's lock detection. Every table this
 -- migration reads or writes is named here.
-LOCK TABLE "ScopeDep", "ScopeDirty", "FactKey", "FinancialTransaction", "Expense", "Vendor" IN ACCESS EXCLUSIVE MODE;
+LOCK TABLE "ScopeDep", "ScopeDirty", "FactKey", "FinancialTransaction", "Expense" IN ACCESS EXCLUSIVE MODE;
 --> statement-breakpoint
 
 -- Per-scope dependency keys for payment matching, transfer pairing and
 -- Shipments.
 --
--- 1. Four read indexes are added over values an authored write can change,
---    whose before image is the stored `index:<table>` FactKey membership, so
---    every row gets its rows here, spelled exactly as the declarations'
---    `values`:
+-- 1. Three read indexes are added over values an authored write can change,
+--    whose before image includes the stored `index:<table>` FactKey
+--    membership, so every row gets its rows here, spelled exactly as the
+--    declarations' `values`:
 --      index:transaction.amount:<signed amount>      every FinancialTransaction
 --      index:transaction.transfer:<ledgerTransferId> FinancialTransaction with a transfer
 --      index:expense.bookingTransaction:<code>       Expense with a non-empty booking code
---      index:vendor.merchant:<merchant key>          each Vendor name and alias:
---        the six ASCII whitespace characters (space, tab, line feed, vertical
---        tab, form feed, carriage return) trimmed and each run collapsed to one
---        space, A-Z lower-cased, exactly as `merchantKey`; an empty key is not
---        stored
+--    The Vendor merchant index is never spelled here: its key is a Unicode
+--    normalisation only TypeScript computes, and every Vendor writer reports
+--    the row before its write, so the key a row leaves comes from its values.
 --    The ManualEntry and Decision allocation indexes cover insert-only rows,
 --    so no write moves a row between their memberships and they store nothing.
 --
@@ -34,11 +32,9 @@ DECLARE
   ft_total bigint;
   ft_linked bigint;
   expense_booked bigint;
-  vendor_keys bigint;
   amount_rows bigint;
   transfer_rows bigint;
   booking_rows bigint;
-  merchant_rows bigint;
   dep_rows bigint;
   dep_scopes bigint;
   dirty_before bigint;
@@ -64,36 +60,17 @@ BEGIN
     'index:Expense', id::text
   FROM "Expense" WHERE "bookingTransactionCode" <> ''
   ON CONFLICT DO NOTHING;
-  INSERT INTO "FactKey" (key, "factKind", "factId")
-  SELECT DISTINCT 'index:vendor.merchant:' || merchant.key, 'index:Vendor', v.id::text
-  FROM "Vendor" v
-  CROSS JOIN LATERAL unnest(array_prepend(v.name, v.aliases)) alias(name)
-  CROSS JOIN LATERAL (SELECT translate(regexp_replace(regexp_replace(alias.name,
-    '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), '[ \t\n\v\f\r]+', ' ', 'g'),
-    'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') AS key) merchant
-  WHERE merchant.key <> ''
-  ON CONFLICT DO NOTHING;
 
-  SELECT count(DISTINCT (v.id, merchant.key)) INTO vendor_keys
-  FROM "Vendor" v
-  CROSS JOIN LATERAL unnest(array_prepend(v.name, v.aliases)) alias(name)
-  CROSS JOIN LATERAL (SELECT translate(regexp_replace(regexp_replace(alias.name,
-    '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), '[ \t\n\v\f\r]+', ' ', 'g'),
-    'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') AS key) merchant
-  WHERE merchant.key <> '';
   SELECT count(*) INTO amount_rows FROM "FactKey"
     WHERE "factKind" = 'index:FinancialTransaction' AND key LIKE 'index:transaction.amount:%';
   SELECT count(*) INTO transfer_rows FROM "FactKey"
     WHERE "factKind" = 'index:FinancialTransaction' AND key LIKE 'index:transaction.transfer:%';
   SELECT count(*) INTO booking_rows FROM "FactKey"
     WHERE "factKind" = 'index:Expense' AND key LIKE 'index:expense.bookingTransaction:%';
-  SELECT count(*) INTO merchant_rows FROM "FactKey"
-    WHERE "factKind" = 'index:Vendor' AND key LIKE 'index:vendor.merchant:%';
   IF amount_rows <> ft_total OR transfer_rows <> ft_linked
-    OR booking_rows <> expense_booked OR merchant_rows <> vendor_keys THEN
-    RAISE EXCEPTION 'Read-index memberships: % amount for % transactions, % transfer for % linked, % booking for % Expenses, % merchant for % Vendor keys',
-      amount_rows, ft_total, transfer_rows, ft_linked, booking_rows, expense_booked,
-      merchant_rows, vendor_keys;
+    OR booking_rows <> expense_booked THEN
+    RAISE EXCEPTION 'Read-index memberships: % amount for % transactions, % transfer for % linked, % booking for % Expenses',
+      amount_rows, ft_total, transfer_rows, ft_linked, booking_rows, expense_booked;
   END IF;
 
   CREATE TEMP TABLE scope_dep_per_scope ON COMMIT DROP AS
@@ -139,8 +116,8 @@ BEGIN
   END IF;
   SELECT count(*) INTO dirty_after FROM "ScopeDirty"
     WHERE "scopeKind" IN ('purchaseEvent', 'transferPair', 'shipment');
-  RAISE NOTICE 'Memberships: % amount, % transfer, % booking, % merchant; % ScopeDep rows of % scopes deleted, dirty % -> %',
-    amount_rows, transfer_rows, booking_rows, merchant_rows, dep_rows, dep_scopes,
+  RAISE NOTICE 'Memberships: % amount, % transfer, % booking; % ScopeDep rows of % scopes deleted, dirty % -> %',
+    amount_rows, transfer_rows, booking_rows, dep_rows, dep_scopes,
     dirty_before, dirty_after;
 END $$;
 --> statement-breakpoint
