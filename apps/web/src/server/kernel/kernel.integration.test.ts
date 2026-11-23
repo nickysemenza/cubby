@@ -3121,6 +3121,99 @@ describe("evidence-facts kernel", () => {
     ]);
   });
 
+  it("accepts only committed sibling writes across publication pages", async () => {
+    const target = writes(vendor, ["name"], { entity: "vendor" });
+    let publish = false;
+    const external = "synthetic:split:external";
+    const reconciler = defineReconciler<string>({
+      scope: "fixture.splitPublication",
+      lane: "money",
+      version: 1,
+      reads: [source.table(vendor, ["name"])],
+      writes: [target],
+      async load(reads, keys) {
+        await Promise.all(
+          keys.map((key) => reads.for(key).prepare([vendor], async () => null)),
+        );
+        return new Map(keys.map((key) => [key, key]));
+      },
+      reconcile(key, c) {
+        if (publish) {
+          if (key === "c") c.decision("assignment", external, "value");
+          else
+            for (let i = 0; i < 5100; i++)
+              c.decision("assignment", `synthetic:split:${key}:${i}`, "value");
+          if (key === "a")
+            c.record(target, key, { name: "Synthetic split seller" });
+        }
+        return c.done();
+      },
+    });
+    const kernel = createKernel([
+      defineModule({ name: "splitPublication", reconcilers: [reconciler] }),
+    ]);
+    const scopes = ["a", "b", "c"].map((key) => ({
+      kind: reconciler.scope,
+      key,
+    }));
+    const q = repositoryQueries(ctx.db);
+    const dirty = () =>
+      markDirty(q, kernel.registry, {
+        keys: [],
+        discovers: scopes,
+        reason: "synthetic split",
+      });
+    await dirty();
+    await settle(kernel);
+    publish = true;
+    await dirty();
+    const claimed = (
+      await claimScopes(q, kernel.registry, "money", scopes.length)
+    ).sort((a, b) => a.key.localeCompare(b.key));
+    const computed = await computeBatch(
+      q,
+      kernel.registry,
+      reconciler,
+      scopes,
+      {
+        db: ctx.db,
+        locked: false,
+        hideBaseline: false,
+      },
+    );
+    await markDirty(q, kernel.registry, {
+      keys: [`decision:${external}`],
+      reason: "synthetic other writer",
+    });
+    const outcomes = await applyComputed(
+      ctx.db,
+      kernel.registry,
+      reconciler,
+      computed,
+      claimed,
+      {
+        releaseBaseline: false,
+        mode: "background",
+      },
+    );
+    expect(outcomes.map(({ status }) => status)).toEqual([
+      "applied",
+      "applied",
+      "conflict",
+    ]);
+    expect(
+      (
+        await q.execute<{
+          scopeKey: string;
+          conflicts: number;
+          attempts: number;
+          claimToken: string | null;
+        }>(sql`SELECT "scopeKey", conflicts, attempts, "claimToken"
+        FROM "ScopeDirty" WHERE "scopeKind" = ${reconciler.scope}`)
+      ).rows,
+    ).toEqual([{ scopeKey: "c", conflicts: 1, attempts: 0, claimToken: null }]);
+  });
+
   it("reports the final outcome once when a synchronous batch invalidates a sibling scope", async () => {
     const { kernel } = kernelWith();
     await kernel.append(ctx.db, [
