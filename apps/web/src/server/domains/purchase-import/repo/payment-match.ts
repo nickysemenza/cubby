@@ -1,12 +1,13 @@
 import { cardLastFoursOn } from "@cubby/schemas/financial-account";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { decisionChannel } from "@cubby/schemas/kernel/stage";
-import { statementMerchantKey } from "@cubby/schemas/statement-answers";
 import { moneyToMinor } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { textArrayParam } from "~/server/db/helpers/array-param";
+import { canonicalUuids, uuidArrayParam } from "~/server/db/helpers/query";
 import { requestedRows } from "~/server/db/helpers/requested";
 import { decision, manualEntry, recordKey } from "~/server/db/kernel-schema";
 import {
@@ -19,6 +20,7 @@ import {
 import { allocationSetViolation } from "~/server/domains/financial-transaction/policy/allocation-set";
 import {
   amountPayments,
+  merchantKey,
   orderPayments,
   purchasePayments,
   transactionAmounts,
@@ -48,7 +50,9 @@ import {
   retainedPaymentEvidence,
 } from "~/server/domains/purchase-import/repo/order-evidence";
 import {
+  decisionKey,
   defineReadIndex,
+  ownerKey,
   recordIdentity,
   effectiveBindings,
   recordSubject,
@@ -342,7 +346,7 @@ function paymentChoices(
         subject: recordSubject("financialTransaction", transaction.id),
         vendors:
           input.vendorsByMerchant.get(
-            statementMerchantKey(transaction.merchant ?? ""),
+            merchantKey(transaction.merchant ?? ""),
           ) ?? new Set<string>(),
         bindings: bindings.get(paymentBankEventKey(transaction.id)) ?? [],
         choice: {
@@ -628,6 +632,12 @@ export const paymentMatching: Pick<
     ]),
     source.table(vendor, ["name", "aliases", "deletedAt"], [vendorMerchants]),
     source.table(recordKey, ["scopeKind", "scopeKey", "entity", "entityId"]),
+    source.table(entityIdentity, [
+      "kind",
+      "shortcode",
+      "deletedAt",
+      "mergedIntoId",
+    ]),
     source.table(manualEntry, ["entity", "payload"], [manualAllocations]),
     source.table(
       decision,
@@ -776,27 +786,170 @@ export const paymentMatching: Pick<
         ].filter((key) => !closure.visited.has(key));
       });
     }
-    const transactionsOf = await Promise.all(
-      closures.map((closure) =>
-        closure.scoped.lookup(financialTransaction, transactionAmounts, [
-          ...new Set([
-            ...closure.payments.map((row) => String(row.amountMinor)),
-            ...[paymentAmount(closure.key)].filter(
-              (value) => value !== undefined,
-            ),
+    // A scope's Orders name their charges and Purchases through in-force
+    // decisions on their events and Emails. An identity `same` can select a
+    // charge at an amount outside the closure; a `purchaseId` assignment
+    // chooses the Purchase whose owner the proof follows.
+    const subjectsOf = closures.map(
+      (closure) =>
+        new Set(
+          closure.orders.flatMap((row) => [
+            orderEventKey(row),
+            ...(row.emailId ? [recordSubject("email", row.emailId)] : []),
           ]),
+        ),
+    );
+    const eventsOf = closures.map(
+      (closure) => new Set(closure.orders.map(orderEventKey)),
+    );
+    const allSubjects = [...new Set(subjectsOf.flatMap((set) => [...set]))];
+    const allEvents = [...new Set(eventsOf.flatMap((set) => [...set]))];
+    const choices = await reads.selectEach(
+      decision,
+      new Map(
+        closures.map((closure, index) => [
+          closure.key,
+          [...subjectsOf[index]!].map(decisionKey),
         ]),
       ),
+      sql`${decision.id} = ANY(ARRAY(
+        SELECT DISTINCT ON (d.subject, d.channel, d.slot) d.id FROM "Decision" d
+        WHERE (d.channel = ${decisionChannel.enum.assignment} AND d.slot = 'purchaseId'
+            AND d.subject = ANY(${textArrayParam(allSubjects)}))
+          OR (d.channel = ${decisionChannel.enum.identity}
+            AND (d.subject = ANY(${textArrayParam(allEvents)}) OR d.other = ANY(${textArrayParam(allEvents)})))
+        ORDER BY d.subject, d.channel, d.slot, d.at DESC, d.id DESC))`,
     );
-    // The RecordKey owners keep the batch's declared column fence: no writer
-    // raises a key per RecordKey row. Every scope reads the batch's owners;
-    // a scope uses only the owners of the Purchase its own Order chose.
-    const orders = closures.flatMap((closure) => closure.orders);
-    const events = [...new Set(orders.map(orderEventKey))];
-    const transactionIds = [
-      ...new Set(transactionsOf.flat().map((row) => row.id)),
-    ];
-    const [scopedReads, records] = await Promise.all([
+    const transactionSubject = recordSubject("financialTransaction", "");
+    const selectedOf = eventsOf.map((events) =>
+      choices.flatMap((row) => {
+        if (
+          row.channel !== decisionChannel.enum.identity ||
+          row.kind !== "same"
+        )
+          return [];
+        const other = events.has(row.subject)
+          ? row.other
+          : row.other && events.has(row.other)
+            ? row.subject
+            : null;
+        return other?.startsWith(transactionSubject)
+          ? canonicalUuids([other.slice(transactionSubject.length)])
+          : [];
+      }),
+    );
+    const purchaseChoicesOf = subjectsOf.map((subjects) =>
+      choices.flatMap((row) =>
+        row.channel === decisionChannel.enum.assignment &&
+        row.kind === "set" &&
+        subjects.has(row.subject) &&
+        typeof row.value === "string"
+          ? [row.value]
+          : [],
+      ),
+    );
+    // `c.reference` reads an id in any letter case and a shortcode in upper case.
+    const uuidLike =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+    const choiceIdsOf = purchaseChoicesOf.map((values) =>
+      values
+        .filter((value) => uuidLike.test(value))
+        .map((v) => v.toLowerCase()),
+    );
+    const choiceCodesOf = purchaseChoicesOf.map((values) =>
+      values
+        .filter((value) => !uuidLike.test(value))
+        .map((v) => v.toUpperCase()),
+    );
+    const [transactionsOf, namedById, namedByCode] = await Promise.all([
+      Promise.all(
+        closures.map(async (closure, index) => {
+          const [byAmount, selected] = await Promise.all([
+            closure.scoped.lookup(financialTransaction, transactionAmounts, [
+              ...new Set([
+                ...closure.payments.map((row) => String(row.amountMinor)),
+                ...[paymentAmount(closure.key)].filter(
+                  (value) => value !== undefined,
+                ),
+              ]),
+            ]),
+            closure.scoped.rows(financialTransaction, selectedOf[index]!),
+          ]);
+          return unique([...byAmount, ...selected.values()]);
+        }),
+      ),
+      Promise.all(
+        closures.map((closure, index) =>
+          closure.scoped.rows(entityIdentity, choiceIdsOf[index]!),
+        ),
+      ),
+      // A shortcode never changes; the choice's decision key fences it.
+      reads.selectEach(
+        entityIdentity,
+        new Map(
+          closures.map((closure, index) => [
+            closure.key,
+            choiceCodesOf[index]!.length
+              ? [...subjectsOf[index]!].map(decisionKey)
+              : [],
+          ]),
+        ),
+        sql`${entityIdentity.shortcode} = ANY(${textArrayParam(choiceCodesOf.flat())})`,
+      ),
+    ]);
+    // Follow merge redirects to the survivor `c.reference` returns. Every id
+    // on a chain is fenced by its owner key: a merge raises both records'.
+    const chainsOf = closures.map((_, index) => {
+      const codes = new Set(choiceCodesOf[index]);
+      return [
+        ...namedById[index]!.values(),
+        ...namedByCode.filter(
+          (row) => row.shortcode && codes.has(row.shortcode),
+        ),
+      ];
+    });
+    let pending = chainsOf.map((rows) => [...rows]);
+    while (pending.some((rows) => rows.some((row) => row.mergedIntoId))) {
+      const next = await Promise.all(
+        closures.map((closure, index) => {
+          const known = new Set(chainsOf[index]!.map((row) => row.id));
+          return closure.scoped.rows(
+            entityIdentity,
+            pending[index]!.flatMap((row) =>
+              row.mergedIntoId && !known.has(row.mergedIntoId)
+                ? [row.mergedIntoId]
+                : [],
+            ),
+          );
+        }),
+      );
+      pending = next.map((rows) => [...rows.values()]);
+      next.forEach((rows, index) => chainsOf[index]!.push(...rows.values()));
+    }
+    const purchasesOf = closures.map((closure, index) => {
+      const byId = new Map(chainsOf[index]!.map((row) => [row.id, row]));
+      const canonical = chainsOf[index]!.flatMap((start) => {
+        let row: typeof start | undefined = start;
+        const visited = new Set<string>();
+        while (row?.mergedIntoId && !visited.has(row.id)) {
+          visited.add(row.id);
+          row = byId.get(row.mergedIntoId);
+        }
+        return row && row.kind === "purchase" && !row.deletedAt ? [row.id] : [];
+      });
+      return {
+        owned: [
+          ...new Set([
+            ...closure.orders.flatMap((row) =>
+              row.purchaseId ? [row.purchaseId] : [],
+            ),
+            ...canonical,
+          ]),
+        ],
+        fenced: [...byId.keys()],
+      };
+    });
+    const [scopedReads, owners] = await Promise.all([
       Promise.all(
         closures.map((closure, index) => {
           const transactions = transactionsOf[index]!;
@@ -816,7 +969,7 @@ export const paymentMatching: Pick<
             closure.scoped.lookup(vendor, vendorMerchants, [
               ...new Set(
                 transactions
-                  .map((row) => statementMerchantKey(row.merchant ?? ""))
+                  .map((row) => merchantKey(row.merchant ?? ""))
                   .filter(Boolean),
               ),
             ]),
@@ -838,23 +991,23 @@ export const paymentMatching: Pick<
           ]);
         }),
       ),
-      // The decided Purchases join the id array as an init plan: a subquery
-      // or text cast inside the OR turns this lookup into a sequential scan.
-      // Only Purchase owners are read from the entity arm, which lets it use
-      // the (entity, entityId) index.
-      reads.select(
+      // Each scope fences the owners of the Purchases it can choose by their
+      // owner keys, raised whenever a RecordKey naming them changes.
+      reads.selectEach(
         recordKey,
-        [],
-        sql`${recordKey.scopeKind} = 'purchaseEvent' AND (
-        ${recordKey.scopeKey} = ANY(${textArrayParam([...events, ...transactionIds])})
-        OR ${recordKey.entity} = ${"purchase"} AND ${recordKey.entityId} = ANY(${textArrayParam(orders.flatMap((row) => (row.purchaseId ? [row.purchaseId] : [])))}::uuid[]
-          || ARRAY(SELECT e.id FROM "Decision" choice JOIN "Entity" e
-          ON (e.id = CASE WHEN pg_input_is_valid(choice.value #>> '{}', ${"uuid"})
-            THEN (choice.value #>> '{}')::uuid END AND e.id::text = choice.value #>> '{}')
-            OR e.shortcode = choice.value #>> '{}'
-          WHERE choice.channel = ${decisionChannel.enum.assignment} AND choice.field = 'purchaseId'
-            AND choice.subject = ANY(${textArrayParam([...events, ...orders.flatMap((row) => (row.emailId ? [`email:${row.emailId}`] : []))])})))
-      )`,
+        new Map(
+          closures.map((closure, index) => {
+            const { owned, fenced } = purchasesOf[index]!;
+            return [
+              closure.key,
+              [...new Set([...owned, ...fenced])].map((id) =>
+                ownerKey("purchase", id),
+              ),
+            ];
+          }),
+        ),
+        sql`${recordKey.scopeKind} = 'purchaseEvent' AND ${recordKey.entity} = ${"purchase"}
+          AND ${recordKey.entityId} = ANY(${uuidArrayParam(purchasesOf.flatMap((row) => row.owned))})`,
       ),
     ]);
     return new Map(
@@ -862,6 +1015,8 @@ export const paymentMatching: Pick<
         const transactions = transactionsOf[index]!;
         const [accounts, orderVendors, merchants, manuals, recorded, bindings] =
           scopedReads[index]!;
+        const owned = new Set(purchasesOf[index]!.owned);
+        const records = owners.filter((row) => owned.has(row.entityId));
         const vendors = unique([...orderVendors.values(), ...merchants]);
         const totals = new Map(
           orders.map((row) => [
@@ -884,7 +1039,7 @@ export const paymentMatching: Pick<
         for (const row of vendors) {
           if (row.deletedAt) continue;
           for (const name of [row.name, ...row.aliases]) {
-            const merchant = statementMerchantKey(name);
+            const merchant = merchantKey(name);
             if (!merchant) continue;
             const ids = vendorsByMerchant.get(merchant) ?? new Set<string>();
             ids.add(row.id);
@@ -919,6 +1074,7 @@ export const paymentMatching: Pick<
       }),
     );
   },
+
   reconcile(input, c) {
     const paymentsFor: PaymentsFor = (order) =>
       input.paymentsByOrder.get(order.id) ?? [];

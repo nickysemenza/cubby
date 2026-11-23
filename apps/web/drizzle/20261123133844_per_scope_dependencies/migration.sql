@@ -12,10 +12,12 @@ LOCK TABLE "ScopeDep", "ScopeDirty", "FactKey", "FinancialTransaction", "Expense
 --    `values`:
 --      index:transaction.amount:<signed amount>      every FinancialTransaction
 --      index:transaction.transfer:<ledgerTransferId> FinancialTransaction with a transfer
---      index:expense.bookingTransaction:<code>       Expense with a booking code
+--      index:expense.bookingTransaction:<code>       Expense with a non-empty booking code
 --      index:vendor.merchant:<merchant key>          each Vendor name and alias:
---        trimmed, internal whitespace collapsed to one space, lower-cased; an
---        empty key is not stored
+--        the six ASCII whitespace characters (space, tab, line feed, vertical
+--        tab, form feed, carriage return) trimmed and each run collapsed to one
+--        space, A-Z lower-cased, exactly as `merchantKey`; an empty key is not
+--        stored
 --    The ManualEntry and Decision allocation indexes cover insert-only rows,
 --    so no write moves a row between their memberships and they store nothing.
 --
@@ -45,7 +47,7 @@ BEGIN
   SELECT count(*), count(*) FILTER (WHERE "ledgerTransferId" IS NOT NULL)
     INTO ft_total, ft_linked FROM "FinancialTransaction";
   SELECT count(*) INTO expense_booked FROM "Expense"
-    WHERE "bookingTransactionCode" IS NOT NULL;
+    WHERE "bookingTransactionCode" <> '';
 
   INSERT INTO "FactKey" (key, "factKind", "factId")
   SELECT 'index:transaction.amount:' || "amountMinor"::text,
@@ -60,22 +62,24 @@ BEGIN
   INSERT INTO "FactKey" (key, "factKind", "factId")
   SELECT 'index:expense.bookingTransaction:' || "bookingTransactionCode",
     'index:Expense', id::text
-  FROM "Expense" WHERE "bookingTransactionCode" IS NOT NULL
+  FROM "Expense" WHERE "bookingTransactionCode" <> ''
   ON CONFLICT DO NOTHING;
   INSERT INTO "FactKey" (key, "factKind", "factId")
   SELECT DISTINCT 'index:vendor.merchant:' || merchant.key, 'index:Vendor', v.id::text
   FROM "Vendor" v
   CROSS JOIN LATERAL unnest(array_prepend(v.name, v.aliases)) alias(name)
-  CROSS JOIN LATERAL (SELECT lower(regexp_replace(regexp_replace(alias.name,
-    '^[[:space:]]+|[[:space:]]+$', '', 'g'), '[[:space:]]+', ' ', 'g')) AS key) merchant
+  CROSS JOIN LATERAL (SELECT translate(regexp_replace(regexp_replace(alias.name,
+    '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), '[ \t\n\v\f\r]+', ' ', 'g'),
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') AS key) merchant
   WHERE merchant.key <> ''
   ON CONFLICT DO NOTHING;
 
   SELECT count(DISTINCT (v.id, merchant.key)) INTO vendor_keys
   FROM "Vendor" v
   CROSS JOIN LATERAL unnest(array_prepend(v.name, v.aliases)) alias(name)
-  CROSS JOIN LATERAL (SELECT lower(regexp_replace(regexp_replace(alias.name,
-    '^[[:space:]]+|[[:space:]]+$', '', 'g'), '[[:space:]]+', ' ', 'g')) AS key) merchant
+  CROSS JOIN LATERAL (SELECT translate(regexp_replace(regexp_replace(alias.name,
+    '^[ \t\n\v\f\r]+|[ \t\n\v\f\r]+$', '', 'g'), '[ \t\n\v\f\r]+', ' ', 'g'),
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') AS key) merchant
   WHERE merchant.key <> '';
   SELECT count(*) INTO amount_rows FROM "FactKey"
     WHERE "factKind" = 'index:FinancialTransaction' AND key LIKE 'index:transaction.amount:%';

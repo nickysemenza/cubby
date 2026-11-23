@@ -152,6 +152,11 @@ export async function patchEntityRows<T extends PatchTable>(
         ids: [...written],
         columns: Object.keys(values),
         entity: definition.entity,
+        // The read-index keys a row leaves come from its values before the
+        // write, beside its stored membership.
+        before: changes
+          .filter(({ row }) => written.has(row.id))
+          .map(({ row }) => row),
       });
     if (fieldsPlan) {
       const database = databaseForTransaction(tx);
@@ -276,6 +281,7 @@ export async function bulkPatchEntities<
         ids,
         columns: fields,
         entity: spec.entity,
+        before,
       });
     for (const row of before)
       await settleFieldEdits(

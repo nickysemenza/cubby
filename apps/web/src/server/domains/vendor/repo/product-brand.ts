@@ -10,6 +10,10 @@ import {
 } from "~/server/db/helpers";
 import { vendor } from "~/server/db/schema";
 import { vendorNamedSql } from "~/server/domains/vendor/repo/vendor-name-match";
+import {
+  enterVendorNameWrite,
+  reportVendorNameWrite,
+} from "~/server/domains/vendor/repo/vendor-name-write";
 import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -61,7 +65,8 @@ export async function resolveProductBrandName(
         "CONSTRAINT_VIOLATION",
         "The system Generic / Unbranded brand is missing.",
       );
-    const { row } = await findOrCreateWithShortcode(tx, "vendor", {
+    await enterVendorNameWrite(tx);
+    const { row, created } = await findOrCreateWithShortcode(tx, "vendor", {
       where: and(
         notDeleted(vendor),
         isNull(vendor.systemKey),
@@ -69,6 +74,7 @@ export async function resolveProductBrandName(
       ),
       values: () => ({ name }),
     });
+    if (created) await reportVendorNameWrite(tx, row.id, ["name"]);
     return parseShortcodeFor("vendor", row.shortcode);
   });
 }

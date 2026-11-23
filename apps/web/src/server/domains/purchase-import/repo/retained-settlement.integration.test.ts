@@ -371,49 +371,8 @@ describe("settlement from retained order evidence", () => {
 
   it("dirties only the payment scope whose own amount gains a charge", async () => {
     const setup = await world();
-    const order = async (orderId: string, amount: number, checksum: string) => {
-      const run = await startImportRunFixture(ctx.db, setup.run);
-      await appendOrderEvidence(ctx.db, [
-        {
-          orderKey: `${setup.vendor.id}/order/${orderId}`,
-          input: importWriterInput.parse({
-            runId: run.id,
-            ledgerPartyId: setup.party.id,
-            vendorId: setup.vendor.id,
-            vendorAccountId: setup.account.id,
-            source: {
-              kind: "vendor_export",
-              externalKey: `synthetic:${orderId}`,
-              checksum: checksum.repeat(64),
-            },
-            extraction: {
-              status: "ready",
-              candidate: {
-                orderId,
-                merchant: setup.vendor.name,
-                orderedAt: "2026-09-01T12:00:00Z",
-                currency: "USD",
-                printedGrandTotal: amount,
-                lines: [
-                  { title: "Synthetic line", amount, lineKind: "principal" },
-                ],
-                payments: [
-                  {
-                    amount,
-                    chargedAt: "2026-09-02T12:00:00Z",
-                    tender: "card",
-                  },
-                ],
-              },
-            },
-            primaryDocumentImageId: null,
-            screenshotImageId: null,
-          }),
-        },
-      ]);
-    };
-    await order("SYNTHETIC-FIRST", 27, "e");
-    await order("SYNTHETIC-SECOND", 41, "f");
+    await syntheticOrder(setup, "SYNTHETIC-FIRST", 27, "e");
+    await syntheticOrder(setup, "SYNTHETIC-SECOND", 41, "f");
     const keys = [paymentAmountKey(2700n), paymentAmountKey(4100n)];
     const dirty = async () =>
       (
@@ -435,6 +394,91 @@ describe("settlement from retained order evidence", () => {
     await charge(setup.card.id, { amount: 27, postedDate: "2026-09-02" });
     expect(await dirty()).toEqual(keys);
   });
+
+  it("keeps a member's same-payment choice at another amount from an automatic match", async () => {
+    const setup = await world();
+    const observation = await syntheticOrder(
+      setup,
+      "SYNTHETIC-CHOSEN",
+      10,
+      "a",
+    );
+    const matching = await charge(setup.card.id, {
+      amount: 10,
+      postedDate: "2026-09-02",
+    });
+    const chosen = await charge(setup.card.id, {
+      amount: 20,
+      postedDate: "2026-09-02",
+    });
+    const scope = { kind: "purchaseEvent", key: paymentAmountKey(1000n) };
+    await decide(ctx.db, ctx.actor, [
+      {
+        channel: "identity",
+        kind: "same",
+        subject: orderEventKey(observation),
+        field: recordSubject("financialTransaction", chosen.id),
+        scopes: [scope],
+      },
+    ]);
+    await reconcileNow(ctx.db, [scope]);
+    expect(
+      await getDb(ctx.db)
+        .select({ event: evidenceBinding.eventKey })
+        .from(evidenceBinding)
+        .where(eq(evidenceBinding.factKind, "retainedPayment")),
+    ).not.toContainEqual({ event: `bank:${matching.id}` });
+  });
+
+  async function syntheticOrder(
+    setup: Awaited<ReturnType<typeof world>>,
+    orderId: string,
+    amount: number,
+    checksum: string,
+  ) {
+    const run = await startImportRunFixture(ctx.db, setup.run);
+    const [observation] = await appendOrderEvidence(ctx.db, [
+      {
+        orderKey: `${setup.vendor.id}/order/${orderId}`,
+        input: importWriterInput.parse({
+          runId: run.id,
+          ledgerPartyId: setup.party.id,
+          vendorId: setup.vendor.id,
+          vendorAccountId: setup.account.id,
+          source: {
+            kind: "vendor_export",
+            externalKey: `synthetic:${orderId}`,
+            checksum: checksum.repeat(64),
+          },
+          extraction: {
+            status: "ready",
+            candidate: {
+              orderId,
+              merchant: setup.vendor.name,
+              orderedAt: "2026-09-01T12:00:00Z",
+              currency: "USD",
+              printedGrandTotal: amount,
+              lines: [
+                { title: "Synthetic line", amount, lineKind: "principal" },
+              ],
+              payments: [
+                {
+                  amount,
+                  chargedAt: "2026-09-02T12:00:00Z",
+                  tender: "card",
+                },
+              ],
+            },
+          },
+          primaryDocumentImageId: null,
+          screenshotImageId: null,
+        }),
+      },
+    ]);
+    if (!observation)
+      throw new Error("Synthetic accepted observation is missing");
+    return observation;
+  }
 
   async function world() {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {

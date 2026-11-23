@@ -19,6 +19,10 @@ import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { vendor } from "~/server/db/schema";
 import { readSenderAttributions } from "~/server/domains/purchase-import/repo/sender-attribution-read";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
+import {
+  enterVendorNameWrite,
+  reportVendorNameWrite,
+} from "~/server/domains/vendor/repo/vendor-name-write";
 import { resolveNames } from "~/server/entity-kernel/resolve";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
@@ -160,6 +164,11 @@ async function learnSenderAlias(
     );
   const aliases = [...owner.aliases, name];
   const research = `Order Email ${input.evidence ?? "(unknown message)"} from ${address} names the merchant "${name}".`;
+  await enterVendorNameWrite(db);
+  const [before] = await unwrapDb(db)
+    .select()
+    .from(vendor)
+    .where(eq(vendor.id, owner.id));
   await unwrapDb(db)
     .update(vendor)
     .set({
@@ -167,6 +176,7 @@ async function learnSenderAlias(
       notes: sql`concat_ws(E'\n\n', nullif(${vendor.notes}, ''), ${research}::text)`,
     })
     .where(eq(vendor.id, owner.id));
+  await reportVendorNameWrite(db, owner.id, ["aliases", "notes"], before);
   await logAuditEntry(db, actor, {
     entityKind: "vendor",
     entityId: owner.id,

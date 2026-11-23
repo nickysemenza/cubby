@@ -104,6 +104,7 @@ export {
   driftSubject,
   indexKey,
   legacyKey,
+  ownerKey,
   recordIdentity,
   recordSubject,
   rowKey,

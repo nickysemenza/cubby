@@ -1,5 +1,4 @@
-import { statementMerchantKey } from "@cubby/schemas/statement-answers";
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 
 import {
   columnArrayParam,
@@ -139,12 +138,33 @@ export const vendorNames = defineReadIndex(vendor, {
   where: (values) =>
     sql`EXISTS (SELECT 1 FROM unnest(ARRAY[${vendor.name}] || ${vendor.aliases}) name WHERE lower(trim(name)) = ANY(${textArrayParam(values)}))`,
 });
-/** Vendor names and aliases in statement merchant spelling; an empty key never matches. */
+/**
+ * A merchant or Vendor name as payment matching compares it: the six ASCII
+ * whitespace characters (space, tab, line feed, vertical tab, form feed,
+ * carriage return) trimmed and each run collapsed to one space, and only A-Z
+ * lower-cased. PostgreSQL evaluates the same patterns, passed as parameters,
+ * and the same letter map, so every string has one key on both sides.
+ */
+const MERCHANT_EDGES = "^[ \\t\\n\\v\\f\\r]+|[ \\t\\n\\v\\f\\r]+$";
+const MERCHANT_RUNS = "[ \\t\\n\\v\\f\\r]+";
+const UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const LOWER = "abcdefghijklmnopqrstuvwxyz";
+const edges = new RegExp(MERCHANT_EDGES, "gu");
+const runs = new RegExp(MERCHANT_RUNS, "gu");
+export const merchantKey = (name: string) =>
+  name
+    .replace(edges, "")
+    .replace(runs, " ")
+    .replace(/[A-Z]/gu, (letter) => LOWER[UPPER.indexOf(letter)]!);
+/** The SQL spelling of {@link merchantKey}. */
+export const merchantKeySql = (name: SQL) =>
+  sql`translate(regexp_replace(regexp_replace(${name}, ${MERCHANT_EDGES}, '', 'g'), ${MERCHANT_RUNS}, ' ', 'g'), ${UPPER}, ${LOWER})`;
+/** Vendor names and aliases by merchant key; an empty key is never stored or read. */
 export const vendorMerchants = defineReadIndex(vendor, {
   name: "vendor.merchant",
   values: (row) =>
-    [row.name, ...row.aliases].map(statementMerchantKey).filter(Boolean),
+    [...new Set([row.name, ...row.aliases].map(merchantKey))].filter(Boolean),
   where: (values) =>
     sql`EXISTS (SELECT 1 FROM unnest(array_prepend(${vendor.name}, ${vendor.aliases})) alias
-      WHERE lower(regexp_replace(regexp_replace(alias, '^[[:space:]]+|[[:space:]]+$', '', 'g'), '[[:space:]]+', ' ', 'g')) = ANY(${textArrayParam(values)}))`,
+      WHERE ${merchantKeySql(sql`alias`)} = ANY(${textArrayParam(values)}))`,
 });

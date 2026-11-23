@@ -97,6 +97,10 @@ import { foldVendorAccountsInto } from "~/server/domains/vendor-account/repo/ven
 import { vendorPurchaseFolds } from "~/server/domains/vendor/policy/purchase-folds";
 import { vendorStatementLabels } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import { vendorSearch } from "~/server/domains/vendor/repo/search-read-vendor";
+import {
+  enterVendorNameWrite,
+  reportVendorNameWrite,
+} from "~/server/domains/vendor/repo/vendor-name-write";
 import { agentHintsLabel } from "~/server/entity-kernel/repo/detail-display-labels";
 import { resolveEntityAttachments } from "~/server/entity-kernel/repo/entity-display-image";
 import { patchEntityRows } from "~/server/entity-kernel/repo/entity-patch";
@@ -514,7 +518,8 @@ export const findOrCreateVendor = async (
       );
     return match.id;
   }
-  const { row } = await findOrCreateWithShortcode(db, "vendor", {
+  await enterVendorNameWrite(db);
+  const { row, created } = await findOrCreateWithShortcode(db, "vendor", {
     where: and(
       sql`lower(btrim(${vendor.name})) = lower(${trimmed})`,
       notDeleted(vendor),
@@ -523,6 +528,7 @@ export const findOrCreateVendor = async (
       name: trimmed,
     }),
   });
+  if (created) await reportVendorNameWrite(db, row.id, ["name"]);
   return row.id;
 };
 
