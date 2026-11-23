@@ -18,7 +18,7 @@ import { QuerySection } from "~/ui/feedback/query-section";
 import { Section } from "~/ui/layout";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
-import { HomeList, HomeRow } from "./home-list";
+import { HomeCard, HomeLedgerLine, HomeList } from "./home-list";
 
 type PinnedView = {
   entity: ListEntity & BrowserRoutedEntity;
@@ -45,23 +45,23 @@ const pinnedViews: PinnedView[] = homePinnedViews
 export function PinnedViews() {
   if (pinnedViews.length === 0) return null;
   return (
-    <Section title="Your views" headingAs="h2" ruled>
-      <HomeList label="Your views">
-        {pinnedViews.map((pin) => (
-          <QuerySection
-            key={`${pin.entity}:${pin.view.id}`}
-            title={pin.view.label}
-            fallback={
-              <HomeRow>
-                <Skeleton className="h-4 w-24" />
-              </HomeRow>
-            }
-          >
-            <PinnedViewRow {...pin} />
-          </QuerySection>
-        ))}
-      </HomeList>
-    </Section>
+    <HomeCard>
+      <Section title="Your views" headingAs="h2" ruled>
+        <HomeList label="Your views">
+          {pinnedViews.map((pin) => (
+            <QuerySection
+              key={`${pin.entity}:${pin.view.id}`}
+              title={pin.view.label}
+              fallback={
+                <HomeLedgerLine name={<Skeleton className="h-4 w-24" />} />
+              }
+            >
+              <PinnedViewRow {...pin} />
+            </QuerySection>
+          ))}
+        </HomeList>
+      </Section>
+    </HomeCard>
   );
 }
 
@@ -79,29 +79,32 @@ function PinnedViewRow({ entity, view }: PinnedView) {
   );
   const total = data?.meta.totalCount;
   return (
-    <HomeRow
-      trailing={
+    <HomeLedgerLine
+      name={
+        <>
+          <EntityIcon
+            entity={entity}
+            aria-hidden
+            className="size-3.5 shrink-0 text-muted-foreground"
+          />
+          <Link
+            to={entityListHref(queryClient, entity, view)}
+            aria-label={`${view.label}${total === undefined ? "" : `, ${total}`}`}
+            className="truncate underline-offset-2 outline-none hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {view.label}
+          </Link>
+        </>
+      }
+      figure={
         isLoading ? (
-          <Skeleton className="h-4 w-6" />
+          <Skeleton className="ml-auto h-4 w-6" />
+        ) : total === undefined ? (
+          "—"
         ) : (
-          <span className="font-mono text-xs text-muted-foreground">
-            {total === undefined ? "—" : formatCount(total)}
-          </span>
+          formatCount(total)
         )
       }
-    >
-      <EntityIcon
-        entity={entity}
-        aria-hidden
-        className="size-3.5 shrink-0 text-muted-foreground"
-      />
-      <Link
-        to={entityListHref(queryClient, entity, view)}
-        aria-label={`${view.label}${total === undefined ? "" : `, ${total}`}`}
-        className="truncate underline-offset-2 outline-none hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        {view.label}
-      </Link>
-    </HomeRow>
+    />
   );
 }

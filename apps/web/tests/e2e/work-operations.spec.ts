@@ -74,14 +74,27 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
   // Overview counts open the same full population in Records, then the
   // shared pivot narrows it by Type without dropping the Reason predicate.
   await more.getByRole("link", { name: "All work", exact: true }).click();
-  const summary = page.getByRole("table", { name: "Work items by reason" });
+  const summary = page
+    .locator('[data-detail-section][id^="work-reason-"]')
+    .first();
   await expect(summary).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath("work-summary.png"),
     fullPage: true,
   });
-  const count = summary.getByRole("button").first();
-  const expectedCount = Number((await count.innerText()).replaceAll(",", ""));
+  const expectedCount = Number(
+    (await summary.locator(".record-ledger-figure").innerText()).replaceAll(
+      ",",
+      "",
+    ),
+  );
+  // A reason opens in place; its records link carries the same population.
+  await summary
+    .getByRole("heading")
+    .first()
+    .getByRole("button", { expanded: false })
+    .click();
+  const count = summary.getByRole("button", { name: "Open in Records" });
   const drilled = page.waitForResponse((response) =>
     dispatchesOperation(
       response.request(),

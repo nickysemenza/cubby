@@ -106,7 +106,7 @@ export function HomeKeyNumbers({ asOf }: { asOf: HomeAsOfWindow }) {
       layout="strip"
       label="Household key numbers"
       items={items}
-      className="[&>dl]:-ml-3.25"
+      className="border-0"
     />
   );
 }

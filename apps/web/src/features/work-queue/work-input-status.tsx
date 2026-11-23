@@ -1,7 +1,7 @@
 import type { WorkQueueOut } from "@cubby/schemas/work-queue";
 import { countLabel } from "@cubby/shared/pluralize";
 
-export type WorkInputMeta = Pick<
+type WorkInputMeta = Pick<
   WorkQueueOut["meta"],
   "incompleteProjectIds" | "incompleteDiagnosticSources" | "incompleteSources"
 >;
@@ -57,7 +57,7 @@ export function WorkInputStatus({ meta }: { meta: WorkInputMeta | undefined }) {
   ];
   if (!items.length) return null;
   return (
-    <details className="py-1 text-xs text-muted-foreground">
+    <details className="px-3.5 pt-2 text-xs text-muted-foreground md:px-4">
       <summary className="cursor-pointer">
         Counts cover known work only while {countLabel(items.length, "check")}{" "}
         {items.length === 1 ? "finishes" : "finish"} updating.

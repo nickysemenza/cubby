@@ -25,8 +25,8 @@ heading for the surface you are changing.
   new pair numerically. `:root[data-hosted-workspace]` pins every colour that
   palette sets, so hosted native workspaces keep their shipped look; a palette
   change edits both blocks. `page-canvas` is the grey canvas record pages, the
-  inspector, Settings and Account lay their cards on; hosted workspaces pin it
-  to the card colour.
+  inspector, Settings, Account, Today and the Work queue lay their cards on
+  (`Page canvas`, list or bare); hosted workspaces pin it to the card colour.
 - Type has no step under 11px: `text-2xs` and `text-3xs` are both 11px, and
   desktop leading is at least 1.3x.
 - A new semantic color gets its primitive in `brand.css` and a `--color-*`
@@ -546,6 +546,14 @@ never call `PageWrapper` directly. Detail bodies use `DetailSections`
   which `withDigest` in `server/generic/entity-report/repo/digest.ts` fills
   from the first block that reads well in one line). Settings and Account
   sections report their current setting the same way.
+- Pages outside a record use the same parts rather than their own: the Work
+  queue's Summary is a `LedgerCard` under `RecordSectionControlsContext` with
+  `useSectionOpenState(…, eager: false)`, so a reason's embedded records table
+  mounts (and reads) only while its line is open; Today wraps each section in
+  a `HomeCard` (`record-card`) and draws one-line lists with `HomeLedgerLine`
+  (`.record-ledger-line`). The record page's H/L and J/K keys belong to
+  `RecordWorkspace`; these pages keep their own keys, and their ledger lines
+  open with Enter or a click.
 - A fact appears once: header lines, state, kind, the AI summary, the side
   column's needs field and its summary cells leave the field sections, and an
   embedded table omits the parent-reference column.

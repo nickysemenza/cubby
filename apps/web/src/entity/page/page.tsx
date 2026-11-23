@@ -129,6 +129,8 @@ interface PageBareProps {
   variant: "bare";
   children: ReactNode;
   layout?: PageLayout;
+  /** Lay the page's white cards on the grey page canvas (Today). */
+  canvas?: boolean;
 }
 
 interface PageListProps extends PageBaseProps {
@@ -152,8 +154,8 @@ interface PageListProps extends PageBaseProps {
    */
   bodyGutter?: "none" | "standard";
   /**
-   * The page lays white cards on the grey page canvas (Settings, Account)
-   * instead of sitting on the white surface.
+   * The page lays white cards on the grey page canvas (Settings, Account,
+   * Work queue) instead of sitting on the white surface.
    */
   canvas?: boolean;
 }
@@ -194,7 +196,11 @@ type PageProps = PageBareProps | PageListProps | PageDetailProps;
  */
 export function Page(props: PageProps) {
   if (props.variant === "bare")
-    return <PageWrapper layout={props.layout}>{props.children}</PageWrapper>;
+    return (
+      <PageCanvas canvas={props.canvas}>
+        <PageWrapper layout={props.layout}>{props.children}</PageWrapper>
+      </PageCanvas>
+    );
   return props.variant === "detail" ? (
     <DetailPageShell {...props} />
   ) : (
@@ -243,15 +249,25 @@ function ListPageShell(props: PageListProps) {
       </div>
     </PageWrapper>
   );
-  return props.canvas ? (
+  return <PageCanvas canvas={props.canvas}>{page}</PageCanvas>;
+}
+
+/** The grey page canvas under a page's white cards, when it asks for one. */
+function PageCanvas({
+  canvas = false,
+  children,
+}: {
+  canvas?: boolean;
+  children: ReactNode;
+}) {
+  if (!canvas) return children;
+  return (
     <div
       data-page-canvas
       className="min-h-[calc(100dvh-var(--app-chrome-top))] bg-page-canvas pb-6"
     >
-      {page}
+      {children}
     </div>
-  ) : (
-    page
   );
 }
 

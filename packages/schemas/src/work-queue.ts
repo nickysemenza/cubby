@@ -338,6 +338,9 @@ const workQueueSummarySchema = z.object({
       reason: z.string().min(1),
       entity: z.enum(shortcodeEntities).nullable(),
       count,
+      /** The earliest record day among the cell's items (each record's own
+       * calendar day); null when none has one. */
+      oldest: plainDate.nullable(),
     }),
   ),
   types: z.array(
