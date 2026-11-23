@@ -1,7 +1,10 @@
+import { emailPurchaseLinkState } from "@cubby/schemas/email-fields";
 import {
+  financialTransactionKind,
   financialTransactionStatus,
   purchaseSettlementKinds,
 } from "@cubby/schemas/financial-transaction";
+import { mailEvent } from "@cubby/schemas/mailbox-research";
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { RECONCILIATION_TOLERANCE } from "@cubby/schemas/purchase";
 import { cents } from "@cubby/shared";
@@ -11,13 +14,18 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import { purchase, vendor } from "~/server/db/schema";
+import { emailLinkDecisionsForPurchasesSql } from "~/server/domains/email/repo/email-decision-sql";
 import {
   postedRefundPredicate,
   settlementReferencePredicate,
 } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
-import { settlementConflictSql } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
+import {
+  purchaseMailMembersSql,
+  purchaseMembersSql,
+  purchasePayingAccountIdsSql,
+  settlementPartyConflictSql,
+} from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 import { acceptedOrdersBoundToSql } from "~/server/domains/purchase-import/repo/accepted-order-read";
-import { awaitingOrderDetailsSql } from "~/server/domains/purchase-import/repo/notice-purchase";
 import {
   purchaseItemizationExpectationSql,
   purchaseHasItemizationSql,
@@ -112,9 +120,15 @@ async function loadPurchaseQualityRecords(
   ids: readonly string[],
 ) {
   if (!ids.length) return [];
-  // The page owns both grouped scans. List and queue reads consume only the
-  // published checks, never these ledger/settlement inputs.
-  const expenses = sql`(SELECT qe."purchaseId",
+  // The page owns both grouped scans. List and queue reads consume the
+  // published checks.
+  const client = unwrapDb(db);
+  const requested = client.$with("quality_requested", {}).as(sql`
+    SELECT "Purchase".id FROM "Purchase"
+    WHERE ${notDeleted(purchase)} AND "Purchase".id = ANY(${uuidArrayParam(ids)})
+  `);
+  const expenses = client.$with("quality_expenses", {}).as(sql`
+    SELECT qe."purchaseId",
     count(*)::int AS "expenseCount",
     count(*) FILTER (WHERE qe."costMinor" IS NULL AND ${sql.raw(actualExpenseSql("qe"))})::int AS "settleableUnpricedCount",
     (coalesce(sum(qe."costMinor") FILTER (WHERE ${sql.raw(actualExpenseSql("qe"))}), 0) / 100.0)::double precision AS "settleableTotal",
@@ -122,32 +136,102 @@ async function loadPurchaseQualityRecords(
     count(*) FILTER (WHERE qe."economicRole" = ${vendorRole})::int AS "vendorCount",
     count(*) FILTER (WHERE qe."economicRole" = ${vendorRole} AND qe."costMinor" IS NULL)::int AS "vendorUnpricedCount"
     FROM "Expense" qe
-    WHERE ${notDeleted("qe")} AND qe."purchaseId" = ANY(${uuidArrayParam(ids)})
-    GROUP BY qe."purchaseId") quality_expenses`;
+    WHERE ${notDeleted("qe")} AND qe."purchaseId" IN (SELECT id FROM ${requested})
+    GROUP BY qe."purchaseId"
+  `);
+  const accepted = client.$with("quality_accepted_orders", {}).as(sql`
+    SELECT orders."boundPurchaseId" AS "purchaseId",
+      bool_or(orders."orderKey" LIKE '%/order/%') AS "expectsOrderId"
+    FROM ${acceptedOrdersBoundToSql((id) => sql`${id} IN (SELECT id FROM ${requested})`)} orders
+    GROUP BY orders."boundPurchaseId"
+  `);
+  // The notice rule applies only to empty Purchases without accepted sources.
+  // Resolve the current lifecycle links for that page subset together.
+  const notices = client.$with("quality_waiting_for_details", {}).as(sql`
+    WITH waiting AS MATERIALIZED (
+      SELECT requested.id FROM ${requested} requested
+      LEFT JOIN ${expenses} expenses ON expenses."purchaseId" = requested.id
+      LEFT JOIN ${accepted} accepted ON accepted."purchaseId" = requested.id
+      WHERE expenses."purchaseId" IS NULL AND accepted."purchaseId" IS NULL
+    )
+    SELECT DISTINCT link."purchaseId"
+    FROM ${emailLinkDecisionsForPurchasesSql(sql`SELECT id FROM waiting`)} link
+    JOIN "OrderMailEvent" event ON event.id = link."eventId"
+    WHERE link.active AND link.decision = ${emailPurchaseLinkState.enum.linked}
+      AND event.event IN (${mailEvent.enum.shipped}, ${mailEvent.enum.delivered})
+  `);
   const kinds = sql.join(
     purchaseSettlementKinds.map((kind) => sql`${kind}`),
     sql`, `,
   );
-  const aliases = { purchase: "qp", account: "qfa", transaction: "qft" };
-  const settles = sql`qft.kind IN (${kinds}) AND qft.status <> ${financialTransactionStatus.enum.void}`;
-  const settlements = sql`(SELECT qa."purchaseId",
-    coalesce(bool_or(${settles}), false) AS "hasSettlement",
-    (CASE WHEN bool_or(qft.kind IN (${kinds}) AND qft.status IN (${financialTransactionStatus.enum.expected}, ${financialTransactionStatus.enum.pending}))
-      THEN coalesce(sum((qa."amountMinor"::numeric / 100)) FILTER (WHERE ${settles}), 0)
-      ELSE coalesce(sum((qa."amountMinor"::numeric / 100)) FILTER (WHERE qft.kind IN (${kinds}) AND qft.status = ${financialTransactionStatus.enum.posted}), 0)
-    END)::double precision AS "comparisonTotal",
-    coalesce(sum((qa."amountMinor"::numeric / 100)) FILTER (WHERE ${sql.raw(postedRefundPredicate("qft"))}), 0)::double precision AS "postedRefundTotal",
-    coalesce(bool_or(qfa.id IS NOT NULL AND ${sql.raw(settlementReferencePredicate("qft", "qfa"))}), false) AS "hasSettlementReference",
-    coalesce(bool_or(${settlementConflictSql("party", aliases)}) FILTER (WHERE ${settles}), false) AS "partyConflict",
-    coalesce(bool_or(${settlementConflictSql("tender", aliases)}) FILTER (WHERE ${settles}), false) AS "tenderConflict"
+  const settlingKinds = sql`qft.kind IN (${kinds})`;
+  const settlementRows = client.$with("quality_settlement_rows", {}).as(sql`
+    SELECT qa."purchaseId", qa."amountMinor", qft.id, qft."accountId",
+      qft.kind, qft.status, qft."transactionDate", qft."postedDate",
+      ${settlingKinds} AS "settlingKind",
+      (${settlingKinds} AND qft.status <> ${financialTransactionStatus.enum.void}) AS settles,
+      (qft.kind <> ${financialTransactionKind.enum.refund}) AS charge
     FROM "FinancialTransactionAllocation" qa
     JOIN "FinancialTransaction" qft ON qft.id = qa."transactionId" AND ${notDeleted("qft")}
-    JOIN "Purchase" qp ON qp.id = qa."purchaseId" AND ${notDeleted("qp")}
+    WHERE ${notDeleted("qa")} AND qa."purchaseId" IN (SELECT id FROM ${requested})
+  `);
+  const settlingPurchases = client.$with("quality_settling_purchases", {})
+    .as(sql`
+    SELECT qp.id, qp."deletedAt", qp."vendorAccountId", qp."purchaserOverrideId", qp."vendorId", qp.date,
+      demand.charge
+    FROM "Purchase" qp
+    JOIN (
+      SELECT "purchaseId", bool_or(charge) AS charge
+      FROM ${settlementRows} WHERE settles GROUP BY "purchaseId"
+    ) demand ON demand."purchaseId" = qp.id
+    WHERE ${notDeleted("qp")}
+  `);
+  const missingMemberPurchases = sql`
+    SELECT qp.id, qp."deletedAt"
+    FROM ${settlingPurchases} qp
+    LEFT JOIN "VendorAccount" va ON va.id = qp."vendorAccountId" AND ${notDeleted("va")}
+    WHERE qp."purchaserOverrideId" IS NULL AND va."ledgerPartyId" IS NULL
+  `;
+  const members = client
+    .$with("quality_purchase_members", {})
+    .as(
+      purchaseMembersSql(
+        sql`SELECT * FROM ${settlingPurchases}`,
+        purchaseMailMembersSql(missingMemberPurchases),
+      ),
+    );
+  const tenders = client.$with("quality_purchase_tenders", {}).as(sql`
+    SELECT qp.id, ${purchasePayingAccountIdsSql("qp")} AS accounts
+    FROM ${settlingPurchases} qp WHERE qp.charge
+    OFFSET 0
+  `);
+  const settlements = sql`(SELECT qft."purchaseId",
+    coalesce(bool_or(qft.settles), false) AS "hasSettlement",
+    (CASE WHEN bool_or(qft."settlingKind" AND qft.status IN (${financialTransactionStatus.enum.expected}, ${financialTransactionStatus.enum.pending}))
+      THEN coalesce(sum((qft."amountMinor"::numeric / 100)) FILTER (WHERE qft.settles), 0)
+      ELSE coalesce(sum((qft."amountMinor"::numeric / 100)) FILTER (WHERE qft."settlingKind" AND qft.status = ${financialTransactionStatus.enum.posted}), 0)
+    END)::double precision AS "comparisonTotal",
+    coalesce(sum((qft."amountMinor"::numeric / 100)) FILTER (WHERE ${sql.raw(postedRefundPredicate("qft"))}), 0)::double precision AS "postedRefundTotal",
+    coalesce(bool_or(qfa.id IS NOT NULL AND ${sql.raw(settlementReferencePredicate("qft", "qfa"))}), false) AS "hasSettlementReference",
+    coalesce(bool_or(${settlementPartyConflictSql(sql`qfa`, sql`qft`, sql`party.member`)}) FILTER (WHERE qft.settles AND party.member IS NOT NULL), false) AS "partyConflict",
+    coalesce(bool_or(qft.charge AND coalesce(NOT (qfa.id = ANY(tender.accounts)), false)) FILTER (WHERE qft.settles), false) AS "tenderConflict"
+    FROM ${settlementRows} qft
     -- includes-deleted: conflict evidence retains the allocated account; reference coverage requires liveness.
     LEFT JOIN "FinancialAccount" qfa ON qfa.id = qft."accountId"
-    WHERE ${notDeleted("qa")} AND qa."purchaseId" = ANY(${uuidArrayParam(ids)})
-    GROUP BY qa."purchaseId") quality_settlements`;
-  return unwrapDb(db)
+    LEFT JOIN ${members} party ON party.id = qft."purchaseId" AND qft.settles
+    LEFT JOIN ${tenders} tender ON tender.id = qft."purchaseId" AND qft.settles AND qft.charge
+    GROUP BY qft."purchaseId") quality_settlements`;
+  return client
+    .with(
+      requested,
+      expenses,
+      accepted,
+      notices,
+      settlementRows,
+      settlingPurchases,
+      members,
+      tenders,
+    )
     .select({
       id: purchase.id,
       shortcode: purchase.shortcode,
@@ -160,8 +244,7 @@ async function loadPurchaseQualityRecords(
       spendingCategoryId: purchase.spendingCategoryId,
       spendingCategoryOrigin: purchase.spendingCategoryOrigin,
       orderEvidence: vendor.orderEvidence,
-      expectsOrderId: sql<boolean>`EXISTS (SELECT 1 FROM ${acceptedOrdersBoundToSql((id) => sql`${id} = ${purchase.id}`)} dq_order
-      WHERE dq_order."orderKey" LIKE '%/order/%')`,
+      expectsOrderId: sql<boolean>`coalesce(quality_accepted_orders."expectsOrderId", false)`,
       expectation: sql<string>`${purchaseItemizationExpectationSql("Purchase")}`,
       hasPrimaryDocument: sql<boolean>`${purchaseHasPrimaryDocumentSql("Purchase")}`,
       hasItemization: sql<boolean>`${purchaseHasItemizationSql("Purchase")}`,
@@ -178,11 +261,22 @@ async function loadPurchaseQualityRecords(
       partyConflict: sql<boolean>`coalesce(quality_settlements."partyConflict", false)`,
       tenderConflict: sql<boolean>`coalesce(quality_settlements."tenderConflict", false)`,
       hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql("purchase", sql`${purchase.id}`)}`,
-      awaitingOrderDetails: sql<boolean>`${awaitingOrderDetailsSql(sql`${purchase.id}`)}`,
+      awaitingOrderDetails: sql<boolean>`quality_waiting_for_details."purchaseId" IS NOT NULL`,
     })
     .from(purchase)
     .leftJoin(vendor, and(eq(vendor.id, purchase.vendorId), notDeleted(vendor)))
-    .leftJoin(expenses, sql`quality_expenses."purchaseId" = ${purchase.id}`)
+    .leftJoin(
+      sql`${expenses}`,
+      sql`quality_expenses."purchaseId" = ${purchase.id}`,
+    )
+    .leftJoin(
+      sql`${accepted}`,
+      sql`quality_accepted_orders."purchaseId" = ${purchase.id}`,
+    )
+    .leftJoin(
+      sql`${notices}`,
+      sql`quality_waiting_for_details."purchaseId" = ${purchase.id}`,
+    )
     .leftJoin(
       settlements,
       sql`quality_settlements."purchaseId" = ${purchase.id}`,
@@ -190,7 +284,7 @@ async function loadPurchaseQualityRecords(
     .where(
       and(
         notDeleted(purchase),
-        sql`${purchase.id} = ANY(${uuidArrayParam(ids)})`,
+        sql`${purchase.id} IN (SELECT id FROM ${requested})`,
       ),
     );
 }

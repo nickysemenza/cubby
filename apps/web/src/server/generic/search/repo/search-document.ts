@@ -557,20 +557,16 @@ async function upsertSearchDocumentBatch(
         body,
         normalizedText,
         sourceHash,
-        semanticText: body,
       };
     }),
   );
+  // Lock unchanged rows before skipping them so a concurrent edit or
+  // retirement can still send the input through the conflict path.
   const changed = await unwrapDb(db).execute(
     sql`
-    WITH input AS MATERIALIZED (
-      SELECT i.*, NULL::tsvector AS "searchVector", false AS missing FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb)
-        AS i("entityKind" text, "entityId" uuid, title text, subtitle text,
-          "typeHint" text, aliases text[], keywords text[], body text,
-          "normalizedText" text, "sourceHash" text, "semanticText" text)
-      UNION ALL
+    WITH retired AS MATERIALIZED (
       SELECT d."entityKind", d."entityId", d.title, d.subtitle, d."typeHint",
-        d.aliases, d.keywords, d.body, d."normalizedText", d."sourceHash", d."semanticText", d."searchVector", true
+        d.aliases, d.keywords, d.body, d."normalizedText", d."sourceHash", d."semanticText", d."searchVector"
       FROM "SearchDocument" d
       JOIN jsonb_to_recordset(${JSON.stringify(missing)}::jsonb)
         AS wanted("entityKind" text, "entityId" uuid)
@@ -584,12 +580,31 @@ async function upsertSearchDocumentBatch(
     )
     SELECT input."entityKind", input."entityId", input.title,
       input.subtitle, input."typeHint", input.aliases, input.keywords,
-      input.body, input."semanticText", input."normalizedText",
+      input.body, CASE WHEN input.missing THEN input."semanticText" ELSE input.body END, input."normalizedText",
       coalesce(input."searchVector", setweight(to_tsvector('simple', left(input.title, ${SEARCH_VECTOR_PART_CHARS})), 'A') ||
       setweight(to_tsvector('simple', left(concat_ws(' ', input.subtitle, array_to_string(input.aliases, ' '), array_to_string(input.keywords, ' ')), ${SEARCH_VECTOR_PART_CHARS})), 'B') ||
       setweight(to_tsvector('simple', left(input.body, ${SEARCH_VECTOR_PART_CHARS})), 'D')), input."sourceHash"
-    FROM input
-    ORDER BY input."entityKind", input."entityId"
+    -- Stream the live-row check and each conflict in the same lock order.
+    FROM (
+      SELECT i.*, NULL::text AS "semanticText", NULL::tsvector AS "searchVector", false AS missing
+      FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) AS i("entityKind" text, "entityId" uuid,
+        title text, subtitle text, "typeHint" text, aliases text[], keywords text[], body text,
+        "normalizedText" text, "sourceHash" text)
+      UNION ALL
+      SELECT retired.*, true FROM retired
+      ORDER BY "entityKind", "entityId" OFFSET 0
+    ) input
+    WHERE input.missing OR NOT EXISTS (
+      SELECT 1 FROM "SearchDocument" current_document
+      WHERE current_document."entityKind" = input."entityKind"
+        AND current_document."entityId" = input."entityId"
+        AND ${notDeleted("current_document")}
+        AND current_document."sourceHash" = input."sourceHash"
+        AND current_document.body = input.body
+        AND current_document."semanticText" = input.body
+        AND current_document.title = input.title
+      FOR NO KEY UPDATE
+    )
     ON CONFLICT ("entityKind", "entityId") WHERE "deletedAt" IS NULL DO UPDATE SET
       title = EXCLUDED.title,
       subtitle = EXCLUDED.subtitle, "typeHint" = EXCLUDED."typeHint",
@@ -599,17 +614,15 @@ async function upsertSearchDocumentBatch(
       "searchVector" = EXCLUDED."searchVector",
       "sourceHash" = EXCLUDED."sourceHash", "updatedAt" = now(),
       "deletedAt" = NULL
-    WHERE NOT EXISTS (SELECT 1 FROM input retired WHERE retired.missing
-      AND retired."entityKind" = EXCLUDED."entityKind" AND retired."entityId" = EXCLUDED."entityId")
+    WHERE NOT EXISTS (SELECT 1 FROM retired WHERE retired."entityKind" = EXCLUDED."entityKind" AND retired."entityId" = EXCLUDED."entityId")
       AND ("SearchDocument"."sourceHash" IS DISTINCT FROM EXCLUDED."sourceHash"
       OR "SearchDocument".body IS DISTINCT FROM EXCLUDED.body
       OR "SearchDocument"."semanticText" IS DISTINCT FROM EXCLUDED."semanticText"
       OR "SearchDocument".title IS DISTINCT FROM EXCLUDED.title)
     RETURNING "entityKind", "entityId"
     ) SELECT coalesce((SELECT jsonb_agg(jsonb_build_object('entityKind', "entityKind", 'entityId', "entityId")) FROM written), '[]'::jsonb) AS changed,
-      coalesce(jsonb_agg(jsonb_build_object('entityKind', input."entityKind", 'entityId', input."entityId"))
-        FILTER (WHERE input.missing), '[]'::jsonb) AS missing
-      FROM input
+      coalesce((SELECT jsonb_agg(jsonb_build_object('entityKind', "entityKind", 'entityId', "entityId"))
+        FROM retired), '[]'::jsonb) AS missing
   `,
     "objects",
   );
@@ -650,8 +663,12 @@ export async function prepareSearchDocuments(
   db: Database | DrizzleTransaction,
   refs: ReadonlyArray<{ entityKind: SearchableEntity; entityId: string }>,
 ) {
+  const uniqueRefs = new Map<string, SearchableEntityRef>();
   const idsByType = new Map<SearchableEntity, string[]>();
   for (const ref of refs) {
+    const key = entityRefKey(ref.entityKind, ref.entityId);
+    if (uniqueRefs.has(key)) continue;
+    uniqueRefs.set(key, ref);
     const ids = idsByType.get(ref.entityKind);
     if (ids) ids.push(ref.entityId);
     else idsByType.set(ref.entityKind, [ref.entityId]);
@@ -661,14 +678,15 @@ export async function prepareSearchDocuments(
   // whole rather than per type: each UNION arm is already gated on its own
   // entity type, and ids are uuids, so an id belonging to another type simply
   // matches nothing in the arms it was not meant for.
+  const wanted = [...uniqueRefs.values()];
   const [sources, texts, imageTexts] = await Promise.all([
     getSearchDocumentSources(
       db,
       [...idsByType.keys()],
-      refs.map((ref) => ref.entityId),
+      wanted.map((ref) => ref.entityId),
     ),
     getEmbeddingTextsForRefs(db, idsByType),
-    loadDirectImageSearchText(db, refs),
+    loadDirectImageSearchText(db, wanted),
   ]);
 
   const sourceByRef = new Map(
@@ -683,11 +701,7 @@ export async function prepareSearchDocuments(
 
   const missing: SearchableEntityRef[] = [];
   const entries: Array<{ source: SearchDocumentSource; body: string }> = [];
-  const seen = new Set<string>();
-  for (const ref of refs) {
-    const key = entityRefKey(ref.entityKind, ref.entityId);
-    if (seen.has(key)) continue;
-    seen.add(key);
+  for (const [key, ref] of uniqueRefs) {
     const source = sourceByRef.get(key);
     const text = textByRef.get(key);
     if (source && text) {

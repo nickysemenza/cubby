@@ -296,169 +296,154 @@ export const entityProblemSources = (
     ) => Promise<ReadonlyArray<readonly [ListPrepare<unknown>, unknown]>>;
   },
 ): WorkSource[] => {
-  const definitions = problemQueryDeclarations().filter(
-    (definition) =>
-      definition.source.kind === "entity" &&
-      definition.source.entity === entity,
-  );
+  const definitions = problemQueryDeclarations().flatMap((definition) => {
+    const { source } = definition;
+    return source.kind === "entity" && source.entity === entity
+      ? [{ definition, filters: source.filters }]
+      : [];
+  });
   // The scope object belongs to one queue request. Share one preparation and
   // materialized relation across its admitted Problems, never across requests.
-  const prepared = new WeakMap<WorkScope, Promise<WorkCandidates["ctes"]>>();
-  // Source column (`index:key`) to its deduplicated base routing column.
-  const routes = new Map<string, string>();
+  const prepared = new WeakMap<WorkScope, ReturnType<typeof prepare>>();
   const baseName = `work_problem_${entity}`;
-  const base = (db: Database, scope: WorkScope) => {
-    let pending = prepared.get(scope);
-    if (!pending) {
-      pending = (async () => {
-        const columns: Record<string, SQL> = {};
-        const facts: Record<string, SQL> = {};
-        const expressions = new Map<string, string>();
-        const dialect = new PgDialect();
-        const factName = `${baseName}_facts`;
-        // Bind values are part of identity: prepared contexts can differ by Problem.
-        const project = (value: SQL): SQL => {
-          const compiled = dialect.sqlToQuery(value);
-          const key = bindIdentity(compiled);
-          let name = expressions.get(key);
-          if (!name) {
-            name = `fact_${expressions.size}`;
-            expressions.set(key, name);
-            facts[name] = value;
-          }
-          return sql`${sql.identifier(factName)}.${sql.identifier(name)}`;
-        };
-        for (const [index, definition] of definitions.entries()) {
-          if (definition.source.kind !== "entity") continue;
-          if (
-            !scopeAdmitsReasons(scope, [
-              { key: definition.key, label: definition.title },
-            ])
-          )
-            continue;
-          const filters = read.parseFilters(
-            compileProblemFilters(entity, definition.source.filters),
-          );
-          const seeded =
-            (await read.prepare?.(db, scope, definition.source.filters)) ?? [];
-          const context = await read.scaffold.context(
-            db,
-            { filters, readIntent: "count" },
-            seeded,
-          );
-          columns[`match_${index}`] =
-            read.scaffold.plan(filters, {
-              context,
-              membership: "certain",
-              project,
-            }).where ?? sql`true`;
-          columns[`missing_${index}`] = read.scaffold.hasResultFilters(filters)
-            ? (read.scaffold.plan(filters, {
-                context,
-                membership: "possible",
-                project,
-              }).where ?? sql`true`)
-            : sql`false`;
-        }
-        // Labels and routing (owner subqueries) are base columns, not facts:
-        // the base evaluates them only for admitted candidates. The facts
-        // relation is not-deleted records that can match.
-        const routedColumns: Record<string, SQL> = {};
-        const routedNames = new Map<string, string>();
-        if (typeof read.columns === "function")
-          for (const [index, source] of sources.entries()) {
-            if (!scopeAdmitsReasons(scope, source.reasons)) continue;
-            for (const [key, value] of Object.entries(read.columns(source))) {
-              const expression = Array.isArray(value)
-                ? sql`ARRAY[${sql.join(
-                    value.map((item) => sql`${item}`),
-                    sql`, `,
-                  )}]::text[]`
-                : sql`${value}`;
-              const compiled = dialect.sqlToQuery(expression);
-              const identity = bindIdentity(compiled);
-              let name = routedNames.get(identity);
-              if (!name) {
-                name = `route_${routedNames.size}`;
-                routedNames.set(identity, name);
-                routedColumns[name] = expression;
-              }
-              routes.set(`${index}:${key}`, name);
-            }
-          }
-        const factRows = getDb(db)
-          .select({
-            code: sql`${read.table.shortcode}`.as("code"),
-            ...Object.fromEntries(
-              Object.entries(facts).map(([key, value]) => [key, value.as(key)]),
-            ),
-          })
-          .from(read.table)
-          .where(
-            and(
-              recordScope(scope, sql`${read.table.shortcode}`),
-              notDeleted(getTableName(read.table)),
-            ),
-          );
-        // Predicates name the fact relation and the stored table. The scan
-        // alias is hidden inside factRows, so the filter joins the table again.
-        const canMatch = or(...Object.values(columns));
-        const factQuery = canMatch
-          ? sql`(SELECT ${sql.identifier(factName)}.* FROM (${factRows}) ${sql.identifier(factName)} INNER JOIN ${read.table} ON ${read.table.shortcode} = ${sql.identifier(factName)}.code AND ${notDeleted(read.table)} WHERE ${canMatch})`
-          : factRows;
-        const root = getDb(db)
-          .select({
-            code: sql`${read.table.shortcode}`.as("code"),
-            ...(typeof read.columns === "function"
-              ? {}
-              : Object.fromEntries(
-                  Object.entries(read.columns).map(([key, value]) => [
-                    key,
-                    sql`${value}`.as(key),
-                  ]),
-                )),
-            ...Object.fromEntries(
-              Object.entries(routedColumns).map(([key, value]) => [
-                key,
-                value.as(key),
-              ]),
-            ),
-            ...Object.fromEntries(
-              Object.entries(columns).map(([key, value]) => [
-                key,
-                sql`(${value}) IS TRUE`.as(key),
-              ]),
-            ),
-          })
-          .from(read.table)
-          .innerJoin(
-            sql`${sql.identifier(factName)}`,
-            sql`${sql.identifier(factName)}.code = ${read.table.shortcode}`,
-          )
-          // Only possible candidates need labels and routing. Keep unresolved
-          // matches so missing publications still contribute coverage warnings.
-          .where(
-            and(
-              recordScope(scope, sql`${read.table.shortcode}`),
-              or(...Object.values(columns)),
-            ),
-          );
-        return [
-          ...(read.ctes ?? []),
-          { name: factName, sql: sql`${factQuery}` },
-          { name: baseName, sql: sql`${root}` },
-        ];
-      })();
-      prepared.set(scope, pending);
+  const prepare = async (db: Database, scope: WorkScope) => {
+    const admitted = definitions.flatMap((plan, index) => {
+      const source = sources[index];
+      return source &&
+        (scope.admittedSourceIds?.has(source.id) ??
+          scopeAdmitsReasons(scope, source.reasons))
+        ? [{ ...plan, source, index }]
+        : [];
+    });
+    const routes = new Map<string, string>();
+    const columns: Record<string, SQL> = {};
+    const facts: Record<string, SQL> = {};
+    const expressions = new Map<string, string>();
+    const dialect = new PgDialect();
+    const factName = `${baseName}_facts`;
+    // Bind values are part of identity: prepared contexts can differ by Problem.
+    const project = (value: SQL): SQL => {
+      const compiled = dialect.sqlToQuery(value);
+      const key = bindIdentity(compiled);
+      let name = expressions.get(key);
+      if (!name) {
+        name = `fact_${expressions.size}`;
+        expressions.set(key, name);
+        facts[name] = value;
+      }
+      return sql`${sql.identifier(factName)}.${sql.identifier(name)}`;
+    };
+    for (const { index, filters: problemFilters } of admitted) {
+      const filters = read.parseFilters(
+        compileProblemFilters(entity, problemFilters),
+      );
+      const seeded = (await read.prepare?.(db, scope, problemFilters)) ?? [];
+      const context = await read.scaffold.context(
+        db,
+        { filters, readIntent: "count" },
+        seeded,
+      );
+      columns[`match_${index}`] =
+        read.scaffold.plan(filters, {
+          context,
+          membership: "certain",
+          project,
+        }).where ?? sql`true`;
+      columns[`missing_${index}`] = read.scaffold.hasResultFilters(filters)
+        ? (read.scaffold.plan(filters, {
+            context,
+            membership: "possible",
+            project,
+          }).where ?? sql`true`)
+        : sql`false`;
     }
-    return pending;
+    // Labels and routing are evaluated after the membership predicates.
+    const routedColumns: Record<string, SQL> = {};
+    const routedNames = new Map<string, string>();
+    if (typeof read.columns === "function")
+      for (const { index, source } of admitted) {
+        for (const [key, value] of Object.entries(read.columns(source))) {
+          const expression = Array.isArray(value)
+            ? sql`ARRAY[${sql.join(
+                value.map((item) => sql`${item}`),
+                sql`, `,
+              )}]::text[]`
+            : sql`${value}`;
+          const compiled = dialect.sqlToQuery(expression);
+          const identity = bindIdentity(compiled);
+          let name = routedNames.get(identity);
+          if (!name) {
+            name = `route_${routedNames.size}`;
+            routedNames.set(identity, name);
+            routedColumns[name] = expression;
+          }
+          routes.set(`${index}:${key}`, name);
+        }
+      }
+    // Materialize facts before testing membership so PostgreSQL cannot inline
+    // their expressions into both the filter and the projected columns.
+    const factRows = getDb(db)
+      .select({
+        code: sql`${read.table.shortcode}`.as("code"),
+        ...Object.fromEntries(
+          Object.entries(facts).map(([key, value]) => [key, value.as(key)]),
+        ),
+      })
+      .from(read.table)
+      .where(
+        and(
+          recordScope(scope, sql`${read.table.shortcode}`),
+          notDeleted(getTableName(read.table)),
+        ),
+      );
+    const root = getDb(db)
+      .select({
+        code: sql`${read.table.shortcode}`.as("code"),
+        ...(typeof read.columns === "function"
+          ? {}
+          : Object.fromEntries(
+              Object.entries(read.columns).map(([key, value]) => [
+                key,
+                sql`${value}`.as(key),
+              ]),
+            )),
+        ...Object.fromEntries(
+          Object.entries(routedColumns).map(([key, value]) => [
+            key,
+            value.as(key),
+          ]),
+        ),
+        ...Object.fromEntries(
+          Object.entries(columns).map(([key, value]) => [
+            key,
+            sql`(${value}) IS TRUE`.as(key),
+          ]),
+        ),
+      })
+      .from(read.table)
+      .innerJoin(
+        sql`${sql.identifier(factName)}`,
+        sql`${sql.identifier(factName)}.code = ${read.table.shortcode}`,
+      )
+      // Only possible candidates need labels and routing. Keep unresolved
+      // matches so missing publications still contribute coverage warnings.
+      .where(
+        and(
+          recordScope(scope, sql`${read.table.shortcode}`),
+          or(...Object.values(columns)),
+        ),
+      );
+    return {
+      admitted,
+      routes,
+      ctes: [
+        ...(read.ctes ?? []),
+        { name: factName, sql: sql`${factRows}` },
+        { name: baseName, sql: sql`${root}` },
+      ],
+    };
   };
-  const sources: WorkSource[] = definitions.flatMap((definition, index) => {
-    if (
-      definition.source.kind !== "entity" ||
-      definition.source.entity !== entity
-    )
-      return [];
+  const sources: WorkSource[] = definitions.map(({ definition }, index) => {
     const source: WorkSource = {
       id: definition.key,
       family: "problem",
@@ -483,7 +468,12 @@ export const entityProblemSources = (
           : []),
       ],
       candidates: async (db, scope) => {
-        const ctes = await base(db, scope);
+        let pending = prepared.get(scope);
+        if (!pending) {
+          pending = prepare(db, scope);
+          prepared.set(scope, pending);
+        }
+        const { admitted, routes, ctes } = await pending;
         if (typeof read.columns !== "function") {
           const columns = Object.fromEntries(
             Object.keys(read.columns).map((key) => [
@@ -491,14 +481,9 @@ export const entityProblemSources = (
               sql`base.${sql.identifier(key)}`,
             ]),
           );
-          const admitted = definitions.flatMap((definition, index) =>
-            scopeAdmitsReasons(scope, [
-              { key: definition.key, label: definition.title },
-            ])
-              ? [
-                  sql`(${definition.key}::text, ${definition.title}::text, ${decisionExecutor(PROBLEM_DECISION[definition.key])}::text, base.${sql.identifier(`match_${index}`)}, (base.${sql.identifier(`missing_${index}`)} AND NOT base.${sql.identifier(`match_${index}`)}))`,
-                ]
-              : [],
+          const reasons = admitted.map(
+            ({ definition, source, index }) =>
+              sql`(${source.id}::text, ${definition.title}::text, ${source.executor}::text, base.${sql.identifier(`match_${index}`)}, (base.${sql.identifier(`missing_${index}`)} AND NOT base.${sql.identifier(`match_${index}`)}))`,
           );
           const candidates = (missing: boolean) =>
             selectWorkCandidates(db, source, {
@@ -515,7 +500,7 @@ export const entityProblemSources = (
             })
               .from(sql`${sql.identifier(baseName)} base`)
               .innerJoin(
-                sql`LATERAL (VALUES ${sql.join(admitted, sql`, `)}) reason(source, label, executor, matched, missing)`,
+                sql`LATERAL (VALUES ${sql.join(reasons, sql`, `)}) reason(source, label, executor, matched, missing)`,
                 sql`true`,
               )
               .where(missing ? sql`reason.missing` : sql`reason.matched`);
@@ -556,7 +541,7 @@ export const entityProblemSources = (
         };
       },
     };
-    return [source];
+    return source;
   });
   return sources;
 };

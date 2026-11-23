@@ -29,6 +29,8 @@ export interface WorkScope {
   /** Requested reason keys (any-of); a source keeps only these. */
   readonly reasons?: readonly string[];
   readonly reasonExclude?: readonly string[];
+  /** Static source admission, including family, executor and entity filters. */
+  readonly admittedSourceIds?: ReadonlySet<string>;
 }
 
 export interface WorkReason {

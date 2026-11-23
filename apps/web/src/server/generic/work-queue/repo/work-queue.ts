@@ -196,9 +196,13 @@ async function candidateUnion(
   scope: WorkScope,
   includeIncomplete: boolean,
 ) {
+  const admittedScope: WorkScope = {
+    ...scope,
+    admittedSourceIds: new Set(admitted.map((source) => source.id)),
+  };
   const prepared = (
     await boundedAll(admitted, async (source) => {
-      const candidates = await source.candidates(db, scope);
+      const candidates = await source.candidates(db, admittedScope);
       return candidates ? { ...candidates, declaration: source } : null;
     })
   ).filter((candidates) => candidates !== null);
