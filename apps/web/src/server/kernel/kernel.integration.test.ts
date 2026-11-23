@@ -2692,7 +2692,10 @@ describe("evidence-facts kernel", () => {
         { runId: second, cancelled: false },
       ]),
     );
+    const wake = vi.spyOn(backgroundTasks, "wakeKernel").mockResolvedValue();
     await retryRunAsks(ctx.db, first);
+    expect(wake).toHaveBeenCalledTimes(1);
+    wake.mockRestore();
     expect((await kernel.runWork(ctx.db, first)).asks).toEqual(
       expect.arrayContaining([expect.objectContaining({ state: "answered" })]),
     );

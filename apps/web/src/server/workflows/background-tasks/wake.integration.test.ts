@@ -5,9 +5,10 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
+import { withTransactionDatabase } from "~/server/db/helpers";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 
-import { clearDeliveredWakes, offerWake } from "./publish";
+import { clearDeliveredWakes, offerWake, wakeAt } from "./publish";
 
 // Duplicate and stale permits must not clone wake chains.
 describe("single pending future wake", () => {
@@ -61,5 +62,19 @@ describe("single pending future wake", () => {
     );
     await offerWake(ctx.db, later, "synthetic.after-loss");
     expect(sent.at(-1)?.at).toBe(later.toISOString());
+
+    // A deadline due before its writer commits sends nothing until the commit.
+    const before = sent.length;
+    await expect(
+      withTransactionDatabase(ctx.db, async (tx) => {
+        await wakeAt(new Date(Date.now() - 1), {
+          source: "synthetic.rolled-back",
+          db: tx,
+        });
+        expect(sent).toHaveLength(before);
+        throw new Error("synthetic rollback");
+      }),
+    ).rejects.toThrow("synthetic rollback");
+    expect(sent).toHaveLength(before);
   });
 });

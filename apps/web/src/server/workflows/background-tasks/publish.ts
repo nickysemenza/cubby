@@ -118,26 +118,32 @@ const delaySecondsUntil = (at: Date) =>
   Math.max(0, Math.ceil((at.getTime() - Date.now()) / 1000));
 
 /**
- * A best-effort wake when known work falls due. A due `at` is an immediate
- * wake. A future one joins the running delivery's offer, or is offered after
- * the caller's commit (`offerWake`); `db` defaults to the invocation database.
- * `ring` also rings companions for parked device work (`ringDueDeviceWork`):
- * a ring permit is always sent, so it never merges into a wake without it.
+ * A best-effort wake when known work falls due. Inside a delivery a future
+ * `at` joins the delivery's offer and a due one is dropped. Otherwise nothing
+ * is decided or sent until the caller's transaction on `db` (default: the
+ * invocation database) commits: a consumer must not drain before the rows it
+ * wakes for are visible, and a rollback must send nothing. Then a due `at` is
+ * an immediate wake and a future one is offered (`offerWake`). `ring` also
+ * rings companions for parked device work (`ringDueDeviceWork`): a ring permit
+ * is always sent, so it never merges into a wake without it, and its callers
+ * send it after their commit.
  */
 export async function wakeAt(
   at: Date,
   options: PublishOptions & { ring?: boolean; db?: Database },
 ) {
   if (options.ring) return sendRing(at, options.source);
-  if (at.getTime() <= Date.now()) return wakeKernel({ source: options.source });
   const delivery = deliveryWakes.getStore();
   if (delivery) {
-    if (!delivery.future || at < delivery.future) delivery.future = at;
+    if (at.getTime() > Date.now() && (!delivery.future || at < delivery.future))
+      delivery.future = at;
     return;
   }
   const db = options.db ?? (await import("~/server/db")).db;
   await repositoryAfterCommit(db, (committed) =>
-    offerWake(committed, at, options.source),
+    at.getTime() <= Date.now()
+      ? wakeKernel({ source: options.source })
+      : offerWake(committed, at, options.source),
   );
 }
 
@@ -173,8 +179,19 @@ async function sendRing(at: Date, source: string) {
  * while it still holds that permit's `at` (`clearDeliveredWakes`) and offers
  * the global next deadline. Stale and duplicate permits therefore end without
  * a successor. The statement runs alone after the caller's commit, so it never
- * holds the row inside a gated transaction. A lost permit costs the time
- * until its `at` passes and another offer wins, or the hourly cron.
+ * holds the row inside a gated transaction.
+ *
+ * Offers refused while a permit is pending are not remembered: their deadlines
+ * rely on that permit's delivery offering the global next deadline. So a lost
+ * permit leaves them waiting until its `at` passes and another offer wins, or
+ * the hourly cron; a send that exhausts its retries empties the row so a later
+ * offer can win, but the deadlines it refused meanwhile wait the same way.
+ * Deadline writers that send no wake of their own are bounded the same way:
+ * settlements, backoffs and waits written inside a delivery (its offer covers
+ * them), failures settled by a member's `reconcileNow` (its claim-recovery
+ * wake's delivery covers them), and any other write of a future `availableAt`
+ * without `wakeAt`, such as a Run's funding pause or an external executor's
+ * delayed release.
  */
 export async function offerWake(
   db: Database,

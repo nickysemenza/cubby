@@ -82,14 +82,17 @@ async function runScopeBatch(
 }
 
 /**
- * Run kernel work until nothing is due or the budget is spent. Returns how
- * many units it ran: scopes, asks and pass pages.
+ * How a runner invocation ended: `ran` counts scopes, asks and pass pages;
+ * `exhausted` means the budget ended it, not an empty round.
  */
+export type KernelRun = { ran: number; exhausted: boolean };
+
+/** Run kernel work until a round finds nothing to claim or the budget is spent. */
 export async function runKernel(
   db: Database,
   registry: KernelRegistry,
   options: { budgetMs: number },
-): Promise<number> {
+): Promise<KernelRun> {
   return withWorkContext(async () => {
     const deadline = Date.now() + options.budgetMs;
     await stopUnregisteredWork(db, registry);
@@ -101,10 +104,10 @@ export async function runKernel(
       const asks = await runQueuedAsks(db, registry, ASK_BATCH);
       const passes = (await runOnePass(db, registry)) ? 1 : 0;
       const round = scopes + asks + passes;
-      if (!round) break;
+      if (!round) return { ran, exhausted: false };
       ran += round;
     }
-    return ran;
+    return { ran, exhausted: true };
   });
 }
 

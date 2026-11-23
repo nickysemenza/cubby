@@ -37,6 +37,7 @@ import type { MergeVerdict } from "./identity";
 import { productionKernel } from "./kernel";
 import type { MachineryListRow } from "./projection";
 import type { OwnedReferenceRepoint } from "./repoint";
+import type { KernelRun } from "./runner";
 import type { NeedsYouOptions } from "./work";
 
 export {
@@ -293,7 +294,7 @@ export async function cancelWork(
 export async function runProductionKernel(
   db: Database,
   options: { budgetMs: number },
-): Promise<number> {
+): Promise<KernelRun> {
   return (await productionKernel()).run(db, options);
 }
 

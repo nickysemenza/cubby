@@ -52,9 +52,9 @@ export async function handleBackgroundQueueBatch(
         await import("~/server/domains/image-processing/repo/image-processing-ring")
       ).ringDueDeviceWork(db);
     const { result, future } = await collectDeliveryWakes(async () => {
-      const started = Date.now();
-      const ran = await runProductionKernel(db, { budgetMs: BUDGET_MS });
-      const exhausted = Date.now() - started >= BUDGET_MS;
+      const { ran, exhausted } = await runProductionKernel(db, {
+        budgetMs: BUDGET_MS,
+      });
       let alertAt: Date | null;
       try {
         const { dispatchBackgroundAlerts } =
