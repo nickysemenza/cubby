@@ -1,0 +1,1 @@
+CREATE INDEX "RunOperation_completed_target_idx" ON "RunOperation" (("result" #>> '{target,entityId}'),("result" #>> '{target,entityKind}'),"runId") WHERE "kind" = 'target_outcome' AND "state" = 'completed';

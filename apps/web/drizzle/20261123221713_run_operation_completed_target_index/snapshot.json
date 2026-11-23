@@ -1,0 +1,71 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "c45b1cf0-86d9-4afe-a8f0-cdb1c8ad5eb7",
+  "prevIds": [
+    "316731cc-6c6c-40d8-aaea-4b35391afdb6"
+  ],
+  "footprints": [
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "RunOperation",
+        "RunOperation_completed_target_idx"
+      ],
+      "writes": [
+        "s|idx|public.RunOperation_completed_target_idx",
+        "n|idx|public.RunOperation_completed_target_idx",
+        "e|idx|public.RunOperation_completed_target_idx",
+        "n|rel|public.RunOperation_completed_target_idx"
+      ],
+      "reads": [
+        "n|tbl|public.RunOperation",
+        "n|sch|public",
+        "n|col|public.RunOperation.runId"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "RunOperation",
+        "name": "RunOperation_completed_target_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "(\"result\" #>> '{target,entityId}')",
+            "isExpression": true,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "(\"result\" #>> '{target,entityKind}')",
+            "isExpression": true,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "runId",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": "\"kind\" = 'target_outcome' AND \"state\" = 'completed'",
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    }
+  ]
+}

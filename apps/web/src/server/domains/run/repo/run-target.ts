@@ -16,17 +16,7 @@ import {
   type RunTargetOutcomeReceipt,
 } from "@cubby/schemas/run-fields";
 import { mailImportOutcome } from "@cubby/schemas/suggestion";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  exists,
-  inArray,
-  or,
-  type SQL,
-  sql,
-} from "drizzle-orm";
+import { and, asc, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { aiCostSummarySql } from "~/server/ai/repo/ai-usage";
@@ -156,49 +146,25 @@ export async function listRunTargetOutcomes(
   }));
 }
 
-const runSubjectHistory = (
-  db: Database,
-  subject: EntityRef<"purchase" | "product">,
-) =>
-  or(
-    exists(
-      getDb(db)
-        .select({ id: auditLog.id })
-        .from(auditLog)
-        .where(
-          and(
-            eq(auditLog.runId, runTable.id),
-            eq(auditLog.entityKind, subject.entity),
-            eq(auditLog.entityId, subject.id),
-          ),
-        ),
-    ),
-    exists(
-      getDb(db)
-        .select({ id: runFinding.id })
-        .from(runFinding)
-        .where(
-          and(
-            eq(runFinding.runId, runTable.id),
-            eq(runFinding.entityKind, subject.entity),
-            eq(runFinding.entityId, subject.id),
-          ),
-        ),
-    ),
-    exists(
-      getDb(db)
-        .select({ id: runOperation.id })
-        .from(runOperation)
-        .where(
-          and(
-            eq(runOperation.runId, runTable.id),
-            eq(runOperation.kind, "target_outcome"),
-            eq(runOperation.state, "completed"),
-            sql`${runOperation.result}->${"target"}->>'entityKind' = ${subject.entity} AND ${runOperation.result}->${"target"}->>'entityId' = ${subject.id}`,
-          ),
-        ),
-    ),
-  );
+/**
+ * The Runs that wrote, found or recorded a completed target outcome for one
+ * subject. Each source is read by its subject index first; correlating the
+ * sources per Run walked every Run of the party. The target-outcome branch
+ * repeats `RunOperation_completed_target_idx`'s expressions and predicate.
+ */
+const runSubjectHistory = (subject: EntityRef<"purchase" | "product">) =>
+  sql`${runTable.id} IN (
+    SELECT ${auditLog.runId} FROM ${auditLog}
+    WHERE ${auditLog.entityKind} = ${subject.entity} AND ${auditLog.entityId} = ${subject.id}
+    UNION
+    SELECT ${runFinding.runId} FROM ${runFinding}
+    WHERE ${runFinding.entityKind} = ${subject.entity} AND ${runFinding.entityId} = ${subject.id}
+    UNION
+    SELECT ${runOperation.runId} FROM ${runOperation}
+    WHERE ${runOperation.kind} = ${"target_outcome"} AND ${runOperation.state} = ${"completed"}
+      AND (${runOperation.result} #>> '{target,entityId}') = ${subject.id}
+      AND (${runOperation.result} #>> '{target,entityKind}') = ${subject.entity}
+  )`;
 
 /** List write provenance and targeted no-op validation runs for a Purchase. */
 export function listRuns(
@@ -210,7 +176,7 @@ export function listRuns(
     db,
     ledgerPartyId,
     purchaseId
-      ? runSubjectHistory(db, { entity: "purchase", id: purchaseId })
+      ? runSubjectHistory({ entity: "purchase", id: purchaseId })
       : undefined,
   );
 }
@@ -225,7 +191,7 @@ export function listProductRuns(
     db,
     ledgerPartyId,
     productId
-      ? runSubjectHistory(db, { entity: "product", id: productId })
+      ? runSubjectHistory({ entity: "product", id: productId })
       : undefined,
   );
 }
