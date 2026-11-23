@@ -11,7 +11,7 @@
  */
 import type { ActorContext } from "@cubby/schemas/context";
 import { resolveStage, nextActor } from "@cubby/schemas/kernel/stage";
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
@@ -95,9 +95,12 @@ function semanticallyEmpty(diff: Difference): boolean {
   });
 }
 
-/** The stale-scope predicate for the sweep's scope-key ordering. */
-const stale = (reconciler: Reconciler) => sql`
-  s."scopeKind" = ${reconciler.scope} AND s.rules <> ${reconciler.rules}
+/**
+ * The stale-scope predicate the sweep and its trigger share. The trigger asks
+ * with `<` and `>` separately so each probe is one index range.
+ */
+const stale = (reconciler: Reconciler, differs: SQL = sql`<>`) => sql`
+  s."scopeKind" = ${reconciler.scope} AND s.rules ${differs} ${reconciler.rules}
   AND NOT EXISTS (SELECT 1 FROM "ScopeDirty" d
     WHERE d."scopeKind" = s."scopeKind" AND d."scopeKey" = s."scopeKey")
   AND NOT EXISTS (SELECT 1 FROM "Drift" p
@@ -360,14 +363,8 @@ export async function hasStaleScopes(
     SELECT ${sql.join(
       reconcilers.flatMap((reconciler) =>
         [sql`<`, sql`>`].map(
-          (range) => sql`EXISTS (
-            SELECT 1 FROM "ScopeState" s
-            WHERE s."scopeKind" = ${reconciler.scope} AND s.rules ${range} ${reconciler.rules}
-              AND NOT EXISTS (SELECT 1 FROM "ScopeDirty" d
-                WHERE d."scopeKind" = s."scopeKind" AND d."scopeKey" = s."scopeKey")
-              AND NOT EXISTS (SELECT 1 FROM "Drift" p
-                WHERE p."scopeKind" = s."scopeKind" AND p."scopeKey" = s."scopeKey"
-                  AND p.rules = ${reconciler.rules}))`,
+          (range) =>
+            sql`EXISTS (SELECT 1 FROM "ScopeState" s WHERE ${stale(reconciler, range)})`,
         ),
       ),
       sql` OR `,

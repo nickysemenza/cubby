@@ -31,10 +31,12 @@ export const retentionPass = definePass({
       availableAt: page.next ? undefined : new Date(Date.now() + 60 * 60_000),
       async publish(tx) {
         // A concurrent start may retain the old cursor. Replaying the range is safe.
-        // Repair and Pass pruning run once per cycle so later pages hold the gate only for their own events.
+        // Repair runs once per cycle so later pages hold the gate only for their
+        // own events. Pass pruning runs on the cycle's last page, which the
+        // hourly start repeats.
         if (!after) await repairImageProcessingExecution(tx, 500);
         await pruneImageProcessingEvents(tx, page.ids);
-        if (after) return;
+        if (page.next) return;
         await repositoryQueries(tx).execute(sql`
           WITH doomed AS (
             SELECT name, key FROM "Pass"
