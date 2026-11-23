@@ -232,8 +232,8 @@ describe("composed Work queue engine", () => {
       totalCount: 2,
       summary: {
         cells: [
-          { reason: "a", entity: null, count: 1, oldest: null },
-          { reason: "b", entity: null, count: 2, oldest: null },
+          { reason: "a", entity: null, count: 1, oldest: "2026-09-01" },
+          { reason: "b", entity: null, count: 2, oldest: "2026-09-01" },
         ],
         types: [{ entity: null, count: 2 }],
       },
