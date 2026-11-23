@@ -387,8 +387,9 @@ jump; section headers match it. `DesktopDataRow` clips every cell to the height.
   rows. Tailwind width classes on `meta.className` are normalized legacy input.
 - Widths belong to the column kind (`COLUMN_KIND_WIDTHS` in
   `ui/data-table/column-kind-widths.ts`: a full width and a narrow one), never
-  the entity. The record identity has no kind: it fits its title and is the
-  one column that takes pane slack. State, progress and text kinds cap their
+  the entity. The record identity has no kind: it fits its title and takes
+  pane slack first; slack left over that is at most half the painted columns'
+  width justifies the unpinned columns, and more than that stays empty. State, progress and text kinds cap their
   content at the kind width and end in an ellipsis; dates, ages and money fit
   their whole value. A table pane of 1100px or wider draws the full width class; a
   narrower one steps each kind to its narrow width and optional columns leave
@@ -517,7 +518,7 @@ never call `PageWrapper` directly. Detail bodies use `DetailSections`
   detail page whose body is one form omits `workspace` and keeps the header.
 - `DetailSections` renders `RecordWorkspace`: the 172px rail with the page's
   `facts` and the contents index, the pinned `signals` bar, the section groups
-  with each section as wide as its content needs, and the Activity column. Without `detail.groups` an entity
+  with the sections on one shared set of tracks, and the Activity column. Without `detail.groups` an entity
   gets Overview, Work, Evidence, Relations and Activity. Every section stays
   mounted; a group or section is a URL fragment, and a fragment naming a folded
   section opens it. [DESIGN.md](../DESIGN.md#layout) owns the widths and keys.

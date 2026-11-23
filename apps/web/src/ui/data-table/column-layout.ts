@@ -551,17 +551,19 @@ function distributeSlack(
   candidates: readonly TableWidthColumn[],
   slack: number,
   cap: (column: TableWidthColumn) => number,
+  weight: (column: TableWidthColumn) => number = (column) => column.getSize(),
 ) {
   let remaining = slack;
   let pool = candidates;
   while (remaining > 0 && pool.length > 0) {
     const totalWeight = pool.reduce((total, column) => {
-      return total + column.getSize();
+      return total + weight(column);
     }, 0);
+    if (totalWeight <= 0) break;
     let distributed = 0;
     const open: TableWidthColumn[] = [];
     for (const column of pool) {
-      const share = Math.floor((remaining * column.getSize()) / totalWeight);
+      const share = Math.floor((remaining * weight(column)) / totalWeight);
       const room = cap(column) - (widths[column.id] ?? 0);
       const grant = Math.max(0, Math.min(share, room));
       widths[column.id] = (widths[column.id] ?? 0) + grant;
@@ -651,13 +653,17 @@ function pinnedIdentityCap(
   );
 }
 
+/** The slack, as a share of the painted columns, a table is justified across. */
+const JUSTIFY_SLACK_SHARE = 0.5;
+
 /**
  * Resolves the widths the browser should paint without mutating TanStack's own
  * column-sizing state. A user's deliberate resize remains the source of truth
  * (`userSized` and pinned columns never receive slack). A measured width
- * stops at the column's fit maximum. Pane slack goes only to the record
- * identity, up to its whole measured title; the rest goes to the trailing
- * spacer.
+ * stops at the column's fit maximum. Pane slack goes first to the record
+ * identity, up to its whole measured title. What is left justifies the
+ * unpinned columns when it is at most half their painted width, and otherwise
+ * goes to the trailing spacer.
  *
  * Regressions: all slack used to go to one column past its maxSize, so a
  * three-column table (Product Categories) painted a 1200px name beside
@@ -726,7 +732,31 @@ export function resolvedTableColumnWidths(
         Math.max(columnFitMax(column), measured[column.id] ?? 0),
       ),
   );
-  return { widths, spacer: Math.max(0, remaining) };
+  // A table that nearly fills its pane is justified to it: the unpinned columns
+  // share the last of the slack in proportion. More slack than that stays in
+  // the spacer, so a small table keeps its columns together.
+  const painted = Object.values(widths).reduce(
+    (total, width) => total + width,
+    0,
+  );
+  if (remaining <= 0 || remaining > painted * JUSTIFY_SLACK_SHARE)
+    return { widths, spacer: Math.max(0, remaining) };
+  const fitted = { ...widths };
+  const spacer = distributeSlack(
+    widths,
+    columns.filter(
+      (column) =>
+        !isLockedColumn(column) &&
+        !column.getIsPinned?.() &&
+        !userSized.has(column.id) &&
+        !collapsed.has(column.id),
+    ),
+    remaining,
+    (column) =>
+      Math.floor((fitted[column.id] ?? 0) * (1 + JUSTIFY_SLACK_SHARE)),
+    (column) => fitted[column.id] ?? 0,
+  );
+  return { widths, spacer: Math.max(0, spacer) };
 }
 
 export function columnWidthVariables(

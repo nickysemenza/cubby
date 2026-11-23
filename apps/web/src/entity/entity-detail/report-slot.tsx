@@ -546,7 +546,13 @@ function useReportBlocks(
       loaded &&
       !batch.isError &&
       !paged.isError &&
-      blocks.length === 0,
+      // A report that only says its lists are empty has nothing recorded.
+      blocks.every(
+        (block) =>
+          (block.kind === "records" || block.kind === "table") &&
+          block.rows.length === 0 &&
+          !("actions" in block && block.actions?.length),
+      ),
   );
   const state = batched ? batch : paged;
   return {

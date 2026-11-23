@@ -58,11 +58,12 @@ export function QualityResult({ check }: { check: RecordQualityCheck }) {
         : "text-warning-ink";
   return (
     <span
+      data-quality-state={check.state}
       className={`inline-flex min-w-0 items-start gap-1 text-xs ${tone}`}
-      title={check.stateLabel}
+      title={`${check.label} · ${check.stateLabel}`}
     >
       <Icon aria-hidden className="mt-0.5 size-3.5 shrink-0" />
-      <span>
+      <span data-quality-label>
         {check.label}
         {check.state === "excepted"
           ? " · Accepted exception"

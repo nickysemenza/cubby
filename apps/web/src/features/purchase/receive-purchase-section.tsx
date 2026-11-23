@@ -7,6 +7,7 @@ import type { ListRowOf } from "~/entity/display/list-renderer-types";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { entityListFor } from "~/entity/entity-list";
 import { ReceiveExpenseDialog } from "~/features/expense/receive-expense-dialog";
+import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { Row, Stack } from "~/ui/layout";
 import { Description } from "~/ui/text/description";
 import { StatusText } from "~/ui/text/status-text";
@@ -29,6 +30,10 @@ export const PurchaseReceiving: DetailSlotComponent<"purchase"> = ({
     }),
   );
   const [receiving, setReceiving] = useState<ExpenseOut | null>(null);
+  useSectionEmpty(
+    lines.isSuccess &&
+      !lines.data.items.some((line) => fieldValueOf(line.fields.productId)),
+  );
   if (lines.isPending) return <StatusText>Loading lines…</StatusText>;
   if (lines.isError)
     return <StatusText tone="destructive">{lines.error.message}</StatusText>;
