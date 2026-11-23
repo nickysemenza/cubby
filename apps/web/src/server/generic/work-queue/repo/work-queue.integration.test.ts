@@ -268,7 +268,7 @@ describe("composed Work queue engine", () => {
           deferrals,
         )
       ).meta.summary?.cells,
-    ).toEqual([{ reason: "b", entity: null, count: 1, oldest: null }]);
+    ).toEqual([{ reason: "b", entity: null, count: 1, oldest: "2026-09-02" }]);
     const view = await read([source], { view: "agent" }, deferrals);
     expect(view.items.map((row) => row.key)).toEqual(["Alpha"]);
     expect(
@@ -276,9 +276,9 @@ describe("composed Work queue engine", () => {
         .summary,
     ).toEqual({
       cells: [
-        { reason: "a", entity: null, count: 1, oldest: null },
-        { reason: "b", entity: null, count: 1, oldest: null },
-        { reason: "c", entity: null, count: 1, oldest: null },
+        { reason: "a", entity: null, count: 1, oldest: "2026-09-01" },
+        { reason: "b", entity: null, count: 1, oldest: "2026-09-01" },
+        { reason: "c", entity: null, count: 1, oldest: "2026-09-01" },
       ],
       types: [{ entity: null, count: 1 }],
     });
