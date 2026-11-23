@@ -49,8 +49,10 @@ import {
   bindingFactKey,
   decisionKey,
   ownerKey,
+  recordOwnerKeys,
   recordSubject,
   rowKey,
+  scopeOwnerKey,
   tableKey,
 } from "./keys";
 import { idColumn, KernelContractError } from "./reads";
@@ -422,8 +424,16 @@ export async function mergeRecords(
   const scopes = new Map<string, ScopeRef>();
   for (const owner of [...survivorOwners, ...absorbedOwners])
     scopes.set(`${owner.kind}\u0000${owner.key}`, owner);
-  // Same-scope (or unowned survivor) rows simply follow the survivor.
-  await q
+  // Same-scope (or unowned survivor) rows simply follow the survivor. Every
+  // RecordKey row this merge rewrites raises its record's and its scope's
+  // owner keys.
+  const ownerColumns = {
+    scopeKind: recordKey.scopeKind,
+    scopeKey: recordKey.scopeKey,
+    entity: recordKey.entity,
+    entityId: recordKey.entityId,
+  };
+  const followed = await q
     .update(recordKey)
     .set({ entityId: keepId })
     .where(
@@ -434,19 +444,26 @@ export async function mergeRecords(
           ? sql`NOT (${recordKey.scopeKind}, ${recordKey.scopeKey}) IN (SELECT f.kind, f.key FROM jsonb_to_recordset(${JSON.stringify(foreign)}::jsonb) AS f(kind text, key text))`
           : undefined,
       ),
-    );
+    )
+    .returning(ownerColumns);
+  keys.push(...recordOwnerKeys(followed));
   for (const owner of foreign) {
-    await q
-      .update(recordKey)
-      .set({ entityId: keepId, mergedAt: new Date() })
-      .where(
-        and(
-          eq(recordKey.entity, entity),
-          eq(recordKey.entityId, loserId),
-          eq(recordKey.scopeKind, owner.kind),
-          eq(recordKey.scopeKey, owner.key),
-        ),
-      );
+    keys.push(
+      ...recordOwnerKeys(
+        await q
+          .update(recordKey)
+          .set({ entityId: keepId, mergedAt: new Date() })
+          .where(
+            and(
+              eq(recordKey.entity, entity),
+              eq(recordKey.entityId, loserId),
+              eq(recordKey.scopeKind, owner.kind),
+              eq(recordKey.scopeKey, owner.key),
+            ),
+          )
+          .returning(ownerColumns),
+      ),
+    );
     const remaining = await q
       .select({ id: recordKey.entityId })
       .from(recordKey)
@@ -475,6 +492,8 @@ export async function mergeRecords(
       RETURNING child.entity, child."entityId"`);
     for (const row of movedOwners.rows)
       keys.push(ownerKey(row.entity, row.entityId));
+    if (movedOwners.rows.length)
+      keys.push(scopeOwnerKey(owner), scopeOwnerKey(survivor!));
     // Retarget the event below, retaining the emitting scope's ownership.
     // Transferring ownership would let the survivor's next desired-binding
     // set remove absorbed evidence it reads but does not itself derive.

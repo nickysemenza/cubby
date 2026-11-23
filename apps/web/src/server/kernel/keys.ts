@@ -34,6 +34,29 @@ export const bindingFactKey = (fact: FactRef): Key =>
 export const ownerKey = (entity: string, id: string): Key =>
   `owner:${entity}:${id}`;
 
+/**
+ * The records one scope owns: raised whenever a `RecordKey` row of that scope
+ * is inserted, deleted, rejected, cleared, repointed by a merge or moved to or
+ * from it. A reader that knows the owning scope but not the record reads its
+ * owners through this key.
+ */
+export const scopeOwnerKey = (scope: ScopeRef): Key =>
+  `owned:${scope.kind}:${scope.key}`;
+
+/** Both owner keys of changed `RecordKey` rows. */
+export const recordOwnerKeys = (
+  rows: readonly {
+    scopeKind: string;
+    scopeKey: string;
+    entity: string;
+    entityId: string;
+  }[],
+): Key[] =>
+  rows.flatMap((row) => [
+    ownerKey(row.entity, row.entityId),
+    scopeOwnerKey({ kind: row.scopeKind, key: row.scopeKey }),
+  ]);
+
 /** A decision subject for a record. */
 export const recordSubject = (entity: string, id: string) => `${entity}:${id}`;
 /** A drift proposal's approval subject, by item or by class. */

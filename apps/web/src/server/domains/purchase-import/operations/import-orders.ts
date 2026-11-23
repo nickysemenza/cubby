@@ -86,6 +86,7 @@ import {
   retainedMailSource,
   readUnchangedMailSource,
 } from "~/server/domains/purchase-import/repo/import-scope";
+import { emitEmailRunAssignment } from "~/server/domains/purchase-import/repo/mail-run-kernel";
 import { releaseUnsettledMailRunSources } from "~/server/domains/purchase-import/repo/mail-run-membership";
 import {
   MODEL_STYLE_MATCH_REASON,
@@ -1073,7 +1074,12 @@ async function finalizeReviewRun(
         columns: ["status", "endedAt", "updatedAt"],
       });
     if (stopped?.purpose === "mail_import" && stopped.input !== null)
-      await releaseUnsettledMailRunSources(tx, runEntityId.parse(runId));
+      await emitEmailRunAssignment(
+        tx,
+        (
+          await releaseUnsettledMailRunSources(tx, runEntityId.parse(runId))
+        ).map((row) => row.id),
+      );
   });
 }
 

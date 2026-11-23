@@ -12,6 +12,8 @@ import { expense } from "~/server/db/schema";
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { splitExpense } from "~/server/domains/purchase/repo/purchase";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
+import { rowKey } from "~/server/kernel/keys";
+import { dependentScope } from "~/server/kernel/testing/dependent-scope.fixtures";
 
 describe("atomic split classification intent", () => {
   const ctx = withTestDb();
@@ -50,6 +52,13 @@ describe("atomic split classification intent", () => {
   it("atomically preserves omitted intent, resets null, and stores only explicitly reviewed categories", async () => {
     const { originalCategory, reviewedCategory, purchase, original } =
       await fixture();
+    // The split removes the original itself before its cascade; a scope that
+    // read the original is dirtied by that removal.
+    const originalReader = await dependentScope(
+      ctx.db,
+      "transferPair",
+      rowKey("Expense", original.id),
+    );
     await splitExpense(
       ctx.db,
       splitExpenseInput.parse({
@@ -123,6 +132,7 @@ describe("atomic split classification intent", () => {
         })
       )?.deletedAt,
     ).not.toBeNull();
+    expect(await originalReader.dirty()).toBe(true);
   });
   it("refuses a Product on an unitemized allocation before retiring the source", async () => {
     const { original, purchase } = await fixture();

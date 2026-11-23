@@ -472,14 +472,16 @@ async function applyAggregateReplacement(
   }
   await products.flush();
   await validateProductPolicy(tx, { purchaseId });
-  await tx
+  const removed = await tx
     .update(expense)
     .set({ deletedAt: new Date() })
-    .where(eq(expense.id, aggregate.id));
+    .where(eq(expense.id, aggregate.id))
+    .returning();
   await cascadeRemoval(tx, {
     entity: "expense",
     ids: [aggregate.id],
     audit: { into: audit },
+    removed: removed.map((row) => ({ ...row, deletedAt: null })),
   });
   await logAuditEntries(tx, actor, audit);
   await updatePurchaseEventWhere(

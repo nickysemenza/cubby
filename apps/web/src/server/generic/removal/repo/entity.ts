@@ -344,6 +344,8 @@ export const removeEntity = async <E extends RemovableEntity>(
       ids,
       counts: { ...counts, ...extraCounts },
       audit: { actor },
+      // removeRows reported the root's rows with their before images.
+      removed: [],
     });
 
     // After the cascade, so the audit entry above describes the association

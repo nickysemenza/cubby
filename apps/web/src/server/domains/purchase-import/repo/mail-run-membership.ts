@@ -395,12 +395,12 @@ export async function transferMailRunSources(
  * A member's cancel stops the Run's work without handing it back to
  * discovery, which would readmit what the member stopped: its researching
  * Emails stay with it as `unsettled`, for its retry or restart, or a new
- * evidence revision.
+ * evidence revision. Returns the held Emails for the caller to report.
  */
 export async function holdCancelledMailRunSources(
   tx: DrizzleTransaction,
   runId: RunId,
-) {
+): Promise<{ id: string }[]> {
   const held = await tx
     .update(emailTable)
     .set({ status: "unsettled", updatedAt: new Date() })
@@ -410,6 +410,7 @@ export async function holdCancelledMailRunSources(
     .returning({ id: emailTable.id });
   if (held.length)
     await recordChange(tx, { kind: "source", categories: ["email"] });
+  return held;
 }
 
 /**
@@ -421,7 +422,8 @@ export async function holdCancelledMailRunSources(
  * message that keeps ending its import unsettled must not spend a coordinator
  * every discovery pass, and must not claim research nothing is doing. Only a
  * new evidence revision (`mail-import-run.ts`), a transient-failure retry or a
- * member's retry admits it again.
+ * member's retry admits it again. Returns every Email it held or released,
+ * for the caller to report.
  */
 export async function releaseUnsettledMailRunSources(
   tx: DrizzleTransaction,
@@ -544,42 +546,47 @@ export async function releaseUnsettledMailRunSources(
   );
   for (const orderMailId of exhausted) failedBefore.add(orderMailId);
   const kept = held.filter((source) => failedBefore.has(source.orderMailId));
-  if (kept.length)
-    await tx
+  const unsettled = kept.length
+    ? await tx
+        .update(emailTable)
+        .set({ status: "unsettled", updatedAt: new Date() })
+        .where(
+          and(
+            eq(emailTable.runId, runId),
+            eq(emailTable.status, "researching"),
+            inArray(
+              emailTable.id,
+              kept.map((source) => source.email.id),
+            ),
+          ),
+        )
+        .returning({ id: emailTable.id })
+    : [];
+  const released = held.filter(
+    (source) => !failedBefore.has(source.orderMailId),
+  );
+  if (!released.length) return unsettled;
+  // The admission replay key names this Run's source set; readmitting the same
+  // released Emails would otherwise replay this ended Run instead of starting one.
+  // The revision fence reads `input.evidenceRevision`, which stays.
+  await tx.update(run).set({ clientKey: null }).where(eq(run.id, runId));
+  return [
+    ...unsettled,
+    ...(await tx
       .update(emailTable)
-      .set({ status: "unsettled", updatedAt: new Date() })
+      .set({ runId: null, status: "pending", updatedAt: new Date() })
       .where(
         and(
           eq(emailTable.runId, runId),
           eq(emailTable.status, "researching"),
           inArray(
             emailTable.id,
-            kept.map((source) => source.email.id),
+            released.map((source) => source.email.id),
           ),
         ),
-      );
-  const released = held.filter(
-    (source) => !failedBefore.has(source.orderMailId),
-  );
-  if (!released.length) return [];
-  // The admission replay key names this Run's source set; readmitting the same
-  // released Emails would otherwise replay this ended Run instead of starting one.
-  // The revision fence reads `input.evidenceRevision`, which stays.
-  await tx.update(run).set({ clientKey: null }).where(eq(run.id, runId));
-  return tx
-    .update(emailTable)
-    .set({ runId: null, status: "pending", updatedAt: new Date() })
-    .where(
-      and(
-        eq(emailTable.runId, runId),
-        eq(emailTable.status, "researching"),
-        inArray(
-          emailTable.id,
-          released.map((source) => source.email.id),
-        ),
-      ),
-    )
-    .returning({ id: emailTable.id });
+      )
+      .returning({ id: emailTable.id })),
+  ];
 }
 
 /**

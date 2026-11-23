@@ -340,6 +340,10 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
           .select()
           .from(indexed)
           .where(inArray(idColumn(indexed), [...write.ids]));
+        const before = new Map(
+          (write.before ?? []).map((row) => [String(row.id), row]),
+        );
+        const present = new Set(rows.map((row) => String(row.id)));
         evidenceKeys.push(
           ...(await reindexRows(
             repositoryQueries(db),
@@ -355,11 +359,30 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
               rows.map((row) => ({
                 table: name,
                 id: String(row.id),
-                before: null,
+                before: before.get(String(row.id)) ?? null,
                 after: row,
               })),
             ),
             true,
+          ),
+          // A hard-deleted row no longer joins the committed graph, and an
+          // authored writer reports after its write: its joined memberships
+          // come from its before image, raising every value it could have
+          // joined whether or not it matched.
+          ...membershipKeys(
+            await relatedMemberships(
+              db,
+              bound,
+              [...before.values()]
+                .filter((row) => !present.has(String(row.id)))
+                .map((row) => ({
+                  table: name,
+                  id: String(row.id),
+                  before: row,
+                  after: null,
+                })),
+            ),
+            false,
           ),
         );
       }

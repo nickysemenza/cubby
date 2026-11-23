@@ -98,6 +98,8 @@ import {
   bindingEventKey,
   bindingFactKey,
   ownerKey,
+  recordOwnerKeys,
+  scopeOwnerKey,
   recordSubject,
   rowKey,
   tableKey,
@@ -1018,8 +1020,7 @@ async function applyBatch(
           for (const row of rows) touch(group[0]!.target, row);
         }
         await insertRows(q, recordKey, recordKeys);
-        for (const row of recordKeys)
-          changed.add(ownerKey(row.entity, row.entityId));
+        for (const key of recordOwnerKeys(recordKeys)) changed.add(key);
         await updateRecords(q, combined.updates);
         // Several scopes may set columns of one row; its membership is one row's.
         const published = new Map<string, Map<string, ColumnValues>>();
@@ -1072,19 +1073,24 @@ async function applyBatch(
             );
         }
         for (const plan of plans)
-          for (const entry of plan.diff.removals)
+          for (const entry of plan.diff.removals) {
             changed.add(ownerKey(recordEntity(entry.target), entry.id));
+            changed.add(scopeOwnerKey(plan.computed.scope));
+          }
         for (const entry of combined.rejections)
           changed.add(ownerKey(recordEntity(entry.target), entry.id));
         if (combined.removals.length)
           await q.execute(sql`
       DELETE FROM "RecordKey" k USING jsonb_to_recordset(${JSON.stringify(plans.flatMap((plan) => plan.diff.removals.map((entry) => ({ kind: plan.computed.scope.kind, key: plan.computed.scope.key, entity: recordEntity(entry.target), id: entry.id }))))}::jsonb) AS r(kind text, key text, entity text, id uuid)
       WHERE k."scopeKind" = r.kind AND k."scopeKey" = r.key AND k.entity = r.entity AND k."entityId" = r.id`);
-        if (combined.rejections.length)
-          await q.execute(sql`
+        if (combined.rejections.length) {
+          const rejected = await q.execute<{ kind: string; key: string }>(sql`
       UPDATE "RecordKey" k SET "rejectedAt" = coalesce(k."rejectedAt", now())
       FROM jsonb_to_recordset(${JSON.stringify(combined.rejections.map((entry) => ({ entity: recordEntity(entry.target), id: entry.id })))}::jsonb) AS r(entity text, id uuid)
-      WHERE k.entity = r.entity AND k."entityId" = r.id`);
+      WHERE k.entity = r.entity AND k."entityId" = r.id
+      RETURNING k."scopeKind" AS kind, k."scopeKey" AS key`);
+          for (const owner of rejected.rows) changed.add(scopeOwnerKey(owner));
+        }
         for (const plan of plans)
           for (const merge of plan.diff.merges) {
             const verdict = await mergeRecords(tx, registry, {

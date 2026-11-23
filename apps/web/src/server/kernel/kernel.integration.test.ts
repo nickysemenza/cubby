@@ -100,11 +100,13 @@ import { computeBatch } from "./compute";
 import type { Reconciler } from "./define";
 import { markDirty } from "./dirty";
 import { enterWriteTransaction, householdWrite } from "./gate";
+import { scopeOwnerKey } from "./keys";
 import { runOnePass } from "./pass";
 import { claimPassFixture, seedPass } from "./pass.fixtures";
 import { machineryActorSql, machineryStageSql } from "./projection";
 import { publishTransaction } from "./publication";
 import { ownedColumns } from "./registry";
+import { dependentScope } from "./testing/dependent-scope.fixtures";
 import {
   CATEGORY_SCOPE,
   chargeEvidence,
@@ -3668,6 +3670,13 @@ describe("evidence-facts kernel", () => {
     await kernel.append(ctx.db, [charge("ORD-M2", 200)]);
     await settle(kernel);
     const [older, newer] = await purchases(ctx.db);
+    // A reader of the absorbed scope's owned records, by scope rather than
+    // record: its RecordKey now names the survivor.
+    const ownerReader = await dependentScope(
+      ctx.db,
+      CATEGORY_SCOPE,
+      scopeOwnerKey({ kind: PURCHASE_SCOPE, key: "ORD-M2" }),
+    );
 
     const verdict = await kernel.merge(ctx.db, {
       target: fixture.purchaseWrites,
@@ -3681,6 +3690,8 @@ describe("evidence-facts kernel", () => {
       keepId: older!.id,
       loserId: newer!.id,
     });
+    expect(await ownerReader.dirty()).toBe(true);
+    await ownerReader.release();
     await settle(kernel);
     // Evidence that still reaches the absorbed scope reruns the survivor; the
     // absorbed scope writes nothing again.

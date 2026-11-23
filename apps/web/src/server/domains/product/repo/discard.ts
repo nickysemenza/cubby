@@ -231,14 +231,16 @@ const writeDiscardLine = async (
         remainingValue: remaining,
       };
     } else {
-      await tx
+      const removed = await tx
         .update(inventoryEntry)
         .set({ deletedAt: new Date() })
-        .where(eq(inventoryEntry.id, entry.id));
+        .where(eq(inventoryEntry.id, entry.id))
+        .returning();
       await cascadeRemoval(tx, {
         entity: "inventory",
         ids: [entry.id],
         audit: { actor },
+        removed: removed.map((row) => ({ ...row, deletedAt: null })),
       });
       inventory = {
         entryId: entry.id,

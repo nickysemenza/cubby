@@ -59,9 +59,9 @@ import {
   defineReadIndex,
   effectiveBindings,
   defineReconciler,
-  columnKey,
   indexKey,
   rowKey,
+  scopeOwnerKey,
   source,
   writes,
   recordSubject,
@@ -118,6 +118,18 @@ const emailOrderObservations = defineReadIndex(sourceOrderObservation, {
   values: (row) => (row.emailId ? [row.emailId] : []),
   where: (values) =>
     sql`${sourceOrderObservation.emailId} = ANY(${columnArrayParam(values)})`,
+});
+/** Email link decisions by the order event they name; matches `Decision_link_event_idx`. */
+const linkedEvent = z.object({ eventId: z.string() });
+const eventLinkDecisions = defineReadIndex(decision, {
+  name: "decisionLink.event",
+  values: (row) => {
+    if (!row.field?.startsWith("link:")) return [];
+    const parsed = linkedEvent.safeParse(row.value);
+    return parsed.success ? [parsed.data.eventId] : [];
+  },
+  where: (values) =>
+    sql`${decision.field} LIKE 'link:%' AND ${decision.value}->>'eventId' = ANY(${textArrayParam(values)})`,
 });
 /** Matches the leading column of `OrderMailEvent_source_key`. */
 const originalEvents = defineReadIndex(orderMailEvent, {
@@ -327,20 +339,26 @@ function outcomeFor(
 export const emailState = defineReconciler<Input>({
   scope: "emailState",
   lane: "money",
-  version: 1,
+  version: 2,
   after: ["purchaseEvent"],
   reads: [
     source.evidence(emailEvidence),
     source.evidence(orderEvidence),
     source.evidence(emailPredictionEvidence),
     source.bindings,
-    source.table(decision, ["subject", "slot", "field", "kind", "value", "at"]),
+    source.table(
+      decision,
+      ["subject", "slot", "field", "kind", "value", "at"],
+      [eventLinkDecisions],
+    ),
     source.table(entityIdentity, ["kind", "deletedAt", "mergedIntoId"]),
     source.table(ledgerParty, ["kind", "userId", "deletedAt"]),
+    // `runId` names the Run whose state decides an import outcome.
     source.table(email, [
       "checksum",
       "ledgerPartyId",
       "orderMailId",
+      "runId",
       "deletedAt",
     ]),
     source.table(
@@ -439,21 +457,17 @@ export const emailState = defineReconciler<Input>({
           ),
         ),
     );
-    // A Purchase publication inserts, rejects or merges the RecordKey rows
-    // that own a scope's bound observations, and no writer raises a key per
-    // RecordKey row. A scope with order observations therefore depends on the
-    // declared RecordKey and Purchase columns that publication raises; one
-    // without them has no owner to read.
-    const ownerFence = [
-      ...recordKeyColumns.map((column) => columnKey("RecordKey", column)),
-      ...purchaseColumns.map((column) => columnKey("Purchase", column)),
-    ];
+    // The Purchases that own a scope's bound observations are read through
+    // their owning purchaseEvent scopes: every RecordKey change of one raises
+    // its scope owner key, and the owned Purchases are fenced by row below.
     const owners = await reads.selectEach(
       recordKey,
       new Map(
         keys.map((key, index) => [
           key,
-          own[index]![1].length ? ownerFence : [],
+          [...ownerKeys[index]!].map((owner) =>
+            scopeOwnerKey({ kind: "purchaseEvent", key: owner }),
+          ),
         ]),
       ),
       sql`${recordKey.scopeKind} = 'purchaseEvent'
@@ -463,12 +477,37 @@ export const emailState = defineReconciler<Input>({
       ...keys.map((key) => `email:${key}`),
       ...events.map((row) => `emailEvent:${row.id}`),
     ];
+    // The link projection behind suggestions also reads every Email decision
+    // that names one of this scope's order events. A new such decision raises
+    // the event's index key; a later decision of a subject found here raises
+    // that subject's decision key.
+    const eventLinks = await Promise.all(
+      keys.map((key, index) =>
+        reads.for(key).lookup(
+          decision,
+          eventLinkDecisions,
+          own[index]![2].map((row) => row.id),
+        ),
+      ),
+    );
+    const linkSubjects = keys.map(
+      (key, index) =>
+        new Set([
+          recordSubject("email", key),
+          ...eventLinks[index]!.flatMap((row) =>
+            row.subject.startsWith("email:") ? [row.subject] : [],
+          ),
+        ]),
+    );
     const linkChoices = await reads.selectEach(
       decision,
       new Map(
-        keys.map((key) => [key, [decisionKey(recordSubject("email", key))]]),
+        keys.map((key, index) => [
+          key,
+          [...linkSubjects[index]!].map(decisionKey),
+        ]),
       ),
-      sql`${decision.subject}=ANY(${textArrayParam(keys.map((key) => recordSubject("email", key)))}) AND ${decision.field} LIKE 'link:%'`,
+      sql`${decision.subject}=ANY(${textArrayParam(linkSubjects.flatMap((set) => [...set]))}) AND ${decision.field} LIKE 'link:%'`,
     );
     const linkTargets = await Promise.all(
       keys.map((key) => {

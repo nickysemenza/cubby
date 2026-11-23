@@ -339,9 +339,11 @@ Every mutation of an input dirties the scopes it affects in the transaction
 that makes it. That covers evidence appends, new answers, decisions, a
 reconciler's own applied output, and a write to any authored or catalog column
 a reconciler declares in `reads` (the generator adds the key emission to that
-entity's writer; generic removal, detach and merge-repoint writes report their
+entity's writer; generic removal, detach and merge-repoint writes, merge
+overrides, link repoints and the callers of the removal cascade report their
 rows with their values before the write, after taking the gate ahead of their
-first row lock). The statement inserts the row's `FactKey` rows and upserts
+first row lock; a hard-deleted row raises every joined-predicate membership
+its before image could hold). The statement inserts the row's `FactKey` rows and upserts
 `ScopeDirty`, raising `seq`, for:
 
 - every scope the row `discovers`, which is how a scope starts with no
@@ -418,7 +420,10 @@ replace the affected `FactKey` entries and raise both the old and the new keys
 in their transaction. Raw source observations remain insert-only. Every
 change to a record's `RecordKey` ownership (an insert, delete, rejection or
 its clearing, a merge, or a move to a surviving scope) raises
-`owner:<entity>:<id>`, so a read of a record's owners depends on that key.
+`owner:<entity>:<id>` and the owning scope's `owned:<kind>:<key>`, so a read
+of a record's owners depends on the first and a read of the records a known
+scope owns, such as Email state reading the Purchase that owns its Order, on
+the second.
 
 A lookup value carries only the columns that select rows. A component every
 scope enumerates, such as each live account, belongs in the consumer's filter:

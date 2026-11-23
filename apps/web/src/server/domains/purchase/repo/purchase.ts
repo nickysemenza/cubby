@@ -1581,10 +1581,11 @@ export const splitExpense = async (
       // stomping update into a silent 0-row no-op while the N part rows are
       // still inserted and a delete entry is still logged for a row this
       // transaction didn't delete. Leave it stomping.
-      await tx
+      const removed = await tx
         .update(expense)
         .set({ deletedAt: new Date() })
-        .where(eq(expense.id, expenseId));
+        .where(eq(expense.id, expenseId))
+        .returning();
 
       const auditEntries: AuditEntryInput[] = inserted.map((id) => ({
         entityKind: "expense" as const,
@@ -1595,6 +1596,7 @@ export const splitExpense = async (
         entity: "expense",
         ids: [expenseId],
         audit: { into: auditEntries },
+        removed: removed.map((row) => ({ ...row, deletedAt: null })),
       });
 
       await touchUpdatedAt(

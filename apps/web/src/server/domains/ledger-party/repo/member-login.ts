@@ -9,6 +9,10 @@ import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import { ledgerParty } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
+import {
+  enterRemovalGate,
+  reportRowWrites,
+} from "~/server/generic/removal/repo/kernel-writes";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 export type MemberLoginUser = {
@@ -80,6 +84,8 @@ export async function setMemberLoginParty(
   actor: ActorContext,
 ): Promise<void> {
   await withTransaction(db, async (tx) => {
+    // Reconcilers read a party's login; the gate precedes the row locks.
+    await enterRemovalGate(tx);
     const [authUser] = await tx
       .select({ id: user.id })
       .from(user)
@@ -90,19 +96,16 @@ export async function setMemberLoginParty(
     }
 
     const current = await tx
-      .select({ id: ledgerParty.id, userId: ledgerParty.userId })
+      .select()
       .from(ledgerParty)
       .where(and(eq(ledgerParty.userId, targetUserId), notDeleted(ledgerParty)))
       .for("update");
 
-    let target: {
-      id: (typeof ledgerParty.$inferSelect)["id"];
-      userId: UserId | null;
-    } | null = null;
+    let target: typeof ledgerParty.$inferSelect | null = null;
     if (shortcode) {
       const targetId = await resolveOrThrow(tx, "ledgerParty", shortcode);
       const [row] = await tx
-        .select({ id: ledgerParty.id, userId: ledgerParty.userId })
+        .select()
         .from(ledgerParty)
         .where(
           and(
@@ -129,6 +132,7 @@ export async function setMemberLoginParty(
     }
 
     const now = new Date();
+    const written: (typeof ledgerParty.$inferSelect)[] = [];
     for (const party of current) {
       if (party.id === target?.id) continue;
       await tx
@@ -140,6 +144,7 @@ export async function setMemberLoginParty(
             eq(ledgerParty.userId, targetUserId),
           ),
         );
+      written.push(party);
       await logAuditEntry(tx, actor, {
         entityKind: "ledgerParty",
         entityId: party.id,
@@ -153,6 +158,7 @@ export async function setMemberLoginParty(
         .update(ledgerParty)
         .set({ userId: targetUserId, updatedAt: now })
         .where(eq(ledgerParty.id, target.id));
+      written.push(target);
       await logAuditEntry(tx, actor, {
         entityKind: "ledgerParty",
         entityId: target.id,
@@ -160,5 +166,6 @@ export async function setMemberLoginParty(
         changes: { userId: { from: target.userId, to: targetUserId } },
       });
     }
+    await reportRowWrites(tx, ledgerParty, written, ["userId"]);
   });
 }

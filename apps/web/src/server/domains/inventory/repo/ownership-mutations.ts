@@ -200,11 +200,15 @@ export const applyInventoryOwnershipInTransaction = async (
   }
 
   if (transferValue === sourceAmount.value && target) {
-    await tx.delete(inventoryEntry).where(eq(inventoryEntry.id, source.id));
+    const removed = await tx
+      .delete(inventoryEntry)
+      .where(eq(inventoryEntry.id, source.id))
+      .returning();
     await cascadeRemoval(tx, {
       entity: "inventory",
       ids: [source.id],
       audit: { into: audit },
+      removed,
     });
   } else if (transferValue < sourceAmount.value) {
     const remaining = {

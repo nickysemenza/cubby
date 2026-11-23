@@ -221,7 +221,12 @@ export const mailRunLifecycle: RunPurposeLifecycle = {
   // them, and discovery must not readmit what the member stopped: they stay
   // with this Run as `unsettled` for its retry or restart.
   cancelled: async (tx, { runId, input }) => {
-    if (input !== null) await holdCancelledMailRunSources(tx, runId);
+    if (input !== null)
+      await emitEmailRunAssignment(
+        tx,
+        (await holdCancelledMailRunSources(tx, runId)).map((row) => row.id),
+        ["status"],
+      );
   },
   /**
    * The failure class decides what follows (ADR 0011): a transient failure

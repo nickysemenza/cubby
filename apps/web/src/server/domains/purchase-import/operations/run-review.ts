@@ -51,6 +51,7 @@ import {
   runOperation,
   photoRunImage,
 } from "~/server/db/schema";
+import { emitEmailRunAssignment } from "~/server/domains/purchase-import/repo/mail-run-kernel";
 import { releaseUnsettledMailRunSources } from "~/server/domains/purchase-import/repo/mail-run-membership";
 import {
   loadRunScope,
@@ -157,7 +158,12 @@ async function reconcileSettledRunOnce(
         current.generation === input.generation &&
         current.input !== null
       )
-        await releaseUnsettledMailRunSources(tx, scope.public.runId);
+        await emitEmailRunAssignment(
+          tx,
+          (await releaseUnsettledMailRunSources(tx, scope.public.runId)).map(
+            (row) => row.id,
+          ),
+        );
     });
   }
   if (scope.public.status !== "running")
@@ -776,7 +782,10 @@ async function stopRunForReviewOnce(
     // A Run without a roster (erased, or a legacy/manual Mail import) has no
     // Email to return, and stopping it for review must never fail on parsing one.
     if (current.purpose === "mail_import" && current.input !== null)
-      await releaseUnsettledMailRunSources(tx, runId);
+      await emitEmailRunAssignment(
+        tx,
+        (await releaseUnsettledMailRunSources(tx, runId)).map((row) => row.id),
+      );
     return { findingId: finding.open ? finding.id : null };
   });
 }

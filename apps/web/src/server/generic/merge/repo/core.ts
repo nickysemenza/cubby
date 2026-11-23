@@ -171,11 +171,18 @@ export const repointEdge = async <E extends Entity>(
     });
     return rows.map((row) => String(row.id));
   }
+  // Callers hold the household gate; the moved rows report their before images.
+  // SAFETY: select() without a selection yields whole rows of this table.
+  const before = (await tx
+    .select()
+    .from(table)
+    .where(and(...conditions))) as ColumnValues[];
   const rows = await tx
     .update(table)
     .set({ [property]: args.to })
     .where(and(...conditions))
     .returning({ id: table.id });
+  await reportRowWrites(tx, table, before, [property]);
   return rows.map((row) => String(row.id));
 };
 
@@ -225,16 +232,6 @@ export const finalizeMerge = async <E extends RemovableEntity>(
           .where(and(inArray(table.id, ids), notDeleted(table)))
           .returning()
   ) as ColumnValues[];
-  // A reconciler reads the losers by row and read index; their tombstones
-  // raise those keys with the rows before the removal.
-  await reportRowWrites(
-    tx,
-    table,
-    removal === "hard"
-      ? removedRows
-      : removedRows.map((row) => ({ ...row, deletedAt: null })),
-    removal === "hard" ? Object.keys(getTableColumns(table)) : ["deletedAt"],
-  );
 
   // Old loser codes keep resolving (to the survivor) for reads; mutations
   // through them are refused. See ADR 0006.
@@ -261,7 +258,17 @@ export const finalizeMerge = async <E extends RemovableEntity>(
       changes: survivorChanges,
     });
   }
-  await cascadeRemoval(tx, { entity, ids, audit: { into: entries } });
+  // A reconciler reads the losers by row and read index; their tombstones
+  // raise those keys with the rows before the removal.
+  await cascadeRemoval(tx, {
+    entity,
+    ids,
+    audit: { into: entries },
+    removed:
+      removal === "hard"
+        ? removedRows
+        : removedRows.map((row) => ({ ...row, deletedAt: null })),
+  });
   if (actor) await logAuditEntries(tx, actor, entries);
   return { removed: removedRows.length };
 };
