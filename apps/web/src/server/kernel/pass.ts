@@ -156,9 +156,9 @@ export async function runOnePass(
               ELSE ${JSON.stringify(result.cursor)}::jsonb END
             ELSE cursor END,
           "doneAt" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} AND ${result.done} THEN now() ELSE NULL END,
-          "availableAt" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${result.availableAt ? sql`${result.availableAt.toISOString()}::timestamp` : sql`now()`} ELSE least("availableAt", now()) END,
+          "availableAt" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${result.availableAt ? sql`${result.availableAt.toISOString()}::timestamp` : sql`now()`} ELSE CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN "availableAt" ELSE least("availableAt", now()) END END,
           attempts = 0, "claimToken" = NULL, "claimDeadline" = NULL,
-          "waitCause" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${result.done ? null : (result.waitCause ?? null)} ELSE NULL END, "lastError" = NULL, "updatedAt" = now()
+          "waitCause" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${result.done ? null : (result.waitCause ?? null)} ELSE CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN "waitCause" END END, "lastError" = NULL, "updatedAt" = now()
         WHERE name = ${claimed.name} AND key = ${claimed.key}
         RETURNING ${isoText(sql`"availableAt"`)} AS at, "doneAt" IS NULL AND "availableAt" > now() AS wait`);
         });

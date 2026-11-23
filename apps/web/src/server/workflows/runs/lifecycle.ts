@@ -88,12 +88,14 @@ export async function releaseMailDiscoveryAdmission(
   // startPass's live-row wake, limited to live Passes: a finished or cancelled
   // Pass is never restarted. The waiter's committed admission wait is the
   // authority, so a funding marker left by a page claimed at its funding
-  // deadline does not hold the wake back. The bumped version discards an
+  // deadline does not hold the wake back, and the wake clears it: a funding
+  // marker found after this wake was written by a later funding pause, whose
+  // deadline the holder's publication keeps. The bumped version discards an
   // in-flight holder's cursor and wait; Run progress is the discovery
   // checkpoint, so the page only repeats from it.
   const woken = await repositoryQueries(tx).execute<{ key: string }>(sql`
     UPDATE "Pass" SET "availableAt" = least("availableAt", now()),
-      "wakeVersion" = "wakeVersion" + 1, "updatedAt" = now()
+      "waitCause" = NULL, "wakeVersion" = "wakeVersion" + 1, "updatedAt" = now()
     WHERE name = ${RUN_EXECUTE_PASS} AND key = ANY(${textArrayParam(waiters)})
       AND "doneAt" IS NULL AND "cancelledAt" IS NULL
       AND ("availableAt" > now() OR "claimToken" IS NOT NULL)

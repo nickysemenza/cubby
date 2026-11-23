@@ -20,7 +20,10 @@ export const maintenanceHandlers = implementOperationDomain(
     status: (context) => readMaintenanceStatus(context.db),
     rebuildDerived: async (context) => {
       const receipt = await requestDerivedRebuild(context.db);
-      await wakeAt(new Date(), { source: "manual-derived-rebuild" });
+      await wakeAt(new Date(), {
+        source: "manual-derived-rebuild",
+        db: context.db,
+      });
       return receipt;
     },
     repairImageDimensions: (context, input) =>
