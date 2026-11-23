@@ -5,10 +5,14 @@ import {
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { textArrayParam } from "~/server/db/helpers/array-param";
+import { recordKey } from "~/server/db/kernel-schema";
+import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { shipment, shipmentPackageObservation } from "~/server/db/schema";
 import {
   defineEvidence,
   defineReconciler,
+  recordIdentity,
   rowKey,
   recordSubject,
   source,
@@ -56,30 +60,59 @@ type Input = {
   rows: (typeof shipment.$inferSelect)[];
 };
 
+const SHIPMENT_SCOPE = "shipment";
+
 /** Accepted, normalized package headers and member decisions fill a single Shipment identity. */
 export const shipmentEvent = defineReconciler<Input>({
-  scope: "shipment",
+  scope: SHIPMENT_SCOPE,
   lane: "money",
   version: 1,
   after: ["purchaseEvent"],
   reads: [
     source.evidence(shipmentPackageEvidence),
-    source.table(shipment, shipmentColumns),
+    source.table(shipment, [...shipmentColumns, "deletedAt"]),
   ],
   writes: [shipmentRecords],
   async load(reads, keys) {
-    const [observations, rows] = await Promise.all([
-      reads.facts(
-        shipmentPackageEvidence,
-        keys.map((key) => `shipment:${key}`),
-      ),
-      reads.select(shipment, [], sql`true`),
-    ]);
+    // A scope reads only its own Shipment: the records it owns, or the one it
+    // would create. Its RecordKey rows change only through its own
+    // publication or a kernel merge or rejection, which dirties it.
+    const owned = await reads.prepare([], async (database) =>
+      repositoryQueries(database)
+        .select({ key: recordKey.scopeKey, id: recordKey.entityId })
+        .from(recordKey)
+        .where(
+          sql`${recordKey.scopeKind} = ${SHIPMENT_SCOPE} AND ${recordKey.scopeKey} = ANY(${textArrayParam(keys)})`,
+        ),
+    );
+    const loaded = await Promise.all(
+      keys.map((key) => {
+        const scoped = reads.for(key);
+        return Promise.all([
+          scoped.facts(shipmentPackageEvidence, [`shipment:${key}`]),
+          scoped.rows(shipment, [
+            ...owned.filter((row) => row.key === key).map((row) => row.id),
+            recordIdentity(
+              { kind: SHIPMENT_SCOPE, key },
+              shipmentRecords.name,
+              "shipment",
+            ),
+          ]),
+        ]);
+      }),
+    );
     return new Map(
-      keys.map((key) => [
-        key,
-        { key, observations: observations.get(`shipment:${key}`) ?? [], rows },
-      ]),
+      keys.map((key, index) => {
+        const [observations, rows] = loaded[index]!;
+        return [
+          key,
+          {
+            key,
+            observations: observations.get(`shipment:${key}`) ?? [],
+            rows: [...rows.values()],
+          },
+        ];
+      }),
     );
   },
   reconcile(input, c) {

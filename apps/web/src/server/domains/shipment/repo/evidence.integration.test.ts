@@ -31,6 +31,7 @@ import {
   ledgerParty,
   orderMail,
   purchase,
+  scopeDirty,
   user,
 } from "~/server/db/schema";
 import {
@@ -38,11 +39,15 @@ import {
   retainedMailFixture,
 } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import { shipmentTrackingReport } from "~/server/domains/shipment/repo/report-shipment";
-import { updateShipmentWhere } from "~/server/domains/shipment/repo/shipment-mutations";
+import {
+  appendShipmentHeader,
+  updateShipmentWhere,
+} from "~/server/domains/shipment/repo/shipment-mutations";
 import { mergeVendors } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import { getEntityGraph } from "~/server/generic/entity-graph/repo/entity-graph";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
+import { emitWrites, reconcileNow } from "~/server/kernel/api";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 
@@ -3629,5 +3634,45 @@ describe("Shipment retained evidence", () => {
     expect(
       (await readShipmentTimeline(ctx.db, target.shipmentIds[0]!)).observations,
     ).toHaveLength(2);
+  });
+
+  it("dirties only the Shipment scope whose own record changes", async () => {
+    const first = await appendShipmentHeader(ctx.db, {
+      values: { name: "Synthetic first parcel" },
+      sourceKey: "synthetic:first",
+      packageKey: "header",
+    });
+    const second = await appendShipmentHeader(ctx.db, {
+      values: { name: "Synthetic second parcel" },
+      sourceKey: "synthetic:second",
+      packageKey: "header",
+    });
+    const keys = ["synthetic:first:header", "synthetic:second:header"];
+    const dirty = async () =>
+      (
+        await getDb(ctx.db)
+          .select({ key: scopeDirty.scopeKey })
+          .from(scopeDirty)
+          .where(eq(scopeDirty.scopeKind, "shipment"))
+      )
+        .map((row) => row.key)
+        .filter((key) => keys.includes(key));
+    await reconcileNow(
+      ctx.db,
+      keys.map((key) => ({ kind: "shipment", key })),
+    );
+    expect(await dirty()).toEqual([]);
+    await updateShipmentWhere(
+      ctx.db,
+      { name: "Synthetic renamed parcel" },
+      eq(shipment.id, second.id),
+    );
+    expect(await dirty()).toEqual([]);
+    await emitWrites(ctx.db, {
+      table: shipment,
+      ids: [first.id],
+      columns: ["deletedAt"],
+    });
+    expect(await dirty()).toEqual([keys[0]]);
   });
 });

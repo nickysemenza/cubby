@@ -369,6 +369,73 @@ describe("settlement from retained order evidence", () => {
     },
   );
 
+  it("dirties only the payment scope whose own amount gains a charge", async () => {
+    const setup = await world();
+    const order = async (orderId: string, amount: number, checksum: string) => {
+      const run = await startImportRunFixture(ctx.db, setup.run);
+      await appendOrderEvidence(ctx.db, [
+        {
+          orderKey: `${setup.vendor.id}/order/${orderId}`,
+          input: importWriterInput.parse({
+            runId: run.id,
+            ledgerPartyId: setup.party.id,
+            vendorId: setup.vendor.id,
+            vendorAccountId: setup.account.id,
+            source: {
+              kind: "vendor_export",
+              externalKey: `synthetic:${orderId}`,
+              checksum: checksum.repeat(64),
+            },
+            extraction: {
+              status: "ready",
+              candidate: {
+                orderId,
+                merchant: setup.vendor.name,
+                orderedAt: "2026-09-01T12:00:00Z",
+                currency: "USD",
+                printedGrandTotal: amount,
+                lines: [
+                  { title: "Synthetic line", amount, lineKind: "principal" },
+                ],
+                payments: [
+                  {
+                    amount,
+                    chargedAt: "2026-09-02T12:00:00Z",
+                    tender: "card",
+                  },
+                ],
+              },
+            },
+            primaryDocumentImageId: null,
+            screenshotImageId: null,
+          }),
+        },
+      ]);
+    };
+    await order("SYNTHETIC-FIRST", 27, "e");
+    await order("SYNTHETIC-SECOND", 41, "f");
+    const keys = [paymentAmountKey(2700n), paymentAmountKey(4100n)];
+    const dirty = async () =>
+      (
+        await getDb(ctx.db)
+          .select({ key: scopeDirty.scopeKey })
+          .from(scopeDirty)
+          .where(eq(scopeDirty.scopeKind, "purchaseEvent"))
+      )
+        .map((row) => row.key)
+        .filter((key) => keys.includes(key))
+        .sort();
+    await reconcileNow(
+      ctx.db,
+      keys.map((key) => ({ kind: "purchaseEvent", key })),
+    );
+    expect(await dirty()).toEqual([]);
+    await charge(setup.card.id, { amount: 41, postedDate: "2026-09-02" });
+    expect(await dirty()).toEqual([keys[1]]);
+    await charge(setup.card.id, { amount: 27, postedDate: "2026-09-02" });
+    expect(await dirty()).toEqual(keys);
+  });
+
   async function world() {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Settlement member",

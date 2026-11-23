@@ -131,6 +131,7 @@ import {
   applyMergePolicy,
   policyDelete,
 } from "~/server/generic/removal/repo/dispositions";
+import { reportRowWrites } from "~/server/generic/removal/repo/kernel-writes";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   findOrCreateWithShortcode,
@@ -1039,6 +1040,8 @@ export const mergeVendors = async (
       });
       if (aliases.length !== keeperNamed.aliases.length) {
         await tx.update(vendor).set({ aliases }).where(eq(vendor.id, keepId));
+        // Merchant and name lookups read the keeper's aliases.
+        await reportRowWrites(tx, vendor, [keeperNamed], ["aliases"]);
         aliasChange = { from: keeperNamed.aliases, to: aliases };
       }
     }

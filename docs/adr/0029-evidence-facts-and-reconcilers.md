@@ -403,8 +403,8 @@ Predicate reads record declared index membership keys, including empty reads.
 Catalog rosters track the declared columns they consume. The registry rejects
 a table-wide dependency on any reconciled table. A matching authored or
 catalog mutation raises that key, including when the previous predicate read
-was empty, and so does an evidence append to a table with declared read
-indexes. A write that moves a row between memberships raises the key it left
+was empty, and so do an evidence append to a table with declared read
+indexes and a Decision insert. A write that moves a row between memberships raises the key it left
 and the key it joined. A publication and a repoint derive both from the row
 before and after. An authored writer reports after its write, so the kernel
 stores each indexed row's membership as `index:<table>` `FactKey` rows, every
@@ -986,7 +986,9 @@ suggestion. Current account-owner eligibility still gates both read paths.
 
 Order reads follow only the event's facts, bindings and stored money graph.
 Payment matching follows the connected set of payment amounts so all competing
-orders and each complete payment set participate. An amount scope discovers
+orders and each complete payment set participate. Each scope follows its own
+set through its own reads; its charges, Vendor aliases and member allocations
+are read by amount, merchant and transaction index keys. An amount scope discovers
 Order events through extracted keys and through retained payments linked to an
 observation or to the latest capture for its source claim and Purchase. The
 claim/Purchase lookup carries that pair's revision even when empty. The event's accepted facts

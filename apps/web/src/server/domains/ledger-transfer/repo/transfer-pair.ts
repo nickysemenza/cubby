@@ -2,11 +2,12 @@ import { decisionChannel } from "@cubby/schemas/kernel/stage";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { plainDateDaysBetween } from "~/lib/household-date";
+import { plainDateDaysBetween, shiftPlainDate } from "~/lib/household-date";
+import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { textArrayParam } from "~/server/db/helpers/array-param";
-import { notDeleted } from "~/server/db/helpers/predicates";
-import { canonicalUuids, uuidArrayParam } from "~/server/db/helpers/query";
-import { manualEntry } from "~/server/db/kernel-schema";
+import { canonicalUuids } from "~/server/db/helpers/query";
+import { decision, manualEntry, recordKey } from "~/server/db/kernel-schema";
+import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import {
   ledgerTransfer,
   financialTransaction,
@@ -17,8 +18,16 @@ import {
 } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { manualTransactionEvidence } from "~/server/domains/financial-transaction/repo/manual-evidence";
+import {
+  amountDayValue,
+  bookingExpenses,
+  transactionAllocations,
+  transactionCandidates,
+  transferLegs as linkedLegs,
+} from "~/server/domains/financial-transaction/repo/money-read-indexes";
 import { isTransferPairKind } from "~/server/domains/ledger-transfer/policy/transfer-kind";
 import {
+  decisionKey,
   defineModule,
   defineReconciler,
   source,
@@ -97,95 +106,192 @@ const transferPair = defineReconciler<Input>({
       "notes",
       "deletedAt",
     ]),
-    source.table(financialTransaction, [
-      "accountId",
-      "amount",
-      "kind",
-      "status",
-      "transactionDate",
-      "postedDate",
-      "ledgerTransferId",
-      "deletedAt",
-    ]),
+    source.table(
+      financialTransaction,
+      [
+        "accountId",
+        "amount",
+        "kind",
+        "status",
+        "transactionDate",
+        "postedDate",
+        "ledgerTransferId",
+        "deletedAt",
+      ],
+      [transactionCandidates, linkedLegs],
+    ),
     source.table(financialAccount, ["ledgerPartyId", "deletedAt"]),
     source.table(ledgerParty, ["deletedAt"]),
-    source.table(expense, ["bookingTransactionCode", "deletedAt"]),
-    source.table(financialTransactionAllocation, [
-      "transactionId",
-      "deletedAt",
-    ]),
+    source.table(
+      expense,
+      ["bookingTransactionCode", "deletedAt"],
+      [bookingExpenses],
+    ),
+    source.table(
+      financialTransactionAllocation,
+      ["transactionId", "deletedAt"],
+      [transactionAllocations],
+    ),
+    source.table(decision, ["channel", "subject", "field", "value"]),
+    source.table(entityIdentity, ["shortcode"]),
   ],
   writes: targets,
   async load(reads, keys) {
-    const manuals = await reads.facts(
-      manualTransactionEvidence,
-      keys.map((key) => `transferPair:${key}`),
+    // Every scope reads its own anchor, manual entry, decided legs, candidates
+    // and their rows through its own scope, so a batchmate's charge never
+    // wakes it. Each phase issues every scope's reads in one tick: they
+    // coalesce into one statement per source.
+    const subjectOf = (key: string) => `transferPair:${key}`;
+    const scopes = keys.map((key) => ({ key, scoped: reads.for(key) }));
+    const [manuals, anchors, choices, owned] = await Promise.all([
+      Promise.all(
+        scopes.map(({ key, scoped }) =>
+          scoped.facts(manualTransactionEvidence, [subjectOf(key)]),
+        ),
+      ),
+      Promise.all(
+        scopes.map(({ key, scoped }) =>
+          scoped.rows(financialTransaction, canonicalUuids([key])),
+        ),
+      ),
+      // Every recorded pair decision names legs, not only the one in force.
+      reads.selectEach(
+        decision,
+        new Map(keys.map((key) => [key, [decisionKey(subjectOf(key))]])),
+        sql`${decision.channel} = ${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)}
+          AND ${decision.field} = 'transactions'
+          AND ${decision.subject} = ANY(${textArrayParam(keys.map(subjectOf))})`,
+      ),
+      // A scope's own RecordKey rows change only through its own publication
+      // or a kernel merge, which dirties it.
+      reads.prepare([], async (database) =>
+        repositoryQueries(database)
+          .select({ key: recordKey.scopeKey, id: recordKey.entityId })
+          .from(recordKey)
+          .where(
+            sql`${recordKey.scopeKind} = 'transferPair' AND ${recordKey.scopeKey} = ANY(${textArrayParam(keys)})`,
+          ),
+      ),
+    ]);
+    const chosen = keys.map((key) =>
+      choices.flatMap((row) =>
+        row.subject === subjectOf(key) && Array.isArray(row.value)
+          ? row.value.filter(
+              (value): value is string => typeof value === "string",
+            )
+          : [],
+      ),
     );
-    const manualIds = [...manuals.values()].flat().flatMap((row) => {
-      const parsed = seed.safeParse(row.payload);
-      return parsed.success ? parsed.data.transactionIds : [];
-    });
-    // Each source selects transaction ids on its own plan: as OR branches of
-    // one filter the anchor match rescanned every transaction for each row.
-    const transactions = await reads.select(
-      financialTransaction,
-      [],
-      sql`${financialTransaction.id} = ANY(ARRAY(
-      SELECT unnest(${uuidArrayParam(canonicalUuids([...keys, ...manualIds]))})
-      UNION SELECT candidate.id FROM "FinancialTransaction" anchor
-        JOIN "FinancialTransaction" candidate ON candidate."amountMinor" = -anchor."amountMinor"
-          AND abs(coalesce(candidate."transactionDate", candidate."postedDate")::date
-            - coalesce(anchor."transactionDate", anchor."postedDate")::date) <= 5
-        WHERE anchor.id = ANY(${uuidArrayParam(canonicalUuids(keys))}) AND ${notDeleted("anchor")}
-      UNION SELECT e.id FROM "Decision" choice
-        CROSS JOIN LATERAL jsonb_array_elements_text(CASE WHEN jsonb_typeof(choice.value)='array' THEN choice.value ELSE '[]'::jsonb END) selected
-        JOIN "Entity" e ON (e.id = CASE WHEN pg_input_is_valid(selected.value, ${"uuid"}) THEN selected.value::uuid END
-          AND e.id::text = selected.value) OR e.shortcode = selected.value
-        WHERE choice.channel=${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)} AND choice.field='transactions'
-          AND choice.subject=ANY(${textArrayParam(keys.map((key) => `transferPair:${key}`))})
-      UNION SELECT linked.id FROM "FinancialTransaction" linked
-        WHERE linked."ledgerTransferId" IN (SELECT "entityId" FROM "RecordKey"
-          WHERE "scopeKind"='transferPair' AND "scopeKey"=ANY(${textArrayParam(keys)}))))`,
+    // A decided leg named by shortcode resolves through its Entity row.
+    const codes = chosen.map((values) =>
+      values.filter((value) => !canonicalUuids([value]).length),
     );
-    const [accounts, parties, expenses, allocations, transfers] =
-      await Promise.all([
-        reads.rows(
-          financialAccount,
-          transactions.map((row) => row.accountId),
-        ),
-        reads.select(ledgerParty, [], sql`true`),
-        reads.select(
-          expense,
-          [],
-          sql`${expense.bookingTransactionCode}=ANY(${textArrayParam(transactions.map((row) => row.shortcode))})`,
-        ),
-        reads.select(
-          financialTransactionAllocation,
-          [],
-          sql`${financialTransactionAllocation.transactionId}=ANY(${uuidArrayParam(transactions.map((row) => row.id))})`,
-        ),
-        reads.select(
-          ledgerTransfer,
-          [],
-          sql`${ledgerTransfer.id} = ANY(ARRAY(
-        SELECT unnest(${uuidArrayParam(transactions.flatMap((row) => (row.ledgerTransferId ? [row.ledgerTransferId] : [])))})
-        UNION SELECT "entityId" FROM "RecordKey" WHERE "scopeKind"='transferPair' AND "scopeKey"=ANY(${textArrayParam(keys)})))`,
-        ),
-      ]);
+    const named = codes.some((values) => values.length)
+      ? await reads.selectEach(
+          entityIdentity,
+          new Map(
+            keys.map((key, index) => [
+              key,
+              codes[index]!.length ? [decisionKey(subjectOf(key))] : [],
+            ]),
+          ),
+          sql`${entityIdentity.shortcode} = ANY(${textArrayParam(codes.flat())})`,
+        )
+      : [];
+    const ownIds = keys.map((key) =>
+      owned.filter((row) => row.key === key).map((row) => row.id),
+    );
+    const legs = await Promise.all(
+      scopes.map(({ key, scoped }, index) => {
+        const manualIds = (manuals[index]!.get(subjectOf(key)) ?? []).flatMap(
+          (row) => {
+            const parsed = seed.safeParse(row.payload);
+            return parsed.success ? parsed.data.transactionIds : [];
+          },
+        );
+        const anchor = anchors[index]!.get(key);
+        const date = anchor && (anchor.transactionDate ?? anchor.postedDate);
+        // Equal minor units within five days of a live anchor, either way.
+        const window =
+          anchor && !anchor.deletedAt && date
+            ? Array.from({ length: 11 }, (_, offset) =>
+                amountDayValue(anchor.amount, shiftPlainDate(date, offset - 5)),
+              )
+            : [];
+        const own = new Set(codes[index]);
+        return Promise.all([
+          scoped.lookup(financialTransaction, transactionCandidates, window),
+          scoped.lookup(financialTransaction, linkedLegs, ownIds[index]!),
+          scoped.rows(
+            financialTransaction,
+            canonicalUuids([
+              ...manualIds,
+              ...chosen[index]!,
+              ...named.flatMap((row) =>
+                row.shortcode && own.has(row.shortcode) ? [row.id] : [],
+              ),
+            ]),
+          ),
+        ]).then(([candidates, linked, decided]) => {
+          const transactions = [
+            ...(anchor ? [anchor] : []),
+            ...candidates.filter((row) => row.amount === -anchor!.amount),
+            ...linked,
+            ...decided.values(),
+          ];
+          return [
+            ...new Map(transactions.map((row) => [row.id, row])).values(),
+          ];
+        });
+      }),
+    );
+    const [parties, related] = await Promise.all([
+      reads.select(ledgerParty, [], sql`true`),
+      Promise.all(
+        scopes.map(({ scoped }, index) => {
+          const transactions = legs[index]!;
+          return Promise.all([
+            scoped.rows(
+              financialAccount,
+              transactions.map((row) => row.accountId),
+            ),
+            scoped.lookup(
+              expense,
+              bookingExpenses,
+              transactions.map((row) => row.shortcode),
+            ),
+            scoped.lookup(
+              financialTransactionAllocation,
+              transactionAllocations,
+              transactions.map((row) => row.id),
+            ),
+            scoped.rows(ledgerTransfer, [
+              ...transactions.flatMap((row) =>
+                row.ledgerTransferId ? [row.ledgerTransferId] : [],
+              ),
+              ...ownIds[index]!,
+            ]),
+          ]);
+        }),
+      ),
+    ]);
     return new Map(
-      keys.map((key) => [
-        key,
-        {
+      keys.map((key, index) => {
+        const [accounts, expenses, allocations, transfers] = related[index]!;
+        return [
           key,
-          transactions,
-          accounts: [...accounts.values()],
-          parties,
-          expenses,
-          allocations,
-          transfers,
-          manuals: manuals.get(`transferPair:${key}`) ?? [],
-        },
-      ]),
+          {
+            key,
+            transactions: legs[index]!,
+            accounts: [...accounts.values()],
+            parties,
+            expenses,
+            allocations,
+            transfers: [...transfers.values()],
+            manuals: manuals[index]!.get(subjectOf(key)) ?? [],
+          },
+        ];
+      }),
     );
   },
   reconcile(input, c) {

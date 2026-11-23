@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { unwrapDb } from "~/server/db/helpers";
+import { scopeDirty } from "~/server/db/kernel-schema";
 import {
   auditLog,
   financialAccount,
@@ -21,6 +22,7 @@ import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { householdContributionLedger } from "~/server/domains/household-contribution/repo/reports";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
+import { reconcileNow } from "~/server/kernel/api";
 
 import { acceptFinancialTransferPair } from "./financial-transfer-accept";
 
@@ -353,5 +355,51 @@ describe("acceptFinancialTransferPair", () => {
     expect(mover!.position - (moverBefore?.position ?? 0)).toBe(30);
     expect(after.checks.transferNet).toBe(before.checks.transferNet);
     expect(after.checks.positionNet - before.checks.positionNet).toBe(0);
+  });
+
+  it("dirties only the transfer pair whose own window gains a candidate", async () => {
+    const memberA = await party("Synthetic pair member A", "member");
+    const memberB = await party("Synthetic pair member B", "member");
+    const [accountA, accountB, accountC] = await Promise.all([
+      account("Synthetic pair checking A", memberA.id),
+      account("Synthetic pair checking B", memberB.id),
+      account("Synthetic pair checking C", memberB.id),
+    ]);
+    const leg = (
+      accountId: EntityId<"financialAccount">,
+      amount: number,
+      date: string,
+    ) =>
+      seedBankTransaction(ctx.db, {
+        accountId,
+        kind: "account_transfer",
+        status: "posted",
+        amount: moneyToMinor(amount),
+        transactionDate: date,
+        postedDate: date,
+      });
+    const first = await leg(accountA.id, 40, "2026-03-02");
+    await leg(accountB.id, -40, "2026-03-03");
+    const second = await leg(accountA.id, 70, "2026-05-10");
+    await leg(accountB.id, -70, "2026-05-11");
+    const keys: string[] = [first.id, second.id];
+    const dirty = async () =>
+      (
+        await unwrapDb(ctx.db)
+          .select({ key: scopeDirty.scopeKey })
+          .from(scopeDirty)
+          .where(eq(scopeDirty.scopeKind, "transferPair"))
+      )
+        .map((row) => row.key)
+        .filter((key) => keys.includes(key));
+    await reconcileNow(
+      ctx.db,
+      keys.map((key) => ({ kind: "transferPair", key })),
+    );
+    expect(await dirty()).toEqual([]);
+    await leg(accountC.id, -70, "2026-05-14");
+    expect(await dirty()).toEqual([second.id]);
+    await leg(accountC.id, -40, "2026-02-26");
+    expect((await dirty()).sort()).toEqual([...keys].sort());
   });
 });

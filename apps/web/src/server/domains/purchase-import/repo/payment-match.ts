@@ -7,7 +7,6 @@ import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { textArrayParam } from "~/server/db/helpers/array-param";
-import { uuidArrayParam } from "~/server/db/helpers/query";
 import { requestedRows } from "~/server/db/helpers/requested";
 import { decision, manualEntry, recordKey } from "~/server/db/kernel-schema";
 import {
@@ -22,6 +21,8 @@ import {
   amountPayments,
   orderPayments,
   purchasePayments,
+  transactionAmounts,
+  vendorMerchants,
 } from "~/server/domains/financial-transaction/repo/money-read-indexes";
 import { combinedChargeAllocations } from "~/server/domains/purchase-import/policy/combined-charge";
 import {
@@ -47,6 +48,7 @@ import {
   retainedPaymentEvidence,
 } from "~/server/domains/purchase-import/repo/order-evidence";
 import {
+  defineReadIndex,
   recordIdentity,
   effectiveBindings,
   recordSubject,
@@ -54,6 +56,7 @@ import {
   type Binding,
   type Pure,
   type Reconciler,
+  type ScopeReads,
 } from "~/server/kernel/api";
 
 type Order = typeof sourceOrderObservation.$inferSelect;
@@ -77,6 +80,16 @@ export type PaymentMatchInput = {
   vendorsByMerchant: ReadonlyMap<string, ReadonlySet<string>>;
   /** Each fact's effective binding, by fact kind and id. */
   effectiveBindings: ReadonlyMap<string, Binding>;
+};
+
+/** One payment scope's connected Orders and payments, followed through its own reads. */
+type PaymentClosure = {
+  key: string;
+  scoped: ScopeReads;
+  visited: Set<string>;
+  pending: string[];
+  orders: Order[];
+  payments: Payment[];
 };
 
 const newerOrder = (candidate: Order, existing: Order) =>
@@ -221,6 +234,39 @@ function chosenOrderScope(input: PaymentMatchInput, order: Order, c: Pure) {
     .map((record) => record.scopeKey)
     .sort()[0];
 }
+
+const allocationTransaction = z.object({
+  table: z.literal("FinancialTransactionAllocation"),
+  values: z.object({ transactionId: z.string() }),
+});
+const allocationTransactionOf = (value: unknown) => {
+  const parsed = allocationTransaction.safeParse(value);
+  return parsed.success ? [parsed.data.values.transactionId] : [];
+};
+/**
+ * Member allocations naming a transaction. Both tables are insert-only, so a
+ * row never moves between memberships. Match
+ * `ManualEntry_allocation_transaction_idx` and
+ * `Decision_allocation_transaction_idx`.
+ */
+const manualAllocations = defineReadIndex(manualEntry, {
+  name: "manualAllocation.transaction",
+  values: (row) => allocationTransactionOf(row.payload),
+  where: (values) =>
+    sql`${manualEntry.payload}#>>'{table}' = 'FinancialTransactionAllocation'
+      AND ${manualEntry.payload}->'values'->>'transactionId' = ANY(${textArrayParam(values)})`,
+});
+const decidedAllocations = defineReadIndex(decision, {
+  name: "decisionAllocation.transaction",
+  values: (row) =>
+    row.channel === decisionChannel.enum.assignment
+      ? allocationTransactionOf(row.value)
+      : [],
+  where: (values) =>
+    sql`${decision.value}#>>'{table}' = 'FinancialTransactionAllocation'
+      AND ${decision.channel} = ${decisionChannel.enum.assignment}
+      AND ${decision.value}->'values'->>'transactionId' = ANY(${textArrayParam(values)})`,
+});
 
 const factIndexKey = (kind: string, id: string) => `${kind}\u0000${id}`;
 const bindingFor = (input: PaymentMatchInput, kind: string, id: string) =>
@@ -560,171 +606,246 @@ export const paymentMatching: Pick<
       ],
       [amountPayments, orderPayments, purchasePayments],
     ),
-    source.table(financialTransaction, [
-      "accountId",
-      "amount",
-      "kind",
-      "status",
-      "transactionDate",
-      "postedDate",
-      "merchant",
-      "deletedAt",
-    ]),
+    source.table(
+      financialTransaction,
+      [
+        "accountId",
+        "amount",
+        "kind",
+        "status",
+        "transactionDate",
+        "postedDate",
+        "merchant",
+        "deletedAt",
+      ],
+      [transactionAmounts],
+    ),
     source.table(financialAccount, [
       "ledgerPartyId",
       "identity",
       "cardNumbers",
       "deletedAt",
     ]),
-    source.table(vendor, ["name", "aliases", "deletedAt"]),
+    source.table(vendor, ["name", "aliases", "deletedAt"], [vendorMerchants]),
     source.table(recordKey, ["scopeKind", "scopeKey", "entity", "entityId"]),
-    source.table(manualEntry, ["entity", "payload"]),
-    source.table(decision, [
-      "channel",
-      "subject",
-      "field",
-      "kind",
-      "value",
-      "at",
-    ]),
+    source.table(manualEntry, ["entity", "payload"], [manualAllocations]),
+    source.table(
+      decision,
+      ["channel", "subject", "field", "kind", "value", "at"],
+      [decidedAllocations],
+    ),
   ],
   async load(reads, keys) {
     const unique = <T extends { id: string }>(rows: readonly T[]): T[] => [
       ...new Map(rows.map((row) => [row.id, row])).values(),
     ];
-    // Follow shared payment amounts to all contenders and complete each source's
-    // payment set. An exact-key read also fences an empty matching set.
-    const visited = new Set<string>();
-    let pending = [...keys];
-    let orders: Order[] = [];
-    let payments: Payment[] = [];
-    while (pending.length) {
-      for (const key of pending) visited.add(key);
-      const amounts = pending
-        .map(paymentAmount)
-        .filter((value) => value !== undefined);
-      const [facts, byAmount] = await Promise.all([
-        reads.facts(orderEvidence, pending),
-        reads.lookup(purchasePaymentEvidence, amountPayments, amounts),
-      ]);
+    // Each scope follows its own payment amounts to all contenders and
+    // completes each source's payment set through its own scope, so a
+    // batchmate's Order, charge or decision never wakes it. An exact-key read
+    // also fences an empty matching set. Each phase issues every open scope's
+    // reads in one tick: they coalesce into one statement per source.
+    const closures = keys.map((key): PaymentClosure => ({
+      key,
+      scoped: reads.for(key),
+      visited: new Set(),
+      pending: [key],
+      orders: [],
+      payments: [],
+    }));
+    for (
+      let open = closures;
+      open.length;
+      open = closures.filter((closure) => closure.pending.length)
+    ) {
+      for (const closure of open)
+        for (const key of closure.pending) closure.visited.add(key);
+      const found = await Promise.all(
+        open.map((closure) =>
+          Promise.all([
+            closure.scoped.facts(orderEvidence, closure.pending),
+            closure.scoped.lookup(
+              purchasePaymentEvidence,
+              amountPayments,
+              closure.pending
+                .map(paymentAmount)
+                .filter((value) => value !== undefined),
+            ),
+          ]),
+        ),
+      );
       // Legacy payments may lead to an Order whose extraction omitted their
       // amount. Use both link shapes to find event keys, then read their facts.
-      const legacy = byAmount.flatMap((row) =>
-        !row.orderObservationId && row.sourceClaimId && row.purchaseId
-          ? [{ claim: row.sourceClaimId, purchase: row.purchaseId }]
-          : [],
+      const legacy = found.map(([, byAmount]) =>
+        byAmount.flatMap((row) =>
+          !row.orderObservationId && row.sourceClaimId && row.purchaseId
+            ? [{ claim: row.sourceClaimId, purchase: row.purchaseId }]
+            : [],
+        ),
       );
       const legacyLinks = requestedRows(
-        legacy,
+        legacy.flat(),
         { claim: "uuid", purchase: "uuid" },
         "payment_order_links",
       );
       const [directOrders, legacyOrders] = await Promise.all([
-        reads.rows(
-          sourceOrderObservation,
-          byAmount.flatMap((row) =>
-            row.orderObservationId ? [row.orderObservationId] : [],
+        Promise.all(
+          open.map((closure, index) =>
+            closure.scoped.rows(
+              sourceOrderObservation,
+              found[index]![1].flatMap((row) =>
+                row.orderObservationId ? [row.orderObservationId] : [],
+              ),
+            ),
           ),
         ),
-        legacy.length
-          ? reads.select(
-              sourceOrderObservation,
-              legacy.map(({ claim, purchase }) =>
+        reads.selectEach(
+          sourceOrderObservation,
+          new Map(
+            open.map((closure, index) => [
+              closure.key,
+              legacy[index]!.map(({ claim, purchase }) =>
                 orderClaimPurchaseKey(claim, purchase),
               ),
-              sql`EXISTS (
-              SELECT 1 FROM ${legacyLinks.from}
-              WHERE ${sourceOrderObservation.sourceClaimId} = ${legacyLinks.col("claim")}
-                AND ${sourceOrderObservation.purchaseId} = ${legacyLinks.col("purchase")}
-            )`,
-            )
-          : [],
-      ]);
-      const latestLegacyOrders = new Map<string, Order>();
-      for (const row of legacyOrders) {
-        if (!row.sourceClaimId || !row.purchaseId) continue;
-        const link = orderClaimPurchaseKey(row.sourceClaimId, row.purchaseId);
-        const current = latestLegacyOrders.get(link);
-        if (!current || newerOrder(row, current))
-          latestLegacyOrders.set(link, row);
-      }
-      orders = unique([...orders, ...[...facts.values()].flat()]);
-      const [observed, retained] = await Promise.all([
-        reads.lookup(
-          purchasePaymentEvidence,
-          orderPayments,
-          orders.map((row) => row.id),
-        ),
-        reads.lookup(
-          purchasePaymentEvidence,
-          purchasePayments,
-          orders.flatMap((row) => (row.purchaseId ? [row.purchaseId] : [])),
-        ),
-      ]);
-      payments = unique([...payments, ...observed, ...retained]);
-      pending = [
-        ...new Set([
-          ...[...directOrders.values(), ...latestLegacyOrders.values()].map(
-            orderEventKey,
+            ]),
           ),
-          ...orders.flatMap((row) => [
-            orderEventKey(row),
-            ...orderPaymentKeys(row),
+          sql`EXISTS (
+            SELECT 1 FROM ${legacyLinks.from}
+            WHERE ${sourceOrderObservation.sourceClaimId} = ${legacyLinks.col("claim")}
+              AND ${sourceOrderObservation.purchaseId} = ${legacyLinks.col("purchase")}
+          )`,
+        ),
+      ]);
+      const linked = open.map((closure, index) => {
+        const own = new Set(
+          legacy[index]!.map(({ claim, purchase }) =>
+            orderClaimPurchaseKey(claim, purchase),
+          ),
+        );
+        const latestLegacyOrders = new Map<string, Order>();
+        for (const row of legacyOrders) {
+          if (!row.sourceClaimId || !row.purchaseId) continue;
+          const link = orderClaimPurchaseKey(row.sourceClaimId, row.purchaseId);
+          if (!own.has(link)) continue;
+          const current = latestLegacyOrders.get(link);
+          if (!current || newerOrder(row, current))
+            latestLegacyOrders.set(link, row);
+        }
+        closure.orders = unique([
+          ...closure.orders,
+          ...[...found[index]![0].values()].flat(),
+        ]);
+        return [
+          ...directOrders[index]!.values(),
+          ...latestLegacyOrders.values(),
+        ];
+      });
+      const completed = await Promise.all(
+        open.map((closure) =>
+          Promise.all([
+            closure.scoped.lookup(
+              purchasePaymentEvidence,
+              orderPayments,
+              closure.orders.map((row) => row.id),
+            ),
+            closure.scoped.lookup(
+              purchasePaymentEvidence,
+              purchasePayments,
+              closure.orders.flatMap((row) =>
+                row.purchaseId ? [row.purchaseId] : [],
+              ),
+            ),
           ]),
-          ...payments.map((row) => paymentAmountKey(row.amountMinor)),
-        ]),
-      ].filter((key) => !visited.has(key));
+        ),
+      );
+      open.forEach((closure, index) => {
+        const [observed, retained] = completed[index]!;
+        closure.payments = unique([
+          ...closure.payments,
+          ...observed,
+          ...retained,
+        ]);
+        closure.pending = [
+          ...new Set([
+            ...linked[index]!.map(orderEventKey),
+            ...closure.orders.flatMap((row) => [
+              orderEventKey(row),
+              ...orderPaymentKeys(row),
+            ]),
+            ...closure.payments.map((row) => paymentAmountKey(row.amountMinor)),
+          ]),
+        ].filter((key) => !closure.visited.has(key));
+      });
     }
-    const amounts = [
-      ...new Set([
-        ...payments.map((row) => String(row.amountMinor)),
-        ...keys.map(paymentAmount).filter((value) => value !== undefined),
-      ]),
-    ];
-    const transactions = await reads.select(
-      financialTransaction,
-      [],
-      sql`${financialTransaction.amount} = ANY(${textArrayParam(amounts)}::bigint[])`,
+    const transactionsOf = await Promise.all(
+      closures.map((closure) =>
+        closure.scoped.lookup(financialTransaction, transactionAmounts, [
+          ...new Set([
+            ...closure.payments.map((row) => String(row.amountMinor)),
+            ...[paymentAmount(closure.key)].filter(
+              (value) => value !== undefined,
+            ),
+          ]),
+        ]),
+      ),
     );
-    const transactionIds = transactions.map((row) => row.id);
-    const events = orders.map(orderEventKey);
-    const [accounts, vendors, manuals, recordDecisions, records, bindings] =
-      await Promise.all([
-        reads.rows(
-          financialAccount,
-          transactions.map((row) => row.accountId),
-        ),
-        // Merchant aliases participate in refusing a match at another Vendor.
-        // Keep the roster fence while fetching only matching merchant aliases.
-        reads.select(
-          vendor,
-          [],
-          sql`${vendor.id} = ANY(${uuidArrayParam(orders.map((row) => row.vendorId))})
-        OR EXISTS (SELECT 1 FROM unnest(array_prepend(${vendor.name}, ${vendor.aliases})) alias
-          WHERE lower(regexp_replace(regexp_replace(alias, '^[[:space:]]+|[[:space:]]+$', '', 'g'), '[[:space:]]+', ' ', 'g')) = ANY(
-            ${textArrayParam(transactions.map((row) => statementMerchantKey(row.merchant ?? "")))}) )`,
-        ),
-        reads.select(
-          manualEntry,
-          [],
-          sql`${manualEntry.payload}#>>'{table}' = 'FinancialTransactionAllocation'
-        AND ${manualEntry.payload}->'values'->>'transactionId' = ANY(${textArrayParam(transactionIds)})`,
-        ),
-        reads.select(
-          decision,
-          [],
-          sql`${decision.channel} = ${decisionChannel.enum.assignment}
-        AND ${decision.value}#>>'{table}' = 'FinancialTransactionAllocation'
-        AND ${decision.value}->'values'->>'transactionId' = ANY(${textArrayParam(transactionIds)})`,
-        ),
-        // The decided Purchases join the id array as an init plan: a subquery
-        // or text cast inside the OR turns this lookup into a sequential scan.
-        // Only Purchase owners are read from the entity arm, which lets it use
-        // the (entity, entityId) index.
-        reads.select(
-          recordKey,
-          [],
-          sql`${recordKey.scopeKind} = 'purchaseEvent' AND (
+    // The RecordKey owners keep the batch's declared column fence: no writer
+    // raises a key per RecordKey row. Every scope reads the batch's owners;
+    // a scope uses only the owners of the Purchase its own Order chose.
+    const orders = closures.flatMap((closure) => closure.orders);
+    const events = [...new Set(orders.map(orderEventKey))];
+    const transactionIds = [
+      ...new Set(transactionsOf.flat().map((row) => row.id)),
+    ];
+    const [scopedReads, records] = await Promise.all([
+      Promise.all(
+        closures.map((closure, index) => {
+          const transactions = transactionsOf[index]!;
+          const ids = transactions.map((row) => row.id);
+          return Promise.all([
+            closure.scoped.rows(
+              financialAccount,
+              transactions.map((row) => row.accountId),
+            ),
+            closure.scoped.rows(
+              vendor,
+              closure.orders.flatMap((row) =>
+                row.vendorId ? [row.vendorId] : [],
+              ),
+            ),
+            // Merchant aliases participate in refusing a match at another Vendor.
+            closure.scoped.lookup(vendor, vendorMerchants, [
+              ...new Set(
+                transactions
+                  .map((row) => statementMerchantKey(row.merchant ?? ""))
+                  .filter(Boolean),
+              ),
+            ]),
+            closure.scoped.lookup(manualEntry, manualAllocations, ids),
+            closure.scoped.lookup(decision, decidedAllocations, ids),
+            closure.scoped.bindings({
+              facts: [
+                ...closure.orders.map((row) => ({
+                  kind: orderEvidence.kind,
+                  id: row.id,
+                })),
+                ...closure.payments.map((row) => ({
+                  kind: retainedPaymentEvidence.kind,
+                  id: row.id,
+                })),
+              ],
+              events: ids.map(paymentBankEventKey),
+            }),
+          ]);
+        }),
+      ),
+      // The decided Purchases join the id array as an init plan: a subquery
+      // or text cast inside the OR turns this lookup into a sequential scan.
+      // Only Purchase owners are read from the entity arm, which lets it use
+      // the (entity, entityId) index.
+      reads.select(
+        recordKey,
+        [],
+        sql`${recordKey.scopeKind} = 'purchaseEvent' AND (
         ${recordKey.scopeKey} = ANY(${textArrayParam([...events, ...transactionIds])})
         OR ${recordKey.entity} = ${"purchase"} AND ${recordKey.entityId} = ANY(${textArrayParam(orders.flatMap((row) => (row.purchaseId ? [row.purchaseId] : [])))}::uuid[]
           || ARRAY(SELECT e.id FROM "Decision" choice JOIN "Entity" e
@@ -734,72 +855,68 @@ export const paymentMatching: Pick<
           WHERE choice.channel = ${decisionChannel.enum.assignment} AND choice.field = 'purchaseId'
             AND choice.subject = ANY(${textArrayParam([...events, ...orders.flatMap((row) => (row.emailId ? [`email:${row.emailId}`] : []))])})))
       )`,
-        ),
-        reads.bindings({
-          facts: [
-            ...orders.map((row) => ({ kind: orderEvidence.kind, id: row.id })),
-            ...payments.map((row) => ({
-              kind: retainedPaymentEvidence.kind,
-              id: row.id,
-            })),
-          ],
-          events: transactions.map((row) => paymentBankEventKey(row.id)),
-        }),
-      ]);
-    const totals = new Map(
-      orders.map((row) => [
-        row.id,
-        row.extraction.candidate?.printedGrandTotal == null
-          ? null
-          : moneyToMinor(row.extraction.candidate.printedGrandTotal),
-      ]),
-    );
-    // Every scope in the batch reconciles this same input, once per round:
-    // derive the input-only indexes here rather than in each reconcile.
-    const belongs = createOrderPaymentMatcher(orders, payments);
-    const paymentsByOrder = new Map(
-      orders.map((order) => [
-        order.id,
-        payments.filter((payment) => belongs(payment, order)),
-      ]),
-    );
-    const vendorsByMerchant = new Map<string, Set<string>>();
-    for (const row of vendors) {
-      if (row.deletedAt) continue;
-      for (const name of [row.name, ...row.aliases]) {
-        const merchant = statementMerchantKey(name);
-        if (!merchant) continue;
-        const ids = vendorsByMerchant.get(merchant) ?? new Set<string>();
-        ids.add(row.id);
-        vendorsByMerchant.set(merchant, ids);
-      }
-    }
-    const effective = new Map(
-      effectiveBindings(bindings).map((binding) => [
-        factIndexKey(binding.fact.kind, binding.fact.id),
-        binding,
-      ]),
-    );
+      ),
+    ]);
     return new Map(
-      keys.map((key) => [
-        key,
-        {
+      closures.map(({ key, orders, payments }, index) => {
+        const transactions = transactionsOf[index]!;
+        const [accounts, orderVendors, merchants, manuals, recorded, bindings] =
+          scopedReads[index]!;
+        const vendors = unique([...orderVendors.values(), ...merchants]);
+        const totals = new Map(
+          orders.map((row) => [
+            row.id,
+            row.extraction.candidate?.printedGrandTotal == null
+              ? null
+              : moneyToMinor(row.extraction.candidate.printedGrandTotal),
+          ]),
+        );
+        // Every round of this scope's reconcile reads the same input: derive
+        // the input-only indexes here rather than in each reconcile.
+        const belongs = createOrderPaymentMatcher(orders, payments);
+        const paymentsByOrder = new Map(
+          orders.map((order) => [
+            order.id,
+            payments.filter((payment) => belongs(payment, order)),
+          ]),
+        );
+        const vendorsByMerchant = new Map<string, Set<string>>();
+        for (const row of vendors) {
+          if (row.deletedAt) continue;
+          for (const name of [row.name, ...row.aliases]) {
+            const merchant = statementMerchantKey(name);
+            if (!merchant) continue;
+            const ids = vendorsByMerchant.get(merchant) ?? new Set<string>();
+            ids.add(row.id);
+            vendorsByMerchant.set(merchant, ids);
+          }
+        }
+        const effective = new Map(
+          effectiveBindings(bindings).map((binding) => [
+            factIndexKey(binding.fact.kind, binding.fact.id),
+            binding,
+          ]),
+        );
+        return [
           key,
-          orders,
-          records,
-          payments,
-          transactions,
-          accounts: [...accounts.values()],
-          vendors,
-          manuals,
-          recordDecisions,
-          bindings,
-          totals,
-          paymentsByOrder,
-          vendorsByMerchant,
-          effectiveBindings: effective,
-        },
-      ]),
+          {
+            key,
+            orders,
+            records,
+            payments,
+            transactions,
+            accounts: [...accounts.values()],
+            vendors,
+            manuals,
+            recordDecisions: recorded,
+            bindings,
+            totals,
+            paymentsByOrder,
+            vendorsByMerchant,
+            effectiveBindings: effective,
+          },
+        ];
+      }),
     );
   },
   reconcile(input, c) {

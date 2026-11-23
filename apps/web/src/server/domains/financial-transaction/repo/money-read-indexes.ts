@@ -1,3 +1,4 @@
+import { statementMerchantKey } from "@cubby/schemas/statement-answers";
 import { sql } from "drizzle-orm";
 
 import {
@@ -39,6 +40,28 @@ export const transactionCandidates = defineReadIndex(financialTransaction, {
         return `${value.slice(0, split)}:${Date.parse(`${value.slice(split + 1)}T00:00:00Z`) / 86_400_000}`;
       }),
     )})`,
+});
+/** One lookup value per transaction: its signed amount on any day. */
+export const transactionAmounts = defineReadIndex(financialTransaction, {
+  name: "transaction.amount",
+  values: (row) => [String(row.amount)],
+  where: (values) =>
+    sql`${financialTransaction.amount} = ANY(${textArrayParam(values)}::bigint[])`,
+});
+/** The legs a LedgerTransfer links. */
+export const transferLegs = defineReadIndex(financialTransaction, {
+  name: "transaction.transfer",
+  values: (row) => (row.ledgerTransferId ? [row.ledgerTransferId] : []),
+  where: (values) =>
+    sql`${financialTransaction.ledgerTransferId} = ANY(${columnArrayParam(values)})`,
+});
+/** Matches `Expense_bookingTransactionCode_idx`; deleted lines included. */
+export const bookingExpenses = defineReadIndex(expense, {
+  name: "expense.bookingTransaction",
+  values: (row) =>
+    row.bookingTransactionCode ? [row.bookingTransactionCode] : [],
+  where: (values) =>
+    sql`${expense.bookingTransactionCode} = ANY(${textArrayParam(values)})`,
 });
 export const acceptedOccurrences = defineReadIndex(sourceOccurrence, {
   name: "occurrence.transaction",
@@ -115,4 +138,13 @@ export const vendorNames = defineReadIndex(vendor, {
     [row.name, ...row.aliases].map((name) => name.trim().toLowerCase()),
   where: (values) =>
     sql`EXISTS (SELECT 1 FROM unnest(ARRAY[${vendor.name}] || ${vendor.aliases}) name WHERE lower(trim(name)) = ANY(${textArrayParam(values)}))`,
+});
+/** Vendor names and aliases in statement merchant spelling; an empty key never matches. */
+export const vendorMerchants = defineReadIndex(vendor, {
+  name: "vendor.merchant",
+  values: (row) =>
+    [row.name, ...row.aliases].map(statementMerchantKey).filter(Boolean),
+  where: (values) =>
+    sql`EXISTS (SELECT 1 FROM unnest(array_prepend(${vendor.name}, ${vendor.aliases})) alias
+      WHERE lower(regexp_replace(regexp_replace(alias, '^[[:space:]]+|[[:space:]]+$', '', 'g'), '[[:space:]]+', ' ', 'g')) = ANY(${textArrayParam(values)}))`,
 });

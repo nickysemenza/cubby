@@ -31,6 +31,7 @@ import type { DecisionInput, DecisionRef, ScopeRef } from "./define";
 import { markDirty } from "./dirty";
 import { takeHouseholdGate } from "./gate";
 import { clearRejected, markRejected, removeRecords } from "./identity";
+import { rowIndexKeys } from "./index-keys";
 import { decisionKey, hashCanonical, VETO_SEPARATOR } from "./keys";
 import { KernelContractError } from "./reads";
 import type { KernelRegistry } from "./registry";
@@ -264,6 +265,8 @@ export async function decide(
             ...(decision.other ? [decisionKey(decision.other)] : []),
           ]),
         ),
+        // Decisions are insert-only: a row's read-index membership is fixed.
+        ...rows.flatMap((row) => rowIndexKeys(registry, "Decision", row)),
       ],
       discovers: discovered,
       reason: "decision",
