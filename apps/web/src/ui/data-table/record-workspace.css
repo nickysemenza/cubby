@@ -221,6 +221,28 @@
       grid-row: 2;
       grid-column: 2;
     }
+
+    /* The rail keeps each fact to its label and value: a satisfied check is
+       its mark alone, named on hover and to a screen reader, and a fact's
+       controls wait for the pointer or focus. */
+    :root:not([data-hosted-workspace])
+      .record-rail
+      [data-quality-state="satisfied"]
+      > [data-quality-label] {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+    :root:not([data-hosted-workspace])
+      .record-rail
+      .ledger[data-ledger="facts"]
+      > .ledger-row:not(:hover, :focus-within, :has([aria-expanded="true"]))
+      > [data-ledger-slot="actions"] {
+      opacity: 0;
+    }
   }
 
   @container record (min-width: 75rem) {

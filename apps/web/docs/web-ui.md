@@ -387,8 +387,9 @@ jump; section headers match it. `DesktopDataRow` clips every cell to the height.
   rows. Tailwind width classes on `meta.className` are normalized legacy input.
 - Widths belong to the column kind (`COLUMN_KIND_WIDTHS` in
   `ui/data-table/column-kind-widths.ts`: a full width and a narrow one), never
-  the entity. The record identity has no kind: it fits its title and is the
-  one column that takes pane slack. State, progress and text kinds cap their
+  the entity. The record identity has no kind: it fits its title and takes
+  pane slack first; slack left over that is at most half the painted columns'
+  width justifies the unpinned columns, and more than that stays empty. State, progress and text kinds cap their
   content at the kind width and end in an ellipsis; dates, ages and money fit
   their whole value. A table pane of 1100px or wider draws the full width class; a
   narrower one steps each kind to its narrow width and optional columns leave
