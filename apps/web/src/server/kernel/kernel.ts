@@ -344,6 +344,22 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
           (write.before ?? []).map((row) => [String(row.id), row]),
         );
         const present = new Set(rows.map((row) => String(row.id)));
+        const changes = [
+          ...rows.map((row) => ({
+            table: name,
+            id: String(row.id),
+            before: before.get(String(row.id)) ?? null,
+            after: row,
+          })),
+          ...[...before.values()]
+            .filter((row) => !present.has(String(row.id)))
+            .map((row) => ({
+              table: name,
+              id: String(row.id),
+              before: row,
+              after: null,
+            })),
+        ];
         evidenceKeys.push(
           ...(await reindexRows(
             repositoryQueries(db),
@@ -356,31 +372,20 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
             await relatedMemberships(
               db,
               bound,
-              rows.map((row) => ({
-                table: name,
-                id: String(row.id),
-                before: before.get(String(row.id)) ?? null,
-                after: row,
-              })),
+              changes.filter((change) => !change.before),
             ),
             true,
           ),
-          // A hard-deleted row no longer joins the committed graph, and an
-          // authored writer reports after its write: its joined memberships
-          // come from its before image, raising every value it could have
-          // joined whether or not it matched.
+          // An authored writer reports after its write, so a joined
+          // predicate's membership reads the graph after it: a row that left
+          // the predicate (it or a joined row updated, soft- or hard-deleted)
+          // no longer matches. A row with a before image raises every value
+          // it joined before or after, whether or not it matched.
           ...membershipKeys(
             await relatedMemberships(
               db,
               bound,
-              [...before.values()]
-                .filter((row) => !present.has(String(row.id)))
-                .map((row) => ({
-                  table: name,
-                  id: String(row.id),
-                  before: row,
-                  after: null,
-                })),
+              changes.filter((change) => change.before),
             ),
             false,
           ),

@@ -342,8 +342,9 @@ a reconciler declares in `reads` (the generator adds the key emission to that
 entity's writer; generic removal, detach and merge-repoint writes, merge
 overrides, link repoints and the callers of the removal cascade report their
 rows with their values before the write, after taking the gate ahead of their
-first row lock; a hard-deleted row raises every joined-predicate membership
-its before image could hold). The statement inserts the row's `FactKey` rows and upserts
+first row lock; a row reported with its before image raises every
+joined-predicate membership it could hold before or after the write). The
+statement inserts the row's `FactKey` rows and upserts
 `ScopeDirty`, raising `seq`, for:
 
 - every scope the row `discovers`, which is how a scope starts with no
@@ -411,7 +412,10 @@ and the key it joined. A publication and a repoint derive both from the row
 before and after. An authored writer reports after its write, so the kernel
 stores each indexed row's membership as `index:<table>` `FactKey` rows, every
 writer of the row replaces them, and the stored keys stand for the row before
-an authored write. A migration that adds a read index over values a writer can
+an authored write. A joined predicate's membership reads the committed graph
+after the write, so a writer that reports a row's before image raises every
+value that row joins before or after, matched or not: a row an update, soft
+delete or hard delete took out of the predicate raises the key it left. A migration that adds a read index over values a writer can
 change, or changes an index's values, rebuilds those rows from the table; an
 index over columns set once at insert has no before image to store. A plain
 insert into an indexed table outside `append` reports its new rows through the

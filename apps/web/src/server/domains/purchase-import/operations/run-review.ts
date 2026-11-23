@@ -144,6 +144,10 @@ async function reconcileSettledRunOnce(
     scope.public.purpose === "mail_import"
   ) {
     await withTransaction(db, async (tx) => {
+      // The gate before the Run row lock; releasing its Emails dirties them.
+      await (
+        await import("~/server/kernel/api")
+      ).enterHouseholdGate(databaseForTransaction(tx));
       const [current] = await tx
         .select({
           status: runTable.status,
@@ -715,6 +719,10 @@ async function stopRunForReviewOnce(
     });
   const auditedAt = new Date();
   return withTransaction(db, async (tx) => {
+    // The gate before the Run row lock; releasing its Emails dirties them.
+    await (
+      await import("~/server/kernel/api")
+    ).enterHouseholdGate(databaseForTransaction(tx));
     const [current] = await tx
       .select({
         generation: runTable.dispatchEventId,

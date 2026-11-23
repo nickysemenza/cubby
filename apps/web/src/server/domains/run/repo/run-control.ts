@@ -843,6 +843,11 @@ export async function controlRun(
         .set({ status: "paused", updatedAt: new Date() })
         .where(eq(runTable.id, scope.runId));
       await cancelRunWork(tx, scope.runId);
+      // Email state reads a held Email's outcome from its Run's status.
+      await kernel.emitWrites(databaseForTransaction(tx), {
+        ...ended,
+        columns: ["status"],
+      });
       return {
         publicId: input.runPublicId,
         status: "paused" as const,
@@ -883,6 +888,7 @@ export async function controlRun(
           updatedAt: new Date(),
         })
         .where(eq(runTable.id, scope.runId));
+      await kernel.emitWrites(databaseForTransaction(tx), ended);
       await dispatchStartedRun(tx, {
         id: scope.runId,
         eventId: dispatchEventId,

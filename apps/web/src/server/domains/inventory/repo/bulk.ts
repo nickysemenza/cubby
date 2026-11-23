@@ -43,6 +43,7 @@ import {
   logAuditEntries,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
+import { enterRemovalGate } from "~/server/generic/removal/repo/kernel-writes";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { readInventoryEntries } from "./crud";
@@ -672,6 +673,8 @@ export const moveInventoryEntries = async (
   const processedItems = await withTransaction(
     db,
     async (tx: DrizzleTransaction) => {
+      // The gate before the first row lock: removed entries are reported.
+      await enterRemovalGate(tx);
       const targetLocationIds = uniq(
         payload.items.map((item) => item.targetLocationId),
       );
@@ -810,6 +813,8 @@ export const reconcileLocationSession = async (
   const { processed, removedIds, recomputeNeeded } = await withTransaction(
     db,
     async (tx: DrizzleTransaction) => {
+      // The gate before the first row lock: removed entries are reported.
+      await enterRemovalGate(tx);
       await assertLiveTargets(tx, { locationId });
       const relocationTargets = uniq(
         resolutions
