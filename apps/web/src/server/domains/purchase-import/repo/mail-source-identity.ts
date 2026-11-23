@@ -20,6 +20,7 @@ export async function mailSourceIdentityBlocked(
     .where(
       and(
         eq(emailTable.ledgerPartyId, source.ledgerPartyId),
+        eq(emailTable.provider, "gmail"),
         eq(emailTable.mailboxId, source.mailboxId),
         eq(emailTable.messageId, source.messageId),
         eq(emailTable.orderMailId, source.id),

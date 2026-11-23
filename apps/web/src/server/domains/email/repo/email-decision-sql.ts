@@ -29,21 +29,21 @@ const purchaseReference = (identity: SQLWrapper, value: SQL) => sql`
  * Current member links projected from decision slots, including their original
  * evidence. A subject-scoped projection reads only the scoped subjects' slots
  * and their event pointers; the unscoped one sorts and self-joins every Email
- * decision. An Email scope also reads every Email decision that names one of
- * the scoped Emails' order events, so an event's decisions do not depend on
- * which Emails share a batch.
+ * decision. A batch of Emails also reads links that name its order events.
+ * A point read needs only the Email's own slots and their event pointers.
  */
 const emailLinkDecisionProjection = (
   correlateEventPointers: boolean,
-  emailId?: SQL,
-  subjects?: { purchaseIds: SQL } | { emailIds: SQL },
+  subjects?: { purchaseIds: SQL } | { emailIds: SQL } | { emailId: SQL },
 ) => sql`(
   WITH ${
     subjects
       ? sql`
   link_subjects AS MATERIALIZED (${
-    "emailIds" in subjects
-      ? sql`
+    "emailId" in subjects
+      ? sql`SELECT 'email:'||${subjects.emailId} AS subject`
+      : "emailIds" in subjects
+        ? sql`
     SELECT 'email:'||scoped.id AS subject FROM unnest(${subjects.emailIds}) AS scoped(id)
     UNION
     SELECT link.subject FROM "Email" scoped
@@ -52,7 +52,7 @@ const emailLinkDecisionProjection = (
     WHERE scoped.id IN (SELECT ids.id FROM unnest(${subjects.emailIds}) AS ids(id))
       AND link.channel=${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)}
       AND link.subject LIKE 'email:%'`
-      : sql`
+        : sql`
     SELECT DISTINCT link.subject
     FROM "Decision" link
     LEFT JOIN "Entity" link_target ON link_target.id=CASE WHEN link.field LIKE 'link:%' THEN substring(link.field from 6)::uuid END
@@ -115,7 +115,7 @@ const emailLinkDecisionProjection = (
   LEFT JOIN "Purchase" live_purchase ON live_purchase.id=coalesce(target."mergedIntoId",target.id,substring(d.field from 6)::uuid) AND ${notDeleted("live_purchase")}
   LEFT JOIN current review ON review.subject=d.subject AND review.field='review-status:' || d.id
   WHERE d.subject LIKE 'email:%' AND d.field LIKE 'link:%'
-    ${emailId ? sql`AND substring(d.subject from 7)::uuid=${emailId}` : sql``}
+    ${subjects && "emailId" in subjects ? sql`AND d.subject='email:'||${subjects.emailId}` : sql``}
     ${subjects && "purchaseIds" in subjects ? sql`AND coalesce(target."mergedIntoId",target.id,substring(d.field from 6)::uuid) IN (${subjects.purchaseIds})` : sql``}
     AND d.kind=${sqlEnumConstant(decisionKind, decisionKind.enum.set)}
   ORDER BY d.subject, coalesce(target."mergedIntoId",target.id,substring(d.field from 6)::uuid), coalesce(linked_event.id,(d.value->>'eventId')::uuid), active DESC,
@@ -125,14 +125,12 @@ const emailLinkDecisionProjection = (
 export const emailLinkDecisionsSql = emailLinkDecisionProjection(false);
 /** One Email's links; correlated per row, it reads only that Email's subjects. */
 export const emailLinkDecisionsForEmailSql = (emailId: SQL) =>
-  emailLinkDecisionProjection(true, emailId, {
-    emailIds: sql`ARRAY[${emailId}]::uuid[]`,
-  });
+  emailLinkDecisionProjection(true, { emailId });
 export const emailLinkDecisionsForPurchasesSql = (purchaseIds: SQL) =>
-  emailLinkDecisionProjection(true, undefined, { purchaseIds });
+  emailLinkDecisionProjection(true, { purchaseIds });
 /** Current links for a uuid[] of Emails, without projecting the household's. */
 export const emailLinkDecisionsForEmailsSql = (emailIds: SQL) =>
-  emailLinkDecisionProjection(true, undefined, { emailIds });
+  emailLinkDecisionProjection(true, { emailIds });
 const decisionsRead = (projection: SQL) =>
   new QueryBuilder()
     .select(decisionProjectionColumns(emailPurchaseDecision))
@@ -165,8 +163,7 @@ export const emailLinkDecisionHistoryRead = new QueryBuilder()
   .from(sql`${emailLinkDecisionHistorySql} "EmailPurchaseDecision"`)
   .as("EmailPurchaseDecision");
 
-/** Decision history projected with the review contract; retained tables are not read. */
-export const emailReviewsSql = sql`(
+const emailReviewProjection = (emailId?: SQL) => sql`(
   SELECT d.id, d.at AS "createdAt", r.*
   FROM "Decision" d CROSS JOIN LATERAL jsonb_to_record(CASE WHEN jsonb_typeof(d.value)='object' THEN d.value ELSE '{}'::jsonb END) AS r(
     family text, "subjectId" uuid, "emailId" uuid, "originalId" uuid,
@@ -174,7 +171,13 @@ export const emailReviewsSql = sql`(
     correction jsonb, reason text, evidence jsonb, intent text, authority text,
     "actorUserId" text, subject jsonb, receipt jsonb, metadata jsonb)
   WHERE d.channel=${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)} AND d.field LIKE 'review:%' AND d.kind=${sqlEnumConstant(decisionKind, decisionKind.enum.set)}
+    ${emailId ? sql`AND d.subject='email:'||${emailId} AND r."emailId"=${emailId}` : sql``}
 )`;
+/** Decision history projected with the review contract; retained tables are not read. */
+export const emailReviewsSql = emailReviewProjection();
+/** Both authored and carried reviews with an Email id use its Email subject. */
+export const emailReviewsForEmailSql = (emailId: SQL) =>
+  emailReviewProjection(emailId);
 const emailReviewsFrom = sql`${emailReviewsSql} "EmailReview"`;
 export const emailReviewsRead = new QueryBuilder()
   .select(decisionProjectionColumns(emailReview))
@@ -182,14 +185,19 @@ export const emailReviewsRead = new QueryBuilder()
   .as("EmailReview");
 export const emailReviewsReadFields = emailReviewsRead._.selectedFields;
 
-/** Reviewed account facts are durable decisions, separate from current settlement. */
-export const emailFinancialAssociationsSql = sql`(
+const emailFinancialAssociationProjection = (emailId?: SQL) => sql`(
  SELECT d.id, substring(d.subject from 7)::uuid AS "emailId", r.*, d."actorId" AS "decidedByUserId", d.at AS "createdAt"
  FROM "Decision" d CROSS JOIN LATERAL jsonb_to_record(
    CASE WHEN jsonb_typeof(d.value)='object' THEN d.value ELSE '{}'::jsonb END
  ) AS r("evidenceChecksum" text,"transactionId" uuid,"reviewedAccountId" uuid,"sourceAccountLabel" text,"reviewReason" text)
  WHERE d.channel=${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)} AND d.field LIKE 'financial:%' AND d.kind=${sqlEnumConstant(decisionKind, decisionKind.enum.set)} AND d.subject LIKE 'email:%'
+   ${emailId ? sql`AND d.subject='email:'||${emailId}` : sql``}
 )`;
+/** Reviewed account facts are durable decisions, separate from current settlement. */
+export const emailFinancialAssociationsSql =
+  emailFinancialAssociationProjection();
+export const emailFinancialAssociationsForEmailSql = (emailId: SQL) =>
+  emailFinancialAssociationProjection(emailId);
 const emailFinancialAssociationsFrom = sql`${emailFinancialAssociationsSql} "EmailFinancialAssociation"`;
 export const emailFinancialAssociationsRead = new QueryBuilder()
   .select(decisionProjectionColumns(emailFinancialAssociation))

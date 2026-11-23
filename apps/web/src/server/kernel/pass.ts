@@ -79,9 +79,8 @@ export async function startPass(
 }
 
 /**
- * A pass page's publication: the gate, then the Pass row, then the work. A
- * publication that locks records or appends evidence must not hold a row
- * while it waits for the gate.
+ * Fenced output publication takes the gate before the Pass row and any work.
+ * A page that only settles its Pass row fences the claim without the gate.
  */
 export function fencedPublication<T>(
   db: Database,
@@ -144,9 +143,8 @@ export async function runOnePass(
         // SAFETY: the cursor column holds the JSON the pass last returned.
         const result = await pass.run(db, claimed.cursor as Json | null, claim);
         span.setAttribute("kernel.pass.result_done", result.done);
-        const published = await claim.fenced(async (tx) => {
-          await result.publish?.(tx);
-          return repositoryQueries(tx).execute<{
+        const settle = (tx: Database) =>
+          repositoryQueries(tx).execute<{
             at: string;
             wait: boolean;
           }>(sql`
@@ -161,7 +159,15 @@ export async function runOnePass(
           "waitCause" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${result.done ? null : (result.waitCause ?? null)} ELSE CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN "waitCause" END END, "lastError" = NULL, "updatedAt" = now()
         WHERE name = ${claimed.name} AND key = ${claimed.key}
         RETURNING ${isoText(sql`"availableAt"`)} AS at, "doneAt" IS NULL AND "availableAt" > now() AS wait`);
-        });
+        const published = result.publish
+          ? await claim.fenced(async (tx) => {
+              await result.publish?.(tx);
+              return settle(tx);
+            })
+          : await repositoryTransactionDatabase(db, async (tx) => {
+              await claim.fence(tx);
+              return settle(tx);
+            });
         wait = published.rows[0];
       } catch (error) {
         span.setError("Pass page failed");

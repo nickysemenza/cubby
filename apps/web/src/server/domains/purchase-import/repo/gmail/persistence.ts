@@ -1083,6 +1083,8 @@ export async function publishStagedOrderMailAttachment(
   await finalizeMailAttachmentUpload(db, input.prepared.key);
 }
 
+const EVENT_INSERT_CHUNK = 1_000;
+
 /**
  * Record history changes for messages Cubby saved. An event for a message it
  * never saved (deleted before it was fetched, or never listed) is dropped and
@@ -1122,31 +1124,41 @@ export const persistGmailEvents = async (
           )
       ).map((row) => [row.messageId, row.id]),
     );
-    let saved = 0;
-    const inserted: string[] = [];
-    for (const event of input.events) {
+    const rows = input.events.flatMap((event) => {
       const orderMailId = known.get(event.messageId);
-      if (!orderMailId) continue;
-      const [row] = await tx
-        .insert(orderMailEvent)
-        .values({
-          orderMailId,
-          event: event.kind,
-          occurredAt: null,
-          sourceKey: event.sourceKey,
-          payload: {
-            mailboxId: event.mailboxId,
-            historyId: event.historyId,
-            messageId: event.messageId,
-            threadId: event.threadId,
-            labelIds: event.labelIds,
-          },
-        })
-        .onConflictDoNothing()
-        .returning({ id: orderMailEvent.id });
-      if (row) inserted.push(row.id);
-      saved += 1;
-    }
+      return orderMailId
+        ? [
+            {
+              orderMailId,
+              event: event.kind,
+              occurredAt: null,
+              sourceKey: event.sourceKey,
+              payload: {
+                mailboxId: event.mailboxId,
+                historyId: event.historyId,
+                messageId: event.messageId,
+                threadId: event.threadId,
+                labelIds: event.labelIds,
+              },
+            },
+          ]
+        : [];
+    });
+    // An already recorded event, including a repeat within this page, counts
+    // as saved; only rows this statement inserted are emitted. Chunks keep a
+    // large history page under the bind-parameter limit.
+    const inserted: string[] = [];
+    for (let offset = 0; offset < rows.length; offset += EVENT_INSERT_CHUNK)
+      inserted.push(
+        ...(
+          await tx
+            .insert(orderMailEvent)
+            .values(rows.slice(offset, offset + EVENT_INSERT_CHUNK))
+            .onConflictDoNothing()
+            .returning({ id: orderMailEvent.id })
+        ).map((row) => row.id),
+      );
+    const saved = rows.length;
     // A new event joins its original's read-index membership.
     if (inserted.length)
       await (

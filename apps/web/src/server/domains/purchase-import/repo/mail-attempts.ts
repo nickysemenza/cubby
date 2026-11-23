@@ -57,11 +57,13 @@ export async function recordMailAttempt(
       .where(
         and(
           eq(email.ledgerPartyId, owner.ledgerPartyId),
+          eq(email.provider, "gmail"),
           eq(email.mailboxId, input.source.mailboxId),
           eq(email.messageId, input.source.messageId),
         ),
       )
-      .for("update");
+      .for("update")
+      .limit(1);
     if (
       !source ||
       source.runId !== runId ||

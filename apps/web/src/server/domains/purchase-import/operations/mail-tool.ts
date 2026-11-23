@@ -737,15 +737,17 @@ export async function settleMail(
     );
   return withTransaction(db, async (tx) => {
     await enterHouseholdGate(tx);
+    // Settled mail is Gmail-only; the provider completes the unique key.
     const identity = and(
       eq(emailTable.ledgerPartyId, input.mail.ledgerPartyId),
+      eq(emailTable.provider, "gmail"),
       eq(emailTable.mailboxId, input.mail.mailboxId),
       eq(emailTable.messageId, input.mail.messageId),
       notDeleted(emailTable),
       input.importRunId ? eq(emailTable.runId, input.importRunId) : undefined,
     );
     const [initialEmail] = await tx
-      .select()
+      .select({ runId: emailTable.runId })
       .from(emailTable)
       .where(identity)
       .limit(1);
@@ -765,7 +767,8 @@ export async function settleMail(
       .select()
       .from(emailTable)
       .where(identity)
-      .for("update");
+      .for("update")
+      .limit(1);
     if (!originalEmail || originalEmail.runId !== initialEmail.runId)
       throw createAppError(
         "MAIL_EVIDENCE_STALE",
@@ -990,6 +993,7 @@ async function disposedUnrelatedMail(
           emailTable.ledgerPartyId,
           await memberPartyIds(db, actor.userId),
         ),
+        eq(emailTable.provider, "gmail"),
         eq(emailTable.mailboxId, input.mailboxId),
         eq(emailTable.messageId, input.messageId),
         eq(emailTable.checksum, input.checksum),

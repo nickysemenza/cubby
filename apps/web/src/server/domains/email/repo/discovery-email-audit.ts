@@ -45,10 +45,13 @@ export async function recordDiscoveryEmailReceipt(
           email.ledgerPartyId,
           parseEntityId("ledgerParty", input.ledgerPartyId),
         ),
+        // The full mailbox identity makes this a point lookup on the unique key.
+        eq(email.provider, "gmail"),
         eq(email.mailboxId, input.mailboxId),
         eq(email.messageId, input.messageId),
       ),
-    );
+    )
+    .limit(1);
   const handled = current ?? input.expected;
   if (!handled) return;
   if (

@@ -291,15 +291,19 @@ export const runExecutePass = definePass({
           ms: Math.max(1, performance.now() - started),
           at: new Date().toISOString(),
         };
-        await claim.fenced(async (tx) => {
-          await repositoryQueries(tx)
-            .execute(sql`UPDATE "Pass" SET "durationHistory" = (
-            SELECT coalesce(jsonb_agg(sample ORDER BY ordinal), '[]'::jsonb)
-            FROM jsonb_array_elements("durationHistory" || ${JSON.stringify([sample])}::jsonb)
-              WITH ORDINALITY recent(sample, ordinal)
-            WHERE ordinal > jsonb_array_length("durationHistory") - 11
-          ) WHERE name = ${RUN_EXECUTE_PASS} AND key = ${runId}`);
-        });
+        return {
+          ...result,
+          async publish(tx) {
+            await result.publish?.(tx);
+            await repositoryQueries(tx)
+              .execute(sql`UPDATE "Pass" SET "durationHistory" = (
+              SELECT coalesce(jsonb_agg(sample ORDER BY ordinal), '[]'::jsonb)
+              FROM jsonb_array_elements("durationHistory" || ${JSON.stringify([sample])}::jsonb)
+                WITH ORDINALITY recent(sample, ordinal)
+              WHERE ordinal > jsonb_array_length("durationHistory") - 11
+            ) WHERE name = ${RUN_EXECUTE_PASS} AND key = ${runId}`);
+          },
+        };
       }
       return result;
     } catch (error) {
