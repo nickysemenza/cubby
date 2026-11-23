@@ -540,24 +540,6 @@ async function partitionOwnership(
       ),
     )
     .for("update", { of: emailTable });
-  const ownerIds = [
-    ...new Set(messages.flatMap((message) => message.runId ?? [])),
-  ];
-  const liveOwners = new Map(
-    (ownerIds.length
-      ? await tx
-          .select()
-          .from(run)
-          .where(
-            and(
-              inArray(run.id, ownerIds),
-              eq(run.ledgerPartyId, partyId),
-              notDeleted(run),
-            ),
-          )
-      : []
-    ).map((row) => [row.id, row]),
-  );
   const owners = new Map<string, typeof run.$inferSelect>();
   const fresh: RetainedMail[] = [];
   const transfers = new Map<RunId, RetainedMail[]>();
@@ -569,7 +551,19 @@ async function partitionOwnership(
         candidate.messageId === source.messageId,
     );
     if (skipsSource(message, source, controlledParentRunId)) continue;
-    const owner = message?.runId ? liveOwners.get(message.runId) : undefined;
+    const [owner] = message?.runId
+      ? await tx
+          .select()
+          .from(run)
+          .where(
+            and(
+              eq(run.id, runEntityId.parse(message.runId)),
+              eq(run.ledgerPartyId, partyId),
+              notDeleted(run),
+            ),
+          )
+          .limit(1)
+      : [];
     // A new evidence revision readmits an unsettled Email from any ended holder,
     // failed and retired ones included; the per-revision guard below is what
     // keeps one revision from paying for more than one attempt.
