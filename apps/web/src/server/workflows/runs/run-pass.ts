@@ -47,8 +47,8 @@ import { WorkSupersededError } from "~/server/kernel/work-errors";
 
 import { withWorkflowExecution } from "./execution";
 import {
+  announceMailDiscoveryVacancy,
   mailDiscoveryBackpressure,
-  releaseMailDiscoveryRunAdmission,
   yieldClaimedMailDiscovery,
   resumeClaimedWorkflowRun,
 } from "./lifecycle";
@@ -256,9 +256,10 @@ async function asWait(
         .where(and(eq(run.id, runId), eq(run.status, "running")));
     });
   // `pauseForFunding` committed the paused discovery without the mailbox
-  // lock; the release that follows is a no-op unless the slot is free.
+  // lock. The announcement reports its own failure, so the funding wait is
+  // always returned and keeps its deadline.
   if (funding && cursor.purpose === "mail_discovery")
-    await releaseMailDiscoveryRunAdmission(db, runId);
+    await announceMailDiscoveryVacancy(db, runId);
   return waitResult(cursor, wait.until, wait.reason);
 }
 

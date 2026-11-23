@@ -300,7 +300,7 @@ function admissionDecision(
  * earlier pick already runs, so release follows priority and fairness and
  * never brings forward more waiters than the freed slots admit. Call only
  * while holding this mailbox's admission lock, after the releasing Run's
- * status write in the same transaction.
+ * status write, either committed or earlier in the same transaction.
  */
 export async function mailDiscoveryWaitersToRelease(
   db: Database,

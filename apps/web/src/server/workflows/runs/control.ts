@@ -13,15 +13,14 @@ import { grantPaid } from "~/server/ai/funding-wait";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { ledgerParty, runStep, run as runTable } from "~/server/db/schema";
-import { lockMailDiscoveryRunAdmission } from "~/server/domains/purchase-import/repo/gmail/discovery-admission";
 import { reopenRunStep } from "~/server/domains/run/repo/run-step";
 import { runControlRefusal } from "~/server/domains/run/run-control-rules";
 import { createAppError } from "~/server/errors/app-error";
 
 import {
+  announceMailDiscoveryVacancy,
   launchWorkflowRun,
   recordRunProgress,
-  releaseMailDiscoveryAdmission,
 } from "./lifecycle";
 import { cancelRunPass } from "./run-pass";
 
@@ -147,13 +146,7 @@ export async function controlWorkflowRun(
       ids: [row.id],
       columns: ["status", "endedAt", "failureCode"],
     };
-    // Mailbox admission, then revisions before the Run row, the order a
-    // kernel apply takes. A cancelled discovery frees its slot or its place
-    // in line, either of which can admit a waiter.
-    const mailbox =
-      purpose === "mail_discovery"
-        ? await lockMailDiscoveryRunAdmission(tx, row.id)
-        : null;
+    // Revisions before the Run row, the order a kernel apply takes.
     await kernel.lockWrites(tx, write);
     const [cancelled] = await database
       .update(runTable)
@@ -194,7 +187,11 @@ export async function controlWorkflowRun(
         ),
       );
     await kernel.cancelRunAsks(tx, row.id);
-    if (mailbox) await releaseMailDiscoveryAdmission(tx, mailbox);
+    // A cancelled discovery frees its slot or its place in line, either of
+    // which can admit a waiter; announced under the admission lock after
+    // commit, since the gate is this transaction's first lock.
+    if (purpose === "mail_discovery")
+      await announceMailDiscoveryVacancy(tx, row.id);
   });
   await recordRunProgress(db, row.id, "cancelled", MEMBER_CANCELLED_AI_WORK, {
     attempt: row.attempt,

@@ -59,6 +59,7 @@ import { WorkPausedError } from "~/server/kernel/work-errors";
 import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
 import { currentRunExecution } from "~/server/workflows/runs/execution";
 import {
+  announceMailDiscoveryVacancy,
   claimWorkflowRun,
   launchWorkflowRun,
   mailDiscoveryBackpressure,
@@ -911,12 +912,7 @@ export async function finishMailDiscovery(
     columns: ["status", "endedAt"],
   };
   const finished = await withTransactionDatabase(db, async (tx) => {
-    // Admission, then the gate before the Run row, the order a kernel apply
-    // takes; the freed slot admits its waiters in this transaction.
-    const mailbox = await lockMailDiscoveryRunAdmission(
-      tx,
-      runEntityId.parse(params.runId),
-    );
+    // The gate before the Run row, the order a kernel apply takes.
     await kernel.lockWrites(tx, write);
     const [row] = await getDb(tx)
       .update(runTable)
@@ -931,7 +927,9 @@ export async function finishMailDiscovery(
       .returning({ id: runTable.id });
     if (row) {
       await kernel.emitWrites(tx, write);
-      if (mailbox) await releaseMailDiscoveryAdmission(tx, mailbox);
+      // The gate is this transaction's first lock, so the freed slot is
+      // announced under the admission lock after commit.
+      await announceMailDiscoveryVacancy(tx, row.id);
     }
     return row;
   });
