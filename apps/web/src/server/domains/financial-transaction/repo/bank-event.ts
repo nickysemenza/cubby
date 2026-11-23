@@ -3,6 +3,7 @@ import {
   financialTransactionKind,
   type FinancialTransactionCreateInput,
 } from "@cubby/schemas/financial-transaction";
+import { statementMerchantKey } from "@cubby/schemas/statement-answers";
 import { minorToMoney, moneyToMinor } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 
@@ -55,6 +56,7 @@ import {
   amountDayValue,
   transactionCandidates,
   acceptedOccurrences,
+  merchantNameCandidatesSql,
 } from "./money-read-indexes";
 
 export const bankTransactionWrites = writes(
@@ -95,7 +97,7 @@ import {
 
 import type { statementAsks } from "../service/purchase-asks";
 
-/** Matches `ManualEntry_financial_merchant_idx`; the load keeps live accounts. */
+/** Merchant history uses the statement key; the load keeps live accounts. */
 const manualHistory = defineReadIndex(manualEntry, {
   name: "manualTransaction.merchant",
   values: (row) => {
@@ -105,16 +107,12 @@ const manualHistory = defineReadIndex(manualEntry, {
       typeof p === "object" &&
       !Array.isArray(p) &&
       typeof p.merchant === "string"
-      ? [p.merchant.trim().toLowerCase()]
+      ? [statementMerchantKey(p.merchant)]
       : [];
   },
-  where: (values) => {
-    const merchant = sql`lower(trim(${manualEntry.payload}->>'merchant'))`;
-    // Fixed-width index keys narrow the lookup. Equality still checks the original values.
-    return sql`md5(${merchant}) = ANY(ARRAY(SELECT md5(wanted) FROM unnest(${textArrayParam(values)}) wanted))
-      AND ${merchant} = ANY(${textArrayParam(values)})
-      AND ${manualEntry.entity} = ${"financialTransaction"}`;
-  },
+  where: (values) =>
+    sql`${manualEntry.entity} = ${"financialTransaction"}
+      AND ${merchantNameCandidatesSql(sql`${manualEntry.payload}->>'merchant'`, values)}`,
 });
 
 type Account = typeof financialAccount.$inferSelect & {
@@ -377,7 +375,7 @@ export function createBankEvent({
   const bankEvent = defineReconciler<BankInput>({
     scope: "bankEvent",
     lane: "money",
-    version: 1,
+    version: 2,
     reads: [
       source.evidence(occurrenceEvidence),
       source.evidence(statementEvidence),
@@ -512,7 +510,7 @@ export function createBankEvent({
             const past = current?.merchant
               ? (
                   await scoped.lookup(manualEntry, manualHistory, [
-                    current.merchant.trim().toLowerCase(),
+                    statementMerchantKey(current.merchant),
                   ])
                 ).filter((row) => {
                   const saved = row.payload;

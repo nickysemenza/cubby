@@ -25,12 +25,14 @@ import { textArrayParam } from "~/server/db/helpers/array-param";
 import { withKernelApply } from "~/server/db/kernel-apply-context";
 import {
   evidenceBinding,
+  manualEntry,
   drift,
   ask,
   answer,
   recordKey,
   scopeDirty,
 } from "~/server/db/kernel-schema";
+import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import {
   expense,
   financialTransaction,
@@ -62,6 +64,7 @@ import { append, evidenceRow } from "~/server/kernel/api";
 import { runQueuedAsks } from "~/server/kernel/ask";
 import { askEnvelope, inputHashOf } from "~/server/kernel/envelope";
 import { productionKernel } from "~/server/kernel/kernel";
+import { createReads, KeyLedger } from "~/server/kernel/reads";
 
 import { recordSourceTransactionRecords } from "./source-transaction-record";
 
@@ -646,7 +649,7 @@ describe("statement spending review and re-import", () => {
     expect(await bankEventSeq(occurrence!.id)).toBeGreaterThan(settled);
   });
 
-  it("dirties a bank event when a manual transaction names the merchant it looked up", async () => {
+  it("loads and invalidates manual history across merchant whitespace variants", async () => {
     const setup = await fixture("merchant-history");
     const [occurrence] = await getDb(ctx.db).select().from(sourceOccurrence);
     await reconcileNow(ctx.db, [{ kind: "bankEvent", key: occurrence!.id }]);
@@ -658,9 +661,31 @@ describe("statement spending review and re-import", () => {
       status: "posted",
       transactionDate: "2026-01-10",
       postedDate: "2026-01-10",
-      merchant: " synthetic ORCHARD ",
+      merchant: "\u00a0synthetic\t ORCHARD\u00a0",
     });
     expect(await bankEventSeq(occurrence!.id)).toBeGreaterThan(settled);
+    const { registry } = await productionKernel();
+    const index = registry.indexes
+      .get("ManualEntry")
+      ?.find((index) => index.name === "manualTransaction.merchant");
+    const reads = createReads(
+      repositoryQueries(ctx.db),
+      registry.reconcilers.get("bankEvent")!,
+      [occurrence!.id],
+      new KeyLedger(),
+      { locked: false, hideBaseline: false },
+    );
+    expect(
+      await reads.lookup(manualEntry, index!, [
+        statementMerchantKey("Synthetic Orchard"),
+      ]),
+    ).toEqual([
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          merchant: expect.stringContaining("\t"),
+        }),
+      }),
+    ]);
   });
 
   it("retains old partly paid candidates and invalidates them when their capacity closes", async () => {
