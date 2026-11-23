@@ -37,7 +37,6 @@ import {
   and,
   asc,
   desc,
-  getTableColumns,
   eq,
   inArray,
   isNotNull,
@@ -159,12 +158,29 @@ const HELD_UNSETTLED_STATUSES: (typeof emailTable.$inferSelect.status)[] = [
 const heldUnsettledSql = () =>
   sql<boolean>`(${emailTable.status} = ${"unsettled"} OR (${emailTable.status} = ${"pending"} AND EXISTS (${newestUnresolvedOutcome})))`;
 
+/** The Email fields admission decides from; the row lock covers the whole row. */
+const lockedMailSourceFields = {
+  id: emailTable.id,
+  mailboxId: emailTable.mailboxId,
+  messageId: emailTable.messageId,
+  orderMailId: emailTable.orderMailId,
+  checksum: emailTable.checksum,
+  status: emailTable.status,
+  runId: emailTable.runId,
+  importAttempts: emailTable.importAttempts,
+};
+type LockedMailSource = {
+  [
+    K in keyof typeof lockedMailSourceFields
+  ]: (typeof emailTable.$inferSelect)[K];
+};
+
 /**
  * A controlled child skips Emails outside its parent's statuses; an excluded,
  * deleted or changed Email is refused.
  */
 function skipsSource(
-  message: typeof emailTable.$inferSelect | undefined,
+  message: LockedMailSource | undefined,
   source: RetainedMail,
   controlledParentRunId: RunId | undefined,
 ) {
@@ -194,7 +210,7 @@ function skipsSource(
 async function endedHolderLeftUnsettled(
   tx: DrizzleTransaction,
   owner: typeof run.$inferSelect | undefined,
-  message: typeof emailTable.$inferSelect | undefined,
+  message: LockedMailSource | undefined,
 ) {
   if (
     !message ||
@@ -505,8 +521,10 @@ async function partitionOwnership(
     { mailbox: "text", message: "text" },
     "requested_mail",
   );
-  const messages = await tx
-    .select(getTableColumns(emailTable))
+  // Retained mail sources are Gmail-only; the provider completes the
+  // (party, provider, mailbox, message) unique key so each pair is a point probe.
+  const messages: LockedMailSource[] = await tx
+    .select(lockedMailSourceFields)
     .from(emailTable)
     .innerJoin(
       pairs.from,
@@ -515,8 +533,31 @@ async function partitionOwnership(
         eq(emailTable.messageId, pairs.col("message")),
       ),
     )
-    .where(eq(emailTable.ledgerPartyId, partyId))
+    .where(
+      and(
+        eq(emailTable.ledgerPartyId, partyId),
+        eq(emailTable.provider, "gmail"),
+      ),
+    )
     .for("update", { of: emailTable });
+  const ownerIds = [
+    ...new Set(messages.flatMap((message) => message.runId ?? [])),
+  ];
+  const liveOwners = new Map(
+    (ownerIds.length
+      ? await tx
+          .select()
+          .from(run)
+          .where(
+            and(
+              inArray(run.id, ownerIds),
+              eq(run.ledgerPartyId, partyId),
+              notDeleted(run),
+            ),
+          )
+      : []
+    ).map((row) => [row.id, row]),
+  );
   const owners = new Map<string, typeof run.$inferSelect>();
   const fresh: RetainedMail[] = [];
   const transfers = new Map<RunId, RetainedMail[]>();
@@ -528,19 +569,7 @@ async function partitionOwnership(
         candidate.messageId === source.messageId,
     );
     if (skipsSource(message, source, controlledParentRunId)) continue;
-    const [owner] = message?.runId
-      ? await tx
-          .select()
-          .from(run)
-          .where(
-            and(
-              eq(run.id, runEntityId.parse(message.runId)),
-              eq(run.ledgerPartyId, partyId),
-              notDeleted(run),
-            ),
-          )
-          .limit(1)
-      : [];
+    const owner = message?.runId ? liveOwners.get(message.runId) : undefined;
     // A new evidence revision readmits an unsettled Email from any ended holder,
     // failed and retired ones included; the per-revision guard below is what
     // keeps one revision from paying for more than one attempt.
@@ -943,6 +972,7 @@ export async function admitMailImport(
             },
             "requested_mail",
           );
+          // Gmail-only sources: the provider completes the unique key.
           const assigned = await tx
             .update(emailTable)
             .set({
@@ -954,6 +984,7 @@ export async function admitMailImport(
             .where(
               and(
                 eq(emailTable.ledgerPartyId, selected.col("party")),
+                eq(emailTable.provider, "gmail"),
                 eq(emailTable.mailboxId, selected.col("mailbox")),
                 eq(emailTable.messageId, selected.col("message")),
                 eq(emailTable.orderMailId, selected.col("mail")),
