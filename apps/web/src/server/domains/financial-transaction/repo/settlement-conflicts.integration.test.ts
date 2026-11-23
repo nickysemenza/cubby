@@ -1,19 +1,22 @@
 import { financialTransactionUpdateData } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { moneyToMinor } from "@cubby/shared";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { seedEmailLinkDecision } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
-import { getDb, insertAndReturn } from "~/server/db/helpers";
+import { entityIdentity } from "~/server/db/entity-identity-schema";
+import { getDb, insertAndReturn, uuidArrayParam } from "~/server/db/helpers";
 import {
   importSourceClaim,
   orderMailEvent,
+  purchase,
   purchasePaymentEvidence,
   vendorAccount,
 } from "~/server/db/schema";
+import { emailLinkDecisionsForPurchasesSql } from "~/server/domains/email/repo/email-decision-sql";
 import { seedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
 import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
@@ -22,6 +25,7 @@ import { startImportRunFixture } from "~/server/domains/purchase-import/service/
 import { readPurchase as readPurchaseByShortcode } from "~/server/domains/purchase/repo/purchase";
 import { purchasePaymentAccountsRelationAdapter } from "~/server/domains/purchase/repo/purchase-payment-accounts";
 import { listPurchaseSettlementCandidates } from "~/server/domains/purchase/repo/purchase-settlement-candidates";
+import { purchaseQualityLinkDecisionsSql } from "~/server/generic/data-quality/repo/checks/purchase-link-decisions";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 
 import { applyFinancialSettlementAllocation } from "./financial-settlement-allocation";
@@ -260,7 +264,7 @@ describe("settlement conflicts", () => {
         orderId: "SYN-1002",
         sourceKey: `synthetic-settle-event-${index}`,
       });
-      await seedEmailLinkDecision(ctx.db, {
+      return seedEmailLinkDecision(ctx.db, {
         eventId: event.id,
         purchaseId: purchase.id,
         decision: "linked",
@@ -269,7 +273,43 @@ describe("settlement conflicts", () => {
         proposedBy: "member",
       });
     };
-    await linkMail(buyer, 0);
+    const predecessor = await accountless({});
+    const link = await linkMail(buyer, 0, predecessor);
+    const q = getDb(ctx.db);
+    const deletedAt = new Date();
+    await q
+      .update(entityIdentity)
+      .set({ mergedIntoId: mailed.id, deletedAt })
+      .where(eq(entityIdentity.id, predecessor.id));
+    await q
+      .update(purchase)
+      .set({ deletedAt })
+      .where(eq(purchase.id, predecessor.id));
+    const requested = sql`SELECT id FROM unnest(${uuidArrayParam([mailed.id, asserted.id])}) AS requested(id)`;
+    const projection = (
+      links: ReturnType<typeof purchaseQualityLinkDecisionsSql>,
+    ) =>
+      sql`SELECT id, "purchaseId", "eventId", "emailId", decision, active
+          FROM ${links} projected ORDER BY id, "eventId"`;
+    const previous = projection(emailLinkDecisionsForPurchasesSql(requested));
+    const scoped = projection(purchaseQualityLinkDecisionsSql(requested));
+    type LinkFact = {
+      id: string;
+      purchaseId: string;
+      eventId: string | null;
+      emailId: string | null;
+      decision: string | null;
+      active: boolean | null;
+    };
+    const links = (await q.execute<LinkFact>(scoped)).rows;
+    expect(links).toEqual((await q.execute<LinkFact>(previous)).rows);
+    expect(links).toContainEqual(
+      expect.objectContaining({
+        id: link.id,
+        purchaseId: mailed.id,
+        active: true,
+      }),
+    );
     const wrong = await charge(otherCard.id, 13.59);
     await expect(
       allocate(wrong.shortcode, mailed.shortcode, 13.59),

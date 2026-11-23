@@ -84,6 +84,7 @@ export const repositoryOwners = [
   "src/server/domains/transaction-import/repo/source-observation-state.ts",
   "src/server/domains/email/repo/decision-projection.ts",
   "src/server/domains/email/repo/email-decision-sql.ts",
+  "src/server/generic/data-quality/repo/checks/purchase-link-decisions.ts",
   "src/server/domains/purchase-import/repo/accepted-order-read.ts",
   "src/server/domains/financial-transaction/repo/financial-source-evidence.ts",
   "src/server/domains/financial-transaction/repo/transaction-money.ts",
