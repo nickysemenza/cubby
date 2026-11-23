@@ -14,14 +14,17 @@ heading for the surface you are changing.
   `positive`, red to `destructive`, amber to `warning`. Canvas paint,
   `theme-color` and chart-library fallbacks are the usual exceptions; this is a
   review rule, not a lint.
-- The web palette (Warm neutral, light only) overrides the shared colors in
+- The web palette (Cool neutral, light only) overrides the shared colors in
   `:root` of `styles.css`; native keeps `tokens.json`. Colour carries meaning
   only. State tokens: `running` (the info hue), `done` and `failed` (the
   `positive` and `destructive` hues), `stalled`, `stalled-surface`,
   `stalled-mark`, `queued` and `paused`; `needs` and `needs-foreground` for the
   needs-you pill; `progress-done` and `progress-track` for meters; `row-hover`
-  for the hover wash. Every text pair on the surface, sidebar and row hover
-  needs 4.5:1 and every mark 3:1; check a new pair numerically.
+  for the hover wash; `row-selected*` for batch-selected rows. Every text pair
+  on the surface, sidebar and row hover needs 4.5:1 and every mark 3:1; check a
+  new pair numerically. `:root[data-hosted-workspace]` pins every colour that
+  palette sets, so hosted native workspaces keep their shipped look; a palette
+  change edits both blocks.
 - Type has no step under 11px: `text-2xs` and `text-3xs` are both 11px, and
   desktop leading is at least 1.3x.
 - A new semantic color gets its primitive in `brand.css` and a `--color-*`
