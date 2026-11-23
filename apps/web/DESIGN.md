@@ -1,13 +1,13 @@
 ---
 name: Cubby Dense Utility
-description: Dense, flat, light desktop workspaces on a warm neutral surface, one blue for links and primary controls, colour only for meaning, and record context beside every list.
+description: Dense, flat, light desktop workspaces on a white surface with cool grey panels, one blue for links and primary controls, colour only for meaning, and record context beside every list.
 ---
 
 # Design System: Cubby
 
 ## Overview
 
-Cubby is a very dense, light desktop utility, because vertical space is the scarce resource on a desktop record tool and width is not. A flat warm working surface (#FBF9F5), a slightly deeper sidebar (#F3F0E9), 1px dividers, aligned facts and state marks make household records easy to scan and edit. Colour carries meaning only: state, progress, links and the primary action, money direction, and the area marker in the sidebar and breadcrumb. Mobile web remains usable; native Swift apps own fieldwork. Web has no dark mode; `cubby/no-dark-variant` rejects `dark:` utilities in web class strings, including primitives and ReUI.
+Cubby is a very dense, light desktop utility, because vertical space is the scarce resource on a desktop record tool and width is not. A flat white working surface (#FFFFFF), a cool grey sidebar (#F7F8FA), 1px dividers, aligned facts and state marks make household records easy to scan and edit. Colour carries meaning only: state, progress, links and the primary action, money direction, and the area marker in the sidebar and breadcrumb. Mobile web remains usable; native Swift apps own fieldwork. Web has no dark mode; `cubby/no-dark-variant` rejects `dark:` utilities in web class strings, including primitives and ReUI.
 
 **Key Characteristics:**
 
@@ -16,13 +16,13 @@ Cubby is a very dense, light desktop utility, because vertical space is the scar
 - Lists open records in a side inspector; the full record page leads with key numbers, what needs attention, and a merged activity timeline.
 - Restrained color, the system sans with system mono figures, and flat 1px separators instead of floating cards.
 
-The canonical token source, `packages/design-tokens/tokens.json`, owns the palette, spacing, fonts, and separate web geometry. Generation writes `packages/design-tokens/brand.css`; `src/styles.css` binds the web theme and carries the web workspace palette (Warm neutral: #FBF9F5 surface, #F3F0E9 sidebar, #2B2621 ink, #655C52 secondary ink, #E4DED3 hairline, #E9E4DA current row, #2A47C2 link and primary), which overrides the shared light colors on web only. Change those sources rather than generated outputs. Native geometry and appearance remain independent.
+The canonical token source, `packages/design-tokens/tokens.json`, owns the palette, spacing, fonts, and separate web geometry. Generation writes `packages/design-tokens/brand.css`; `src/styles.css` binds the web theme and carries the web workspace palette (Cool neutral: #FFFFFF surface, #F7F8FA sidebar, #F4F5F7 inset, #1F2328 ink, #656D76 secondary ink, #E5E7EB hairline, #EEF0F3 current row, #2563EB link and primary), which overrides the shared light colors on web only. Change those sources rather than generated outputs. Native geometry and appearance remain independent.
 
 ## Colors
 
 ### Primary
 
-One blue (#2A47C2) marks links, focus rings, primary controls and needs-you pills; white ink sits on it (7.6:1). Ink (#2B2621, strong #1A1612) carries text and secondary ink (#655C52) carries labels. Work state has its own meaning-only colours: running #0E6A86, done #2D6A39, failed #A8251C, and stalled #744A08 on its #F7E8C6 tint, each with a quiet `*-surface` tint where it fills a pill. Queued and missing are hollow (#8E8578 outline), paused is #857B6E, and completed progress is #3A342D on a hairline track. Every text pair measures at least 4.5:1 on the surface, sidebar, row hover and its own tint, and every mark or fill at least 3:1 against what it sits on. Web is light only. Identity glyphs and enum choices may use the separate category-blue token; their labels and interaction affordances distinguish them from links. Current domain navigation rows use a quiet domain tint; current utility navigation and the inspected table row use the flat current-row tone (#E9E4DA). Citron remains one cell of the ink shelf-grid logo and a sparse focus mark; it never means success or warning, and needs-you uses the primary blue.
+One blue (#2563EB) marks links, focus rings, primary controls and needs-you pills; white ink sits on it (5.2:1). Ink (#1F2328, strong #111418) carries text and secondary ink (#656D76) carries labels. Work state has its own meaning-only colours: running #0E6A86, done #2D6A39, failed #A8251C, and stalled #744A08 on its #F7E8C6 tint, each with a quiet `*-surface` tint where it fills a pill. Queued and missing are hollow (#848D97 outline), paused is #7D8590, and completed progress is #32383F on a hairline track. Every text pair measures at least 4.5:1 on the surface, sidebar, row hover and its own tint, and every mark or fill at least 3:1 against what it sits on. Web is light only. Identity glyphs and enum choices may use the separate category-blue token; their labels and interaction affordances distinguish them from links. Current domain navigation rows use a quiet domain tint; current utility navigation and the inspected table row use the flat current-row tone (#EEF0F3); a batch-selected row takes a faint blue wash that deepens on hover only as far as text keeps 4.5:1. Citron remains one cell of the ink shelf-grid logo and a sparse focus mark; it never means success or warning, and needs-you uses the primary blue.
 
 ### Secondary
 
@@ -38,7 +38,7 @@ Action color marks the outcome of a pending decision: create is blue, link/attac
 
 ### Neutral
 
-The warm surface (#FBF9F5), #F3F0E9 sidebar, #F6F3ED row hover, #EFEBE3 inset, secondary ink and #E4DED3 hairlines separate regions without decorating every record. Dashed empty slots use #D3CBBE, and unchecked controls #8E8578 (3.5:1).
+The white surface (#FFFFFF), #F7F8FA sidebar, #F6F8FA row hover, #F4F5F7 inset, secondary ink and #E5E7EB hairlines separate regions without decorating every record. Dashed empty slots use #D1D5DB, and unchecked controls #848D97 (3.4:1).
 
 ## Typography
 

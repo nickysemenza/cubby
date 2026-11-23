@@ -1,4 +1,3 @@
-import tokens from "@cubby/design-tokens/tokens.json";
 import { IconContext } from "@phosphor-icons/react/dist/lib/context";
 import type { QueryClient } from "@tanstack/react-query";
 import {
@@ -156,9 +155,9 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
           "A private household workspace for inventory, purchases, projects, recipes, and meal planning.",
       },
       {
-        // Browser chrome shares the generated canvas role.
+        // Browser chrome matches the web canvas (`--brand-canvas` in styles.css).
         name: "theme-color",
-        content: tokens.colors.canvas.light.toLowerCase(),
+        content: "#ffffff",
       },
     ],
     links: [

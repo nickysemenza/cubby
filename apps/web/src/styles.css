@@ -171,45 +171,45 @@
   Cubby Theme - Field Guide
 */
 :root {
-  /* Web workspace palette: Warm neutral. The native app keeps tokens.json
-     colors. The web runs flat and light only: a warm working surface, a
-     slightly deeper sidebar, 1px dividers, one blue for links and primary
-     controls, and colour only where it means something (running, done,
-     failed, stalled). Every text pair clears 4.5:1 on the surface, sidebar,
-     row hover and its own tint; marks and fills clear 3:1. */
-  --brand-foreground: #2b2621;
-  --brand-graphite-secondary: #655c52;
-  --brand-canvas: #fbf9f5;
-  --brand-surface: #fbf9f5;
-  --brand-inset: #efebe3;
-  --brand-hairline: #e4ded3;
-  --brand-interaction: #2a47c2;
-  --brand-interaction-hover: #2139a3;
-  --brand-slate: #655c52;
-  --brand-neutral-status: #655c52;
+  /* Web workspace palette: Cool neutral. The native app keeps tokens.json
+     colors. The web runs flat and light only: a white working surface, a
+     cool grey sidebar and insets, 1px dividers, one blue for links and
+     primary controls, and colour only where it means something (running,
+     done, failed, stalled). Every text pair clears 4.5:1 on the surface,
+     sidebar, row hover and its own tint; marks and fills clear 3:1. */
+  --brand-foreground: #1f2328;
+  --brand-graphite-secondary: #656d76;
+  --brand-canvas: #ffffff;
+  --brand-surface: #ffffff;
+  --brand-inset: #f4f5f7;
+  --brand-hairline: #e5e7eb;
+  --brand-interaction: #2563eb;
+  --brand-interaction-hover: #1d4ed8;
+  --brand-slate: #656d76;
+  --brand-neutral-status: #656d76;
   --brand-positive: #2d6a39;
-  --brand-positive-surface: #e2eddb;
+  --brand-positive-surface: #e4f1e7;
   --brand-warning: #744a08;
   --brand-warning-ink: #744a08;
   --brand-warning-surface: #f7e8c6;
   /* Warning callouts are a quieter wash than warning chips. */
-  --brand-warning-panel: #f6efdc;
+  --brand-warning-panel: #fdf5e1;
   --brand-destructive: #a8251c;
-  --brand-destructive-surface: #f8e0da;
+  --brand-destructive-surface: #fbe6e3;
   --brand-info: #0e6a86;
-  --brand-info-surface: #dcedf1;
-  --brand-action-create: #2a47c2;
-  --brand-action-create-surface: #e1e6f7;
+  --brand-info-surface: #e1eff4;
+  --brand-action-create: #2563eb;
+  --brand-action-create-surface: #edf3ff;
   --brand-elevation-popover:
     0 12px 32px -8px rgb(0 0 0 / 0.18), 0 2px 6px rgb(0 0 0 / 0.06);
   --brand-focus-ring: 0 0 0 2px var(--brand-surface), 0 0 0 4px var(--link);
-  --foreground-strong: #1a1612;
-  --link: #2a47c2;
-  --hairline-soft: #eee9e0;
+  --foreground-strong: #111418;
+  --link: #2563eb;
+  --hairline-soft: #eef0f3;
   /* Dashed empty-state slots: one step stronger than a hairline. */
-  --hairline-strong: #d3cbbe;
-  --row-current: #e9e4da;
-  --row-hover: #f6f3ed;
+  --hairline-strong: #d1d5db;
+  --row-current: #eef0f3;
+  --row-hover: #f6f8fa;
 
   /* Work state. Running is the info hue and done and failed are the positive
      and destructive hues; the rest are named here. Needs-you is the primary
@@ -218,9 +218,9 @@
   --needs-foreground: #ffffff;
   --stalled-surface: var(--brand-warning-surface);
   --stalled-mark: #a86c12;
-  --queued: #8e8578;
-  --paused: #857b6e;
-  --progress-done: #3a342d;
+  --queued: #848d97;
+  --paused: #7d8590;
+  --progress-done: #32383f;
   --progress-track: var(--brand-hairline);
 
   /* Geometry for phones, coarse pointers and hosted native workspaces. */
@@ -271,7 +271,7 @@
   --border-spine: 1px;
   --border-spine-card: 1px;
 
-  /* Core colors: warm canvas, clear working surfaces, quiet insets. */
+  /* Core colors: white canvas and working surfaces, quiet cool insets. */
   --background: var(--brand-paper);
   --foreground: var(--brand-foreground);
   --card: var(--brand-cream);
@@ -303,11 +303,20 @@
   --input: var(--brand-hairline);
   /* Checkbox border - a visible ink-leaning hairline so unchecked boxes read as
      empty controls against the paper surfaces */
-  --checkbox-border: #8e8578;
+  --checkbox-border: #848d97;
   --ring: var(--link);
 
-  /* A batch-selected row carries a faint link wash; the inspected row is grey. */
+  /* A batch-selected row carries a faint link wash; the inspected row is grey.
+     Hover and inspected selected rows deepen the wash only as far as muted
+     text and links keep 4.5:1. */
   --row-selected: color-mix(in oklab, var(--link) 7%, var(--brand-surface));
+  --row-selected-hover: color-mix(in srgb, var(--link) 9%, var(--card));
+  --row-current-selected: var(--row-selected-hover);
+  --row-current-selected-hover: color-mix(
+    in srgb,
+    var(--link) 9.5%,
+    var(--card)
+  );
 
   /* Extended palette */
   --highlight: var(--brand-ultramarine);
@@ -366,7 +375,7 @@
   --radius: var(--brand-web-radius-panel);
 
   /* Sidebar */
-  --sidebar: #f3f0e9;
+  --sidebar: #f7f8fa;
   --sidebar-foreground: var(--brand-foreground);
   --sidebar-primary: var(--brand-ultramarine);
   --sidebar-primary-foreground: var(--brand-on-accent);
@@ -582,21 +591,13 @@
     background: var(--table-row-surface);
   }
   .table-record-row[data-state="selected"]:hover {
-    --table-row-surface: color-mix(in srgb, var(--link) 12%, var(--card));
+    --table-row-surface: var(--row-selected-hover);
   }
   .table-record-row[data-current="true"][data-state="selected"] {
-    --table-row-surface: color-mix(
-      in srgb,
-      var(--link) 10%,
-      var(--row-current)
-    );
+    --table-row-surface: var(--row-current-selected);
   }
   .table-record-row[data-current="true"][data-state="selected"]:hover {
-    --table-row-surface: color-mix(
-      in srgb,
-      var(--link) 14%,
-      var(--row-current)
-    );
+    --table-row-surface: var(--row-current-selected-hover);
   }
   .table-record-row .table-pinned-cell {
     background: var(--table-row-surface);
@@ -744,13 +745,47 @@
   }
 }
 
-/* Hosted native workspaces keep the look the Apple apps shipped with. */
+/* Hosted native workspaces keep the look the Apple apps shipped with: every
+   colour the web palette above sets is pinned here. */
 :root[data-hosted-workspace] {
   --brand-foreground: #333333;
+  --brand-graphite-secondary: #655c52;
+  --brand-canvas: #fbf9f5;
+  --brand-surface: #fbf9f5;
+  --brand-inset: #efebe3;
   --brand-hairline: #ebebeb;
   --brand-interaction: #202020;
   --brand-interaction-hover: #3a3a3a;
+  --brand-slate: #655c52;
+  --brand-neutral-status: #655c52;
+  --brand-positive-surface: #e2eddb;
+  --brand-warning-panel: #f6efdc;
+  --brand-destructive-surface: #f8e0da;
+  --brand-info-surface: #dcedf1;
+  --brand-action-create: #2a47c2;
+  --brand-action-create-surface: #e1e6f7;
   --foreground-strong: #202020;
+  --link: #2a47c2;
+  --hairline-soft: #eee9e0;
+  --hairline-strong: #d3cbbe;
+  --row-current: #e9e4da;
+  --row-hover: #f6f3ed;
+  --row-selected-hover: color-mix(in srgb, var(--link) 12%, var(--card));
+  --row-current-selected: color-mix(
+    in srgb,
+    var(--link) 10%,
+    var(--row-current)
+  );
+  --row-current-selected-hover: color-mix(
+    in srgb,
+    var(--link) 14%,
+    var(--row-current)
+  );
+  --queued: #8e8578;
+  --paused: #857b6e;
+  --progress-done: #3a342d;
+  --checkbox-border: #8e8578;
+  --sidebar: #f3f0e9;
   --brand-web-radius-control: 8px;
   --brand-web-radius-panel: 12px;
   --brand-web-radius-chip: 6px;
