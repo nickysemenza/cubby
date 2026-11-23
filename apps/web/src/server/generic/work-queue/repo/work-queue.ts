@@ -511,7 +511,7 @@ async function queryWorkQueue(
         input.pageSize === 0
           ? sql`jsonb_build_object(
         'cells', coalesce((SELECT jsonb_agg(to_jsonb(cells) ORDER BY reason, entity) FROM (
-          SELECT reasons.reason, entity, count(DISTINCT key)::int AS count
+          SELECT reasons.reason, entity, count(DISTINCT key)::int AS count, min(date) AS oldest
           FROM eligible CROSS JOIN LATERAL unnest(reason_keys) AS reasons(reason)
           ${
             scope.reasons?.length

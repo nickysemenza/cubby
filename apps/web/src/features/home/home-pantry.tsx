@@ -9,7 +9,7 @@ import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Section } from "~/ui/layout";
 import { CurrencyValue } from "~/ui/values/currency-value";
 
-import { HomeList, HomeRow, HomeRowsLoading } from "./home-list";
+import { HomeLedgerLine, HomeList, HomeRowsLoading } from "./home-list";
 
 /**
  * Where pantry value is stored: the top locations by persisted direct
@@ -49,18 +49,23 @@ export function HomePantry() {
       ) : (
         <HomeList label="Pantry value by location">
           {locations.map((item) => (
-            <HomeRow
+            <HomeLedgerLine
               key={item.id}
-              trailing={
+              name={
+                <EntityRefLink
+                  entity="location"
+                  id={item.id}
+                  name={item.name}
+                />
+              }
+              figure={
                 <CurrencyValue
                   value={item.value}
                   tone={false}
                   className="font-mono text-foreground"
                 />
               }
-            >
-              <EntityRefLink entity="location" id={item.id} name={item.name} />
-            </HomeRow>
+            />
           ))}
         </HomeList>
       )}

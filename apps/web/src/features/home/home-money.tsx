@@ -14,7 +14,7 @@ import { Section } from "~/ui/layout";
 import { CurrencyValue } from "~/ui/values/currency-value";
 
 import { getHomeAsOfWindow, type HomeAsOfWindow } from "./home-as-of-window";
-import { HomeList, HomeRow, HomeRowsLoading } from "./home-list";
+import { HomeLedgerLine, HomeList, HomeRowsLoading } from "./home-list";
 
 export function fillRecordedSpendMonths(
   monthly: ExpenseMonthlyAggregate[],
@@ -108,10 +108,17 @@ export function HomeMoney({ asOf }: { asOf: HomeAsOfWindow }) {
             {[...monthly].reverse().map((row) => {
               const isCurrent = row.month === current?.month;
               return (
-                <HomeRow
+                <HomeLedgerLine
                   key={row.month}
-                  leading={formatCalendarDay(`${row.month}-01`, "monthShort")}
-                  trailing={
+                  name={formatCalendarDay(`${row.month}-01`, "monthShort")}
+                  digest={
+                    isCurrent
+                      ? "This month"
+                      : row.count > 0
+                        ? `${formatCount(row.count)} expenses`
+                        : ""
+                  }
+                  figure={
                     <CurrencyValue
                       value={row.net}
                       // A credit month keeps its sign tone.
@@ -121,15 +128,7 @@ export function HomeMoney({ asOf }: { asOf: HomeAsOfWindow }) {
                       )}
                     />
                   }
-                >
-                  <span className="truncate text-xs text-muted-foreground">
-                    {isCurrent
-                      ? "This month"
-                      : row.count > 0
-                        ? `${formatCount(row.count)} expenses`
-                        : null}
-                  </span>
-                </HomeRow>
+                />
               );
             })}
           </HomeList>

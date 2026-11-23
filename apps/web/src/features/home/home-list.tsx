@@ -3,6 +3,19 @@ import type { ReactNode } from "react";
 
 import { Skeleton } from "~/ui/primitives/skeleton";
 
+import "~/ui/data-table/record-workspace.css";
+
+/** One Today card on the page canvas: a section with its heading and link. */
+export function HomeCard({
+  className,
+  children,
+}: {
+  className?: string;
+  children: ReactNode;
+}) {
+  return <div className={cn("record-card", className)}>{children}</div>;
+}
+
 /** Home's ruled rows: one 32px line each, a hairline under every row. */
 export function HomeList({
   label,
@@ -48,6 +61,37 @@ export function HomeRow({
           {trailing}
         </span>
       )}
+    </li>
+  );
+}
+
+/**
+ * One ledger line with nothing to open: a name, its one-line digest and the
+ * figure on the right. Without a digest the name takes its place.
+ */
+export function HomeLedgerLine({
+  name,
+  digest,
+  figure,
+}: {
+  name: ReactNode;
+  digest?: ReactNode;
+  figure?: ReactNode;
+}) {
+  return (
+    <li className="record-ledger-line">
+      <span
+        className={cn(
+          "record-ledger-name flex items-center gap-1.5",
+          digest == null && "col-span-2",
+        )}
+      >
+        {name}
+      </span>
+      {digest != null && <span className="record-ledger-digest">{digest}</span>}
+      <span className="record-ledger-figure col-start-3 text-right">
+        {figure}
+      </span>
     </li>
   );
 }

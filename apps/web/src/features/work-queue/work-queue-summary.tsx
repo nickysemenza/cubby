@@ -4,22 +4,36 @@ import {
   workRecordTypeOptions,
   type WorkQueueOut,
 } from "@cubby/schemas/work-queue";
-import { cn } from "cn";
-import { useMemo, useState } from "react";
+import { TrayIcon } from "@phosphor-icons/react/dist/csr/Tray";
+import { type ReactNode, useMemo, useState } from "react";
 
 import type { GroupSummaryModel } from "~/entity/entity-list/group-drill-down";
 import { EntityPivot } from "~/entity/entity-list/pivot/entity-pivot";
 import type { PivotShare } from "~/entity/entity-list/pivot/pivot-model";
+import { formatCalendarDay } from "~/lib/date-format";
 import { formatCount, formatPercent } from "~/lib/number-format";
-import { CrossTabTable } from "~/ui/matrix/cross-tab-table";
-import { heatBucket, HEAT_CLASSES } from "~/ui/matrix/heat-scale";
-import { cellMono } from "~/ui/matrix/matrix-chrome";
+import {
+  type IndexedSection,
+  LedgerCard,
+  RecordSectionControlsContext,
+  useSectionOpenState,
+} from "~/ui/data-table/indexed-sections";
+import { Button } from "~/ui/primitives/button";
 import {
   Visualization,
   visualizationState,
 } from "~/ui/visualizations/visualization";
 
-/** Queue counts adapt to the same full-population model as entity-list pivots. */
+const NO_FOLDED: IndexedSection[] = [];
+const closedByDefault = () => false;
+const ignoreUnfold = () => undefined;
+
+/**
+ * Queue counts adapt to the same full-population model as entity-list pivots.
+ * Summary is one card of ledger rows, one per reason: its share and oldest
+ * record day as the digest, its count as the figure, and its records in place
+ * once opened.
+ */
 export function WorkQueueSummary({
   meta,
   pivot,
@@ -28,6 +42,7 @@ export function WorkQueueSummary({
   error,
   onRetry,
   onDrill,
+  renderRecords,
 }: {
   meta:
     | Pick<WorkQueueOut["meta"], "totalCount" | "summary" | "reasons">
@@ -38,8 +53,12 @@ export function WorkQueueSummary({
   error: unknown;
   onRetry: () => void;
   onDrill: (path: readonly string[]) => void;
+  /** One reason's records, mounted only while its row is open. */
+  renderRecords: (reason: string) => ReactNode;
 }) {
   const [share, setShare] = useState<PivotShare>("count");
+  // Rows mount their records only once opened, and unmount when closed.
+  const { controls } = useSectionOpenState(null, closedByDefault, false);
   const current = isTransitioning ? undefined : meta;
   const model = useMemo<GroupSummaryModel | undefined>(() => {
     if (!current?.summary) return undefined;
@@ -97,28 +116,63 @@ export function WorkQueueSummary({
       drill: onDrill,
     };
   }, [current, onDrill]);
+  const oldest = useMemo(() => {
+    const byReason = new Map<string, string>();
+    for (const cell of current?.summary?.cells ?? []) {
+      const prior = byReason.get(cell.reason);
+      if (cell.oldest && (!prior || cell.oldest < prior))
+        byReason.set(cell.reason, cell.oldest);
+    }
+    return byReason;
+  }, [current]);
   if (pivot)
     return (
-      <EntityPivot
-        labels={["Reason", "Type"]}
-        recordLabel={{ one: "work item", other: "work items" }}
-        summary={model}
-        isLoading={isLoading}
-        isTransitioning={isTransitioning}
-        error={error}
-        onRetry={onRetry}
-        share={share}
-        onShareChange={setShare}
-        onDrill={onDrill}
-      />
+      <div className="p-3.5 md:p-4">
+        <div className="record-card overflow-hidden p-0!">
+          <EntityPivot
+            labels={["Reason", "Type"]}
+            recordLabel={{ one: "work item", other: "work items" }}
+            summary={model}
+            isLoading={isLoading}
+            isTransitioning={isTransitioning}
+            error={error}
+            onRetry={onRetry}
+            share={share}
+            onShareChange={setShare}
+            onDrill={onDrill}
+          />
+        </div>
+      </div>
     );
 
   const rows = (
     model?.groups.filter((group) => group.path.length === 1) ?? []
   ).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-  const max = Math.max(0, ...rows.map((row) => row.count));
+  const total = current?.totalCount ?? 0;
+  const sections = rows.map((row): IndexedSection => {
+    const reason = row.path[0] ?? "";
+    const since = oldest.get(reason);
+    return {
+      id: `work-reason-${reason.replaceAll(/[^\w-]/gu, "-")}`,
+      title: row.label,
+      icon: TrayIcon,
+      count: row.count,
+      digest: [
+        `${formatPercent(row.count / (total || 1))} of work`,
+        since ? `oldest from ${formatCalendarDay(since, "dateShort")}` : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      headerAction: (
+        <Button variant="ghost" size="xs" onClick={() => onDrill(row.path)}>
+          Open in Records
+        </Button>
+      ),
+      content: renderRecords(reason),
+    };
+  });
   return (
-    <div className="min-w-0 p-2 md:p-4">
+    <div className="record-cards @container/record p-3.5 md:p-4">
       <Visualization
         state={visualizationState({
           data: model,
@@ -129,59 +183,28 @@ export function WorkQueueSummary({
         })}
         message="No known work matches these filters."
       >
-        <CrossTabTable
-          caption="Work items by reason"
-          surface="background"
-          rowHover
-          bareCells
-          cornerLabel="Reason"
-          columns={[
-            { key: "count", data: "count" },
-            { key: "share", data: "share" },
-          ]}
-          rows={rows.map((row) => ({ key: row.key, data: row }))}
-          renderColumnHeader={(column) =>
-            column.key === "count" ? "Work items" : "Share of total"
-          }
-          renderRowHeader={({ data }) => (
-            <span className="block max-w-prose text-wrap">{data.label}</span>
-          )}
-          renderCell={({ data }, column) => (
-            <button
-              type="button"
-              className={cn(
-                cellMono,
-                "block w-full hover:underline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
-                column.key === "count" &&
-                  HEAT_CLASSES[heatBucket(data.count, max)],
-              )}
-              aria-label={`${data.label}: ${formatCount(data.count)} work items. Open in table`}
-              onClick={() => onDrill(data.path)}
-            >
-              {column.key === "count"
-                ? formatCount(data.count)
-                : formatPercent(data.count / (current?.totalCount || 1))}
-            </button>
-          )}
-          footer={[
-            {
-              key: "total",
-              label: "Total work items",
-              cell: (key) =>
-                key === "count"
-                  ? formatCount(current?.totalCount ?? 0)
-                  : "100%",
-            },
-          ]}
-        />
+        <RecordSectionControlsContext.Provider value={controls}>
+          <LedgerCard
+            title="Work by reason"
+            caption={
+              <>
+                <span className="font-mono font-semibold text-foreground-strong tabular-nums">
+                  {formatCount(total)}
+                </span>{" "}
+                work {total === 1 ? "item" : "items"}. One record may have
+                several.{" "}
+                {model?.groups.some((group) => group.overlapping) &&
+                  "An item can appear under several reasons; the total counts it once."}{" "}
+                Open a reason to see its records.
+              </>
+            }
+            sections={sections}
+            folded={NO_FOLDED}
+            pending={0}
+            onUnfold={ignoreUnfold}
+          />
+        </RecordSectionControlsContext.Provider>
       </Visualization>
-      <p className="mt-2 text-xs text-muted-foreground">
-        Counts cover all matching work items. One record may have several work
-        items.{" "}
-        {model?.groups.some((group) => group.overlapping) &&
-          "An item can appear under several reasons; the total counts it once."}{" "}
-        Select a count to open its records.
-      </p>
     </div>
   );
 }

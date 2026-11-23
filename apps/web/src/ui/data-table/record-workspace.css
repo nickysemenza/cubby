@@ -122,9 +122,11 @@
   align-items: center;
   gap: 0.5rem;
 }
-.record-ledger-trigger {
+.record-ledger-trigger,
+.record-ledger-line {
   display: grid;
   width: 100%;
+  min-width: 0;
   min-height: 2.75rem;
   grid-template-columns: 0.75rem minmax(6rem, 11rem) minmax(0, 1fr) auto;
   padding-block: 0.25rem;
@@ -136,6 +138,17 @@
   font-size: var(--text-base);
   line-height: var(--text-base--line-height);
   outline: none;
+}
+/* A ledger line with nothing to open (Today's months, locations and views):
+   the same name, digest and figure, with no chevron. Its tracks share the
+   card's width, so a narrow card keeps the digest readable. */
+.record-ledger-line {
+  grid-template-columns: minmax(3rem, 2fr) minmax(0, 3fr) auto;
+  border-top: 1px solid var(--hairline-soft);
+  border-radius: 0;
+}
+.record-ledger-line:first-child {
+  border-top: 0;
 }
 .record-ledger-trigger:hover {
   background: var(--row-hover);
@@ -312,7 +325,8 @@
     .record-workspace[data-record-workspace="page"] {
     padding: 1.25rem 1.5rem 0;
   }
-  :root:not([data-hosted-workspace]) .record-ledger-trigger {
+  :root:not([data-hosted-workspace])
+    :is(.record-ledger-trigger, .record-ledger-line) {
     min-height: 2.25rem;
   }
   :root:not([data-hosted-workspace]) .record-hints {

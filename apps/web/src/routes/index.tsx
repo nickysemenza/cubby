@@ -1,21 +1,7 @@
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
-import { lazy, Suspense } from "react";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-import { createActionFor } from "~/entity/actions/action-items";
-import { CreateDialogAction } from "~/entity/editing/create-dialog-action";
-import { captureRequest } from "~/entity/editing/editor-requests";
-import { Page } from "~/entity/page/page";
 import { getHomeAsOfWindow } from "~/features/home/home-as-of-window";
-import { HomeKeyNumbers } from "~/features/home/home-key-numbers";
-import { HomeRowsLoading } from "~/features/home/home-list";
-import { HomeMoney } from "~/features/home/home-money";
-import { HomePantry } from "~/features/home/home-pantry";
-import { TodayAttention } from "~/features/home/house-card";
-import { TodayMeals } from "~/features/home/meals-card";
-import { NeedsYou } from "~/features/home/needs-you";
-import { PinnedViews } from "~/features/home/pinned-views";
-import { RecentActivityFeed } from "~/features/home/recent-activity-feed";
-import { TodayNutrition } from "~/features/meal/daily-nutrition";
+import { TodayPage } from "~/features/home/today-page";
 import { installFeatures } from "~/features/registry";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { auditLog } from "~/integrations/tanstack-query/generated/domains/auditLog.gen";
@@ -24,22 +10,6 @@ import { expense } from "~/integrations/tanstack-query/generated/domains/expense
 import { location } from "~/integrations/tanstack-query/generated/domains/location.gen";
 import { machinery } from "~/integrations/tanstack-query/generated/domains/machinery.gen";
 import { meal } from "~/integrations/tanstack-query/generated/domains/meal.gen";
-import { formatCalendarDay } from "~/lib/date-format";
-import { QuerySection } from "~/ui/feedback/query-section";
-import { VisibleContent } from "~/ui/hooks/visible-content";
-import { Section } from "~/ui/layout";
-import { PageHeader } from "~/ui/layout/page-header";
-import { Button } from "~/ui/primitives/button";
-
-const HomeInsights = lazy(async () => {
-  const module = await import("~/features/home/home-insights");
-  return { default: module.HomeInsights };
-});
-
-const EntityCount = lazy(() => import("~/features/home/entitycount"));
-
-const LOG_MEAL = createActionFor("meal");
-const NEW_TASK = createActionFor("task");
 
 export const Route = createFileRoute("/")({
   // The home dashboard is authenticated-only (the counts/feeds are all
@@ -87,103 +57,5 @@ function Home() {
   // registry its pickers read; idempotent.
   installFeatures();
   const { asOf } = Route.useLoaderData();
-  // The loader's household-local day, so SSR and hydration print one title.
-  const today = asOf.meals.from;
-
-  return (
-    <Page variant="bare" layout="contained">
-      <PageHeader
-        layout="stacked"
-        title={formatCalendarDay(today, "weekdayLongMonthDay")}
-        actions={
-          <>
-            {LOG_MEAL && (
-              <Button
-                variant="outline"
-                nativeButton={false}
-                render={<Link to={LOG_MEAL.to} search={LOG_MEAL.search} />}
-              >
-                Log meal
-              </Button>
-            )}
-            {NEW_TASK && (
-              <CreateDialogAction request={captureRequest("task")}>
-                New task
-              </CreateDialogAction>
-            )}
-          </>
-        }
-      />
-
-      {/* Current work leads; the rail holds household context and, below
-          the wide breakpoint, follows the main column. */}
-      <div className="mt-3 grid grid-cols-1 gap-x-5 gap-y-4 pb-8 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <div className="flex min-w-0 flex-col gap-4">
-          <QuerySection
-            title="household key numbers"
-            fallback={
-              <HomeRowsLoading label="Loading household key numbers" rows={1} />
-            }
-          >
-            <HomeKeyNumbers asOf={asOf} />
-          </QuerySection>
-          <div className="grid grid-cols-1 items-start gap-x-5 gap-y-4 md:grid-cols-2">
-            <TodayAttention />
-            <NeedsYou />
-          </div>
-          <RecentActivityFeed limit={6} />
-          <Section
-            headingAs="h2"
-            title="Browse records"
-            caption="Everything the household has on record"
-            disclosure={{}}
-          >
-            <Suspense
-              fallback={
-                <output className="block min-h-24 text-sm text-muted-foreground">
-                  Loading record counts…
-                </output>
-              }
-            >
-              <EntityCount />
-            </Suspense>
-          </Section>
-          {/* Insights — exploration, not operation: the heaviest reads on the
-              most-visited route and the least likely to change what anyone
-              does next, so the region is collapsed by default. Section mounts
-              its body only while open, so a closed region runs no queries. */}
-          <Section
-            headingAs="h2"
-            title="Insights"
-            caption="Four exploratory views"
-            disclosure={{}}
-          >
-            <Suspense
-              fallback={
-                <output className="block min-h-24 text-sm text-muted-foreground">
-                  Loading insights…
-                </output>
-              }
-            >
-              <HomeInsights />
-            </Suspense>
-          </Section>
-        </div>
-        <aside
-          aria-label="Household context"
-          className="flex min-w-0 flex-col gap-4"
-        >
-          <TodayMeals asOf={asOf} />
-          <HomeMoney asOf={asOf} />
-          <VisibleContent
-            fallback={<HomeRowsLoading label="Loading nutrition" rows={2} />}
-          >
-            <TodayNutrition initialDate={asOf.meals.from} />
-          </VisibleContent>
-          <HomePantry />
-          <PinnedViews />
-        </aside>
-      </div>
-    </Page>
-  );
+  return <TodayPage asOf={asOf} />;
 }

@@ -232,8 +232,8 @@ describe("composed Work queue engine", () => {
       totalCount: 2,
       summary: {
         cells: [
-          { reason: "a", entity: null, count: 1 },
-          { reason: "b", entity: null, count: 2 },
+          { reason: "a", entity: null, count: 1, oldest: null },
+          { reason: "b", entity: null, count: 2, oldest: null },
         ],
         types: [{ entity: null, count: 2 }],
       },
@@ -268,7 +268,7 @@ describe("composed Work queue engine", () => {
           deferrals,
         )
       ).meta.summary?.cells,
-    ).toEqual([{ reason: "b", entity: null, count: 1 }]);
+    ).toEqual([{ reason: "b", entity: null, count: 1, oldest: null }]);
     const view = await read([source], { view: "agent" }, deferrals);
     expect(view.items.map((row) => row.key)).toEqual(["Alpha"]);
     expect(
@@ -276,9 +276,9 @@ describe("composed Work queue engine", () => {
         .summary,
     ).toEqual({
       cells: [
-        { reason: "a", entity: null, count: 1 },
-        { reason: "b", entity: null, count: 1 },
-        { reason: "c", entity: null, count: 1 },
+        { reason: "a", entity: null, count: 1, oldest: null },
+        { reason: "b", entity: null, count: 1, oldest: null },
+        { reason: "c", entity: null, count: 1, oldest: null },
       ],
       types: [{ entity: null, count: 1 }],
     });
@@ -397,7 +397,7 @@ describe("composed Work queue engine", () => {
     expect(ownSummary.meta).toMatchObject({
       totalCount: 3,
       summary: {
-        cells: [{ reason: "a", entity: null, count: 3 }],
+        cells: [{ reason: "a", entity: null, count: 3, oldest: null }],
         types: [{ entity: null, count: 3 }],
       },
       incompleteSources: own.meta.incompleteSources,
@@ -447,7 +447,7 @@ describe("composed Work queue engine", () => {
     expect(fencedSummary.meta).toMatchObject({
       totalCount: 2,
       summary: {
-        cells: [{ reason: "a", entity: null, count: 2 }],
+        cells: [{ reason: "a", entity: null, count: 2, oldest: null }],
         types: [{ entity: null, count: 2 }],
       },
       incompleteSources: fenced.meta.incompleteSources,
