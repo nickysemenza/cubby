@@ -611,7 +611,7 @@ const referenceMediaEntity = (entity: string): BrowserRoutedEntity | null =>
     : null;
 
 /** The display-image refs a reference field names on one record. */
-export function referenceMediaRefs<TRecord extends object>(
+function referenceMediaRefs<TRecord extends object>(
   record: TRecord,
   field: DisplayField,
 ): EntityRef[] {

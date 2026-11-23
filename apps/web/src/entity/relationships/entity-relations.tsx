@@ -28,7 +28,10 @@ import { entityGraph } from "~/integrations/tanstack-query/generated/domains/ent
 import { formatCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
+import {
+  useSectionDigest,
+  useSectionEmpty,
+} from "~/ui/data-table/detail-section-state";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
@@ -249,6 +252,11 @@ function useEntityRelationsModel({
   );
   useSectionEmpty(
     initial.isSuccess && !initial.isError && data.edges.length === 0,
+  );
+  useSectionDigest(
+    data.edges.length
+      ? `${data.nodes.length - 1} linked ${data.nodes.length === 2 ? "record" : "records"} · ${data.edges.length} ${data.edges.length === 1 ? "link" : "links"}`
+      : undefined,
   );
   const selected =
     data.nodes.find((node) => graphRefKey(node) === selectedKey) ??

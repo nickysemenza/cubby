@@ -1,4 +1,3 @@
-import { classificationFieldDisplayRefusal } from "@cubby/schemas/classification-field-policy";
 import { entitySchema, type EntityRef } from "@cubby/schemas/entity";
 import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
 import {
@@ -8,21 +7,11 @@ import {
 import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
 import type { ReportSlot, ReportBlock } from "@cubby/schemas/entity-report";
 import { summaryReportProjection } from "@cubby/schemas/entity-summary-report";
-import {
-  useQueries,
-  useSuspenseQuery,
-  useQueryClient,
-  type QueryClient,
-} from "@tanstack/react-query";
+import { useSuspenseQuery, type QueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { cn } from "cn";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import {
-  renderDetailFieldValue,
-  referenceMediaRefs,
-} from "~/entity/display/entity-display";
 import {
   entities,
   entityDetailParams,
@@ -44,7 +33,6 @@ import { DateDisplay } from "~/ui/values/date-display";
 import { readPathValue } from "../read-path";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { detailSlotsFor } from "./detail-slots";
-import { fieldRecorded, useDetailFieldOverrides } from "./entity-record-fields";
 import { recordStateOf } from "./record-header";
 import { ReportRowText, ReportTimeDisplay } from "./records-ledger";
 import {
@@ -56,29 +44,8 @@ import { MonthlySpendChart } from "./spend-chart";
 
 type Field = EntityFieldModel["fields"][number];
 
-/**
- * The fields of a summary cell worth a glance. An absent value is not: the row
- * is omitted so the field stays in the record's field sections, where the
- * member can still fill it in, and the glance never contradicts a populated
- * cell beside it with "Not recorded". A cell with no shown fields disappears.
- */
-function summaryFieldsShown<E extends GenericDetailEntity>(
-  queryClient: QueryClient,
-  entity: E,
-  record: DetailRecordOf<E>,
-  slot: DetailSummarySlot,
-): readonly string[] {
-  if (slot.kind !== "fields") return [];
-  const fields: readonly Field[] = entityMetadata(queryClient, entity).fields
-    .fields;
-  return slot.fields.filter((key) => {
-    const field = fields.find((candidate) => candidate.key === key);
-    return field !== undefined && fieldRecorded(entity, record, field);
-  });
-}
-
-/** Every field the declared `fields` summary cells name, in order. */
-function summarySlotFields(
+/** Every field the declared `fields` summary cells name, in order: the facts card leads with them. */
+export function summaryFieldKeys(
   queryClient: QueryClient,
   entity: GenericDetailEntity,
 ): string[] {
@@ -154,38 +121,26 @@ function repeatsHeaderState<E extends GenericDetailEntity>(
 }
 
 /**
- * The section fields a record surface still shows: a field a summary cell shows
- * is not repeated, and a Name row only repeats the title above it (the header's
- * Edit keeps it editable). On the full page (`placed`) the rail owns the
- * declared lines, the summary's fields and the identity's fields outright,
- * recorded or not, and an option field that reads the same as the state leaves
- * too, so no fact appears twice.
+ * The fields a relation section's context still shows: the facts card owns
+ * the declared lines, the summary's fields and the identity's fields outright,
+ * recorded or not, a Name row only repeats the title above it (the header's
+ * Edit keeps it editable), and an option field that reads the same as the
+ * state leaves too, so no fact appears twice.
  */
 export function detailSectionFields<E extends GenericDetailEntity>(
   queryClient: QueryClient,
   entity: E,
   record: DetailRecordOf<E>,
   keys: readonly string[],
-  options: { omitTitle: boolean; placed?: boolean },
+  options: { omitTitle: boolean },
 ) {
   const { detail, titleField } = entityMetadata(queryClient, entity).summary;
-  const declared: readonly DetailSummarySlot[] = detail.summary;
-  const summarized = new Set(
-    options.placed
-      ? [
-          ...summarySlotFields(queryClient, entity),
-          ...detail.lines.map((line) => line.field),
-          ...identityPlacedFields(queryClient, entity),
-        ]
-      : declared.flatMap((slot) =>
-          onDetailSurface(slot, "web")
-            ? summaryFieldsShown(queryClient, entity, record, slot)
-            : [],
-        ),
-  );
-  const repeatsState = options.placed
-    ? repeatsHeaderState(queryClient, entity, record)
-    : () => false;
+  const summarized = new Set([
+    ...summaryFieldKeys(queryClient, entity),
+    ...detail.lines.map((line) => line.field),
+    ...identityPlacedFields(queryClient, entity),
+  ]);
+  const repeatsState = repeatsHeaderState(queryClient, entity, record);
   const titled =
     options.omitTitle &&
     typeof readPathValue(record, titleField) === "string" &&
@@ -199,7 +154,7 @@ export function detailSectionFields<E extends GenericDetailEntity>(
 }
 
 /**
- * Every singular fact the full page's rail lists, in reading order: the
+ * Every singular fact the facts card lists, in reading order: the
  * declared lines, the summary's field cells, then each field section's fields.
  * The title, and what the identity already states, are left out.
  */
@@ -219,7 +174,7 @@ export function railFieldKeys<E extends GenericDetailEntity>(
   return [
     ...new Set([
       ...detail.lines.map((line) => line.field),
-      ...summarySlotFields(queryClient, entity),
+      ...summaryFieldKeys(queryClient, entity),
       ...sections.flatMap((section) =>
         section.kind === "fields" && onDetailSurface(section, "web")
           ? section.fields
@@ -313,37 +268,6 @@ function reportImageRefs(blocks: readonly ReportBlock[]): EntityRef[] {
           ),
         ])
       : [],
-  );
-}
-
-function SummaryCell({
-  title,
-  children,
-  hidden = false,
-  compact = false,
-}: {
-  title: string;
-  children: ReactNode;
-  hidden?: boolean;
-  compact?: boolean;
-}) {
-  // A report or record list that resolves to nothing leaves its body empty, and
-  // the whole cell goes with it rather than printing an orphan heading.
-  return (
-    <section
-      aria-label={title}
-      hidden={hidden}
-      data-summary-cell
-      className={cn(
-        "min-w-0 border-r border-b border-border py-2 text-xs has-[>[data-summary-body]:empty]:hidden md:py-1.5 [&_[data-entity-pill]>span:last-child]:truncate",
-        compact ? "flex-[1_1_9rem] px-2" : "flex-[1_1_14rem] px-3",
-      )}
-    >
-      <h2 className="mb-1 text-xs font-medium text-muted-foreground md:mb-0.5">
-        {title}
-      </h2>
-      <div data-summary-body>{children}</div>
-    </section>
   );
 }
 
@@ -528,9 +452,9 @@ export function CompactSummaryReport({
 }
 
 /**
- * The chart, report and record cells the full page's signals bar offers: a
- * cell that repeats a section the page draws leaves, and the rail lists the
- * field cells.
+ * The chart, report and record cells the record's summary card offers: a
+ * cell that repeats a section the page draws leaves, and the facts card lists
+ * the field cells.
  */
 export function signalSlots<E extends GenericDetailEntity>(
   queryClient: QueryClient,
@@ -581,195 +505,6 @@ export function SummarySlotBody({
         <SummaryRecords entity={entity} id={id} slot={slot} />
       )}
     </QuerySection>
-  );
-}
-
-/** The inspector's ruled strip of the declared summary cells. */
-export function DetailSummary<E extends GenericDetailEntity>({
-  entity,
-  record,
-  compact = false,
-}: {
-  entity: E;
-  record: DetailRecordOf<E>;
-  compact?: boolean;
-}) {
-  const queryClient = useQueryClient();
-  const metadata = useEntityMetadata(entity);
-  const hydrated = useHydrated();
-  const declared: readonly DetailSummarySlot[] =
-    metadata.summary.detail.summary;
-  const slots = declared.filter((slot) => onDetailSurface(slot, "web"));
-  const id = record.id;
-  const [showContext, setShowContext] = useState(false);
-  const records = slots.filter((slot) => slot.kind === "records");
-  const recordQueries = useQueries({
-    queries: records.map((slot) => ({
-      ...entityGraph.connectedRecords.queryOptions({
-        source: { entityKind: entity, entityId: id },
-        viewKey: slot.viewKey,
-        limit: 2,
-      }),
-      enabled: false,
-    })),
-  });
-  const reports = slots.filter((slot) => slot.kind === "report");
-  const reportInputs = reports.length
-    ? [{ id, slots: reports.map((slot) => slot.slot) }]
-    : [];
-  const reportQueries = useQueries({
-    queries: reportInputs.map((input) => {
-      const options: ReturnType<typeof entityReport.getMany.queryOptions> = {
-        ...entityReport.getMany.queryOptions(input),
-        enabled: false,
-      };
-      return options;
-    }),
-  });
-  const reportQuery = reportQueries[0];
-  const fields: readonly Field[] = entityMetadata(queryClient, entity).fields
-    .fields;
-  const fieldKeys = slots.flatMap((slot) =>
-    slot.kind === "fields" ? slot.fields : [],
-  );
-  // Later field sections omit these fields, so the cell carries their editor
-  // or domain renderer.
-  const overrides = useDetailFieldOverrides(entity, record, fieldKeys);
-  const imageRefs = [
-    ...fields
-      .filter((field) => fieldKeys.includes(field.key))
-      .flatMap((field) => referenceMediaRefs(record, field)),
-    ...recordQueries.flatMap(
-      (query) =>
-        query.data?.items.flatMap((item) => [
-          item.target,
-          ...item.paths.flat(),
-        ]) ?? [],
-    ),
-  ];
-  // The first four slots are the glance; later context folds behind a toggle.
-  const secondary = new Set(
-    slots
-      .slice(4)
-      .filter((slot) => {
-        if (slot.kind === "fields") return false;
-        // Streamed queries may resolve before the first client render. Keep
-        // the server's declaration-only fold until this boundary hydrates.
-        if (!hydrated) return true;
-        if (slot.kind === "report") {
-          if (reportQuery?.isError) return false;
-          const report = reportQuery?.data?.reports.find(
-            (entry) => entry.slot === slot.slot,
-          )?.report;
-          if (
-            report?.blocks.some(
-              (block) =>
-                block.kind === "note" &&
-                (block.strong ||
-                  block.tone === "warning" ||
-                  block.tone === "destructive"),
-            )
-          )
-            return false;
-          return report === undefined || report.blocks.length > 0;
-        }
-        if (slot.kind === "records") {
-          const query =
-            recordQueries[records.findIndex((entry) => entry.id === slot.id)];
-          if (query?.isError) return false;
-          return query?.data === undefined || query.data.totalCount > 0;
-        }
-        return true;
-      })
-      .map((slot) => slot.id),
-  );
-  if (!slots.length) return null;
-  const cells = slots.map((slot) => {
-    let content: ReactNode;
-    if (slot.kind === "fields") {
-      const shown = summaryFieldsShown(queryClient, entity, record, slot);
-      if (shown.length === 0) return null;
-      content = (
-        <dl className="flex flex-wrap gap-x-3 gap-y-0.5">
-          {shown.map((key) => {
-            const field = fields.find((field) => field.key === key);
-            if (!field) return null;
-            const override =
-              classificationFieldDisplayRefusal(entity, record, field.key) ===
-              null
-                ? overrides[field.key]?.(record, queryClient)?.value
-                : undefined;
-            return (
-              <div key={key} className="flex min-w-0 items-baseline gap-1.5">
-                <dt
-                  className={
-                    shown.length === 1 && slot.title === field.label
-                      ? "sr-only"
-                      : "shrink-0 text-muted-foreground"
-                  }
-                >
-                  {field.label}
-                </dt>
-                <dd className="min-w-0 break-words">
-                  {override ??
-                    renderDetailFieldValue(queryClient, entity, record, field)}
-                </dd>
-              </div>
-            );
-          })}
-        </dl>
-      );
-    } else
-      content = (
-        <SummarySlotBody
-          entity={entity}
-          id={id}
-          slot={slot}
-          reportSlots={reports.map((report) => report.slot)}
-        />
-      );
-    return (
-      <SummaryCell
-        key={slot.id}
-        title={slot.title}
-        compact={compact}
-        hidden={secondary.has(slot.id) && !showContext}
-      >
-        {secondary.has(slot.id) && !showContext ? null : content}
-      </SummaryCell>
-    );
-  });
-  return (
-    <EntityDisplayImagesProvider refs={imageRefs}>
-      <div
-        className={cn(
-          "overflow-hidden border-border",
-          compact ? "border-t" : "border-b",
-        )}
-      >
-        <div
-          aria-label="Record summary"
-          // Cells grow to share each row, so a cell that disappears leaves no
-          // hole; the -1px margins hide the rules on each row's trailing edge.
-          className="-mr-px -mb-px flex flex-wrap items-stretch"
-        >
-          {cells}
-          {secondary.size > 0 ? (
-            <div className="flex flex-none items-center border-r border-b border-border px-2 py-1">
-              <Button
-                variant="ghost"
-                size="xs"
-                aria-expanded={showContext}
-                disabled={!hydrated}
-                onClick={() => setShowContext((value) => !value)}
-              >
-                {showContext ? "Less context" : "More context"}
-              </Button>
-            </div>
-          ) : null}
-        </div>
-      </div>
-    </EntityDisplayImagesProvider>
   );
 }
 

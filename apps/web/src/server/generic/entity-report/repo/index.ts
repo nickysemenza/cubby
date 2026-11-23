@@ -13,6 +13,7 @@ import {
   type ReportDependency,
   type ReportServices,
 } from "~/server/generic/entity-report/repo/dependency";
+import { withDigest } from "~/server/generic/entity-report/repo/digest";
 import { foldRepeatedRows } from "~/server/generic/entity-report/repo/fold-repeats";
 import { type ReportViewer } from "~/server/generic/entity-report/repo/records";
 /** The blocks both clients draw for one detail slot of one record. */
@@ -25,7 +26,7 @@ export async function buildEntityReport(
 ): Promise<EntityReportOut> {
   if (input.scope.kind !== "record") {
     const { buildCollectionReport } = await import("./collection");
-    return foldRepeatedRows(await buildCollectionReport(db, input));
+    return withDigest(foldRepeatedRows(await buildCollectionReport(db, input)));
   }
   if (input.slot === "task.briefing")
     throw new Error("task.briefing does not support a record scope.");
@@ -38,7 +39,9 @@ export async function buildEntityReport(
     actor,
     services,
   });
-  return foldRepeatedRows(await execution.read(await reportFor(input.slot)));
+  return withDigest(
+    foldRepeatedRows(await execution.read(await reportFor(input.slot))),
+  );
 }
 
 /** Slots preserve requested order and duplicates while sharing declared dependencies. */
@@ -68,7 +71,9 @@ export async function buildEntityReports(
         throw new Error("task.briefing does not support a record scope.");
       return {
         slot,
-        report: foldRepeatedRows(await execution.read(await reportFor(slot))),
+        report: withDigest(
+          foldRepeatedRows(await execution.read(await reportFor(slot))),
+        ),
       };
     }),
   );

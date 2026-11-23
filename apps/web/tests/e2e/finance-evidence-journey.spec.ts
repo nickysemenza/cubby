@@ -6,7 +6,12 @@ import { getDb } from "~/server/db/helpers";
 import * as schema from "~/server/db/schema";
 import { createEvidenceHarnessContext } from "./fixtures/core";
 import { dispatchesOperation } from "./support/dispatch-wire";
-import { gotoAuthenticatedPage, uniqueName } from "./support/e2e-helpers";
+import {
+  gotoAuthenticatedPage,
+  showAllFacts,
+  uniqueName,
+  waitForAppHydration,
+} from "./support/e2e-helpers";
 import { operationCall } from "./support/operation";
 
 import { expect, test } from "./support/e2e-test";
@@ -99,6 +104,8 @@ test("source evidence uses generic records while provider facts remain immutable
   ]);
   await expect(dialog).toBeHidden();
   await page.reload();
+  await waitForAppHydration(page);
+  await showAllFacts(page);
   await expect(
     page
       .getByText("Synthetic judgment reviewed against source", { exact: true })

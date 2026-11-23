@@ -10,6 +10,7 @@ import { z } from "zod";
 
 import { copyTextWithToast } from "~/lib/clipboard";
 import { formatCurrency } from "~/lib/number-format";
+import { useSectionDigest } from "~/ui/data-table/detail-section-state";
 import { StaticTable } from "~/ui/data-table/static-table";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Stack } from "~/ui/layout";
@@ -47,6 +48,15 @@ export function ChatGptPlanSettings() {
   });
   const budget = useQuery(aiFundingStatusQuery());
   const connected = status.data?.connected === true;
+  useSectionDigest(
+    status.data === undefined
+      ? undefined
+      : connected
+        ? status.data.needsReauthorization
+          ? "Connected · sign in again"
+          : "Connected"
+        : "Not connected",
+  );
   const dismiss = useMutation({
     mutationFn: () => request(chatGptStatus, "", "PATCH"),
     onSuccess: (data) => client.setQueryData(STATUS_KEY, data),

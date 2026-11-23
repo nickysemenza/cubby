@@ -21,7 +21,10 @@ import {
   IMAGE_IDENTIFICATION_RESULT_SCHEMA_REVISION,
 } from "@cubby/schemas/image-identification";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import {
+  gotoAuthenticatedPage,
+  showDetailSection,
+} from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 import { getFixtureDb, fixtureUserId } from "./fixtures/core";
 import { seedImagePrerequisite } from "./fixtures/photos";
@@ -199,7 +202,9 @@ test("image results compare descriptions and require explicit attachment confirm
     }),
   ).toBeDisabled();
   // The Image's generic "Image jobs" section opens the job's own record.
-  await page
+  await (
+    await showDetailSection(page, { title: "Image jobs" })
+  )
     .getByRole("link", { name: /^Image identification · / })
     .first()
     .click();

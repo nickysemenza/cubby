@@ -36,6 +36,7 @@ import {
   type TimingResponse,
 } from "~/lib/perf/timing.contract";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
+import { useSectionDigest } from "~/ui/data-table/detail-section-state";
 import { IndexedSections } from "~/ui/data-table/indexed-sections";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Row, Section, Stack } from "~/ui/layout";
@@ -51,8 +52,10 @@ export function SettingsPage({
   purchaseAgent: z.infer<typeof purchaseAgentConnectionStatus> | undefined;
 }) {
   return (
-    <Page variant="list" title="Settings">
+    <Page variant="list" title="Settings" canvas>
       <IndexedSections
+        layout="ledger"
+        storageKey="cubby.settings-sections"
         groups={[
           {
             id: "detail-group-connections",
@@ -63,6 +66,7 @@ export function SettingsPage({
                 title: "Calendar",
                 icon: CalendarIcon,
                 overflowVisible: true,
+                digest: "App password and subscription feeds",
                 description:
                   "Set up editable Calendar access or read-only subscriptions.",
                 content: <CalendarConnectDialog />,
@@ -132,12 +136,14 @@ export function SettingsPage({
               {
                 id: "maintenance",
                 title: "Work and maintenance",
+                digest: "Background work and repairs",
                 icon: WrenchIcon,
                 content: <MaintenanceSettings />,
               },
               {
                 id: "diagnostics",
                 title: "Developer diagnostics",
+                digest: "Connection diagnostics and the calendar feed",
                 icon: WrenchIcon,
                 overflowVisible: true,
                 content: (
@@ -159,6 +165,12 @@ export function SettingsPage({
 
 function MemberLoginsSettings() {
   const roster = useQuery(ledgerParty.memberLogins.queryOptions(null));
+  const users = roster.data?.users ?? [];
+  useSectionDigest(
+    roster.data === undefined
+      ? undefined
+      : `${users.filter((user) => user.ledgerParty).length} of ${users.length} logins linked to a member`,
+  );
   const update = useMutation(
     ledgerParty.setMemberLogin.mutationOptions({
       onSuccess: () => toast.success("Member login updated"),
@@ -278,6 +290,13 @@ function GmailAccessSettings() {
     (account) => account.providerId === "google",
   );
   const connected = hasGmailReadonlyScope(googleAccount?.scopes);
+  useSectionDigest(
+    accounts.data === undefined
+      ? undefined
+      : connected
+        ? "Gmail connected"
+        : "Gmail not connected",
+  );
   const [busy, setBusy] = useState(false);
 
   const connect = async () => {

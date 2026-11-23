@@ -6,6 +6,7 @@ import {
   openDetailActions,
   selectComboboxItem,
   gotoAuthenticatedPage,
+  showDetailSection,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
@@ -19,9 +20,10 @@ test("meal product nutrition preserves entered amounts through creation, edits a
   await expect(
     page.getByRole("heading", { name: `${name} meal`, exact: true }),
   ).toBeVisible();
-  const guest = page.getByRole("region", {
-    name: `${name} guest nutrition`,
-  });
+  const guest = (await showDetailSection(page, "nutrition")).getByRole(
+    "region",
+    { name: `${name} guest nutrition` },
+  );
   await expect(guest.getByText(fixture.manualFoodName)).toBeVisible();
   await expect(guest.getByLabel(/^Carbs: 0 g\./)).toHaveCount(2);
   await expect(guest.getByLabel(/^Fat: —\./)).toHaveCount(2);

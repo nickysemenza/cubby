@@ -24,6 +24,7 @@ import {
 
 import {
   useSectionCount,
+  useSectionDigest,
   useSectionEmpty,
 } from "../../ui/data-table/detail-section-state";
 import {
@@ -220,6 +221,12 @@ export function ConnectedRecordsSection({
   );
   useSectionEmpty(query.isSuccess && found.length === 0);
   const items = found.flatMap((view) => view.items);
+  useSectionDigest(
+    found
+      .slice(0, 3)
+      .map((view) => `${view.title} ${view.totalCount}`)
+      .join(" · "),
+  );
   return (
     <EntityDisplayImagesProvider
       refs={[...items.map((item) => item.target), ...connectionRefs(items)]}

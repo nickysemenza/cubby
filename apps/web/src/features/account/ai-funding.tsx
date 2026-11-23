@@ -18,6 +18,7 @@ import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { aiFunding } from "~/integrations/tanstack-query/generated/domains/aiFunding.gen";
 import { formatInstant } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/number-format";
+import { useSectionDigest } from "~/ui/data-table/detail-section-state";
 import { StaticTable } from "~/ui/data-table/static-table";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
@@ -187,6 +188,14 @@ export function AiFundingSettings() {
     onSuccess: replace,
   });
   const budget = status.data;
+  const waiting = budget ? budget.waiting.runs + budget.waiting.work : 0;
+  useSectionDigest(
+    budget === undefined
+      ? undefined
+      : waiting > 0
+        ? `${waiting} waiting for funding`
+        : "Nothing waiting for funding",
+  );
   const retryButton = (source: FundingRefusalSource, label: string) => (
     <Button
       type="button"

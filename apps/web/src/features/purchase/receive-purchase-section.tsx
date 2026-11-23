@@ -1,4 +1,5 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { countLabel } from "@cubby/shared/pluralize";
 import { useQuery } from "@tanstack/react-query";
 import { useState, type FC } from "react";
 
@@ -7,7 +8,10 @@ import type { ListRowOf } from "~/entity/display/list-renderer-types";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { entityListFor } from "~/entity/entity-list";
 import { ReceiveExpenseDialog } from "~/features/expense/receive-expense-dialog";
-import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
+import {
+  useSectionDigest,
+  useSectionEmpty,
+} from "~/ui/data-table/detail-section-state";
 import { Row, Stack } from "~/ui/layout";
 import { Description } from "~/ui/text/description";
 import { StatusText } from "~/ui/text/status-text";
@@ -30,9 +34,14 @@ export const PurchaseReceiving: DetailSlotComponent<"purchase"> = ({
     }),
   );
   const [receiving, setReceiving] = useState<ExpenseOut | null>(null);
-  useSectionEmpty(
-    lines.isSuccess &&
-      !lines.data.items.some((line) => fieldValueOf(line.fields.productId)),
+  const receivable = lines.data?.items.filter((line) =>
+    fieldValueOf(line.fields.productId),
+  );
+  useSectionEmpty(lines.isSuccess && receivable?.length === 0);
+  useSectionDigest(
+    receivable?.length
+      ? `${countLabel(receivable.length, "Product line")} to receive`
+      : undefined,
   );
   if (lines.isPending) return <StatusText>Loading lines…</StatusText>;
   if (lines.isError)

@@ -15,8 +15,9 @@ afterEach(() => {
   harness.dispose();
 });
 
-// Every group is on the page: a jump must never cost a draft or hide content.
-it("shows every group, keeps drafts, and follows section links", async () => {
+// The primary section is a card; the rest are ledger lines a link opens in
+// place. A jump never costs a draft.
+it("opens a ledger line through its fragment and keeps drafts", async () => {
   await page.viewport(1280, 900);
   render(
     <DetailSections
@@ -44,11 +45,12 @@ it("shows every group, keeps drafts, and follows section links", async () => {
   fireEvent.change(screen.getByRole("textbox", { name: "Review draft" }), {
     target: { value: "Unsaved review" },
   });
-  expect(screen.getByText("Source evidence body")).toBeVisible();
+  expect(screen.getByText("Source evidence body")).not.toBeVisible();
   await harness.router.navigate({ to: "/", hash: "source" });
   await waitFor(() =>
     expect(document.activeElement).toBe(document.getElementById("source")),
   );
+  expect(screen.getByText("Source evidence body")).toBeVisible();
   expect(screen.getByRole("textbox", { name: "Review draft" })).toHaveValue(
     "Unsaved review",
   );

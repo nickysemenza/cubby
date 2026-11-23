@@ -4,6 +4,7 @@ import { createFixtureGraph } from "./fixtures/core";
 import {
   selectComboboxItem,
   gotoAuthenticatedPage,
+  showDetailSection,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
@@ -62,7 +63,11 @@ test("location relation sections create a planting and list both plantings", asy
   // Create a second planting through the section's own generic create
   // dialog — seeded with this location via the direct `locationId` create
   // field (`planRelationSection`'s direct branch).
-  await page.getByRole("button", { name: "New planting", exact: true }).click();
+  await (
+    await showDetailSection(page, "plantings")
+  )
+    .getByRole("button", { name: "New planting", exact: true })
+    .click();
   let dialog = page.getByRole("dialog");
   await expect(dialog.getByText("New Planting")).toBeVisible();
   await selectComboboxItem(
@@ -91,7 +96,6 @@ test("a planting journal entry persists and appears in its location relation", a
 }) => {
   const { growingBedName, growingBed, existingPlanting } =
     await seedGarden(page);
-  const gardenEntriesSection = page.locator("#garden-entries");
   // The Journal section's anchor selects its tab and unfolds it while empty;
   // its create button opens the generic garden entry dialog seeded with this
   // planting's id.
@@ -123,8 +127,9 @@ test("a planting journal entry persists and appears in its location relation", a
   // The entry it just logged (`locationId: growingBed`) is a garden entry
   // for the bed too, so its Garden entries section now shows the entry.
   await gotoAuthenticatedPage(page, `/locations/${growingBed.id}#work`);
-  await expect(gardenEntriesSection).toBeVisible();
-  const gardenEntries = page.getByRole("table", { name: "Garden entries" });
+  const gardenEntries = (
+    await showDetailSection(page, "garden-entries")
+  ).getByRole("table", { name: "Garden entries" });
   await expect(gardenEntries).toBeVisible();
   await expect(
     gardenEntries.getByText("First harvest from this planting", {

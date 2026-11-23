@@ -34,7 +34,7 @@ export function MonthlySpendChart({
   id: string;
   viewKey?: string;
   compact?: boolean;
-  /** One line: the total beside bare bars, for the record's signals bar. */
+  /** One line: the total beside bare bars, for the record's summary card. */
   spark?: boolean;
 }) {
   const spend = useSuspenseQuery(

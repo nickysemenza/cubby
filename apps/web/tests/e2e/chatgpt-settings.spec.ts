@@ -1,4 +1,7 @@
-import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import {
+  gotoAuthenticatedPage,
+  showDetailSection,
+} from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
 test("settings explains local authorization and exposes no model selectors", async ({
@@ -50,7 +53,7 @@ test("settings explains local authorization and exposes no model selectors", asy
   });
   expect(crossOrigin.status()).toBe(403);
   await gotoAuthenticatedPage(page, "/settings");
-  const card = page.getByRole("region", { name: "ChatGPT plan", exact: true });
+  const card = await showDetailSection(page, "chatgpt");
   await expect(
     card.getByRole("heading", { name: "ChatGPT plan" }),
   ).toBeVisible();

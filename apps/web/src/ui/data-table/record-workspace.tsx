@@ -1,45 +1,41 @@
-import { cn } from "cn";
 import {
   type ReactNode,
   type RefObject,
   useCallback,
   useEffect,
-  useLayoutEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
 
-import { formatCount } from "~/lib/number-format";
-import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Kbd } from "~/ui/primitives/kbd";
 
 import {
   ContinuousDetailContext,
   SectionIndexRegistryContext,
-  type SectionIndexState,
 } from "./detail-section-state";
 import {
-  FoldedSectionsLine,
-  hashForDetailTarget,
   type IndexedSection,
   type IndexedSectionGroup,
+  LedgerCard,
   type RecordSectionControls,
   RecordSectionControlsContext,
-  SectionJumpMenu,
   SectionStack,
   useIndexedSections,
+  useSectionOpenState,
 } from "./indexed-sections";
-
-import "./record-workspace.css";
 
 const FINE_DESKTOP =
   "(min-width: 48rem) and (hover: hover) and (pointer: fine)";
-/** The pane width (px) from which the rail appears and sections share rows. */
-const RAIL_WIDTH = 800;
 
 const ROWS =
   '[data-slot="table-row"]:not(thead *), [data-slot="record-row"], [data-row-cursor-target]';
+
+/** Sections whose rows J/K walk: open cards and opened ledger rows. */
+const OPEN_SECTIONS = "[data-detail-section]:not([data-folded]):not([hidden])";
+
+const isHosted = () =>
+  typeof document !== "undefined" &&
+  document.documentElement.hasAttribute("data-hosted-workspace");
 
 const isEditableTarget = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
@@ -48,313 +44,17 @@ const isEditableTarget = (target: EventTarget | null) =>
       "input, textarea, select, [contenteditable=''], [contenteditable=true], [role=combobox], [role=listbox], [role=menu], [role=dialog], [role=alertdialog]",
     ) !== null);
 
-/** Whether the pane draws the rail, and with it lets sections share rows. */
-function usePaneMode(workspace: RefObject<HTMLElement | null>) {
-  const [mode, setMode] = useState({ rail: false, columns: false });
+/** A fine-pointer desktop outside a hosted native workspace: the page has keys. */
+function useFineDesktop() {
+  const [fine, setFine] = useState(false);
   useEffect(() => {
-    const element = workspace.current;
-    if (!element || typeof ResizeObserver === "undefined") return;
     const media = window.matchMedia?.(FINE_DESKTOP);
-    const update = () => {
-      const desktop =
-        (media?.matches ?? true) &&
-        !document.documentElement.hasAttribute("data-hosted-workspace");
-      const width = element.getBoundingClientRect().width;
-      const rail = desktop && width >= RAIL_WIDTH;
-      const next = { rail, columns: rail };
-      setMode((previous) =>
-        previous.rail === next.rail && previous.columns === next.columns
-          ? previous
-          : next,
-      );
-    };
-    const observer = new ResizeObserver(update);
-    observer.observe(element);
+    const update = () => setFine((media?.matches ?? true) && !isHosted());
     media?.addEventListener("change", update);
     update();
-    return () => {
-      observer.disconnect();
-      media?.removeEventListener("change", update);
-    };
-  }, [workspace]);
-  return mode;
-}
-
-/**
- * Whether Activity is too short to hold a column of its own. A short Activity
- * joins the body's sections, so no empty column runs beside a long body; it
- * returns to its own column once it outgrows the threshold. Loading never decides.
- */
-function useShortActivity(
-  workspace: RefObject<HTMLElement | null>,
-  enabled: boolean,
-) {
-  const [short, setShort] = useState(false);
-  useEffect(() => {
-    const root = workspace.current;
-    if (!enabled || !root || typeof ResizeObserver === "undefined") return;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const decide = () => {
-      const section = root.querySelector<HTMLElement>("[data-record-activity]");
-      if (!section || section.querySelector('[data-slot="skeleton"]')) return;
-      const height = section.getBoundingClientRect().height;
-      const body = root.querySelector(".record-body");
-      const tall =
-        (body?.getBoundingClientRect().height ?? 0) > window.innerHeight;
-      setShort((previous) =>
-        previous
-          ? height < window.innerHeight * 0.6
-          : tall && height < window.innerHeight * 0.4,
-      );
-    };
-    // Settle before deciding: a section that is still filling must not move.
-    const observer = new ResizeObserver(() => {
-      clearTimeout(timer);
-      timer = setTimeout(decide, 400);
-    });
-    const target = root.querySelector(".record-main-grid");
-    if (target) observer.observe(target);
-    return () => {
-      clearTimeout(timer);
-      observer.disconnect();
-    };
-  }, [workspace, enabled]);
-  return enabled && short;
-}
-
-const TRACK_WIDTH = 256;
-const TABLE_WIDTH = 480;
-const MAX_TRACKS = 6;
-
-/** Tracks per section so each row fills: `wants` holds a row's sections in order. */
-function packRow(wants: number[], tracks: number) {
-  const spans = [...wants];
-  let spare = tracks - spans.reduce((sum, span) => sum + span, 0);
-  // A table takes spare tracks before a paragraph does.
-  const order = [
-    ...spans.flatMap((span, index) => (span > 1 ? [index] : [])),
-    ...spans.flatMap((span, index) => (span > 1 ? [] : [index])),
-  ];
-  for (let turn = 0; spare > 0; turn++, spare--)
-    spans[order[turn % order.length]!]! += 1;
-  return spans;
-}
-
-/**
- * Puts every body section on one shared set of tracks, so section edges line
- * up from row to row. A paragraph section wants one track, a table as many as
- * a table needs and a widened one the row; a row's sections then grow to fill
- * it. CSS cannot fill rows on shared tracks, so the spans are written here.
- */
-function useSectionTracks(
-  workspace: RefObject<HTMLElement | null>,
-  enabled: boolean,
-) {
-  useLayoutEffect(() => {
-    const body = workspace.current?.querySelector<HTMLElement>(".record-body");
-    if (!enabled || !body || typeof ResizeObserver === "undefined") return;
-    let frame = 0;
-    const pack = () => {
-      frame = 0;
-      const first = body.querySelector<HTMLElement>("[data-detail-group]");
-      if (!first) return;
-      const gap = Number.parseFloat(getComputedStyle(first).columnGap) || 0;
-      const width = first.getBoundingClientRect().width;
-      const tracks = Math.max(
-        1,
-        Math.min(MAX_TRACKS, Math.floor((width + gap) / (TRACK_WIDTH + gap))),
-      );
-      const track = (width - (tracks - 1) * gap) / tracks;
-      const table = Math.min(
-        tracks,
-        Math.ceil((TABLE_WIDTH + gap) / (track + gap)),
-      );
-      const write = (element: HTMLElement, name: string, value: string) => {
-        if (element.style.getPropertyValue(name) !== value)
-          element.style.setProperty(name, value);
-      };
-      write(body, "--record-tracks", String(tracks));
-      for (const group of body.querySelectorAll<HTMLElement>(
-        "[data-detail-group]",
-      )) {
-        let row: HTMLElement[] = [];
-        let wants: number[] = [];
-        const flush = () => {
-          packRow(wants, tracks).forEach((span, index) =>
-            write(row[index]!, "--record-span", String(span)),
-          );
-          row = [];
-          wants = [];
-        };
-        for (const section of group.querySelectorAll<HTMLElement>(
-          ":scope > [data-detail-section]:not([hidden])",
-        )) {
-          const folded = section.hasAttribute("data-folded");
-          const want = section.hasAttribute("data-wide")
-            ? tracks
-            : !folded &&
-                (section.hasAttribute("data-wideable") ||
-                  section.querySelector("table") !== null)
-              ? table
-              : 1;
-          if (wants.reduce((sum, span) => sum + span, 0) + want > tracks)
-            flush();
-          row.push(section);
-          wants.push(want);
-        }
-        if (row.length > 0) flush();
-      }
-    };
-    const schedule = () => {
-      if (frame === 0) frame = requestAnimationFrame(pack);
-    };
-    const resize = new ResizeObserver(schedule);
-    resize.observe(body);
-    // Tables arrive late, and folding or widening changes what a section wants.
-    const mutation = new MutationObserver(schedule);
-    mutation.observe(body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ["data-wide", "data-folded", "hidden"],
-    });
-    pack();
-    return () => {
-      cancelAnimationFrame(frame);
-      resize.disconnect();
-      mutation.disconnect();
-      body.style.removeProperty("--record-tracks");
-    };
-  }, [workspace, enabled]);
-}
-
-/** The ids of the sections some part of which is on screen. */
-function useOnScreen(
-  workspace: RefObject<HTMLElement | null>,
-  enabled: boolean,
-  signature: string,
-) {
-  const [visible, setVisible] = useState<ReadonlySet<string>>(new Set());
-  useEffect(() => {
-    const element = workspace.current;
-    if (!enabled || !element || typeof IntersectionObserver === "undefined")
-      return;
-    const seen = new Set<string>();
-    const observer = new IntersectionObserver((entries) => {
-      for (const entry of entries) {
-        if (entry.isIntersecting) seen.add(entry.target.id);
-        else seen.delete(entry.target.id);
-      }
-      setVisible(new Set(seen));
-    });
-    for (const target of element.querySelectorAll<HTMLElement>(
-      ".record-main [data-detail-section]",
-    ))
-      if (!target.hidden) observer.observe(target);
-    return () => observer.disconnect();
-  }, [workspace, enabled, signature]);
-  return visible;
-}
-
-/**
- * The rail's contents index: each group's label over its sections, with a
- * mark on the ones on screen, a dot on the ones that need the member, and
- * their counts.
- */
-function RailIndex({
-  groups,
-  sectionStates,
-  activeId,
-  onScreen,
-  attention,
-  onSelect,
-}: {
-  groups: IndexedSectionGroup[];
-  sectionStates: ReadonlyMap<string, SectionIndexState>;
-  activeId: string | undefined;
-  onScreen: ReadonlySet<string>;
-  attention: ReadonlySet<string>;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <nav aria-label="Section index" className="record-index text-xs">
-      <p className="mb-0.5 flex items-center justify-between text-muted-foreground">
-        <span>Contents</span>
-        <span aria-hidden className="inline-flex items-center gap-1">
-          <span className="h-2.5 w-0.5 bg-foreground" />
-          on screen
-        </span>
-      </p>
-      {groups.map((group) => {
-        const sections = group.sections.filter(
-          (section) => section.includeInIndex !== false,
-        );
-        if (sections.length === 0) return null;
-        return (
-          <div key={group.id}>
-            <a
-              href={`#${hashForDetailTarget(group.id, groups)}`}
-              className="mt-0.5 flex h-4 items-center truncate rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={(event) => {
-                event.preventDefault();
-                onSelect(group.id);
-              }}
-            >
-              {group.title}
-            </a>
-            <ul className="min-w-0">
-              {sections.map((section) => {
-                const state = sectionStates.get(section.id);
-                const current = activeId === section.id;
-                return (
-                  <li key={section.id} className="min-w-0">
-                    <a
-                      href={`#${section.id}`}
-                      aria-current={current ? "location" : undefined}
-                      aria-label={section.title}
-                      aria-describedby={
-                        state?.count !== undefined || state?.empty
-                          ? `${section.id}-marker`
-                          : undefined
-                      }
-                      title={section.title}
-                      data-on-screen={onScreen.has(section.id) || undefined}
-                      className={cn(
-                        "flex h-4.5 min-w-0 items-center gap-1 border-l-2 border-transparent pr-0.5 pl-1 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring data-on-screen:border-foreground",
-                        state?.empty
-                          ? "text-muted-foreground/70"
-                          : "text-foreground",
-                        current && "bg-row-current font-medium",
-                      )}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        onSelect(section.id);
-                      }}
-                    >
-                      <span className="min-w-0 truncate">{section.title}</span>
-                      {attention.has(section.id) ? (
-                        <span className="size-1.5 shrink-0 rounded-full bg-needs">
-                          <span className="sr-only">Needs you</span>
-                        </span>
-                      ) : null}
-                      {state?.count !== undefined ? (
-                        <span
-                          aria-hidden
-                          className="ml-auto shrink-0 pl-1 font-mono text-muted-foreground tabular-nums"
-                        >
-                          {formatCount(state.count)}
-                        </span>
-                      ) : null}
-                    </a>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        );
-      })}
-    </nav>
-  );
+    return () => media?.removeEventListener("change", update);
+  }, []);
+  return fine;
 }
 
 interface Cursor {
@@ -365,10 +65,11 @@ interface Cursor {
 }
 
 /**
- * The record page's keys: J/K move a row cursor through the body's rows, Enter
- * opens the row, H/L fold and unfold its section, W widens it, E edits the
- * record, 1-9 reach the Needs you items and [ ] step to the neighbouring record. A key that belongs
- * to a field, a menu or a dialog is left alone.
+ * The record page's keys: J/K move a row cursor through the open sections'
+ * rows, Enter opens the row, H/L close and open the current section (a card or
+ * a ledger row), E edits the record, 1-9 reach the Needs you items and [ ]
+ * step to the neighbouring record. A key that belongs to a field, a menu or a
+ * dialog is left alone; Enter on a focused ledger row is the row's own button.
  */
 function useRecordKeys(
   workspace: RefObject<HTMLElement | null>,
@@ -378,7 +79,7 @@ function useRecordKeys(
 ) {
   const [cursor, setCursor] = useState<Cursor | null>(null);
   const row = useRef<HTMLElement | null>(null);
-  // The section the cursor last sat in: H folds it away, and L needs it back.
+  // The section the cursor last sat in: H closes it, and L needs it back.
   const lastSection = useRef<string | undefined>(undefined);
   const latest = useRef({ controls, activeId });
   latest.current = { controls, activeId };
@@ -386,12 +87,7 @@ function useRecordKeys(
     const root = workspace.current;
     if (!enabled || !root) return;
     const rows = () =>
-      Array.from(
-        root.querySelectorAll<HTMLElement>(
-          ".record-main [data-detail-section]",
-        ),
-      )
-        .filter((section) => !section.hidden && !section.dataset.folded)
+      Array.from(root.querySelectorAll<HTMLElement>(OPEN_SECTIONS))
         .flatMap((section) =>
           Array.from(section.querySelectorAll<HTMLElement>(ROWS)),
         )
@@ -417,21 +113,18 @@ function useRecordKeys(
       });
     };
     const currentSection = () => {
+      const focused =
+        document.activeElement instanceof HTMLElement &&
+        root.contains(document.activeElement)
+          ? document.activeElement.closest<HTMLElement>("[data-detail-section]")
+          : null;
       const id =
+        focused?.id ??
         row.current?.closest<HTMLElement>("[data-detail-section]")?.id ??
         lastSection.current ??
         latest.current.activeId;
-      const target = id
-        ? root.querySelector<HTMLElement>(`.record-main #${CSS.escape(id)}`)
-        : null;
-      // The current index entry may be a group: act on its first section.
-      const section = target?.matches("[data-detail-section]")
-        ? target
-        : target?.querySelector<HTMLElement>(
-            "[data-detail-section]:not([hidden])",
-          );
-      lastSection.current = section?.id;
-      return section?.id;
+      lastSection.current = id;
+      return id && root.querySelector(`#${CSS.escape(id)}`) ? id : undefined;
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (
@@ -476,24 +169,11 @@ function useRecordKeys(
         }
         if (key === "h" || key === "l") {
           const id = currentSection();
-          if (!id || !root.querySelector(`.record-main #${CSS.escape(id)}`))
-            return false;
-          const folded = latest.current.controls.folded.has(id);
-          if (folded === (key === "h")) return true;
-          if (key === "h") place(null, []);
-          latest.current.controls.toggleFold(id);
-          return true;
-        }
-        if (key === "w") {
-          const id = currentSection();
-          const section = id
-            ? root.querySelector<HTMLElement>(`.record-main #${CSS.escape(id)}`)
-            : null;
-          const toggle = section?.querySelector<HTMLElement>(
-            "[data-slot=section-heading] button[aria-pressed]",
-          );
-          if (!toggle) return false;
-          toggle.click();
+          if (!id) return false;
+          const open = key === "l";
+          if (latest.current.controls.isOpen(id) === open) return true;
+          if (!open) place(null, []);
+          latest.current.controls.setOpen(id, open);
           return true;
         }
         if (/^[1-9]$/u.test(key)) {
@@ -546,13 +226,11 @@ const Key = ({ children }: { children: ReactNode }) => (
 function HintLine({
   cursor,
   current,
-  columns,
   needs,
   stepper,
 }: {
   cursor: Cursor | null;
   current: string | undefined;
-  columns: boolean;
   needs: boolean;
   stepper: boolean;
 }) {
@@ -579,15 +257,10 @@ function HintLine({
           <Key>J</Key> <Key>K</Key> row
         </span>
         <span>
-          <Key>H</Key> <Key>L</Key> fold
+          <Key>H</Key> <Key>L</Key> close · open
         </span>
-        {columns ? (
-          <span>
-            <Key>W</Key> wide
-          </span>
-        ) : null}
         <span>
-          <Key>↵</Key> open
+          <Key>↵</Key> open row
         </span>
         <span>
           <Key>E</Key> edit
@@ -607,128 +280,17 @@ function HintLine({
   );
 }
 
-/**
- * A record's page: singular facts in a thin sticky left rail over its contents
- * index, signals pinned above the record's collections on shared tracks, and
- * Activity in its own column on a wide pane. Phones, coarse pointers and hosted
- * native workspaces read the same parts as one stack.
- */
-export function RecordWorkspace({
-  groups,
-  activityId,
-  rail,
-  signals,
-  attention,
-  footer,
-}: {
-  groups: IndexedSectionGroup[];
-  /** The section drawn as the Activity column on a wide pane. */
-  activityId?: string;
-  /** Identity, commands and every singular fact. */
-  rail: ReactNode;
-  /** Needs you and the summary figures. */
-  signals?: ReactNode;
-  /** Sections with something waiting on the member. */
-  attention?: ReadonlySet<string>;
-  /** Rendered after the last section, outside the index. */
-  footer?: ReactNode;
-}) {
-  const hydrated = useHydrated();
-  const [folded, setFolded] = useState<ReadonlySet<string>>(
-    () =>
-      new Set(
-        groups.flatMap((group) =>
-          group.sections
-            .filter((section) => section.collapsed)
-            .map((section) => section.id),
-        ),
-      ),
-  );
-  const [wide, setWide] = useState<ReadonlySet<string>>(new Set());
-  const toggle =
-    (set: typeof setFolded) =>
-    (id: string): void =>
-      set((previous) => {
-        const next = new Set(previous);
-        if (!next.delete(id)) next.add(id);
-        return next;
-      });
-  // A link or fragment naming a folded section opens it.
-  const reveal = useCallback((id: string) => {
-    setFolded((previous) => {
-      if (!previous.has(id)) return previous;
-      const next = new Set(previous);
-      next.delete(id);
-      return next;
-    });
-  }, []);
-  const {
-    workspaceRef,
-    bodyRef,
-    sectionStates,
-    registerSection,
-    unfolded,
-    unfold,
-    isFolded,
-    isPending,
-    indexGroups,
-    activeId,
-    selectSection,
-    focusTarget,
-  } = useIndexedSections(groups, reveal);
-  const mode = usePaneMode(workspaceRef);
-  const controls = useMemo<RecordSectionControls>(
-    () => ({
-      folded,
-      toggleFold: toggle(setFolded),
-      wide,
-      toggleWide: toggle(setWide),
-      columns: mode.columns,
-    }),
-    [folded, wide, mode.columns],
-  );
-  const signalsRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const element = signalsRef.current;
-    const root = workspaceRef.current;
-    if (!element || !root || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() =>
-      root.style.setProperty(
-        "--record-signals-height",
-        `${element.getBoundingClientRect().height}px`,
-      ),
-    );
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [workspaceRef]);
-  const activity = groups
-    .flatMap((group) => group.sections)
-    .find((section) => section.id === activityId);
-  const bodyGroups = groups.map((group) => ({
-    ...group,
-    sections: group.sections.filter((section) => section !== activity),
-  }));
-  const bodySections = bodyGroups.flatMap((group) => group.sections);
-  const activityInBody = useShortActivity(workspaceRef, mode.columns);
-  const onScreen = useOnScreen(
-    workspaceRef,
-    hydrated && mode.rail,
-    indexGroups
-      .flatMap((group) => group.sections.map((section) => section.id))
-      .join(" "),
-  );
-  useSectionTracks(workspaceRef, mode.columns);
-  const cursor = useRecordKeys(workspaceRef, mode.rail, controls, activeId);
-  // The legend names only the keys this record has targets for.
+/** The legend names only the keys this record has targets for. */
+function useKeyTargets(workspace: RefObject<HTMLElement | null>) {
   const [targets, setTargets] = useState({ needs: false, stepper: false });
-  const hasSignals = signals != null;
   useEffect(() => {
-    const root = workspaceRef.current;
+    const root = workspace.current;
     if (!root || typeof MutationObserver === "undefined") return;
+    const side = root.querySelector(".record-side") ?? root;
     const read = () => {
       const next = {
-        needs: root.querySelector("[data-needs-item]") !== null,
-        stepper: root.querySelector("[data-record-stepper]") !== null,
+        needs: side.querySelector("[data-needs-item]") !== null,
+        stepper: side.querySelector("[data-record-stepper]") !== null,
       };
       setTargets((previous) =>
         previous.needs === next.needs && previous.stepper === next.stepper
@@ -736,117 +298,255 @@ export function RecordWorkspace({
           : next,
       );
     };
-    const signalsBar = root.querySelector(".record-signals");
-    if (!signalsBar) {
-      read();
-      return;
-    }
     const observer = new MutationObserver(read);
-    observer.observe(signalsBar, { childList: true, subtree: true });
+    observer.observe(side, { childList: true, subtree: true });
     read();
     return () => observer.disconnect();
-  }, [workspaceRef, hasSignals]);
-  const indexProps = {
-    groups: indexGroups,
-    sectionStates,
-    activeId,
-    onSelect: selectSection,
-  };
-  const currentTitle = indexGroups
-    .flatMap((group) => [group, ...group.sections])
-    .find((entry) => entry.id === activeId)?.title;
-  const stack = (sections: IndexedSection[]) => (
-    <SectionStack sections={sections} unfolded={unfolded} />
-  );
+  }, [workspace]);
+  return targets;
+}
+
+/**
+ * Activity's card: its latest entries, held to a few lines until the member
+ * opens the whole timeline in place.
+ */
+function ActivityCard({
+  section,
+  expanded,
+  onExpandedChange,
+}: {
+  section: IndexedSection;
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
+}) {
+  const host = useRef<HTMLDivElement>(null);
+  const [overflows, setOverflows] = useState(false);
+  useEffect(() => {
+    const body = host.current?.querySelector<HTMLElement>(
+      "[data-record-card] > div:last-child",
+    );
+    if (!body || typeof ResizeObserver === "undefined") return;
+    const measure = () =>
+      setOverflows(body.scrollHeight > body.clientHeight + 1);
+    const observer = new ResizeObserver(measure);
+    observer.observe(body);
+    for (const child of body.children) observer.observe(child);
+    measure();
+    return () => observer.disconnect();
+  }, [expanded]);
   return (
     <div
-      ref={workspaceRef}
-      data-record-workspace
-      className="@container/record min-w-0"
+      ref={host}
+      data-record-activity
+      data-expanded={expanded || undefined}
+      className="record-activity"
     >
-      <ContinuousDetailContext.Provider value>
-        <SectionIndexRegistryContext.Provider value={registerSection}>
-          <RecordSectionControlsContext.Provider value={controls}>
-            <div className="record-frame">
-              <aside aria-label="Record" className="record-rail">
-                <div data-record-rail-scroll className="record-rail-scroll">
-                  {rail}
-                </div>
-                <RailIndex
-                  {...indexProps}
-                  onScreen={onScreen}
-                  attention={attention ?? new Set()}
-                />
-              </aside>
-              <div className="record-main">
-                <div className="record-jump">
-                  <SectionJumpMenu
-                    {...indexProps}
-                    onFocusTarget={focusTarget}
-                  />
-                </div>
-                {signals != null ? (
-                  <div ref={signalsRef} className="record-signals">
-                    {signals}
-                  </div>
-                ) : null}
-                <div
-                  // Scroll tracking reads the body's sections and Activity's.
-                  ref={bodyRef}
-                  className="record-main-grid"
-                  data-activity={activity && !activityInBody ? "" : undefined}
+      <SectionStack
+        card
+        sections={[
+          {
+            ...section,
+            headerAction:
+              overflows || expanded ? (
+                <button
+                  type="button"
+                  aria-expanded={expanded}
+                  onClick={() => onExpandedChange(!expanded)}
+                  className="rounded-sm text-link outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-11"
                 >
-                  <div className="record-body text-sm">
-                    {bodyGroups.map((group) => (
-                      <GroupAnchor key={group.id} id={group.id}>
-                        {stack(group.sections)}
-                      </GroupAnchor>
-                    ))}
-                    {activity && activityInBody ? (
-                      <div data-record-activity>{stack([activity])}</div>
-                    ) : null}
-                    <FoldedSectionsLine
-                      sections={bodySections.filter(isFolded)}
-                      pending={bodySections.filter(isPending).length}
-                      onUnfold={unfold}
-                    />
-                    {footer}
-                  </div>
-                  {activity && !activityInBody ? (
-                    <div
-                      data-record-activity
-                      className="record-activity text-sm"
-                    >
-                      {stack([activity])}
-                    </div>
-                  ) : null}
-                </div>
-                <HintLine
-                  cursor={cursor}
-                  current={currentTitle}
-                  columns={mode.columns}
-                  needs={targets.needs}
-                  stepper={targets.stepper}
-                />
-              </div>
-            </div>
-          </RecordSectionControlsContext.Provider>
-        </SectionIndexRegistryContext.Provider>
-      </ContinuousDetailContext.Provider>
+                  {expanded ? "Latest only" : "All activity"}
+                </button>
+              ) : (
+                section.headerAction
+              ),
+          },
+        ]}
+      />
     </div>
   );
 }
 
-/** A group's fragment target around its sections; its label lives in the index. */
-function GroupAnchor({ id, children }: { id: string; children: ReactNode }) {
+/**
+ * A record laid out as cards on the page canvas. The title bar runs across
+ * the top; below it a main column holds the facts card, the open section cards
+ * (the record's primary section and each section holding something for the
+ * member) and one "More on this record" card of one-line ledger rows, beside a
+ * sticky summary column of the summary, Needs you and Activity cards. Narrow
+ * panes, phones, coarse pointers and the inspector read the same cards as one
+ * stack. A hosted native workspace keeps every section open.
+ */
+export function RecordWorkspace({
+  title,
+  groups,
+  activityId,
+  facts,
+  summary,
+  checklist,
+  attention,
+  storageKey,
+  variant = "page",
+  footer,
+}: {
+  /** The title bar: breadcrumb, title, badges and commands. */
+  title?: ReactNode;
+  groups: IndexedSectionGroup[];
+  /** The section drawn as the Activity card. */
+  activityId?: string;
+  /** Every singular fact. */
+  facts?: ReactNode;
+  /** The record's key figures and the step to its neighbours. */
+  summary?: ReactNode;
+  /** Needs you and the record's quality checks. */
+  checklist?: ReactNode;
+  /** Sections holding something for the member: they open as cards. */
+  attention?: ReadonlySet<string>;
+  /** Where the member's open and closed sections are remembered. */
+  storageKey?: string;
+  /** `inspector`: the side panel beside a list, one narrow stack without keys. */
+  variant?: "page" | "inspector";
+  /** Rendered after the last card. */
+  footer?: ReactNode;
+}) {
+  const page = variant === "page";
+  const [hosted] = useState(isHosted);
+  const sections = groups.flatMap((group) => group.sections);
+  const activity = sections.find((section) => section.id === activityId);
+  const body = sections.filter((section) => section !== activity);
+  const primary = groups[0]?.sections.find((section) => section !== activity);
+  const cards = body.filter(
+    (section) =>
+      hosted || section === primary || attention?.has(section.id) === true,
+  );
+  const rows = body.filter((section) => !cards.includes(section));
+  const rowIds = new Set(rows.map((section) => section.id));
+  const collapsed = new Set(
+    sections
+      .filter((section) => section.collapsed)
+      .map((section) => section.id),
+  );
+  // Ledger lines start closed; cards, Activity and sections nested inside a
+  // section's body (embedded analytics) start open.
+  const defaultOpen = (id: string) => !rowIds.has(id) && !collapsed.has(id);
+  const fine = useFineDesktop();
+  // Closed lines mount their bodies, hidden, only on a desktop page: a phone
+  // would render every table's cards to report one line each.
+  const { controls, reveal } = useSectionOpenState(
+    hosted ? null : (storageKey ?? null),
+    defaultOpen,
+    page && fine,
+  );
+  const [activityExpanded, setActivityExpanded] = useState(false);
+  // A link into a closed section, the folded facts or Activity's older
+  // entries opens what holds it.
+  const revealTarget = useCallback(
+    (target: HTMLElement) => {
+      const section = target.closest<HTMLElement>("[data-detail-section]");
+      if (section) reveal(section.id);
+      if (target.closest("[data-record-activity]")) setActivityExpanded(true);
+      target
+        .closest<HTMLElement>("[data-record-facts]")
+        ?.dispatchEvent(new CustomEvent("record-facts-reveal"));
+    },
+    [reveal],
+  );
+  const {
+    workspaceRef,
+    bodyRef,
+    registerSection,
+    unfolded,
+    unfold,
+    isFolded,
+    isPending,
+    indexGroups,
+    activeId,
+  } = useIndexedSections(groups, revealTarget);
+  const cursor = useRecordKeys(workspaceRef, page && fine, controls, activeId);
+  const targets = useKeyTargets(workspaceRef);
+  const currentTitle = indexGroups
+    .flatMap((group) => [group, ...group.sections])
+    .find((entry) => entry.id === activeId)?.title;
+  const folded = body.filter(isFolded);
   return (
     <div
-      id={id}
-      data-detail-group
-      tabIndex={-1}
-      className="outline-none focus-visible:outline-2 focus-visible:outline-ring"
+      ref={workspaceRef}
+      data-record-workspace={variant}
+      className="record-workspace @container/record"
     >
-      {children}
+      <ContinuousDetailContext.Provider value>
+        <SectionIndexRegistryContext.Provider value={registerSection}>
+          <RecordSectionControlsContext.Provider value={controls}>
+            {title != null ? <div className="record-title">{title}</div> : null}
+            <div className="record-columns">
+              <div className="record-side">
+                {summary != null ? (
+                  <div className="record-summary-slot">{summary}</div>
+                ) : null}
+                {checklist != null ? (
+                  <div className="record-checklist-slot">{checklist}</div>
+                ) : null}
+                {activity ? (
+                  <ActivityCard
+                    section={activity}
+                    expanded={activityExpanded}
+                    onExpandedChange={setActivityExpanded}
+                  />
+                ) : null}
+              </div>
+              <div ref={bodyRef} className="record-main">
+                {facts}
+                {hosted ? (
+                  // The native app opens a record at a group (`#evidence`), so
+                  // a hosted workspace keeps each group as an anchor.
+                  groups.map((group) => {
+                    const members = cards.filter((section) =>
+                      group.sections.includes(section),
+                    );
+                    return members.length > 0 ? (
+                      <div
+                        key={group.id}
+                        id={group.id}
+                        data-detail-group
+                        tabIndex={-1}
+                        className="focus:outline-none"
+                      >
+                        <SectionStack
+                          card
+                          sections={members}
+                          unfolded={unfolded}
+                        />
+                      </div>
+                    ) : null;
+                  })
+                ) : (
+                  <SectionStack card sections={cards} unfolded={unfolded} />
+                )}
+                <LedgerCard
+                  title="More on this record"
+                  caption={
+                    page
+                      ? "One line each. Open a line to see it in full."
+                      : undefined
+                  }
+                  sections={rows}
+                  folded={folded}
+                  pending={body.filter(isPending).length}
+                  unfolded={unfolded}
+                  onUnfold={unfold}
+                />
+                {footer}
+              </div>
+            </div>
+            {page ? (
+              <HintLine
+                cursor={cursor}
+                current={currentTitle}
+                needs={targets.needs}
+                stepper={targets.stepper}
+              />
+            ) : null}
+          </RecordSectionControlsContext.Provider>
+        </SectionIndexRegistryContext.Provider>
+      </ContinuousDetailContext.Provider>
     </div>
   );
 }

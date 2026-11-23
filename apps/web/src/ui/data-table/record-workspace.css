@@ -1,266 +1,371 @@
 /*
-  Record workspace: singular facts in a thin left rail, plural records in a
-  body whose sections share one set of tracks, signals pinned above it and
-  Activity beside it. Every width below is the record pane's (the `record` container), never the viewport's.
+  Record cards: a record page, the inspector and the Settings and Account
+  pages draw white cards on the cool grey page canvas. Every width below is
+  the record pane's (the `record` container), never the viewport's.
 
-  The stacked layout is the base: phones, coarse pointers and hosted native
-  workspaces read the rail, the signals, the sections and Activity in order.
+  The stack is the base: phones, coarse pointers, the inspector and narrow
+  panes read the title, the summary, Needs you, the facts, the section cards
+  and the ledger card, then Activity. A fine-pointer pane of 1040px or more
+  puts the summary column beside the main column.
 */
-.record-frame {
-  --record-rail-width: 10.75rem;
-  --record-activity-width: 17.25rem;
-  --record-hints-height: 0px;
+:root {
+  --record-card-gap: 0.875rem;
+  --record-card-pad: 1rem;
+  --record-side-width: 18.75rem;
+}
+.record-workspace {
   min-width: 0;
+  min-height: calc(100dvh - var(--app-chrome-top));
+  background: var(--page-canvas);
+  padding: var(--record-card-gap);
+  color: var(--foreground);
 }
-.record-rail {
-  min-width: 0;
-  border-bottom: 1px solid var(--border);
-}
-.record-rail-scroll {
-  padding: 0.5rem 0.5rem 0.75rem;
-}
-.record-index,
-.record-hints {
-  display: none;
-}
-.record-jump {
-  position: sticky;
-  top: var(--app-chrome-top);
-  z-index: 30;
-  background: var(--card);
-}
-.record-signals {
-  min-width: 0;
-  background: var(--card);
-  border-bottom: 1px solid var(--border);
-}
-.record-main,
-.record-body,
-.record-activity {
-  min-width: 0;
-}
-.record-body,
-.record-activity {
+.record-workspace[data-record-workspace="inspector"] {
+  --record-card-pad: 0.75rem;
+  min-height: 0;
   padding: 0.5rem;
 }
-.record-body [data-detail-section]:not([hidden]),
-.record-body [data-folded-sections] {
-  margin-bottom: var(--section-gap);
+
+.record-cards {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--record-card-gap);
 }
-.record-body [data-detail-section] {
-  scroll-margin-top: calc(
-    var(--app-chrome-top) + var(--record-signals-height, 2rem) + 0.5rem
-  );
+
+.record-card {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--card);
+  padding: var(--record-card-pad);
 }
+.record-card-heading {
+  margin-bottom: 0.5rem;
+}
+/* A card's heading needs no rule under it: the card's edge already groups it. */
+.record-card [data-slot="section-heading"] {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.record-card[data-folded] {
+  padding-block: 0.625rem;
+}
+
+.record-title {
+  min-width: 0;
+  padding: 0.25rem 0.25rem var(--record-card-gap);
+}
+
+.record-columns {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--record-card-gap);
+}
+/* Stacked, the summary column's cards take their places in the one column:
+   summary and Needs you lead, Activity closes the page. */
+.record-side {
+  display: contents;
+}
+.record-summary-slot {
+  order: 1;
+}
+.record-checklist-slot {
+  order: 2;
+}
+.record-main {
+  order: 3;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--record-card-gap);
+}
+.record-activity {
+  order: 4;
+  min-width: 0;
+}
+.record-main [data-detail-section],
+.record-activity [data-detail-section] {
+  scroll-margin-top: calc(var(--app-chrome-top) + 0.75rem);
+}
+
+/* Activity shows its latest entries until the member opens the whole timeline. */
+.record-activity:not([data-expanded]) [data-record-card] > div:last-child {
+  max-height: 15rem;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, #000 80%, transparent);
+}
+
 /* The J/K cursor: one row, marked on its leading edge. */
-.record-frame [data-row-cursor] {
+.record-workspace [data-row-cursor] {
   background: var(--brand-action-create-surface);
   box-shadow: inset 2px 0 0 var(--link);
 }
 
-/* A hosted native workspace leads with the record's sections (a Run's report
-   and timeline): identity first, then the sections, then the facts. */
-:root[data-hosted-workspace] .record-frame {
+/* Ledger rows: chevron, name, one-line digest, count. */
+.record-ledger {
   display: flex;
+  min-width: 0;
   flex-direction: column;
 }
-:root[data-hosted-workspace]
-  :is(.record-rail, .record-rail-scroll, .record-rail-content) {
+.record-ledger-row {
+  min-width: 0;
+  border-top: 1px solid var(--hairline-soft);
+}
+.record-ledger-row:first-child {
+  border-top: 0;
+}
+.record-ledger-head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+}
+.record-ledger-trigger {
+  display: grid;
+  width: 100%;
+  min-height: 2.75rem;
+  grid-template-columns: 0.75rem minmax(6rem, 11rem) minmax(0, 1fr) auto;
+  padding-block: 0.25rem;
+  align-items: center;
+  column-gap: 0.625rem;
+  border-radius: 0.25rem;
+  padding-inline: 0.125rem;
+  text-align: left;
+  font-size: var(--text-base);
+  line-height: var(--text-base--line-height);
+  outline: none;
+}
+.record-ledger-trigger:hover {
+  background: var(--row-hover);
+}
+.record-ledger-trigger:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+.record-ledger-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.record-ledger-digest {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+}
+.record-ledger-figure {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}
+.record-ledger-actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+}
+.record-ledger-body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--section-body-gap);
+  padding: 0.25rem 0 0.75rem;
+}
+.record-ledger [data-folded-sections] {
+  border-top: 1px solid var(--hairline-soft);
+  padding-top: 0.5rem;
+}
+.record-ledger [data-folded-sections]:first-child {
+  border-top: 0;
+}
+/* A narrow card drops the digest under the name. */
+@container record (max-width: 30rem) {
+  .record-ledger-trigger {
+    grid-template-columns: 0.75rem minmax(0, 1fr) auto;
+    row-gap: 0;
+    padding-block: 0.375rem;
+  }
+  .record-ledger-digest {
+    grid-row: 2;
+    grid-column: 2 / -1;
+    white-space: normal;
+  }
+}
+
+/* Facts: every singular fact as a label over its value, four to a row in
+   the main column and two in the inspector and on a narrow pane. */
+.record-facts {
+  container: facts / inline-size;
+}
+.record-facts-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem 1.25rem;
+}
+@container facts (max-width: 48rem) {
+  .record-facts-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@container facts (max-width: 36rem) {
+  .record-facts-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.record-facts-grid :is(.ledger-container, .ledger, [data-facts-group]) {
   display: contents;
 }
-:root[data-hosted-workspace] [data-slot="record-identity"] {
+.record-facts-grid [data-facts-more]:not([hidden]) {
+  display: contents;
+}
+.record-facts-grid .ledger[data-ledger] > .ledger-row {
+  display: grid;
+  grid-column: auto;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-content: start;
+  column-gap: 0.25rem;
+  row-gap: 0.125rem;
+  padding: 0;
+  border-top: 0;
+}
+.record-facts-grid .ledger[data-ledger] > .ledger-row[data-full-width="true"],
+.record-facts-grid :is([data-folded-facts], [data-rail-section]) {
+  grid-column: 1 / -1;
+}
+.record-facts-grid
+  .ledger[data-ledger]
+  > .ledger-row
+  > [data-ledger-slot="primary"] {
+  grid-row: 1;
+  grid-column: 1 / -1;
+  font-size: var(--text-xs);
+  line-height: var(--text-xs--line-height);
+}
+.record-facts-grid
+  .ledger[data-ledger]
+  > .ledger-row
+  > [data-ledger-slot="secondary"] {
+  grid-row: 2;
+  grid-column: 1;
+  font-weight: 500;
+}
+.record-facts-grid
+  .ledger[data-ledger]
+  > .ledger-row
+  > [data-ledger-slot="actions"] {
+  grid-row: 2;
+  grid-column: 2;
+}
+.record-facts-grid [data-rail-section]:empty {
+  display: none;
+}
+
+/* The hint line names the keys; only a fine-pointer page has them. */
+.record-hints {
+  display: none;
+}
+
+/* A hosted native workspace keeps the look the Apple apps shipped with: no
+   canvas and no card boxes; the title, the sections, then the facts. */
+:root[data-hosted-workspace] .record-workspace {
+  min-height: 0;
+  padding: 0;
+}
+:root[data-hosted-workspace] .record-card {
+  border: 0;
+  border-radius: 0;
   padding: 0.5rem;
+}
+:root[data-hosted-workspace] .record-title {
+  padding: 0.5rem;
+}
+:root[data-hosted-workspace] .record-columns {
+  gap: 0;
 }
 :root[data-hosted-workspace] .record-main {
-  order: 1;
+  display: contents;
 }
 :root[data-hosted-workspace] [data-record-facts] {
-  order: 2;
+  order: 5;
   border-top: 1px solid var(--border);
-  padding: 0.5rem;
 }
 
 @media (min-width: 48rem) and (hover: hover) and (pointer: fine) {
-  @container record (min-width: 50rem) {
-    :root:not([data-hosted-workspace]) .record-frame {
-      --record-hints-height: 1.25rem;
-      display: grid;
-      grid-template-columns: var(--record-rail-width) minmax(0, 1fr);
-      align-items: start;
-    }
-    :root:not([data-hosted-workspace]) .record-rail {
-      position: sticky;
-      top: var(--app-chrome-top);
-      display: flex;
-      height: calc(100dvh - var(--app-chrome-top));
-      flex-direction: column;
-      border-right: 1px solid var(--border);
-      border-bottom: 0;
-    }
-    :root:not([data-hosted-workspace]) .record-rail-scroll {
-      min-height: 0;
-      flex: 1 1 auto;
-      overflow-y: auto;
-      overscroll-behavior: contain;
-      padding: 0.5rem 0.625rem 0.75rem;
-    }
-    :root:not([data-hosted-workspace]) .record-index {
-      display: block;
-      max-height: 45%;
-      flex: none;
-      overflow-y: auto;
-      overscroll-behavior: contain;
-      border-top: 1px solid var(--border);
-      padding: 0.375rem 0.5rem 0.5rem;
-    }
-    :root:not([data-hosted-workspace]) .record-jump {
-      display: none;
-    }
-    :root:not([data-hosted-workspace]) .record-main {
-      display: flex;
-      min-height: calc(100dvh - var(--app-chrome-top));
-      flex-direction: column;
-    }
-    :root:not([data-hosted-workspace]) .record-signals {
-      position: sticky;
-      top: var(--app-chrome-top);
-      z-index: 20;
-    }
-    :root:not([data-hosted-workspace]) .record-main-grid {
-      flex: 1 1 auto;
-    }
-    :root:not([data-hosted-workspace]) .record-body,
-    :root:not([data-hosted-workspace]) .record-activity {
-      padding: 0.5rem 0.875rem 0.75rem;
-    }
-    :root:not([data-hosted-workspace]) .record-hints {
-      position: sticky;
-      bottom: 0;
-      z-index: 20;
-      display: flex;
-      height: var(--record-hints-height);
-      flex: none;
-      align-items: center;
-      gap: 0.75rem;
-      overflow: hidden;
-      border-top: 1px solid var(--border);
-      background: var(--sidebar);
-      padding-inline: 0.875rem;
-      white-space: nowrap;
-    }
+  :root:not([data-hosted-workspace]) {
+    --record-card-pad: 1.125rem 1.25rem;
+  }
+  :root:not([data-hosted-workspace]) .record-workspace,
+  :root:not([data-hosted-workspace]) .record-cards {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+  :root:not([data-hosted-workspace])
+    .record-workspace[data-record-workspace="page"] {
+    padding: 1.25rem 1.5rem 0;
+  }
+  :root:not([data-hosted-workspace]) .record-ledger-trigger {
+    min-height: 2.25rem;
+  }
+  :root:not([data-hosted-workspace]) .record-hints {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    display: flex;
+    height: 1.25rem;
+    align-items: center;
+    gap: 0.75rem;
+    overflow: hidden;
+    margin: var(--record-card-gap) -1.5rem 0;
+    border-top: 1px solid var(--border);
+    background: var(--sidebar);
+    padding-inline: 1.5rem;
+    white-space: nowrap;
+  }
 
-    /* Sections share rows on one set of tracks, so their edges line up down
-       the page: `--record-tracks` and each section's `--record-span` come from
-       `useSectionTracks`. Until they are written, a section takes the row. */
-    :root:not([data-hosted-workspace]) .record-body [data-detail-group] {
+  @container record (min-width: 60rem) {
+    :root:not([data-hosted-workspace])
+      [data-record-workspace="page"]
+      .record-columns {
       display: grid;
-      grid-template-columns: repeat(var(--record-tracks, 1), minmax(0, 1fr));
+      grid-template-columns: minmax(0, 1fr) var(--record-side-width);
       align-items: start;
-      column-gap: 1.5rem;
+      column-gap: 1.125rem;
     }
-    :root:not([data-hosted-workspace]) .record-body [data-detail-section] {
-      min-width: 0;
-      grid-column: span var(--record-span, var(--record-tracks, 1));
-    }
-
-    /* The rail is too thin for a label beside its value: each fact stacks its
-       label over its value, and two short facts share a row. */
     :root:not([data-hosted-workspace])
-      .record-rail
-      .ledger[data-ledger="facts"] {
+      [data-record-workspace="page"]
+      .record-side {
+      position: sticky;
+      top: calc(var(--app-chrome-top) + var(--record-card-gap));
       display: flex;
-      flex-wrap: wrap;
-      column-gap: 0.5rem;
-    }
-    :root:not([data-hosted-workspace])
-      .record-rail
-      .ledger[data-ledger="facts"]
-      > .ledger-row {
-      display: grid;
-      min-width: 40%;
-      max-width: 100%;
-      flex: 1 1 auto;
-      grid-template-columns: minmax(0, 1fr) auto;
-      align-items: center;
-      column-gap: 0.25rem;
-      row-gap: 0;
-      padding-block: 0.125rem;
-      border-top: 0;
-      border-bottom: 1px solid var(--hairline-soft);
-    }
-    :root:not([data-hosted-workspace])
-      .record-rail
-      .ledger[data-ledger="facts"]
-      > .ledger-row[data-full-width="true"] {
-      flex-basis: 100%;
-    }
-    :root:not([data-hosted-workspace])
-      .record-rail
-      .ledger[data-ledger="facts"]
-      > .ledger-row
-      > [data-ledger-slot="primary"] {
-      grid-row: 1;
-      grid-column: 1 / -1;
-      padding-top: 0;
-      font-size: var(--text-xs);
-      line-height: 0.875rem;
-    }
-    :root:not([data-hosted-workspace])
-      .record-rail
-      .ledger[data-ledger="facts"]
-      > .ledger-row
-      > [data-ledger-slot="secondary"] {
-      grid-row: 2;
-      grid-column: 1;
-    }
-    :root:not([data-hosted-workspace])
-      .record-rail
-      .ledger[data-ledger="facts"]
-      > .ledger-row
-      > [data-ledger-slot="actions"] {
-      grid-row: 2;
+      max-height: calc(100dvh - var(--app-chrome-top) - 3rem);
       grid-column: 2;
-    }
-
-    /* The rail keeps each fact to its label and value: a satisfied check is
-       its mark alone, named on hover and to a screen reader, and a fact's
-       controls wait for the pointer or focus. */
-    :root:not([data-hosted-workspace])
-      .record-rail
-      [data-quality-state="satisfied"]
-      > [data-quality-label] {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      overflow: hidden;
-      clip-path: inset(50%);
-      white-space: nowrap;
-    }
-    :root:not([data-hosted-workspace])
-      .record-rail
-      .ledger[data-ledger="facts"]
-      > .ledger-row:not(:hover, :focus-within, :has([aria-expanded="true"]))
-      > [data-ledger-slot="actions"] {
-      opacity: 0;
-    }
-  }
-
-  @container record (min-width: 75rem) {
-    :root:not([data-hosted-workspace]) .record-main-grid[data-activity] {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) var(--record-activity-width);
-      align-items: start;
-    }
-    :root:not([data-hosted-workspace]) .record-activity {
-      position: sticky;
-      top: calc(var(--app-chrome-top) + var(--record-signals-height, 2rem));
-      max-height: calc(
-        100dvh - var(--app-chrome-top) - var(--record-signals-height, 2rem) -
-          var(--record-hints-height)
-      );
+      grid-row: 1;
+      flex-direction: column;
+      gap: var(--record-card-gap);
       overflow-y: auto;
       overscroll-behavior: contain;
-      border-left: 1px solid var(--border);
+    }
+    :root:not([data-hosted-workspace])
+      [data-record-workspace="page"]
+      .record-main {
+      grid-column: 1;
+      grid-row: 1;
     }
   }
+}
+
+/* The summary card leads with its first figure on a quiet link tint. */
+.record-summary-hero {
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--link) 7%, var(--card));
+  padding: 0.875rem 1rem;
 }

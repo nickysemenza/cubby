@@ -5,7 +5,10 @@ import { useState } from "react";
 
 import { entityDetailLink, isShortcodeRoutedEntity } from "~/entity/entities";
 import { suggestions } from "~/integrations/tanstack-query/generated/domains/suggestions.gen";
-import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
+import {
+  useSectionDigest,
+  useSectionEmpty,
+} from "~/ui/data-table/detail-section-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Stack } from "~/ui/layout";
@@ -40,6 +43,12 @@ export function RecordProposals({ id }: { id: string }) {
   );
   const clean = query.data?.meta.cleanCount ?? 0;
   useSectionEmpty(query.isSuccess && query.data.items.length === 0);
+  const pending = query.data?.meta.totalCount ?? query.data?.items.length;
+  useSectionDigest(
+    pending
+      ? `${pending} pending${clean > 0 ? ` · ${clean} clean to accept` : ""}`
+      : undefined,
+  );
   return (
     <section aria-label="Pending suggestions">
       <Stack gap="sm">

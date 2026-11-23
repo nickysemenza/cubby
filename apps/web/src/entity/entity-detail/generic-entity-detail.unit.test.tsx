@@ -232,8 +232,9 @@ describe("GenericEntityDetail", () => {
       { wrapper: harness.wrapper },
     );
     expect(container.querySelector("section#import-targets")).toBeNull();
+    // The section is not drawn, so the Needs you card holds its result.
     expect(
-      await screen.findByText(/Target outcomes · Defect/),
+      await screen.findByRole("link", { name: "Target outcomes" }),
     ).toBeInTheDocument();
   });
 
@@ -323,7 +324,7 @@ describe("GenericEntityDetail", () => {
     expect(categoryRecord.contains(categoryFilter)).toBe(false);
   });
 
-  it("lists every singular fact once in the rail, ahead of the sections", () => {
+  it("lists every singular fact once in the facts card, ahead of the sections", () => {
     const record = recordFor("product");
     const { container, rerender } = render(
       <GenericEntityDetail
@@ -344,9 +345,9 @@ describe("GenericEntityDetail", () => {
       { wrapper: harness.wrapper },
     );
     const facts = container.querySelector("[data-record-facts]");
-    const work = container.querySelector("#detail-group-work");
+    const work = container.querySelector(".record-main [data-detail-section]");
     if (!(facts instanceof HTMLElement) || !(work instanceof HTMLElement)) {
-      throw new Error("The rail's facts and the Work group must render");
+      throw new Error("The facts card and a section must render");
     }
     const fact = within(container).getByText("Category", {
       selector: '[data-slot="fact-label"]',
@@ -367,12 +368,14 @@ describe("GenericEntityDetail", () => {
       }),
     ).toHaveLength(1);
     expect(container.querySelector("#coverage")).not.toBeNull();
-    // An empty fact folds in the rail, which keeps it fillable.
+    // An empty fact folds in the facts card, which keeps it fillable; one a
+    // quality check is placed on stays a row.
     rerender(
       <GenericEntityDetail
         entity="product"
         record={{
           ...record,
+          model: null,
           fields: {
             ...record.fields,
             brandId: fieldValueFixture(
@@ -386,10 +389,11 @@ describe("GenericEntityDetail", () => {
       />,
     );
     expect(
-      within(
-        container.querySelector<HTMLElement>("[data-record-facts]")!,
-      ).getByText(/not recorded:/).parentElement?.textContent,
-    ).toContain("Brand");
+      within(container.querySelector<HTMLElement>("[data-record-facts]")!)
+        .getAllByText(/not recorded:/)
+        .map((line) => line.parentElement?.textContent)
+        .join(" "),
+    ).toMatch(/not recorded:(?!.*Brand).*Model/);
   });
 
   it("labels a book barcode as its ISBN", () => {
@@ -429,6 +433,7 @@ describe("GenericEntityDetail", () => {
       />,
       { wrapper: harness.wrapper },
     );
+    fireEvent.click(screen.getByRole("button", { name: /^All \d+ facts$/ }));
     expect(screen.getByText("ISBN-13")).toBeVisible();
     expect(screen.getByText("9780306406157")).toBeVisible();
     expect(screen.queryByText("UPC", { exact: true })).not.toBeInTheDocument();
@@ -442,7 +447,8 @@ describe("GenericEntityDetail", () => {
   });
 
   it("relation section header carries the loaded count and actions", async () => {
-    await harness.router.navigate({ to: "/", hash: "work" });
+    // A link to a ledger line opens it in place.
+    await harness.router.navigate({ to: "/", hash: "stocked-at" });
     const rows = [
       mock(inventoryListItem, { seed: 1 }),
       mock(inventoryListItem, { seed: 2 }),

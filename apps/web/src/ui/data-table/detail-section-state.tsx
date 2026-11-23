@@ -26,6 +26,23 @@ export function useSectionEmpty(empty: boolean) {
   }, [report, empty]);
 }
 
+/**
+ * One line that stands for a section's body while it is closed: what it holds
+ * in words ("2 mailboxes connected", "Matched · $42.99"). Pending reads report
+ * undefined, so the row keeps its declared digest. Outside a section it is a
+ * safe no-op.
+ */
+export const SectionDigestContext = createContext<
+  ((digest: string | undefined) => void) | null
+>(null);
+export function useSectionDigest(digest: string | undefined) {
+  const report = useContext(SectionDigestContext);
+  useEffect(() => {
+    report?.(digest || undefined);
+    return () => report?.(undefined);
+  }, [report, digest]);
+}
+
 /** What the section index shows for one section: list sections carry a row
  * count (0 included); other sections only report emptiness. */
 export interface SectionIndexState {

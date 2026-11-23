@@ -35,7 +35,10 @@ import { formatCount, formatCurrency } from "~/lib/number-format";
 import { parsePlainDate } from "~/lib/plain-date";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
-import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
+import {
+  useSectionDigest,
+  useSectionEmpty,
+} from "~/ui/data-table/detail-section-state";
 import { DatePickerInput } from "~/ui/dates/date-picker-input";
 import { DateRangeShortcuts } from "~/ui/dates/date-range-shortcuts";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
@@ -869,6 +872,11 @@ export function EntityTimeline<E extends TimelineEntity>({
     onRetry: () => void query.refetch(),
   });
   useSectionEmpty(isEmptyTimeline(data));
+  useSectionDigest(
+    data?.meta.totalCount
+      ? `${formatCount(data.meta.totalCount)} ${data.meta.totalCount === 1 ? "record" : "records"} on the timeline`
+      : undefined,
+  );
   const inBand = controlsPlacement === "band";
   const band = (hasRows: boolean, meta?: EntityTimelineMeta) =>
     inBand ? (

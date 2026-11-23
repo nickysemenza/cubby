@@ -1,4 +1,8 @@
-import { gotoAuthenticatedPage, uniqueName } from "./support/e2e-helpers";
+import {
+  gotoAuthenticatedPage,
+  showDetailSection,
+  uniqueName,
+} from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 import { seedProjectContributionPrerequisite } from "./fixtures/finance";
 
@@ -13,8 +17,7 @@ test("project contribution shows credits as a negative adjustment, both party li
     await seedProjectContributionPrerequisite(page, name);
   await gotoAuthenticatedPage(page, `/projects/${project.id}`);
 
-  const contribution = page.locator("section#contribution");
-  await contribution.scrollIntoViewIfNeeded();
+  const contribution = await showDetailSection(page, "contribution");
   await expect(contribution.getByText("Whole-group cost")).toBeVisible();
   await expect(
     contribution.getByText("Whole-group cost").locator("xpath=.."),

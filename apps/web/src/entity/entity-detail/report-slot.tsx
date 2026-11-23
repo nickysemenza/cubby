@@ -21,7 +21,10 @@ import { entityReport } from "~/integrations/tanstack-query/generated/domains/en
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { savedSentryEventId, sentryEventUrl } from "~/lib/error-diagnostics";
 import { formatCurrency } from "~/lib/number-format";
-import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
+import {
+  useSectionDigest,
+  useSectionEmpty,
+} from "~/ui/data-table/detail-section-state";
 import {
   StaticTable,
   type StaticTableColumn,
@@ -553,6 +556,14 @@ function useReportBlocks(
           block.rows.length === 0 &&
           !("actions" in block && block.actions?.length),
       ),
+  );
+  // The server's one line stands for the report while its section is closed.
+  useSectionDigest(
+    nested
+      ? undefined
+      : batched
+        ? report?.digest
+        : paged.data?.pages[0]?.digest,
   );
   const state = batched ? batch : paged;
   return {
