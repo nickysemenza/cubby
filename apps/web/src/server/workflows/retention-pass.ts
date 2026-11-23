@@ -4,7 +4,7 @@ import { z } from "zod";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { definePass } from "~/server/kernel/api";
 
-const IMAGE_EVENT_PAGE_SIZE = 400;
+const IMAGE_EVENT_PAGE_SIZE = 2_000;
 const PASS_LIMIT = 2_000;
 const imageEventPruneCursor = z.object({
   occurredAt: z.iso.datetime(),
@@ -31,8 +31,10 @@ export const retentionPass = definePass({
       availableAt: page.next ? undefined : new Date(Date.now() + 60 * 60_000),
       async publish(tx) {
         // A concurrent start may retain the old cursor. Replaying the range is safe.
-        await repairImageProcessingExecution(tx, 500);
+        // Repair and Pass pruning run once per cycle so later pages hold the gate only for their own events.
+        if (!after) await repairImageProcessingExecution(tx, 500);
         await pruneImageProcessingEvents(tx, page.ids);
+        if (after) return;
         await repositoryQueries(tx).execute(sql`
           WITH doomed AS (
             SELECT name, key FROM "Pass"

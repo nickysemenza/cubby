@@ -101,7 +101,7 @@ describe("Execution retention", () => {
 
     const occurredAt = "2020-01-01T00:00:00.000001Z";
     const attemptId = crypto.randomUUID();
-    const pageSize = 400;
+    const pageSize = 2_000;
     await db.execute(sql`
       INSERT INTO "ImageProcessingEvent" ("jobId", "eventKey", event, details, "occurredAt")
       SELECT ${jobId}::uuid, 'protected:' || n, 'execution.receipt',
