@@ -518,10 +518,13 @@ same record wins and the scope reruns.
 
 Background money applies commit after each bounded batch of at most 64 scopes,
 before the next batch can take the gate. Heavy batches publish in bounded
-pages, each with its own atomic writes and fence. A later page accepts the
-revision and sequence changes an earlier page committed only when the earlier
-page started at the values it expected. Intervening writers and explicit
-follow-ups still invalidate their scopes. Session timeouts bound in-flight statements. Each record update
+pages, each with its own atomic writes and fence. A later page accepts an
+earlier page's committed revision and sequence changes at the fence only when
+the earlier page started at the expected values. The later page may publish
+output computed before those writes. If the writes dirtied a later scope, its
+original claim sequence leaves it dirty so it reruns on fresh inputs.
+Intervening writers and explicit follow-ups still invalidate their scopes.
+Session timeouts bound in-flight statements. Each record update
 also compares the columns it sets with the values its load saw, and a changed
 value is a conflict; timestamps compare at the millisecond precision a loaded
 value carries. A member's write

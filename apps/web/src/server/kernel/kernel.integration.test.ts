@@ -3121,7 +3121,7 @@ describe("evidence-facts kernel", () => {
     ]);
   });
 
-  it("accepts only committed sibling writes across publication pages", async () => {
+  it("publishes later pages and reruns only the scopes dirtied by a sibling", async () => {
     const target = writes(vendor, ["name"], { entity: "vendor" });
     let publish = false;
     const external = "synthetic:split:external";
@@ -3133,14 +3133,16 @@ describe("evidence-facts kernel", () => {
       writes: [target],
       async load(reads, keys) {
         await Promise.all(
-          keys.map((key) => reads.for(key).prepare([vendor], async () => null)),
+          keys
+            .filter((key) => key === "b")
+            .map((key) => reads.for(key).prepare([vendor], async () => null)),
         );
         return new Map(keys.map((key) => [key, key]));
       },
       reconcile(key, c) {
         if (publish) {
           if (key === "c") c.decision("assignment", external, "value");
-          else
+          else if (key !== "d")
             for (let i = 0; i < 5100; i++)
               c.decision("assignment", `synthetic:split:${key}:${i}`, "value");
           if (key === "a")
@@ -3152,7 +3154,7 @@ describe("evidence-facts kernel", () => {
     const kernel = createKernel([
       defineModule({ name: "splitPublication", reconcilers: [reconciler] }),
     ]);
-    const scopes = ["a", "b", "c"].map((key) => ({
+    const scopes = ["a", "b", "c", "d"].map((key) => ({
       kind: reconciler.scope,
       key,
     }));
@@ -3200,6 +3202,7 @@ describe("evidence-facts kernel", () => {
       "applied",
       "applied",
       "conflict",
+      "applied",
     ]);
     expect(
       (
@@ -3208,10 +3211,14 @@ describe("evidence-facts kernel", () => {
           conflicts: number;
           attempts: number;
           claimToken: string | null;
-        }>(sql`SELECT "scopeKey", conflicts, attempts, "claimToken"
-        FROM "ScopeDirty" WHERE "scopeKind" = ${reconciler.scope}`)
+          due: boolean;
+        }>(sql`SELECT "scopeKey", conflicts, attempts, "claimToken", "availableAt" <= now() AS due
+        FROM "ScopeDirty" WHERE "scopeKind" = ${reconciler.scope} ORDER BY "scopeKey"`)
       ).rows,
-    ).toEqual([{ scopeKey: "c", conflicts: 1, attempts: 0, claimToken: null }]);
+    ).toEqual([
+      { scopeKey: "b", conflicts: 0, attempts: 0, claimToken: null, due: true },
+      { scopeKey: "c", conflicts: 1, attempts: 0, claimToken: null, due: true },
+    ]);
   });
 
   it("reports the final outcome once when a synchronous batch invalidates a sibling scope", async () => {

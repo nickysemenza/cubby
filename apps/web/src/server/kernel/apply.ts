@@ -656,7 +656,12 @@ async function claimedRows(
   return new Map(rows.rows.map((row) => [scopeId(row), row]));
 }
 
-type PendingPublication = { computed: Computed; claim: ClaimedScope };
+type PendingPublication = {
+  computed: Computed;
+  claim: ClaimedScope;
+  /** Latest seq attributable to committed sibling pages, for the fence only. */
+  fenceSeq?: number;
+};
 
 /** Capture the changes attributable to one page while no other writer can raise its fences. */
 async function siblingFences(q: Q, siblings: readonly PendingPublication[]) {
@@ -694,17 +699,17 @@ function advanceSiblingFences(
     const id = scopeId(sibling.claim);
     const previous = before.claims.get(id);
     const next = after.claims.get(id);
+    const fenceSeq = sibling.fenceSeq ?? sibling.claim.seq;
     if (
       previous?.live &&
       next?.live &&
-      Number(previous.seq) === sibling.claim.seq &&
-      Number(next.seq) !== sibling.claim.seq
-    )
-      sibling.claim = {
-        ...sibling.claim,
-        seq: Number(next.seq),
-        attempts: next.attempts,
-      };
+      Number(previous.seq) === fenceSeq &&
+      Number(next.seq) !== fenceSeq
+    ) {
+      sibling.fenceSeq = Number(next.seq);
+      // Settle with the load's seq so a scope dirtied by a sibling runs again.
+      sibling.claim = { ...sibling.claim, attempts: next.attempts };
+    }
   }
 }
 
@@ -714,30 +719,32 @@ function advanceSiblingFences(
  */
 async function fenceBatch(
   q: Q,
-  computed: readonly Computed[],
-  claimed: readonly ClaimedScope[],
+  page: readonly PendingPublication[],
   outputKeys: readonly Key[],
 ) {
   const keys = [
     ...new Set([
-      ...computed.flatMap((item) => [...item.keys.keys()]),
+      ...page.flatMap(({ computed }) => [...computed.keys.keys()]),
       ...outputKeys,
     ]),
   ].sort();
   const revisions = await readGatedKeyRevs(q, keys);
-  const current = await claimedRows(q, claimed, true);
+  const current = await claimedRows(
+    q,
+    page.map(({ claim }) => claim),
+    true,
+  );
   const active: { computed: Computed; claim: ClaimedScope }[] = [];
   const conflicted: ClaimedScope[] = [];
   const outcomes: Outcome[] = [];
-  for (const [index, item] of computed.entries()) {
-    const claim = claimed[index]!;
+  for (const { computed: item, claim, fenceSeq } of page) {
     const row = current.get(scopeId(item.scope));
     if (!row?.live) {
       outcomes.push(outcome(item.scope, "failed", [], new ClaimLapsedError()));
       continue;
     }
     if (
-      Number(row.seq) !== claim.seq ||
+      Number(row.seq) !== (fenceSeq ?? claim.seq) ||
       [...item.keys].some(([key, seen]) => (revisions.get(key) ?? 0) !== seen)
     ) {
       conflicted.push(claim);
@@ -865,19 +872,19 @@ async function heldProposals(
 async function applyBatch(
   tx: Database,
   registry: KernelRegistry,
-  computed: readonly Computed[],
-  claims: readonly ClaimedScope[],
+  page: readonly PendingPublication[],
   options: ApplyOptions,
   proposals: Proposals,
   captureSiblings?: () => Promise<void>,
 ): Promise<Outcome[]> {
   const q = repositoryQueries(tx);
+  const computed = page.map((item) => item.computed);
   const membershipsBefore = await relatedMemberships(
     tx,
     registry,
     indexChanges(computed, options),
   );
-  const fenced = await fenceBatch(q, computed, claims, [
+  const fenced = await fenceBatch(q, page, [
     ...plannedKeys(computed, options, registry),
     ...membershipKeys(membershipsBefore, false),
     ...(await mergeOutputKeys(q, computed, options)),
@@ -1446,7 +1453,13 @@ async function applyOne(
   proposals: Proposals,
 ): Promise<Outcome> {
   return (
-    await applyBatch(tx, registry, [computed], [claimed], options, proposals)
+    await applyBatch(
+      tx,
+      registry,
+      [{ computed, claim: claimed }],
+      options,
+      proposals,
+    )
   )[0]!;
 }
 
@@ -1786,8 +1799,7 @@ async function applyPage(
           applyBatch(
             nested,
             registry,
-            computed,
-            claimed,
+            page,
             options,
             proposals,
             siblings.length
