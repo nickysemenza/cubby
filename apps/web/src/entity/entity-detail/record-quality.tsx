@@ -1,7 +1,9 @@
 import {
   dataCheck,
   dataCheckPresentation,
+  dataChecksByEntity,
   scoredEntities,
+  type ScoredEntity,
 } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
 import { shortcodeEntities } from "@cubby/schemas/entity-roster";
@@ -34,6 +36,7 @@ const QualityContext = createContext<{
   resolution?: FieldExplanationOutput["envelope"];
 } | null>(null);
 const scored = new Set<Entity>(scoredEntities);
+const isScored = (entity: Entity): entity is ScoredEntity => scored.has(entity);
 
 const placementOf = (check: RecordQualityCheck) => {
   const parsed = dataCheck.safeParse(check.check);
@@ -78,6 +81,21 @@ export function QualityResult({ check }: { check: RecordQualityCheck }) {
 export function useFieldQuality(entity: Entity, id: string | undefined) {
   const context = useContext(QualityContext);
   return context?.entity === entity && context.id === id ? context : null;
+}
+
+/**
+ * The fields the entity's declared checks place a result on. Read from the
+ * declarations, not the record's quality read, so a fact placed by it never
+ * moves when that read lands after the member opened its editor.
+ */
+export function qualityCheckedFields(entity: Entity): ReadonlySet<string> {
+  if (!isScored(entity)) return new Set();
+  return new Set(
+    dataChecksByEntity[entity].options.flatMap((check) => {
+      const placement = dataCheckPresentation[check].placement;
+      return "field" in placement ? [placement.field] : [];
+    }),
+  );
 }
 
 export function fieldQualityChecks(
@@ -425,7 +443,7 @@ function AssessedRecordQuality({
 }
 
 export function RecordQualityProvider(props: RecordQualityProps) {
-  return scored.has(props.entity) ? (
+  return isScored(props.entity) ? (
     <AssessedRecordQuality key={`${props.entity}:${props.id}`} {...props} />
   ) : (
     <>{props.children}</>

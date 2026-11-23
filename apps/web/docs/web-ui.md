@@ -551,7 +551,9 @@ never call `PageWrapper` directly. Detail bodies use `DetailSections`
   embedded table omits the parent-reference column.
 - A field section folds absent values into one "N fields not recorded: …"
   `<details>` line (`FoldedFacts`) whose body keeps the Add controls; fields
-  with a quality check or required validation stay visible. Headings and disclosure follow
+  a declared quality check is placed on, or with required validation, stay
+  visible. The split reads only the record and declarations, never a later
+  read, so a fact never moves under its open editor. Headings and disclosure follow
   [shared headings](../DESIGN.md#shared-headings-and-actions). An empty portaled
   table toolbar leaves no border or spacing. Run detail owns the shared agent
   controls, transcript and progress presentation.

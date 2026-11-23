@@ -368,12 +368,14 @@ describe("GenericEntityDetail", () => {
       }),
     ).toHaveLength(1);
     expect(container.querySelector("#coverage")).not.toBeNull();
-    // An empty fact folds in the facts card, which keeps it fillable.
+    // An empty fact folds in the facts card, which keeps it fillable; one a
+    // quality check is placed on stays a row.
     rerender(
       <GenericEntityDetail
         entity="product"
         record={{
           ...record,
+          model: null,
           fields: {
             ...record.fields,
             brandId: fieldValueFixture(
@@ -391,7 +393,7 @@ describe("GenericEntityDetail", () => {
         .getAllByText(/not recorded:/)
         .map((line) => line.parentElement?.textContent)
         .join(" "),
-    ).toContain("Brand");
+    ).toMatch(/not recorded:(?!.*Brand).*Model/);
   });
 
   it("labels a book barcode as its ISBN", () => {

@@ -24,7 +24,7 @@ import { FoldedFacts } from "~/ui/records/facts";
 
 import { readPathValue } from "../read-path";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
-import { fieldQualityChecks, useFieldQuality } from "./record-quality";
+import { qualityCheckedFields } from "./record-quality";
 
 type Field = EntityFieldModel["fields"][number];
 
@@ -161,8 +161,10 @@ function useDetailFieldOverrides<E extends GenericDetailEntity>(
 
 /**
  * A field section: recorded facts as rows, and the absent ones folded into one
- * "N fields not recorded" line whose body keeps their Add controls. A field
- * with a quality check, or one its record requires, stays a visible row.
+ * "N fields not recorded" line whose body keeps their Add controls. A field a
+ * declared quality check is placed on, or one its record requires, stays a
+ * visible row. The split reads only the record and declarations: a fact that
+ * moved between the rows and the fold would remount its open editor.
  */
 export function EntityRecordFields<E extends GenericDetailEntity>({
   entity,
@@ -178,7 +180,7 @@ export function EntityRecordFields<E extends GenericDetailEntity>({
 }) {
   const queryClient = useQueryClient();
   const overrides = useDetailFieldOverrides(entity, record, fields);
-  const quality = useFieldQuality(entity, record.id);
+  const checked = qualityCheckedFields(entity);
   const model: readonly Field[] = entityMetadata(queryClient, entity).fields
     .fields;
   const folded = fields.flatMap((key) => {
@@ -187,7 +189,7 @@ export function EntityRecordFields<E extends GenericDetailEntity>({
       !field ||
       fieldRecorded(entity, record, field) ||
       field.requiredOnCreate ||
-      fieldQualityChecks(quality?.checks ?? [], key).length > 0
+      checked.has(key)
     )
       return [];
     return [field];
