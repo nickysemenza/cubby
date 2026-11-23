@@ -18,6 +18,7 @@ import {
   withTransactionOn,
   isTransaction,
 } from "~/server/db/helpers";
+import { textArrayParam } from "~/server/db/helpers/array-param";
 import {
   imageProcessingJob,
   imageProcessingSubmission,
@@ -48,17 +49,40 @@ export async function recordImageProcessingEvent(
  FROM "ImageProcessingJob" WHERE (id = ${input.jobId}::uuid OR "askId"=${input.jobId}::uuid) ON CONFLICT DO NOTHING`);
 }
 
+type ImageEventPruneCursor = { occurredAt: string; id: string };
+
+/** Walk the partial index and keep the timestamp's full precision in the cursor. */
+export async function readImageEventPrunePage(
+  db: Database,
+  after: ImageEventPruneCursor | null,
+  limit: number,
+): Promise<{ ids: string[]; next: ImageEventPruneCursor | null }> {
+  const { rows } = await unwrapDb(db).execute<ImageEventPruneCursor>(sql`
+    SELECT e.id, to_char(e."occurredAt", 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "occurredAt"
+    FROM "ImageProcessingEvent" e
+    WHERE e.event <> 'image.answer' AND e."occurredAt" < now() - interval '30 days'
+      ${after ? sql`AND (e."occurredAt", e.id) > (${after.occurredAt}::timestamp, ${after.id}::uuid)` : sql``}
+    ORDER BY e."occurredAt", e.id LIMIT ${limit + 1}`);
+  const candidates = rows.slice(0, limit);
+  return {
+    ids: candidates.map((row) => row.id),
+    // Wrap after the last page so newly eligible rows behind the cursor get another turn.
+    next: rows.length > limit ? (candidates.at(-1) ?? null) : null,
+  };
+}
+
 /**
- * Deletes events of terminal jobs older than 30 days and reports whether a full
- * batch went. Kept: each attempt's latest `execution.receipt` (the receipt
+ * Deletes candidate events of terminal jobs older than 30 days.
+ * Kept: each attempt's latest `execution.receipt` (the receipt
  * projection and the next append read only that row), `image.answer` rows and
  * any event bound as kernel evidence. A newer receipt is looked up within the
  * same job because an attempt's receipts are appended under its one job.
  */
 export async function pruneImageProcessingEvents(
-  db: Database | DrizzleTransaction,
-  limit: number,
-): Promise<boolean> {
+  db: Database,
+  ids: readonly string[],
+): Promise<void> {
+  if (!ids.length) return;
   const { imageExecutionEvidence } =
     await import("~/server/domains/image-processing/module");
   const terminal = sql.join(
@@ -67,25 +91,33 @@ export async function pruneImageProcessingEvents(
     ),
     sql`,`,
   );
-  const deleted = await unwrapDb(db).execute<{ id: string }>(sql`
+  // The candidate read is outside the gate. Recheck every deletion predicate
+  // and lock only eligible events inside the fenced publication. Lateral
+  // lookups keep job and binding checks scoped to each candidate.
+  await unwrapDb(db).execute(sql`
     WITH doomed AS (
       SELECT e.id FROM "ImageProcessingEvent" e
-      JOIN "ImageProcessingJob" j ON j.id = e."jobId"
-      WHERE j.state IN (${terminal})
+      JOIN LATERAL (
+        SELECT 1 FROM "ImageProcessingJob" j
+        WHERE j.id = e."jobId" AND j.state IN (${terminal})
+        LIMIT 1
+      ) terminal_job ON true
+      LEFT JOIN LATERAL (
+        SELECT true AS present FROM "EvidenceBinding" b
+        WHERE b."factKind" = ${imageExecutionEvidence.kind} AND b."factId" = e.id::text
+        LIMIT 1
+      ) binding ON true
+      WHERE e.id = ANY(${textArrayParam(ids)}::uuid[])
         AND e."occurredAt" < now() - interval '30 days'
         AND e.event <> 'image.answer'
+        AND binding.present IS NULL
         AND (e.event <> 'execution.receipt' OR EXISTS (
           SELECT 1 FROM "ImageProcessingEvent" newer
           WHERE newer."jobId" = e."jobId" AND newer.event = 'execution.receipt'
             AND newer.details->>'id' = e.details->>'id'
             AND (newer."occurredAt", newer.id) > (e."occurredAt", e.id)))
-        AND NOT EXISTS (
-          SELECT 1 FROM "EvidenceBinding" b
-          WHERE b."factKind" = ${imageExecutionEvidence.kind} AND b."factId" = e.id::text)
-      LIMIT ${limit} FOR UPDATE OF e SKIP LOCKED
-    ) DELETE FROM "ImageProcessingEvent" e USING doomed d WHERE e.id = d.id
-    RETURNING e.id`);
-  return deleted.rows.length === limit;
+      FOR UPDATE OF e SKIP LOCKED
+    ) DELETE FROM "ImageProcessingEvent" e USING doomed d WHERE e.id = d.id`);
 }
 
 /**

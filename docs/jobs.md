@@ -46,7 +46,7 @@ due. Dispatch event admission and funding resets can use the same sequence.
 | `derived.snapshot`         | `default`   | One ordered snapshot cursor: target, last UUID, page attempts and aggregate progress                                                                          |
 | `runs.reconcile`           | `default`   | Projects exhausted Run Passes and stopped dispatch execution onto Run status; checks active Runs every 15 minutes and idle work hourly                        |
 | `purchase.discovery`       | `default`   | Sender-attribution learning, retained-Email admission and mailbox-discovery admission; `senderAfter` stays in the cursor                                      |
-| `retention`                | `default`   | Bounded pruning of execution rows, hourly or immediately while a full page remains                                                                            |
+| `retention`                | `default`   | Bounded pruning of execution rows, with immediate image-event pages until the cursor wraps                                                                    |
 | `fields.reconcile`         | Request key | Admit a requested fields scope and attribute its model Asks to the requesting Run                                                                             |
 | `location.inventory`       | Location id | Requested inventory-evidence publication; each model turn is an Ask                                                                                           |
 | `email.purchase-discovery` | `default`   | Retained Email evidence linked to purchase records, 50 UUIDs per page, restarting hourly                                                                      |
@@ -68,7 +68,7 @@ Queue permits contain no work identity: the consumer invokes the kernel runner d
 
 The derived snapshot Pass walks views and typed snapshots in one scheduled bulk cycle. Source writes stay quick; reads may lag by up to an hour. The cursor lives in Pass; current snapshot state is the derived progress read.
 
-Retention repairs incomplete image execution and prunes completed Passes after eight days and cancelled Passes after fourteen. Unfinished work, Answers, source evidence, decisions, Run and RunStep stay. Calendar invalidation keeps its post-commit Durable Object fast path; only a failed mark starts the origin-keyed fallback Pass.
+Retention repairs incomplete image execution and prunes completed Passes after eight days and cancelled Passes after fourteen. It pages through image events older than 30 days in timestamp and ID order. Each page rechecks eligibility under the publication fence and commits the deletion with the cursor. The cursor advances past protected events and wraps at the cutoff, then waits an hour. Unfinished work, Answers, the latest receipt for each image attempt, bound evidence, source evidence, decisions, Run and RunStep stay. Calendar invalidation keeps its post-commit Durable Object fast path; only a failed mark starts the origin-keyed fallback Pass.
 
 See [background derived data](entities.md#background-derived-data) for snapshot families and [database capacity](infrastructure.md#postgresql-and-hyperdrive) for connection limits.
 

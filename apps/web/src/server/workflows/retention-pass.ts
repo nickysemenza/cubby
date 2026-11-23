@@ -1,35 +1,46 @@
 import { sql } from "drizzle-orm";
+import { z } from "zod";
 
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { definePass } from "~/server/kernel/api";
 
-const LIMIT = 2_000;
+const IMAGE_EVENT_PAGE_SIZE = 400;
+const PASS_LIMIT = 2_000;
+const imageEventPruneCursor = z.object({
+  occurredAt: z.iso.datetime(),
+  id: z.uuid(),
+});
 
-/** Execution rows and old image events expire; answers, decisions, evidence, Run history, attempt receipts and unfinished work stay. */
+/** Prune expired execution history and keep answers, decisions, evidence, Run history, latest attempt receipts and unfinished work. */
 export const retentionPass = definePass({
   name: "retention",
-  async run(_db, cursor, claim) {
-    const removed = await claim.fenced(async (tx) => {
-      const { repairImageProcessingExecution } =
-        await import("~/server/domains/image-processing/repo/image-processing");
-      const { pruneImageProcessingEvents } =
-        await import("~/server/domains/image-processing/repo/image-processing-history");
-      await repairImageProcessingExecution(tx, 500);
-      const events = await pruneImageProcessingEvents(tx, LIMIT);
-      const passes = await repositoryQueries(tx).execute<{ name: string }>(sql`
-        WITH doomed AS (
-          SELECT name, key FROM "Pass"
-          WHERE ("doneAt" IS NOT NULL AND "updatedAt" < now() - interval '8 days')
-            OR ("cancelledAt" IS NOT NULL AND "updatedAt" < now() - interval '14 days')
-          LIMIT ${LIMIT} FOR UPDATE SKIP LOCKED
-        ) DELETE FROM "Pass" p USING doomed d WHERE p.name = d.name AND p.key = d.key
-        RETURNING p.name`);
-      return events || passes.rows.length === LIMIT;
-    });
+  async run(db, cursor) {
+    const { repairImageProcessingExecution } =
+      await import("~/server/domains/image-processing/repo/image-processing");
+    const { readImageEventPrunePage, pruneImageProcessingEvents } =
+      await import("~/server/domains/image-processing/repo/image-processing-history");
+    const after = imageEventPruneCursor.safeParse(cursor).data ?? null;
+    const page = await readImageEventPrunePage(
+      db,
+      after,
+      IMAGE_EVENT_PAGE_SIZE,
+    );
     return {
-      cursor,
+      cursor: page.next,
       done: false,
-      availableAt: new Date(Date.now() + (removed ? 0 : 60 * 60_000)),
+      availableAt: page.next ? undefined : new Date(Date.now() + 60 * 60_000),
+      async publish(tx) {
+        // A concurrent start may retain the old cursor. Replaying the range is safe.
+        await repairImageProcessingExecution(tx, 500);
+        await pruneImageProcessingEvents(tx, page.ids);
+        await repositoryQueries(tx).execute(sql`
+          WITH doomed AS (
+            SELECT name, key FROM "Pass"
+            WHERE ("doneAt" IS NOT NULL AND "updatedAt" < now() - interval '8 days')
+              OR ("cancelledAt" IS NOT NULL AND "updatedAt" < now() - interval '14 days')
+            LIMIT ${PASS_LIMIT} FOR UPDATE SKIP LOCKED
+          ) DELETE FROM "Pass" p USING doomed d WHERE p.name = d.name AND p.key = d.key`);
+      },
     };
   },
 });

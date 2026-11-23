@@ -95,7 +95,7 @@ function semanticallyEmpty(diff: Difference): boolean {
   });
 }
 
-/** The stale-scope predicate the sweep and its trigger share. */
+/** The stale-scope predicate for the sweep's scope-key ordering. */
 const stale = (reconciler: Reconciler) => sql`
   s."scopeKind" = ${reconciler.scope} AND s.rules <> ${reconciler.rules}
   AND NOT EXISTS (SELECT 1 FROM "ScopeDirty" d
@@ -349,7 +349,7 @@ export function versionSweepPass(registry: () => KernelRegistry): Pass {
   });
 }
 
-/** Whether any scope is derived under rules older than its reconciler's. */
+/** Whether any eligible scope was derived under different rules. */
 export async function hasStaleScopes(
   db: Database,
   registry: KernelRegistry,
@@ -358,9 +358,17 @@ export async function hasStaleScopes(
   if (!reconcilers.length) return false;
   const result = await repositoryQueries(db).execute<{ stale: boolean }>(sql`
     SELECT ${sql.join(
-      reconcilers.map(
-        (reconciler) =>
-          sql`EXISTS (SELECT 1 FROM "ScopeState" s WHERE ${stale(reconciler)})`,
+      reconcilers.flatMap((reconciler) =>
+        [sql`<`, sql`>`].map(
+          (range) => sql`EXISTS (
+            SELECT 1 FROM "ScopeState" s
+            WHERE s."scopeKind" = ${reconciler.scope} AND s.rules ${range} ${reconciler.rules}
+              AND NOT EXISTS (SELECT 1 FROM "ScopeDirty" d
+                WHERE d."scopeKind" = s."scopeKind" AND d."scopeKey" = s."scopeKey")
+              AND NOT EXISTS (SELECT 1 FROM "Drift" p
+                WHERE p."scopeKind" = s."scopeKind" AND p."scopeKey" = s."scopeKey"
+                  AND p.rules = ${reconciler.rules}))`,
+        ),
       ),
       sql` OR `,
     )} AS stale`);
