@@ -162,14 +162,14 @@ GROUP BY c.client_id, c.token_endpoint_auth_method, c.require_pkce;
 ### PostgreSQL and Hyperdrive
 
 Neon owns the PostgreSQL database; the Neon console owns the production compute
-range and `max_connections`. Production compute autoscales and keeps
+range and `max_connections`. Production compute autoscales between 1 and 4 CU and keeps
 scale-to-zero (300 s idle) by choice: the first query after an idle gap waits
 for compute start (about 0.5 s median, 0.9 s p90), visible as a long
 `db.connect.phase.startup` on `db.client.connect`. The range belongs to the
 production endpoint: changing the project's default compute range does not
 resize an existing endpoint.
 
-The Hyperdrive origin connection caps are 40 strong + 12 cached + 40
+The Hyperdrive origin connection caps are 16 strong + 8 cached + 32
 background. All three configurations share origin compute; the cached pool needs
 headroom for short reads while expensive reads are running. Pool caps are soft
 limits, not interactive connection reservations. An idle database can still leave Hyperdrive
@@ -223,20 +223,21 @@ from an invocation that already holds a scope (a purchase dispatch delivering
 to its coordinator's services, for example) reuses that pool instead of opening
 a second one. The invariant is
 
-`2 × (background max_concurrency + telemetry max_concurrency + cron + live Durable Object requests) ≤ 40` (the background origin cap)
+`2 × (background max_concurrency + telemetry max_concurrency + cron + live Durable Object requests) ≤ 32` (the background origin cap)
 
 The queue consumers' `max_concurrency` bounds permit and telemetry
 invocations: 8 background (`packages/shared/src/background-queue-consumer.json`)
 and 1 telemetry (`apps/web/cloudflare.config.ts`), so at most 18 sockets. The
 cron runs its backstop and the daily pass one after the other, so 2 more. That
-leaves 20 sockets for Durable Object requests.
+leaves 12 sockets for Durable Object requests.
 
 Purchase coordinators (one `PurchaseImportRunAgent` per import Run) share
 six live `purchase.dispatch` Pass claims in the kernel partition
 `household.agent-turns`. Each Pass holds its slot while Pi works, including
 its model Asks and tools, and renews its 90-second claim every 30 seconds.
-This bounds coordinators to about 12 sockets, leaving room for CalendarFeed
-rebuilds and other Durable Object requests. Full partitions wait 15 seconds
+This bounds coordinators to about 12 sockets, the whole remainder: a
+CalendarFeed rebuild or another Durable Object request waits for a slot while
+all six are live. Full partitions wait 15 seconds
 with `provider_capacity`; cancellation or expiry frees a slot. Agent services
 fence every database/model turn on the Pass token. Alarms and durable member
 prompts request a Pass; observation reads do not load Pi. Stale-Run expiry
@@ -255,7 +256,7 @@ Watch for the margin running out:
   and growing waits in the machinery panel.
 - Long `db.acquire` spans on queue, cron and Durable Object traces.
 - The background configuration's origin connection count in the Hyperdrive
-  dashboard approaching 40.
+  dashboard approaching 32.
 - Coordinator capacity waits: `Pass.name = 'purchase.dispatch'` with
   `waitCause = 'provider_capacity'`, alongside its claim deadline, attempts and
   raw error in the Run's machinery panel. Live `claimPartition` rows across
