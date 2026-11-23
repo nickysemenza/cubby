@@ -20,6 +20,7 @@ import {
   gotoAuthenticatedPage,
   openFoldedFacts,
   showAllFacts,
+  showDetailSection,
   uniqueName,
   waitForAppHydration,
 } from "./support/e2e-helpers";
@@ -328,10 +329,16 @@ test("shows kernel diagnostics on Image and Location and follows a field Sweep R
     name: uniqueName(testInfo, "Synthetic workshop"),
     type: "room",
   });
-  // Machinery sits under the record title, outside any section.
-  for (const path of [`/images/${image.id}`, `/locations/${location.id}`]) {
+  for (const [path, section] of [
+    [`/images/${image.id}`, "associations"],
+    [`/locations/${location.id}`, "ai-description"],
+  ] as const) {
     await gotoAuthenticatedPage(page, path);
-    await page.getByText("Worker diagnostics", { exact: true }).first().click();
+    await (
+      await showDetailSection(page, section)
+    )
+      .getByText("Worker diagnostics", { exact: true })
+      .click();
     await page.screenshot({
       path: testInfo.outputPath(
         path.startsWith("/images")
