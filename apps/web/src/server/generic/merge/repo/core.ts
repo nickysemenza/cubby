@@ -26,8 +26,14 @@ import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { parseLinkEdgeKey } from "~/server/generic/entity-links/repo/entity-links";
 import type { RemovableEntity } from "~/server/generic/removal/repo/core";
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
+import {
+  enterRemovalGate,
+  reportIdentityWrites,
+  reportRowWrites,
+} from "~/server/generic/removal/repo/kernel-writes";
 import { assertNoOrdinaryReferences } from "~/server/generic/removal/repo/ordinary-reference-guard";
 import { resolveAllOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import type { ColumnValues } from "~/server/kernel/define";
 
 /** Preserve original text in keeper/donor order, deduplicating only exact note values. */
 export { mergeNotes } from "~/server/lib/merge-notes";
@@ -205,24 +211,40 @@ export const finalizeMerge = async <E extends RemovableEntity>(
   // ingredients) and its position relative to a caller's own writes can be
   // load-bearing when a partial unique index is involved. Only the tail —
   // cascade plus delete entries — is shared.
-  const removedRows =
+  // Every merge caller enters the household gate before its first row lock;
+  // re-entering here refuses a caller that did not, rather than reporting
+  // the tombstones out of gate order.
+  await enterRemovalGate(tx);
+  // SAFETY: returning() without a selection yields whole rows of this table.
+  const removedRows = (
     removal === "hard"
-      ? await tx
-          .delete(table)
-          .where(inArray(table.id, ids))
-          .returning({ id: table.id })
+      ? await tx.delete(table).where(inArray(table.id, ids)).returning()
       : await tx
           .update(table)
           .set({ deletedAt: new Date() })
           .where(and(inArray(table.id, ids), notDeleted(table)))
-          .returning({ id: table.id });
+          .returning()
+  ) as ColumnValues[];
+  // A reconciler reads the losers by row and read index; their tombstones
+  // raise those keys with the rows before the removal.
+  await reportRowWrites(
+    tx,
+    table,
+    removal === "hard"
+      ? removedRows
+      : removedRows.map((row) => ({ ...row, deletedAt: null })),
+    removal === "hard" ? Object.keys(getTableColumns(table)) : ["deletedAt"],
+  );
 
   // Old loser codes keep resolving (to the survivor) for reads; mutations
   // through them are refused. See ADR 0006.
-  await recordMergeRedirects(
+  await reportIdentityWrites(
     tx,
-    keepId,
-    removedRows.map((row) => String(row.id)),
+    await recordMergeRedirects(
+      tx,
+      keepId,
+      removedRows.map((row) => String(row.id)),
+    ),
   );
 
   // A merge with no actor context (`mergeIngredients`) still has to cascade, so

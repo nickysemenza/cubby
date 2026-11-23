@@ -1,3 +1,4 @@
+import { statementMerchantKey } from "@cubby/schemas/statement-answers";
 import { sql } from "drizzle-orm";
 
 import {
@@ -39,6 +40,28 @@ export const transactionCandidates = defineReadIndex(financialTransaction, {
         return `${value.slice(0, split)}:${Date.parse(`${value.slice(split + 1)}T00:00:00Z`) / 86_400_000}`;
       }),
     )})`,
+});
+/** One lookup value per transaction: its signed amount on any day. */
+export const transactionAmounts = defineReadIndex(financialTransaction, {
+  name: "transaction.amount",
+  values: (row) => [String(row.amount)],
+  where: (values) =>
+    sql`${financialTransaction.amount} = ANY(${textArrayParam(values)}::bigint[])`,
+});
+/** The legs a LedgerTransfer links. */
+export const transferLegs = defineReadIndex(financialTransaction, {
+  name: "transaction.transfer",
+  values: (row) => (row.ledgerTransferId ? [row.ledgerTransferId] : []),
+  where: (values) =>
+    sql`${financialTransaction.ledgerTransferId} = ANY(${columnArrayParam(values)})`,
+});
+/** Matches `Expense_bookingTransactionCode_idx`; deleted lines included. */
+export const bookingExpenses = defineReadIndex(expense, {
+  name: "expense.bookingTransaction",
+  values: (row) =>
+    row.bookingTransactionCode ? [row.bookingTransactionCode] : [],
+  where: (values) =>
+    sql`${expense.bookingTransactionCode} = ANY(${textArrayParam(values)})`,
 });
 export const acceptedOccurrences = defineReadIndex(sourceOccurrence, {
   name: "occurrence.transaction",
@@ -109,10 +132,38 @@ export const orderPayments = defineReadIndex(purchasePaymentEvidence, {
   where: (values) =>
     sql`${purchasePaymentEvidence.orderObservationId} = ANY(${columnArrayParam(values)})`,
 });
+const UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const LOWER = "abcdefghijklmnopqrstuvwxyz";
+/** A key's ASCII letters and digits, A-Z lower-cased; every other character is dropped. */
+const coarse = (key: string) =>
+  key
+    .replace(/[A-Z]/gu, (letter) => LOWER[UPPER.indexOf(letter)]!)
+    .replace(/[^a-z0-9]/gu, "");
+/**
+ * Vendors with a name or alias that can carry a requested key: a superset of
+ * the rows whose `values` hold it, of which the kernel keeps only those. A
+ * name whose key equals a requested key is either all ASCII, where trimming,
+ * collapsing and lower-casing touch only characters the reduction lower-cases
+ * the same way or drops, so both reductions agree; or it holds a non-ASCII
+ * character (its UTF-8 byte length exceeds its length), which every lookup
+ * selects.
+ */
+const vendorNamesLike = (values: readonly string[]) =>
+  sql`EXISTS (SELECT 1 FROM unnest(array_prepend(${vendor.name}, ${vendor.aliases})) alias
+    WHERE octet_length(alias) <> char_length(alias)
+      OR regexp_replace(translate(alias, ${UPPER}, ${LOWER}), '[^abcdefghijklmnopqrstuvwxyz0123456789]', '', 'g') = ANY(${textArrayParam([...new Set(values.map(coarse))])}))`;
 export const vendorNames = defineReadIndex(vendor, {
   name: "vendor.name",
   values: (row) =>
     [row.name, ...row.aliases].map((name) => name.trim().toLowerCase()),
-  where: (values) =>
-    sql`EXISTS (SELECT 1 FROM unnest(ARRAY[${vendor.name}] || ${vendor.aliases}) name WHERE lower(trim(name)) = ANY(${textArrayParam(values)}))`,
+  where: vendorNamesLike,
+});
+/** Vendor names and aliases by statement merchant key; an empty key is never read. */
+export const vendorMerchants = defineReadIndex(vendor, {
+  name: "vendor.merchant",
+  values: (row) =>
+    [...new Set([row.name, ...row.aliases].map(statementMerchantKey))].filter(
+      Boolean,
+    ),
+  where: vendorNamesLike,
 });

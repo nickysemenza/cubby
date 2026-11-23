@@ -27,6 +27,13 @@ export const bindingEventKey = (eventKey: string): Key =>
 export const bindingFactKey = (fact: FactRef): Key =>
   `binding:fact:${fact.kind}:${fact.id}`;
 
+/**
+ * The scopes that own one record: raised whenever a `RecordKey` row naming it
+ * is inserted, deleted, rejected, cleared, merged or moved to another scope.
+ */
+export const ownerKey = (entity: string, id: string): Key =>
+  `owner:${entity}:${id}`;
+
 /** A decision subject for a record. */
 export const recordSubject = (entity: string, id: string) => `${entity}:${id}`;
 /** A drift proposal's approval subject, by item or by class. */

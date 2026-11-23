@@ -208,6 +208,7 @@ import {
   applyMergePolicy,
   deleteByPolicy,
 } from "~/server/generic/removal/repo/dispositions";
+import { reportRowWrites } from "~/server/generic/removal/repo/kernel-writes";
 import {
   resolveAllOrThrow,
   resolveOrThrow,
@@ -2493,7 +2494,7 @@ export const purchaseDeleteEdgeHandlers = (
         inner,
         affectedTransactionIds,
       );
-      await inner
+      const removed = await inner
         .update(financialTransactionAllocation)
         .set({ deletedAt: new Date() })
         .where(
@@ -2504,7 +2505,16 @@ export const purchaseDeleteEdgeHandlers = (
             ),
             notDeleted(financialTransactionAllocation),
           ),
-        );
+        )
+        .returning();
+      // Transfer pairing and bookings read allocations by transaction; the
+      // removal's gate is held (deleteByPolicy enters it first).
+      await reportRowWrites(
+        inner,
+        financialTransactionAllocation,
+        removed.map((row) => ({ ...row, deletedAt: null })),
+        ["deletedAt"],
+      );
       await applyAllocationChanges(inner, {
         transactionIds: affectedTransactionIds,
         before: allocationsBefore,

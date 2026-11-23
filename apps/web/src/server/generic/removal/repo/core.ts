@@ -67,6 +67,7 @@ import { tombstoneEntityIdentities } from "~/server/entity-kernel/repo/entity-id
 import type { AuditEntryInput } from "~/server/generic/audit-log/repo/audit-log";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { softDeleteEntitySearchArtifactsTx } from "~/server/generic/embedding/repo/entity-embedding-cleanup";
+import { reportIdentityWrites } from "~/server/generic/removal/repo/kernel-writes";
 import { retireSuggestionTargetsTx } from "~/server/generic/suggestions/repo/suggestion-state";
 
 import { assertNoOrdinaryReferences } from "./ordinary-reference-guard";
@@ -168,7 +169,7 @@ export const cascadeRemoval = async <E extends RemovableEntity>(
   if (ids.length === 0) return;
 
   await assertNoOrdinaryReferences(tx, entity, ids);
-  await tombstoneEntityIdentities(tx, ids);
+  await reportIdentityWrites(tx, await tombstoneEntityIdentities(tx, ids));
   if (isSearchable(entity)) {
     await softDeleteEntitySearchArtifactsTx(tx, entity, [...ids]);
   }

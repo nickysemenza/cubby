@@ -48,6 +48,7 @@ import {
   bindingEventKey,
   bindingFactKey,
   decisionKey,
+  ownerKey,
   recordSubject,
   rowKey,
   tableKey,
@@ -179,13 +180,15 @@ export function policyRemoval<E extends "financialTransaction" | "vendor">(
 /**
  * Remove records through their table's delete policy, or the plain fallback.
  * A record already deleted elsewhere is left to the delete that removed it.
+ * Returns the rows the fallback removed, as they were before, so a caller
+ * outside an apply can raise their keys.
  */
 export async function removeRecords(
   tx: Database,
   target: ColumnRef,
   ids: readonly string[],
-): Promise<void> {
-  if (!ids.length) return;
+): Promise<ColumnValues[]> {
+  if (!ids.length) return [];
   const q = repositoryQueries(tx);
   const deletedAt = getTableColumns(target.table).deletedAt;
   if (target.remove) {
@@ -202,22 +205,31 @@ export async function removeRecords(
             )
         ).map((row) => row.id)
       : ids;
-    return live.length ? target.remove(tx, live) : undefined;
+    // The delete policy reports the rows it removes.
+    if (live.length) await target.remove(tx, live);
+    return [];
   }
-  if (deletedAt)
-    await q
-      .update(target.table)
-      .set({ deletedAt: new Date() })
-      .where(
-        and(
-          inArray(idColumn(target.table), [...ids]),
-          sql`${deletedAt} IS NULL`,
-        ),
-      );
-  else
-    await q
-      .delete(target.table)
-      .where(inArray(idColumn(target.table), [...ids]));
+  // SAFETY: returning() without a selection yields whole rows of this table.
+  const removed = (
+    deletedAt
+      ? await q
+          .update(target.table)
+          .set({ deletedAt: new Date() })
+          .where(
+            and(
+              inArray(idColumn(target.table), [...ids]),
+              sql`${deletedAt} IS NULL`,
+            ),
+          )
+          .returning()
+      : await q
+          .delete(target.table)
+          .where(inArray(idColumn(target.table), [...ids]))
+          .returning()
+  ) as ColumnValues[];
+  return deletedAt
+    ? removed.map((row) => ({ ...row, deletedAt: null }))
+    : removed;
 }
 
 export type MergeVerdict =
@@ -402,6 +414,8 @@ export async function mergeRecords(
     rowKey(target.name, loserId),
     decisionKey(recordSubject(entity, keepId)),
     decisionKey(recordSubject(entity, loserId)),
+    ownerKey(entity, keepId),
+    ownerKey(entity, loserId),
     ...before.flatMap((row) => rowIndexKeys(registry, target.name, row)),
     ...(await reindexRows(q, registry, target.name, [keepId, loserId], after)),
   ];
@@ -448,13 +462,19 @@ export async function mergeRecords(
     // A grouped accepted scope can still own another primary record. Its
     // surviving records keep their owner and the absorbed key stays rejected.
     if (remaining.length) continue;
-    await q.execute(sql`
+    const movedOwners = await q.execute<{
+      entity: string;
+      entityId: string;
+    }>(sql`
       UPDATE "RecordKey" child SET "scopeKind" = ${survivor!.kind}, "scopeKey" = ${survivor!.key},
         "naturalKey" = CASE WHEN EXISTS (
           SELECT 1 FROM "RecordKey" existing WHERE existing."scopeKind" = ${survivor!.kind} AND existing."scopeKey" = ${survivor!.key}
           AND existing.entity = child.entity AND existing."naturalKey" = child."naturalKey"
         ) THEN 'merged:' || ${owner.key} || ':' || child."naturalKey" ELSE child."naturalKey" END
-      WHERE child."scopeKind" = ${owner.kind} AND child."scopeKey" = ${owner.key} AND child."mergedAt" IS NULL`);
+      WHERE child."scopeKind" = ${owner.kind} AND child."scopeKey" = ${owner.key} AND child."mergedAt" IS NULL
+      RETURNING child.entity, child."entityId"`);
+    for (const row of movedOwners.rows)
+      keys.push(ownerKey(row.entity, row.entityId));
     // Retarget the event below, retaining the emitting scope's ownership.
     // Transferring ownership would let the survivor's next desired-binding
     // set remove absorbed evidence it reads but does not itself derive.

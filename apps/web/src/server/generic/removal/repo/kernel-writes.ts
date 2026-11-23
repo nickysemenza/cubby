@@ -16,6 +16,24 @@ export async function enterRemovalGate(tx: DrizzleTransaction): Promise<void> {
 }
 
 /**
+ * Report identity rows a tombstone or merge redirect changed: a saved
+ * reference resolved through them may now name another record or none. The
+ * removal and merge paths hold the household write gate.
+ */
+export async function reportIdentityWrites(
+  tx: DrizzleTransaction,
+  rows: readonly { id: string; kind: string; shortcode: string | null }[],
+): Promise<void> {
+  if (!rows.length) return;
+  const [{ identityKeys }, { raiseKeys }] = await Promise.all([
+    import("~/server/kernel/identity-keys"),
+    import("~/server/kernel/api"),
+  ]);
+  const keys = identityKeys(rows);
+  if (keys.length) await raiseKeys(tx, keys, "identity");
+}
+
+/**
  * Report rows a removal, detach or repoint wrote, with their values before
  * the write, the way an entity writer reports its own (ADR 0029 section 5):
  * the kernel raises the row, table and declared column keys a reconciler

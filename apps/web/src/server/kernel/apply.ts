@@ -84,6 +84,7 @@ import {
 } from "./gate";
 import { heldBaselineGap } from "./held-gap";
 import { mergeRecords, removeRecords } from "./identity";
+import { identityKeys } from "./identity-keys";
 import {
   membershipKeys,
   relatedMemberships,
@@ -96,6 +97,7 @@ import {
   columnKey,
   bindingEventKey,
   bindingFactKey,
+  ownerKey,
   recordSubject,
   rowKey,
   tableKey,
@@ -998,6 +1000,14 @@ async function applyBatch(
             : [],
         );
         await insertRows(q, entityIdentity, identities);
+        for (const key of identityKeys(
+          identities.map((row) => ({
+            id: row.id,
+            kind: row.kind,
+            shortcode: typeof row.shortcode === "string" ? row.shortcode : null,
+          })),
+        ))
+          changed.add(key);
         for (const group of orderedInserts(combined.inserts)) {
           const rows = group.map((entry) => ({
             ...entry.values,
@@ -1008,6 +1018,8 @@ async function applyBatch(
           for (const row of rows) touch(group[0]!.target, row);
         }
         await insertRows(q, recordKey, recordKeys);
+        for (const row of recordKeys)
+          changed.add(ownerKey(row.entity, row.entityId));
         await updateRecords(q, combined.updates);
         // Several scopes may set columns of one row; its membership is one row's.
         const published = new Map<string, Map<string, ColumnValues>>();
@@ -1059,6 +1071,11 @@ async function applyBatch(
               },
             );
         }
+        for (const plan of plans)
+          for (const entry of plan.diff.removals)
+            changed.add(ownerKey(recordEntity(entry.target), entry.id));
+        for (const entry of combined.rejections)
+          changed.add(ownerKey(recordEntity(entry.target), entry.id));
         if (combined.removals.length)
           await q.execute(sql`
       DELETE FROM "RecordKey" k USING jsonb_to_recordset(${JSON.stringify(plans.flatMap((plan) => plan.diff.removals.map((entry) => ({ kind: plan.computed.scope.kind, key: plan.computed.scope.key, entity: recordEntity(entry.target), id: entry.id }))))}::jsonb) AS r(kind text, key text, entity text, id uuid)

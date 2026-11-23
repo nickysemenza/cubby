@@ -15,10 +15,14 @@ import {
   vendorWebsiteDomain,
 } from "~/lib/vendor/domains";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { notDeleted, unwrapDb } from "~/server/db/helpers";
+import { notDeleted, unwrapDb, withTransactionOn } from "~/server/db/helpers";
 import { vendor } from "~/server/db/schema";
 import { readSenderAttributions } from "~/server/domains/purchase-import/repo/sender-attribution-read";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
+import {
+  enterVendorNameWrite,
+  reportVendorNameWrite,
+} from "~/server/domains/vendor/repo/vendor-name-write";
 import { resolveNames } from "~/server/entity-kernel/resolve";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
@@ -160,24 +164,33 @@ async function learnSenderAlias(
     );
   const aliases = [...owner.aliases, name];
   const research = `Order Email ${input.evidence ?? "(unknown message)"} from ${address} names the merchant "${name}".`;
-  await unwrapDb(db)
-    .update(vendor)
-    .set({
-      aliases,
-      notes: sql`concat_ws(E'\n\n', nullif(${vendor.notes}, ''), ${research}::text)`,
-    })
-    .where(eq(vendor.id, owner.id));
-  await logAuditEntry(db, actor, {
-    entityKind: "vendor",
-    entityId: owner.id,
-    action: "update",
-    changes: {
-      aliases: { from: owner.aliases, to: aliases },
-      notes: { from: null, to: null },
-    },
+  // The gate, the alias write and its key report commit together.
+  return withTransactionOn(db, async (tx) => {
+    await enterVendorNameWrite(tx);
+    const [before] = await tx
+      .select()
+      .from(vendor)
+      .where(eq(vendor.id, owner.id));
+    await tx
+      .update(vendor)
+      .set({
+        aliases,
+        notes: sql`concat_ws(E'\n\n', nullif(${vendor.notes}, ''), ${research}::text)`,
+      })
+      .where(eq(vendor.id, owner.id));
+    await reportVendorNameWrite(tx, owner.id, ["aliases", "notes"], before);
+    await logAuditEntry(tx, actor, {
+      entityKind: "vendor",
+      entityId: owner.id,
+      action: "update",
+      changes: {
+        aliases: { from: owner.aliases, to: aliases },
+        notes: { from: null, to: null },
+      },
+    });
+    await recordChange(tx, { kind: "source", categories: ["vendor"] });
+    return owner.id;
   });
-  await recordChange(db, { kind: "source", categories: ["vendor"] });
-  return owner.id;
 }
 
 /**

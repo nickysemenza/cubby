@@ -31,7 +31,16 @@ import type { DecisionInput, DecisionRef, ScopeRef } from "./define";
 import { markDirty } from "./dirty";
 import { takeHouseholdGate } from "./gate";
 import { clearRejected, markRejected, removeRecords } from "./identity";
-import { decisionKey, hashCanonical, VETO_SEPARATOR } from "./keys";
+import { rowIndexKeys } from "./index-keys";
+import {
+  columnKey,
+  decisionKey,
+  hashCanonical,
+  ownerKey,
+  rowKey,
+  tableKey,
+  VETO_SEPARATOR,
+} from "./keys";
 import { KernelContractError } from "./reads";
 import type { KernelRegistry } from "./registry";
 
@@ -157,6 +166,9 @@ export async function decide(
       id: rows[index]!.id,
     }));
     const discovered: ScopeRef[] = [];
+    // A rejection or its clearing changes the record's RecordKey ownership;
+    // a plain removal changes the record's row and read-index memberships.
+    const removalKeys: string[] = [];
     // A record's own scopes rerun on any decision about it, including one
     // they never read before (its first decision).
     const records = stored.flatMap((decision) =>
@@ -189,6 +201,7 @@ export async function decide(
       discovered.push(...(decision.scopes ?? []));
       const record = recordOf(decision.subject, registry);
       if (decision.channel === "rejection" && record) {
+        removalKeys.push(ownerKey(record.entity, record.id));
         if (decision.kind === "reject") {
           const owners = await markRejected(q, record.entity, record.id);
           discovered.push(...owners);
@@ -215,7 +228,18 @@ export async function decide(
                   },
                 ],
               },
-              () => removeRecords(tx, target, [record.id]),
+              async () => {
+                const removed = await removeRecords(tx, target, [record.id]);
+                for (const row of removed)
+                  removalKeys.push(
+                    tableKey(target.name),
+                    rowKey(target.name, record.id),
+                    ...[...target.columns, ...(target.createOnly ?? [])].map(
+                      (column) => columnKey(target.name, column),
+                    ),
+                    ...rowIndexKeys(registry, target.name, row),
+                  );
+              },
             );
           } else if (writers.reject) await writers.reject(tx, decision);
           else
@@ -264,6 +288,9 @@ export async function decide(
             ...(decision.other ? [decisionKey(decision.other)] : []),
           ]),
         ),
+        ...removalKeys,
+        // Decisions are insert-only: a row's read-index membership is fixed.
+        ...rows.flatMap((row) => rowIndexKeys(registry, "Decision", row)),
       ],
       discovers: discovered,
       reason: "decision",

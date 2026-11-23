@@ -19,7 +19,10 @@ import type { Database } from "~/server/db/database";
 import { withKernelApply } from "~/server/db/kernel-apply-context";
 import { factKey } from "~/server/db/kernel-schema";
 import { registerOwnedColumns } from "~/server/db/owned-columns";
-import { repositoryQueries } from "~/server/db/repository-access.boundary";
+import {
+  repositoryQueries,
+  type RepositoryQueryClient,
+} from "~/server/db/repository-access.boundary";
 
 import { append } from "./append";
 import { withAsk, type AskWaiters } from "./ask";
@@ -35,6 +38,7 @@ import {
   type EvidenceRow,
   type FactRef,
   type Json,
+  type Key,
   type Outcome,
   type Pass,
   type ScopeRef,
@@ -120,6 +124,12 @@ export type Kernel = {
        */
       before?: readonly ColumnValues[];
     },
+  ): Promise<number>;
+  /** Raise derived keys under the household write gate the caller holds. */
+  raiseKeys(
+    q: Pick<RepositoryQueryClient, "execute">,
+    keys: readonly Key[],
+    reason: string,
   ): Promise<number>;
   /**
    * Take the household write gate before an authored writer locks the rows
@@ -239,6 +249,10 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
       machinery(db, bound, viewer, ref, options),
     withAsk: (db, kind, input, options) =>
       withAsk(db, bound, kind, input, options),
+    raiseKeys: (q, keys, reason) =>
+      keys.length
+        ? markDirty(q, bound, { keys: [...new Set(keys)], reason })
+        : Promise.resolve(0),
     async lockWrites(db, write) {
       if (write.ids.length) await enterHouseholdGate(db);
     },

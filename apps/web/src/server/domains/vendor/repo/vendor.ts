@@ -63,6 +63,7 @@ import {
   shortcodeSetCondition,
   sqlEnumConstant,
   withTransaction,
+  withTransactionOn,
   withHouseholdWrite,
 } from "~/server/db/helpers";
 import { outer, related } from "~/server/db/helpers/related";
@@ -97,6 +98,10 @@ import { foldVendorAccountsInto } from "~/server/domains/vendor-account/repo/ven
 import { vendorPurchaseFolds } from "~/server/domains/vendor/policy/purchase-folds";
 import { vendorStatementLabels } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import { vendorSearch } from "~/server/domains/vendor/repo/search-read-vendor";
+import {
+  enterVendorNameWrite,
+  reportVendorNameWrite,
+} from "~/server/domains/vendor/repo/vendor-name-write";
 import { agentHintsLabel } from "~/server/entity-kernel/repo/detail-display-labels";
 import { resolveEntityAttachments } from "~/server/entity-kernel/repo/entity-display-image";
 import { patchEntityRows } from "~/server/entity-kernel/repo/entity-patch";
@@ -131,6 +136,7 @@ import {
   applyMergePolicy,
   policyDelete,
 } from "~/server/generic/removal/repo/dispositions";
+import { reportRowWrites } from "~/server/generic/removal/repo/kernel-writes";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   findOrCreateWithShortcode,
@@ -513,16 +519,21 @@ export const findOrCreateVendor = async (
       );
     return match.id;
   }
-  const { row } = await findOrCreateWithShortcode(db, "vendor", {
-    where: and(
-      sql`lower(btrim(${vendor.name})) = lower(${trimmed})`,
-      notDeleted(vendor),
-    ),
-    values: () => ({
-      name: trimmed,
-    }),
+  // The gate, the creation and its key report commit together.
+  return withTransactionOn(db, async (tx) => {
+    await enterVendorNameWrite(tx);
+    const { row, created } = await findOrCreateWithShortcode(tx, "vendor", {
+      where: and(
+        sql`lower(btrim(${vendor.name})) = lower(${trimmed})`,
+        notDeleted(vendor),
+      ),
+      values: () => ({
+        name: trimmed,
+      }),
+    });
+    if (created) await reportVendorNameWrite(tx, row.id, ["name"]);
+    return row.id;
   });
-  return row.id;
 };
 
 export const createVendor = vendorReader.createWriter(
@@ -1039,6 +1050,8 @@ export const mergeVendors = async (
       });
       if (aliases.length !== keeperNamed.aliases.length) {
         await tx.update(vendor).set({ aliases }).where(eq(vendor.id, keepId));
+        // Merchant and name lookups read the keeper's aliases.
+        await reportRowWrites(tx, vendor, [keeperNamed], ["aliases"]);
         aliasChange = { from: keeperNamed.aliases, to: aliases };
       }
     }
