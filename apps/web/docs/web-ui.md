@@ -517,7 +517,7 @@ never call `PageWrapper` directly. Detail bodies use `DetailSections`
   detail page whose body is one form omits `workspace` and keeps the header.
 - `DetailSections` renders `RecordWorkspace`: the 172px rail with the page's
   `facts` and the contents index, the pinned `signals` bar, the section groups
-  with each section as wide as its content needs, and the Activity column. Without `detail.groups` an entity
+  with the sections on one shared set of tracks, and the Activity column. Without `detail.groups` an entity
   gets Overview, Work, Evidence, Relations and Activity. Every section stays
   mounted; a group or section is a URL fragment, and a fragment naming a folded
   section opens it. [DESIGN.md](../DESIGN.md#layout) owns the widths and keys.

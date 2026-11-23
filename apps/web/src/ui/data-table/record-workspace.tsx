@@ -4,6 +4,7 @@ import {
   type RefObject,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -119,6 +120,112 @@ function useShortActivity(
     };
   }, [workspace, enabled]);
   return enabled && short;
+}
+
+const TRACK_WIDTH = 256;
+const TABLE_WIDTH = 480;
+const MAX_TRACKS = 6;
+
+/** Tracks per section so each row fills: `wants` holds a row's sections in order. */
+function packRow(wants: number[], tracks: number) {
+  const spans = [...wants];
+  let spare = tracks - spans.reduce((sum, span) => sum + span, 0);
+  // A table takes spare tracks before a paragraph does.
+  const order = [
+    ...spans.flatMap((span, index) => (span > 1 ? [index] : [])),
+    ...spans.flatMap((span, index) => (span > 1 ? [] : [index])),
+  ];
+  for (let turn = 0; spare > 0; turn++, spare--)
+    spans[order[turn % order.length]!]! += 1;
+  return spans;
+}
+
+/**
+ * Puts every body section on one shared set of tracks, so section edges line
+ * up from row to row. A paragraph section wants one track, a table as many as
+ * a table needs and a widened one the row; a row's sections then grow to fill
+ * it. CSS cannot fill rows on shared tracks, so the spans are written here.
+ */
+function useSectionTracks(
+  workspace: RefObject<HTMLElement | null>,
+  enabled: boolean,
+) {
+  useLayoutEffect(() => {
+    const body = workspace.current?.querySelector<HTMLElement>(".record-body");
+    if (!enabled || !body || typeof ResizeObserver === "undefined") return;
+    let frame = 0;
+    const pack = () => {
+      frame = 0;
+      const first = body.querySelector<HTMLElement>("[data-detail-group]");
+      if (!first) return;
+      const gap = Number.parseFloat(getComputedStyle(first).columnGap) || 0;
+      const width = first.getBoundingClientRect().width;
+      const tracks = Math.max(
+        1,
+        Math.min(MAX_TRACKS, Math.floor((width + gap) / (TRACK_WIDTH + gap))),
+      );
+      const track = (width - (tracks - 1) * gap) / tracks;
+      const table = Math.min(
+        tracks,
+        Math.ceil((TABLE_WIDTH + gap) / (track + gap)),
+      );
+      const write = (element: HTMLElement, name: string, value: string) => {
+        if (element.style.getPropertyValue(name) !== value)
+          element.style.setProperty(name, value);
+      };
+      write(body, "--record-tracks", String(tracks));
+      for (const group of body.querySelectorAll<HTMLElement>(
+        "[data-detail-group]",
+      )) {
+        let row: HTMLElement[] = [];
+        let wants: number[] = [];
+        const flush = () => {
+          packRow(wants, tracks).forEach((span, index) =>
+            write(row[index]!, "--record-span", String(span)),
+          );
+          row = [];
+          wants = [];
+        };
+        for (const section of group.querySelectorAll<HTMLElement>(
+          ":scope > [data-detail-section]:not([hidden])",
+        )) {
+          const folded = section.hasAttribute("data-folded");
+          const want = section.hasAttribute("data-wide")
+            ? tracks
+            : !folded &&
+                (section.hasAttribute("data-wideable") ||
+                  section.querySelector("table") !== null)
+              ? table
+              : 1;
+          if (wants.reduce((sum, span) => sum + span, 0) + want > tracks)
+            flush();
+          row.push(section);
+          wants.push(want);
+        }
+        if (row.length > 0) flush();
+      }
+    };
+    const schedule = () => {
+      if (frame === 0) frame = requestAnimationFrame(pack);
+    };
+    const resize = new ResizeObserver(schedule);
+    resize.observe(body);
+    // Tables arrive late, and folding or widening changes what a section wants.
+    const mutation = new MutationObserver(schedule);
+    mutation.observe(body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-wide", "data-folded", "hidden"],
+    });
+    pack();
+    return () => {
+      cancelAnimationFrame(frame);
+      resize.disconnect();
+      mutation.disconnect();
+      body.style.removeProperty("--record-tracks");
+    };
+  }, [workspace, enabled]);
 }
 
 /** The ids of the sections some part of which is on screen. */
@@ -502,8 +609,7 @@ function HintLine({
 
 /**
  * A record's page: singular facts in a thin sticky left rail over its contents
- * index, signals pinned above the record's collections, each as wide as its
- * content needs, and
+ * index, signals pinned above the record's collections on shared tracks, and
  * Activity in its own column on a wide pane. Phones, coarse pointers and hosted
  * native workspaces read the same parts as one stack.
  */
@@ -611,6 +717,7 @@ export function RecordWorkspace({
       .flatMap((group) => group.sections.map((section) => section.id))
       .join(" "),
   );
+  useSectionTracks(workspaceRef, mode.columns);
   const cursor = useRecordKeys(workspaceRef, mode.rail, controls, activeId);
   // The legend names only the keys this record has targets for.
   const [targets, setTargets] = useState({ needs: false, stepper: false });

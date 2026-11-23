@@ -1,8 +1,7 @@
 /*
   Record workspace: singular facts in a thin left rail, plural records in a
-  body whose sections take the width their content needs, signals pinned above
-  it and Activity beside it. Every width below is
-  the record pane's (the `record` container), never the viewport's.
+  body whose sections share one set of tracks, signals pinned above it and
+  Activity beside it. Every width below is the record pane's (the `record` container), never the viewport's.
 
   The stacked layout is the base: phones, coarse pointers and hosted native
   workspaces read the rail, the signals, the sections and Activity in order.
@@ -150,34 +149,18 @@
       white-space: nowrap;
     }
 
-    /* Sections share a row when their content fits beside each other: a
-       section that is or holds a table asks for a table's width, any other for a
-       paragraph's, and each grows into what its row leaves. A widened or
-       `full` section takes the whole row. */
+    /* Sections share rows on one set of tracks, so their edges line up down
+       the page: `--record-tracks` and each section's `--record-span` come from
+       `useSectionTracks`. Until they are written, a section takes the row. */
     :root:not([data-hosted-workspace]) .record-body [data-detail-group] {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: flex-start;
+      display: grid;
+      grid-template-columns: repeat(var(--record-tracks, 1), minmax(0, 1fr));
+      align-items: start;
       column-gap: 1.5rem;
     }
     :root:not([data-hosted-workspace]) .record-body [data-detail-section] {
       min-width: 0;
-      flex: 1 1 16rem;
-    }
-    :root:not([data-hosted-workspace])
-      .record-body
-      [data-detail-section]:is([data-wideable], :has(table)) {
-      flex-basis: 30rem;
-    }
-    :root:not([data-hosted-workspace])
-      .record-body
-      [data-detail-section][data-folded] {
-      flex-basis: 16rem;
-    }
-    :root:not([data-hosted-workspace])
-      .record-body
-      [data-detail-section][data-wide] {
-      flex-basis: 100%;
+      grid-column: span var(--record-span, var(--record-tracks, 1));
     }
 
     /* The rail is too thin for a label beside its value: each fact stacks its
