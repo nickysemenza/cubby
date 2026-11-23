@@ -375,7 +375,7 @@ export function createBankEvent({
   const bankEvent = defineReconciler<BankInput>({
     scope: "bankEvent",
     lane: "money",
-    version: 2,
+    version: 1,
     reads: [
       source.evidence(occurrenceEvidence),
       source.evidence(statementEvidence),

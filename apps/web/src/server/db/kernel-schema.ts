@@ -78,9 +78,6 @@ export const manualEntry = pgTable(
     createdAt: createdAt(),
   },
   (table) => [
-    index("ManualEntry_financial_merchant_idx").on(
-      sql`(md5(lower(trim(${table.payload}->>'merchant'))))`,
-    ),
     index("ManualEntry_allocation_transaction_idx")
       .on(sql`(${table.payload}->'values'->>'transactionId')`)
       .where(

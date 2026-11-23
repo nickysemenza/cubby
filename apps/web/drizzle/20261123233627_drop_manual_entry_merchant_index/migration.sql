@@ -1,0 +1,1 @@
+DROP INDEX "ManualEntry_financial_merchant_idx";

@@ -1,0 +1,37 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "29506cf5-e425-43a8-9fae-9750f61714a0",
+  "prevIds": [
+    "2cdbfb38-db46-4f87-8f92-90bb1aae6029"
+  ],
+  "footprints": [
+    {
+      "statementType": "drop_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "ManualEntry",
+        "ManualEntry_financial_merchant_idx"
+      ],
+      "writes": [
+        "s|idx|public.ManualEntry_financial_merchant_idx",
+        "n|idx|public.ManualEntry_financial_merchant_idx",
+        "e|idx|public.ManualEntry_financial_merchant_idx",
+        "n|rel|public.ManualEntry_financial_merchant_idx"
+      ],
+      "reads": [
+        "e|tbl|public.ManualEntry",
+        "n|sch|public"
+      ],
+      "sharedWrites": []
+    }
+  ],
+  "deltas": [
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"ManualEntry_financial_merchant_idx\"]"
+    }
+  ]
+}
