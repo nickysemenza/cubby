@@ -157,7 +157,7 @@ export const merchantKey = (name: string) =>
     .replace(runs, " ")
     .replace(/[A-Z]/gu, (letter) => LOWER[UPPER.indexOf(letter)]!);
 /** The SQL spelling of {@link merchantKey}. */
-export const merchantKeySql = (name: SQL) =>
+const merchantKeySql = (name: SQL) =>
   sql`translate(regexp_replace(regexp_replace(${name}, ${MERCHANT_EDGES}, '', 'g'), ${MERCHANT_RUNS}, ' ', 'g'), ${UPPER}, ${LOWER})`;
 /** Vendor names and aliases by merchant key; an empty key is never stored or read. */
 export const vendorMerchants = defineReadIndex(vendor, {
