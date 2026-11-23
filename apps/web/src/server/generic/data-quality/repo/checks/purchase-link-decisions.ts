@@ -30,6 +30,7 @@ const member = sqlEnumConstant(
 const purchaseKind = sqlEnumConstant(entitySchema, entitySchema.enum.purchase);
 
 /** Read only the current assignment, including an explicit removal of an older pointer. */
+// Keep Purchase identity resolution in sync with purchaseReference in domains/email/repo/email-decision-sql.ts.
 const purchasePointerSql = (subject: SQL) => sql`(
   SELECT coalesce(target."mergedIntoId", target.id) AS id
   FROM (
@@ -49,6 +50,7 @@ const purchasePointerSql = (subject: SQL) => sql`(
 )`;
 
 /** Current link facts used by the notice and settlement checks, with Email projection precedence. */
+// Keep link precedence in sync with emailLinkDecisionProjection in domains/email/repo/email-decision-sql.ts.
 export const purchaseQualityLinkDecisionsSql = (purchaseIds: SQL) => sql`(
   WITH requested AS MATERIALIZED (${purchaseIds}),
   slots AS MATERIALIZED (
