@@ -18,7 +18,6 @@ import {
   readLocationById,
   updateLocationAiDescription,
 } from "~/server/domains/location/repo/crud";
-import { readPlant } from "~/server/domains/plant/repo/plant";
 import {
   entityKernelContextSchema,
   executeEntity,
@@ -27,7 +26,6 @@ import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   createImageFixture,
-  createPlantFixture,
   makeLocationInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -204,22 +202,10 @@ describe("repository writes publish after their commit", () => {
     return published;
   };
 
-  it("coalesces source wakes across savepoints without enrolling work from notifications", async () => {
-    await recordChange(ctx.db, { kind: "source", categories: ["task"] });
+  it("sends no permit for source and projection writes that create no kernel work", async () => {
     const published = recordingQueue();
     await withTransactionDatabase(ctx.db, async (outer) => {
-      // A rolled-back first registration must not consume the deduplication key.
-      await expect(
-        withTransactionDatabase(outer, async (inner) => {
-          await recordChange(inner, {
-            kind: "source",
-            categories: ["product"],
-          });
-          throw new Error("Synthetic savepoint rollback");
-        }),
-      ).rejects.toThrow("Synthetic savepoint rollback");
       await withTransactionDatabase(outer, async (inner) => {
-        await recordChange(inner, { kind: "source", categories: ["task"] });
         await recordChange(inner, { kind: "source", categories: ["task"] });
       });
       await recordChange(outer, { kind: "source", categories: ["project"] });
@@ -227,54 +213,9 @@ describe("repository writes publish after their commit", () => {
         kind: "projection",
         categories: ["image"],
       });
-      expect(published).toEqual([]);
     });
-    expect(published).toHaveLength(1);
-    await recordChange(ctx.db, {
-      kind: "projection",
-      categories: ["search", "relatedData"],
-    });
-    expect(published).toHaveLength(1);
-  });
-
-  it("bulk-updates plants and publishes durable refresh wakeups after commit", async () => {
-    const first = await createPlantFixture(
-      ctx.db,
-      { name: "Bulk verdict tomato" },
-      TEST_ACTOR,
-    );
-    const second = await createPlantFixture(
-      ctx.db,
-      { name: "Bulk verdict pepper" },
-      TEST_ACTOR,
-    );
-    const verdictsAtPublish: (string | null | undefined)[][] = [];
-    const published = recordingQueue(async () => {
-      verdictsAtPublish.push(
-        await Promise.all(
-          [first, second].map(
-            async (plant) => (await readPlant(ctx.db, plant.id))?.verdict,
-          ),
-        ),
-      );
-    });
-
-    await executeEntity(context(), {
-      action: "bulkUpdate",
-      entity: "plant",
-      ids: [first.id, second.id].map((id) => parseShortcodeFor("plant", id)),
-      data: { verdict: "no" },
-    });
-
-    expect(published).toContainEqual(
-      expect.objectContaining({ queueType: "background" }),
-    );
-    expect(verdictsAtPublish).toEqual(expect.arrayContaining([["no", "no"]]));
-    expect(
-      verdictsAtPublish.every((values) =>
-        values.every((value) => value === "no"),
-      ),
-    ).toBe(true);
+    await recordChange(ctx.db, { kind: "source", categories: ["task"] });
+    expect(published).toEqual([]);
   });
 
   it("clears a location's AI description with its last image before the vision refresh is published", async () => {

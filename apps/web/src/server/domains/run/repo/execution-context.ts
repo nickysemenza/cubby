@@ -31,6 +31,7 @@ import {
   fundingWaitUntilSql,
   RUN_EXECUTE_PASS,
 } from "~/server/domains/run/repo/run-execution";
+import { wakeAtDeadline } from "~/server/kernel/wake";
 
 /** Paid work belongs to a live running Run. */
 export async function assertRunExecutable(db: Database, runId: RunId) {
@@ -179,9 +180,13 @@ export async function pauseForFunding(
     // A fenced caller that lost the race owes no resume.
     if (generation !== undefined && !paused) return;
     // The Pass owns the frozen deadline, including a refusal before its driver catches up.
-    await unwrapDb(tx)
-      .execute(sql`UPDATE "Pass" SET "waitCause" = ${kernelWaitCause.enum.funding},
+    const waiting = await unwrapDb(tx).execute<{
+      waiting: number;
+    }>(sql`UPDATE "Pass" SET "waitCause" = ${kernelWaitCause.enum.funding},
       "availableAt" = ${error.until.toISOString()}::timestamp, "updatedAt" = now()
-      WHERE "runId" = ${runId}::uuid AND "doneAt" IS NULL AND "cancelledAt" IS NULL`);
+      WHERE "runId" = ${runId}::uuid AND "doneAt" IS NULL AND "cancelledAt" IS NULL
+      RETURNING 1 AS waiting`);
+    if (waiting.rows.length)
+      await wakeAtDeadline(tx, error.until, "run.funding-pause");
   });
 }

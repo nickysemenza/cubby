@@ -7,6 +7,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import { setCfEnv } from "~/server/cf-env";
 import { withTransactionDatabase } from "~/server/db/helpers";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
+import { startPass } from "~/server/kernel/api";
+import { productionKernel } from "~/server/kernel/kernel";
+import { kernelNextSql } from "~/server/kernel/runner";
 
 import { clearDeliveredWakes, offerWake, wakeAt } from "./publish";
 
@@ -76,5 +79,48 @@ describe("single pending future wake", () => {
       }),
     ).rejects.toThrow("synthetic rollback");
     expect(sent).toHaveLength(before);
+  });
+
+  it("offers no successor for due rows no runner claims", async () => {
+    const sent: BackgroundTaskMessage[] = [];
+    setCfEnv(
+      fromPartial<Env>({
+        BACKGROUND_QUEUE: {
+          sendBatch: async (
+            messages: Iterable<{ body: BackgroundTaskMessage }>,
+          ) => {
+            for (const { body } of messages) sent.push(body);
+          },
+        },
+      }),
+    );
+    const q = repositoryQueries(ctx.db);
+    const next = async () =>
+      (
+        await q.execute<{ at: string | null }>(
+          sql`SELECT (${kernelNextSql((await productionKernel()).registry)})::text AS at`,
+        )
+      ).rows[0]?.at ?? null;
+    const before = await next();
+    // An exhausted Pass, a hosted Ask and an externally executed Ask, all due.
+    await q.execute(sql`
+      INSERT INTO "Pass" (name, key, cursor, attempts, "maxAttempts", "availableAt")
+      VALUES ('retention', 'synthetic-exhausted', '{}'::jsonb, 5, 5, now() - interval '1 hour')`);
+    for (const [hash, feature, producer, executor, hosted] of [
+      ["synthetic-hosted", "purchase.agent-turn", "model", null, true],
+      ["synthetic-external", "image.device", "image", "external", false],
+    ] as const)
+      await q.execute(sql`
+        WITH ask AS (
+          INSERT INTO "Ask" ("inputHash", feature, producer, "promptVersion", input, "maxAttempts", executor, hosted, "availableAt")
+          VALUES (${hash}, ${feature}, ${producer}, '1', '{}'::jsonb, 3, ${executor}, ${hosted}, now() - interval '1 hour')
+          RETURNING id
+        ) INSERT INTO "AskScope" ("askId", "scopeKind", "scopeKey") SELECT id, 'fields', ${hash} FROM ask`);
+    expect(await next()).toBe(before);
+
+    // Starting the exhausted Pass again leaves it unclaimable and sends nothing.
+    await startPass(ctx.db, "retention", { key: "synthetic-exhausted" });
+    expect(await next()).toBe(before);
+    expect(sent).toEqual([]);
   });
 });

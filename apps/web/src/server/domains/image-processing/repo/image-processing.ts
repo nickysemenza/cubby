@@ -28,6 +28,7 @@ import type {
   ImageProcessingTerminalResult as ImageProcessingResult,
 } from "@cubby/schemas/image-processing";
 import type { ImageRepresentations } from "@cubby/schemas/image-summary";
+import { kernelWaitCause } from "@cubby/schemas/kernel/machinery";
 import { runStatus, VISIBLE_RUN_PURPOSES } from "@cubby/schemas/run-fields";
 import {
   and,
@@ -66,6 +67,7 @@ import {
   withTransactionDatabase,
   databaseForTransaction,
 } from "~/server/db/helpers";
+import { textArrayParam } from "~/server/db/helpers/array-param";
 import { uuidArrayParam } from "~/server/db/helpers/query";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { requestedRows } from "~/server/db/helpers/requested";
@@ -98,6 +100,7 @@ import { MAIL_ATTACHMENT_UPLOAD_REASON } from "~/server/domains/mail/repo/mail-a
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { enterHouseholdGate } from "~/server/kernel/gate";
+import { wakeAfterCommit } from "~/server/kernel/wake";
 import { WorkSupersededError } from "~/server/kernel/work-errors";
 
 import { queueImageAsk } from "./image-asks";
@@ -1371,13 +1374,14 @@ export async function repairImageProcessingExecution(
 
 /**
  * A result that unblocks an image's other work (a prepared rendition) brings
- * its waiting jobs forward. Failure backoff is left alone.
+ * its waiting jobs and their cloud Passes forward, and wakes the runner when
+ * a Pass became due. Failure backoff is left alone.
  */
 export async function bringImageProcessingForward(
   db: Database,
   imageId: ImageId,
 ) {
-  await getDb(db)
+  const jobs = await getDb(db)
     .update(imageProcessingJob)
     .set({ runAt: new Date(), waitReason: null })
     .where(
@@ -1387,7 +1391,17 @@ export async function bringImageProcessingForward(
         eq(imageProcessingJob.waitReason, "device"),
         isNull(imageProcessingJob.leaseUntil),
       ),
-    );
+    )
+    .returning({ askId: imageProcessingJob.askId });
+  const keys = jobs.flatMap((job) => (job.askId ? [job.askId] : []));
+  if (!keys.length) return;
+  const woken = await getDb(db).execute<{ woken: number }>(sql`
+    UPDATE "Pass" SET "availableAt" = now(), "wakeVersion" = "wakeVersion" + 1, "updatedAt" = now()
+    WHERE name = ${"image.cloud"} AND key = ANY(${textArrayParam(keys)})
+      AND "doneAt" IS NULL AND "cancelledAt" IS NULL AND "availableAt" > now()
+      AND "waitCause" IS DISTINCT FROM ${kernelWaitCause.enum.funding}
+    RETURNING 1 AS woken`);
+  if (woken.rows.length) await wakeAfterCommit(db);
 }
 
 type DescriptionAnalysisIdentity = {

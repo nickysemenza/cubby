@@ -46,6 +46,7 @@ export async function startPass(
   const started = await repositoryQueries(db).execute<{
     at: string;
     due: boolean;
+    claimable: boolean;
   }>(sql`
     INSERT INTO "Pass" (name, key, cursor, "runId", "availableAt")
     VALUES (${pass.name}, ${options.key ?? "default"}, ${JSON.stringify(options.cursor ?? null)}::jsonb,
@@ -70,11 +71,14 @@ export async function startPass(
       "doneAt" = NULL, "cancelledAt" = NULL,
       "availableAt" = CASE WHEN "Pass"."waitCause" = ${kernelWaitCause.enum.funding} AND "Pass"."doneAt" IS NULL AND "Pass"."cancelledAt" IS NULL THEN "Pass"."availableAt" ELSE least("Pass"."availableAt", excluded."availableAt") END,
       "wakeVersion" = CASE WHEN "Pass"."waitCause" = ${kernelWaitCause.enum.funding} AND "Pass"."doneAt" IS NULL AND "Pass"."cancelledAt" IS NULL THEN "Pass"."wakeVersion" ELSE "Pass"."wakeVersion" + 1 END, "updatedAt" = now()
-    RETURNING ${isoText(sql`"availableAt"`)} AS at, "availableAt" <= now() AS due`);
+    RETURNING ${isoText(sql`"availableAt"`)} AS at, "availableAt" <= now() AS due,
+      attempts < "maxAttempts" AS claimable`);
   const row = started.rows[0];
+  // A pending Pass that spent its attempts keeps them until a member retries
+  // it, so no runner can claim it and no wake is owed.
+  if (!row?.claimable) return;
   // A future start owns its deadline; an immediate wake would find nothing due.
-  if (row && !row.due)
-    await wakeAtDeadline(db, new Date(row.at), "kernel.pass-start");
+  if (!row.due) await wakeAtDeadline(db, new Date(row.at), "kernel.pass-start");
   else await wakeAfterCommit(db);
 }
 

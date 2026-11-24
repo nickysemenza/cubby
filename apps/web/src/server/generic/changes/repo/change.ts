@@ -1,17 +1,11 @@
 import type { DatabaseChanges } from "~/lib/doorbell";
 import { inHttpRequest } from "~/server/db/freshness/member-marker";
 import { recordCommittedChanges } from "~/server/db/helpers/core";
-import {
-  repositoryBeforeCommit,
-  repositoryAfterCommit,
-  repositoryParentDatabase,
-  repositoryTransaction,
-  type RepositoryQueryInput,
-} from "~/server/db/repository-access.boundary";
+import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
 
 /**
- * Reader notifications. Derived work needs no registration here: generated
- * triggers mark it in the writer's transaction (ADR 0021).
+ * Reader notifications. `kind` describes the write; notification treats
+ * source and projection writes alike.
  */
 export type RepositoryChange = {
   kind: "source" | "projection";
@@ -27,43 +21,22 @@ export type RepositoryChange = {
 };
 
 /**
- * Notify readers of committed categories when a member is waiting on them, and
- * wake the Job drain after a source write commits so derived marks are worked
- * promptly.
+ * Notify readers of committed categories when a member is waiting on them.
+ * Kernel work a write creates wakes the runner from its own writer
+ * (ADR 0029 section 7), so a source write alone sends no queue permit.
  */
 export async function recordChange(
   db: RepositoryQueryInput,
   change: RepositoryChange,
 ): Promise<void> {
-  if (
-    change.kind === "source" &&
-    !("rollback" in db) &&
-    !repositoryParentDatabase(db)
-  ) {
-    await repositoryTransaction(db, (tx) => recordChange(tx, change));
-    return;
-  }
-  if (change.ringFromBackground || inHttpRequest()) {
-    await recordCommittedChanges(
-      db,
-      Object.fromEntries(
-        change.categories.map((category) => [
-          category,
-          change.changes?.[category] ?? null,
-        ]),
-      ),
-    );
-  }
-  if (change.kind !== "source") return;
-  await repositoryBeforeCommit(
+  if (!change.ringFromBackground && !inHttpRequest()) return;
+  await recordCommittedChanges(
     db,
-    async (tx) => {
-      await repositoryAfterCommit(tx, async () => {
-        const { wakeKernel } =
-          await import("~/server/workflows/background-tasks/publish");
-        await wakeKernel({ source: "repository.change" });
-      });
-    },
-    { key: "derived:wake" },
+    Object.fromEntries(
+      change.categories.map((category) => [
+        category,
+        change.changes?.[category] ?? null,
+      ]),
+    ),
   );
 }

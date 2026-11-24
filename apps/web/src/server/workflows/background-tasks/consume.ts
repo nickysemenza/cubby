@@ -19,9 +19,12 @@ export interface BackgroundQueueConsumerPorts {
 
 const BUDGET_MS = 20_000;
 /**
- * A drained runner that still sees due work could not claim it, or another
- * writer made it due and sent its own wake; either way an immediate permit
- * would only spin.
+ * `kernelNextSql` counts only rows a runner claim selects, so a drained runner
+ * that still sees due work met a row that became free without a writer after
+ * its last claim (a backoff, wait or claim deadline passing, or a sent Ask's
+ * claim lapsing after `expireAsks` ran) or one a concurrent transaction held
+ * locked, whose writer wakes for any work it commits. An immediate permit could
+ * spin on the lock, so the retry waits.
  */
 const DUE_UNCLAIMED_RETRY_MS = 15_000;
 

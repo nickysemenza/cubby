@@ -22,6 +22,7 @@ import {
   DERIVED_SNAPSHOT_KEY,
   DERIVED_SNAPSHOT_PASS,
 } from "~/server/generic/derived/repo/snapshot-state";
+import { wakeAfterCommit } from "~/server/kernel/wake";
 
 const HISTORY_KEY = "history";
 
@@ -151,13 +152,18 @@ export async function rebuildActive(db: Database): Promise<boolean> {
   return result.rows[0]?.active ?? false;
 }
 
-/** A repair joins active work; the scheduled admission starts at most one new pass per hour. */
+/**
+ * A repair joins active work; the scheduled admission starts at most one new
+ * pass per hour. A start or bring-forward wakes the runner after commit.
+ */
 export async function requestDerivedRebuild(
   db: Database,
   options: { force?: boolean; runId?: string } = {},
 ): Promise<{ existing: boolean }> {
   const existing = await rebuildActive(db);
-  await getDb(db).execute(sql`INSERT INTO "Pass" (name, key, "runId", cursor)
+  const started = await getDb(db).execute<{
+    started: number;
+  }>(sql`INSERT INTO "Pass" (name, key, "runId", cursor)
     VALUES (${DERIVED_SNAPSHOT_PASS}, ${DERIVED_SNAPSHOT_KEY}, ${options.runId ?? null}::uuid, '{}'::jsonb)
     ON CONFLICT (name, key) DO UPDATE SET
       cursor = CASE WHEN "Pass"."doneAt" IS NOT NULL OR "Pass"."cancelledAt" IS NOT NULL THEN jsonb_build_object(
@@ -166,7 +172,9 @@ export async function requestDerivedRebuild(
       "runId" = coalesce(excluded."runId", "Pass"."runId"), "doneAt" = NULL, "cancelledAt" = NULL,
       attempts = 0, "lastError" = NULL, "availableAt" = now(), "updatedAt" = now()
     WHERE ("Pass"."doneAt" IS NULL AND "Pass"."cancelledAt" IS NULL) OR ${options.force ?? true}
-      OR coalesce(("Pass".cursor->>'startedAt')::timestamp, 'epoch'::timestamp) < date_trunc('hour', now())`);
+      OR coalesce(("Pass".cursor->>'startedAt')::timestamp, 'epoch'::timestamp) < date_trunc('hour', now())
+    RETURNING 1 AS started`);
+  if (started.rows.length) await wakeAfterCommit(db);
   return { existing };
 }
 

@@ -32,7 +32,7 @@ import { markDirty } from "./dirty";
 import { hasStaleScopes, VERSION_SWEEP } from "./drift";
 import { startPass, runOnePass } from "./pass";
 import type { KernelRegistry } from "./registry";
-import { wakeClaimRecovery } from "./wake";
+import { wakeAfterCommit, wakeClaimRecovery } from "./wake";
 
 const SCOPE_BATCH = 64;
 const ASK_BATCH = 4;
@@ -114,7 +114,8 @@ export async function runKernel(
 /**
  * Run these scopes now for a waiting member: dirty them, claim them as they
  * become free (up to `waitMs`), and apply with the member lock timeout. A
- * scope another worker still holds when the wait ends reports `waiting`.
+ * scope another worker still holds when the wait ends reports `waiting`;
+ * work left for the runner wakes it after the caller's commit.
  */
 export async function reconcileNow(
   db: Database,
@@ -177,6 +178,19 @@ export async function reconcileNow(
       status: "waiting",
       gaps: [],
     });
+  // Work this call leaves for the runner: a scope still dirty or backing off,
+  // or an Ask it queued. Applied output wakes from its own publication.
+  if (
+    [...outcomes.values()].some(
+      (outcome) =>
+        outcome.status === "conflict" ||
+        outcome.status === "failed" ||
+        (outcome.status === "waiting" &&
+          (!outcome.gaps.length ||
+            outcome.gaps.some((gap) => gap.askState === "queued"))),
+    )
+  )
+    await wakeAfterCommit(db);
   if (options.runId) {
     const q = repositoryQueries(db);
     await q.execute(sql`

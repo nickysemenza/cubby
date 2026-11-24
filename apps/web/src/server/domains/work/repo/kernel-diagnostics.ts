@@ -17,6 +17,7 @@ import { machineryErrorText } from "~/server/kernel/error-presentation";
 import { productionKernel } from "~/server/kernel/kernel";
 import { isoText } from "~/server/kernel/sql-time";
 import { ASK } from "~/server/kernel/vocab";
+import { wakeAfterCommit } from "~/server/kernel/wake";
 
 /** All queues share the same member diagnostics, including work with no record gap. */
 export async function readKernelDiagnostics(
@@ -165,5 +166,7 @@ export async function retryKernelWork(
       : await q.execute<{ retried: number }>(
           sql`UPDATE "Pass" SET ${common} WHERE name=${target.kind} AND key=${target.key} AND attempts>="maxAttempts" AND "doneAt" IS NULL AND "cancelledAt" IS NULL AND ${free} RETURNING 1`,
         );
-  return { retried: result.rows.length > 0 };
+  if (!result.rows.length) return { retried: false };
+  await wakeAfterCommit(db);
+  return { retried: true };
 }

@@ -6,7 +6,8 @@
  * loser inserts nothing.
  * In the same transaction it records the rows' fact keys and dirties every
  * scope they discover or that read one of their keys, including the declared
- * read-index memberships of the inserted rows.
+ * read-index memberships of the inserted rows, and wakes the runner after
+ * commit only when it dirtied one.
  */
 import { generateShortcode } from "@cubby/shared";
 import { getTableColumns, getTableName, inArray } from "drizzle-orm";
@@ -33,6 +34,7 @@ import { enterHouseholdGate } from "./gate";
 import { membershipKeys, relatedMemberships, rowIndexKeys } from "./index-keys";
 import { tableKey, columnKey } from "./keys";
 import type { KernelRegistry } from "./registry";
+import { wakeAfterCommit } from "./wake";
 
 /** A losing source-identity race must discard its unused Entity reservation. */
 async function insertEvidence(
@@ -164,7 +166,7 @@ export async function append(
       );
     }
     await insertFactKeys(q, facts);
-    await markDirty(q, registry, {
+    const dirtied = await markDirty(q, registry, {
       keys: [
         ...new Set([
           ...facts.flatMap((fact) => fact.keys),
@@ -188,6 +190,7 @@ export async function append(
       discovers,
       reason: `evidence:${[...groups.keys()].join(",")}`,
     });
+    if (dirtied) await wakeAfterCommit(tx);
     return facts.map((fact) => ({ kind: fact.kind, id: fact.id }));
   });
 }

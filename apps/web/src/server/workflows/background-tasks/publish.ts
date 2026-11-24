@@ -188,10 +188,7 @@ async function sendRing(at: Date, source: string) {
  * offer can win, but the deadlines it refused meanwhile wait the same way.
  * Deadline writers that send no wake of their own are bounded the same way:
  * settlements, backoffs and waits written inside a delivery (its offer covers
- * them), failures settled by a member's `reconcileNow` (its claim-recovery
- * wake's delivery covers them), and any other write of a future `availableAt`
- * without `wakeAt`, such as a Run's funding pause or an external executor's
- * delayed release.
+ * them) and backoffs settled by an in-line producer call outside one.
  */
 export async function offerWake(
   db: Database,

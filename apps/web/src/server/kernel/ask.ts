@@ -41,6 +41,7 @@ import {
   claimAsk,
   claimExternalAskRow,
   rawError,
+  runnerAskKinds,
   renewClaim,
   settleFailure,
   type ClaimedAsk,
@@ -55,7 +56,7 @@ import { KernelContractError } from "./reads";
 import type { KernelRegistry } from "./registry";
 import { isoText } from "./sql-time";
 import { ASK, PASS_WAITER, RECORD_WAITER, RUN_WAITER } from "./vocab";
-import { wakeAfterCommit, wakeClaimRecovery } from "./wake";
+import { wakeAfterCommit, wakeAtDeadline, wakeClaimRecovery } from "./wake";
 
 type Q = Pick<RepositoryQueryClient, "execute" | "insert" | "select">;
 
@@ -202,13 +203,15 @@ async function ensureAsk(
   return row;
 }
 
-/** Passes waiting on an ask run as soon as it settles. */
-async function wakeWaitingPasses(q: Q, askId: string): Promise<void> {
-  await q.execute(sql`
+/** Passes waiting on an ask run as soon as it settles; returns how many became due. */
+async function wakeWaitingPasses(q: Q, askId: string): Promise<number> {
+  const woken = await q.execute<{ woken: number }>(sql`
     UPDATE "Pass" p SET "availableAt" = now(), "waitCause" = NULL, "wakeVersion" = p."wakeVersion" + 1
     FROM "AskScope" s
     WHERE s."askId" = ${askId}::uuid AND s."cancelledAt" IS NULL AND s."scopeKind" = ${PASS_WAITER}
-      AND s."scopeKey" = p.name || ':' || p.key AND p."doneAt" IS NULL AND p."waitCause" IS DISTINCT FROM ${kernelWaitCause.enum.funding}`);
+      AND s."scopeKey" = p.name || ':' || p.key AND p."doneAt" IS NULL AND p."waitCause" IS DISTINCT FROM ${kernelWaitCause.enum.funding}
+    RETURNING 1 AS woken`);
+  return woken.rows.length;
 }
 
 /**
@@ -244,12 +247,13 @@ export async function settleAskOutcome(
     throw new KernelContractError(
       `The ask ${inputHash} is not in a state that "${outcome}" applies to.${outcome === "retry" && actor !== "member" ? " A member must choose whether to retry an unknown call; it may charge again." : ""}`,
     );
-  await wakeWaitingPasses(q, ask.id);
-  await markDirty(q, registry, {
+  const passes = await wakeWaitingPasses(q, ask.id);
+  const dirtied = await markDirty(q, registry, {
     keys: [answerKey(inputHash)],
     discovers: await waitingScopes(q, ask.id),
     reason: `ask:${outcome}`,
   });
+  if (passes || dirtied || outcome === "retry") await wakeAfterCommit(tx);
 }
 
 /** Scopes waiting on an ask, so its settlement dirties them. */
@@ -298,8 +302,8 @@ async function commitAnswer(
       discovers: await waitingScopes(q, ask.id),
       reason: `answer:${kind.feature}`,
     });
-    await wakeWaitingPasses(q, ask.id);
-    if (dirtied) await wakeAfterCommit(tx);
+    const passes = await wakeWaitingPasses(q, ask.id);
+    if (dirtied || passes) await wakeAfterCommit(tx);
   });
 }
 
@@ -339,12 +343,15 @@ async function settleSent(
           : unsent,
         ask.wakeVersion,
       );
-      if (stale)
-        await markDirty(q, registry, {
+      if (
+        stale &&
+        (await markDirty(q, registry, {
           keys: [],
           discovers: await waitingScopes(q, ask.id),
           reason: "ask-stale-input",
-        });
+        }))
+      )
+        await wakeAfterCommit(tx);
       return;
     }
     const changed = await q.execute<{ id: string }>(sql`
@@ -353,11 +360,14 @@ async function settleSent(
       WHERE id = ${ask.id}::uuid AND state = ${ASK.sent} AND "claimToken" = ${ask.token}::uuid
       RETURNING id`);
     if (!changed.rows.length) return;
-    await markDirty(q, registry, {
-      keys: [],
-      discovers: await waitingScopes(q, ask.id),
-      reason: "ask-unknown",
-    });
+    if (
+      await markDirty(q, registry, {
+        keys: [],
+        discovers: await waitingScopes(q, ask.id),
+        reason: "ask-unknown",
+      })
+    )
+      await wakeAfterCommit(tx);
   });
 }
 
@@ -542,6 +552,12 @@ async function executeClaimed(
             "claimToken" = NULL, "claimDeadline" = NULL,
             "availableAt" = now() + interval '1 second', "lastError" = ${rawError(error)}
           WHERE id = ${ask.id}::uuid AND "claimToken" = ${ask.token}::uuid`);
+        if (cached)
+          await wakeAtDeadline(
+            db,
+            new Date(Date.now() + 1_000),
+            "kernel.ask-requeue",
+          );
         results[index] = { status: "failed", error };
       } finally {
         clearInterval(heartbeat);
@@ -638,10 +654,7 @@ export async function runQueuedAsks(
   registry: KernelRegistry,
   limit: number,
 ): Promise<number> {
-  const runnable = [...registry.asks.values()].filter(
-    (kind) => kind.produce && !kind.hosted,
-  );
-  const claimed = await claimAsks(db, runnable, limit);
+  const claimed = await claimAsks(db, runnerAskKinds(registry), limit);
   if (!claimed.length) return 0;
   const entries: ClaimedEntry[] = [];
   for (const ask of claimed) {
@@ -741,12 +754,15 @@ export async function expireAsks(
       SELECT lapsed.id, s."scopeKind" AS kind, s."scopeKey" AS key
       FROM lapsed LEFT JOIN "AskScope" s ON s."askId" = lapsed.id AND s."scopeKind" <> ${RUN_WAITER}`);
     const scopes = result.rows.filter((row) => row.kind !== null);
-    if (scopes.length)
-      await markDirty(q, registry, {
+    if (
+      scopes.length &&
+      (await markDirty(q, registry, {
         keys: [],
         discovers: scopes.map((row) => ({ kind: row.kind, key: row.key })),
         reason: "ask-expired",
-      });
+      }))
+    )
+      await wakeAfterCommit(tx);
     return new Set(result.rows.map((row) => row.id)).size;
   });
 }

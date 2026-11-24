@@ -12,7 +12,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import type { Database } from "~/server/db/database";
 import {
   repositoryQueries,
-  type RepositoryQueryClient,
+  type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
 
 import type { AskWaiters } from "./ask";
@@ -38,6 +38,7 @@ import { productionKernel } from "./kernel";
 import type { MachineryListRow } from "./projection";
 import type { OwnedReferenceRepoint } from "./repoint";
 import type { KernelRun } from "./runner";
+import { wakeAfterCommit } from "./wake";
 import type { NeedsYouOptions } from "./work";
 
 export {
@@ -192,14 +193,19 @@ export async function emitWrites(
 
 /**
  * Raise keys a writer derived from rows it changed, dirtying the scopes that
- * read them. The transaction already holds the household write gate.
+ * read them and waking the runner after commit when it dirtied one. The
+ * transaction already holds the household write gate.
  */
 export async function raiseKeys(
-  q: Pick<RepositoryQueryClient, "execute">,
+  db: RepositoryQueryInput,
   keys: readonly Key[],
   reason: string,
 ): Promise<number> {
-  return (await productionKernel()).raiseKeys(q, keys, reason);
+  const dirtied = await (
+    await productionKernel()
+  ).raiseKeys(repositoryQueries(db), keys, reason);
+  if (dirtied) await wakeAfterCommit(db);
+  return dirtied;
 }
 
 /** Take the household write gate before a writer locks the rows `emitWrites` will key. */

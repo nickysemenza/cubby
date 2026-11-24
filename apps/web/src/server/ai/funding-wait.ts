@@ -157,8 +157,9 @@ export async function resumeFundingPausedRuns(
   for (const entry of fundingWaiters)
     if (anyWindow || entry.name === "runs")
       woken += await entry.wake(db, now, anyWindow);
-  await (
-    await import("~/server/workflows/background-tasks/publish")
-  ).wakeKernel({ source: "funding-window" });
+  if (woken)
+    await (
+      await import("~/server/workflows/background-tasks/publish")
+    ).wakeKernel({ source: "funding-window" });
   return woken;
 }
