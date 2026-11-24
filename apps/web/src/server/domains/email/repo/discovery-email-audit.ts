@@ -26,13 +26,23 @@ export async function recordDiscoveryEmailReceipt(
     expected?: typeof email.$inferSelect | null;
     observationId?: string | null;
     outcome?: z.infer<typeof discoveryEmailReceipt>["outcome"];
+    /** The `runId` row, when the caller holds it locked in this transaction. */
+    run?: typeof run.$inferSelect;
+    /** The `observationId` row, when the caller wrote it in this transaction. */
+    observation?: Pick<
+      typeof emailClassificationObservation.$inferSelect,
+      "id" | "classification" | "stage"
+    > | null;
   },
 ) {
   if (!input.runId) return;
-  const [owner] = await getDb(db)
-    .select()
-    .from(run)
-    .where(eq(run.id, runEntityId.parse(input.runId)));
+  const [owner] =
+    input.run?.id === input.runId
+      ? [input.run]
+      : await getDb(db)
+          .select()
+          .from(run)
+          .where(eq(run.id, runEntityId.parse(input.runId)));
   if (owner?.purpose !== "mail_discovery") return;
   if (owner.ledgerPartyId !== input.ledgerPartyId)
     throw new Error("Discovery handling ownership changed");
@@ -59,12 +69,14 @@ export async function recordDiscoveryEmailReceipt(
     handled.mailboxId !== input.mailboxId
   )
     throw new Error("Discovery receipt is outside its member/mailbox scope");
-  const [observation] = input.observationId
-    ? await getDb(db)
-        .select()
-        .from(emailClassificationObservation)
-        .where(eq(emailClassificationObservation.id, input.observationId))
-    : [];
+  const [observation] = !input.observationId
+    ? []
+    : input.observation?.id === input.observationId
+      ? [input.observation]
+      : await getDb(db)
+          .select()
+          .from(emailClassificationObservation)
+          .where(eq(emailClassificationObservation.id, input.observationId));
   const receipt = discoveryEmailReceipt.parse({
     id: handled.shortcode,
     emailId: handled.id,

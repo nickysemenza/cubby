@@ -23,7 +23,7 @@ import type {
   Key,
   ReadIndex,
 } from "./define";
-import { insertFactKeys } from "./dirty";
+import { insertFactKeys, replaceFactKeys } from "./dirty";
 import { indexKey } from "./keys";
 import type { KernelRegistry } from "./registry";
 
@@ -89,18 +89,15 @@ export async function reindexRows(
   rows: readonly ColumnValues[],
 ): Promise<Key[]> {
   if (!ids.length || !plainIndexes(registry, table).length) return [];
-  const previous = await q
-    .select({ key: factKey.key })
-    .from(factKey)
-    .where(
-      and(
-        eq(factKey.factKind, `index:${table}`),
-        inArray(factKey.factId, [...ids]),
-      ),
-    );
-  await storeIndexFacts(q, registry, table, rows);
+  const previous = await replaceFactKeys(
+    q,
+    `index:${table}`,
+    rows.map((row) => String(row.id)),
+    indexFacts(registry, table, rows),
+    ids,
+  );
   return [
-    ...previous.map((row) => row.key),
+    ...previous,
     ...rows.flatMap((row) => rowIndexKeys(registry, table, row)),
   ];
 }

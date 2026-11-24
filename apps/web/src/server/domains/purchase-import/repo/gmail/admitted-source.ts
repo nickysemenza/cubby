@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import type { EmailExecutionPolicy } from "@cubby/schemas/email-fields";
 import { parseEntityId, runEntityId } from "@cubby/schemas/identifiers";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
@@ -5,12 +7,19 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
+  boundTransaction,
   databaseForTransaction,
   getDb,
   notDeleted,
+  parentTransactionDatabase,
   withTransaction,
 } from "~/server/db/helpers";
-import { email as emailTable, ledgerParty, run } from "~/server/db/schema";
+import {
+  email as emailTable,
+  emailClassificationObservation,
+  ledgerParty,
+  run,
+} from "~/server/db/schema";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import {
   assertEmailEvidenceScope,
@@ -18,6 +27,7 @@ import {
   type EmailEvidenceWriteScope,
 } from "~/server/domains/purchase-import/repo/email-evidence-write-scope";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
+import { reportHouseholdBusy } from "~/server/kernel/gate";
 
 /** Refresh does not transfer, repair or readmit an assigned import source. */
 async function classificationRefreshDisposition(
@@ -86,10 +96,54 @@ export function emailPublicationChanged(
   );
 }
 
+type PublishedObservation = Pick<
+  typeof emailClassificationObservation.$inferSelect,
+  "id" | "classification" | "stage"
+>;
+
 type GmailPublicationContext = {
   scope: EmailEvidenceWriteScope;
-  recordObservation: (id: string | null) => void;
+  recordObservation: (observation: PublishedObservation | null) => void;
 };
+
+/** The transaction of the Gmail publication running in this async context. */
+const publications = new AsyncLocalStorage<DrizzleTransaction>();
+
+/**
+ * The transaction of the Gmail publication `db` runs inside, if any. A gated
+ * writer nested in a publication joins it instead of opening a savepoint:
+ * nothing in a publication catches a writer's error, so the whole publication
+ * rolls back and a writer savepoint is never rolled back to alone.
+ */
+export function gmailPublicationTransaction(
+  db: Database,
+): DrizzleTransaction | undefined {
+  const publication = publications.getStore();
+  const tx = boundTransaction(db);
+  let candidate: Database | undefined = publication && tx ? db : undefined;
+  while (candidate && boundTransaction(candidate) !== publication)
+    candidate = parentTransactionDatabase(candidate);
+  return candidate ? tx : undefined;
+}
+
+/**
+ * Run a gated writer's `work` joined to its enclosing Gmail publication, or
+ * in its own `open` boundary elsewhere. `busy` keeps a member household
+ * write's lock-timeout error.
+ */
+export function joinGmailPublication<T>(
+  db: Database,
+  work: (tx: DrizzleTransaction) => Promise<T>,
+  open: (
+    db: Database,
+    work: (tx: DrizzleTransaction) => Promise<T>,
+  ) => Promise<T>,
+  options: { busy?: true } = {},
+): Promise<T> {
+  const tx = gmailPublicationTransaction(db);
+  if (!tx) return open(db, work);
+  return options.busy ? reportHouseholdBusy(() => work(tx)) : work(tx);
+}
 
 /** Provider/model IO is complete. Admission wins before this publication boundary. */
 export async function publishGmailEvidence<T>(
@@ -117,11 +171,15 @@ export async function publishGmailEvidence<T>(
   const commitEvidence = async (
     tx: DrizzleTransaction,
     scope: EmailEvidenceWriteScope,
+    memberLimits: boolean,
   ) => {
     assertEmailEvidenceScope(databaseForTransaction(tx), scope);
-    // Transaction-local: a contended member lock fails fast and frees the socket.
-    await tx.execute(sql`SELECT set_config('lock_timeout', '2000', true)`);
+    // Transaction-local: a contended member lock fails fast and frees the
+    // socket. An owned scope entered the gate with these member limits.
+    if (!memberLimits)
+      await tx.execute(sql`SELECT set_config('lock_timeout', '2000', true)`);
     let observationId = initialObservationId;
+    let observation: PublishedObservation | null = null;
     const partyId = parseEntityId("ledgerParty", input.ledgerPartyId);
     // Shared: removal, admission and correction lock the owner exclusively and
     // win, while unrelated Emails publish concurrently.
@@ -138,21 +196,21 @@ export async function publishGmailEvidence<T>(
       ),
     ].map((id) => runEntityId.parse(id));
     // Requester and captured Runs lock in one sorted statement. Publication
-    // may update a captured Run, so neither holds it shared.
-    if (runIds.length)
-      await tx
-        .select({ id: run.id })
-        .from(run)
-        .where(inArray(run.id, runIds))
-        .orderBy(asc(run.id))
-        .for("no key update");
+    // may update a captured Run, so neither holds it shared. The lock holds
+    // the requester's status and identity for the rest of the publication.
+    const lockedRuns = runIds.length
+      ? await tx
+          .select()
+          .from(run)
+          .where(inArray(run.id, runIds))
+          .orderBy(asc(run.id))
+          .for("no key update")
+      : [];
+    const requester = lockedRuns.find((row) => row.id === input.runId);
     if (input.runId)
-      await (
+      (
         await import("~/server/domains/run/repo/execution-context")
-      ).assertRunExecutable(
-        databaseForTransaction(tx),
-        runEntityId.parse(input.runId),
-      );
+      ).assertExecutableRun(requester?.deletedAt ? undefined : requester);
     const decline = async (
       reason: "removed" | "frozen" | "changed",
       _current: typeof emailTable.$inferSelect | null,
@@ -164,13 +222,10 @@ export async function publishGmailEvidence<T>(
           ...input,
           observationId,
           outcome: reason,
+          run: requester,
         });
       if (input.runId && input.expected) {
-        const [owner] = await tx
-          .select({ purpose: run.purpose })
-          .from(run)
-          .where(eq(run.id, runEntityId.parse(input.runId)));
-        if (owner?.purpose === "mail_reclassify")
+        if (requester?.purpose === "mail_reclassify")
           await (
             await import("~/server/domains/purchase-import/repo/gmail/reclassification-receipt")
           ).saveReclassificationReceipt(
@@ -223,12 +278,15 @@ export async function publishGmailEvidence<T>(
       ))
     )
       return decline("frozen", current ?? null);
-    const result = await publish(txDb, current ?? null, {
-      scope,
-      recordObservation: (id) => {
-        observationId = id;
-      },
-    });
+    const result = await publications.run(tx, () =>
+      publish(txDb, current ?? null, {
+        scope,
+        recordObservation: (recorded) => {
+          observation = recorded;
+          observationId = recorded?.id ?? null;
+        },
+      }),
+    );
     if (input.recordHandlingReceipt !== false)
       await (
         await import("~/server/domains/email/repo/discovery-email-audit")
@@ -236,13 +294,11 @@ export async function publishGmailEvidence<T>(
         ...input,
         observationId,
         outcome: input.removed ? "removed" : undefined,
+        run: requester,
+        observation,
       });
     if (input.runId && input.expected) {
-      const [owner] = await tx
-        .select({ purpose: run.purpose })
-        .from(run)
-        .where(eq(run.id, runEntityId.parse(input.runId)));
-      if (owner?.purpose === "mail_reclassify") {
+      if (requester?.purpose === "mail_reclassify") {
         const { reclassificationReceipt, saveReclassificationReceipt } =
           await import("~/server/domains/purchase-import/repo/gmail/reclassification-receipt");
         await saveReclassificationReceipt(
@@ -264,9 +320,13 @@ export async function publishGmailEvidence<T>(
   if (scope !== undefined) {
     // An existing owner must prove its gate; never acquire one after its locks.
     assertEmailEvidenceScope(db, scope);
-    return withTransaction(db, (tx) => commitEvidence(tx, scope));
+    return withTransaction(db, (tx) => commitEvidence(tx, scope, false));
   }
-  return withEmailEvidenceWrite(db, (transactionDb, ownedScope) =>
-    withTransaction(transactionDb, (tx) => commitEvidence(tx, ownedScope)),
-  );
+  // The owned transaction is this publication alone: any failure rolls it
+  // back whole, so it needs no savepoint of its own.
+  return withEmailEvidenceWrite(db, (transactionDb, ownedScope) => {
+    const tx = boundTransaction(transactionDb);
+    if (!tx) throw new Error("Email evidence scope has no open transaction");
+    return commitEvidence(tx, ownedScope, true);
+  });
 }

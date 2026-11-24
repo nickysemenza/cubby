@@ -16,12 +16,45 @@ export async function updateEmailStateWhere(
   values: Changes,
   where: SQL | undefined,
 ) {
+  return writeEmailState(db, values, where, true);
+}
+
+/** {@link updateEmailStateWhere} for a writer that does not read the rows back. */
+export async function writeEmailStateWhere(
+  db: Database | DrizzleTransaction,
+  values: Changes,
+  where: SQL | undefined,
+): Promise<void> {
+  await writeEmailState(db, values, where, false);
+}
+
+async function writeEmailState(
+  db: Database | DrizzleTransaction,
+  values: Changes,
+  where: SQL | undefined,
+  readBack: boolean,
+) {
   const source = isTransaction(db) ? databaseForTransaction(db) : db;
-  const { householdWrite, append, evidenceRow, reconcileNow, emitWrites } =
-    await import("~/server/kernel/api");
+  const {
+    householdWrite,
+    append,
+    evidenceRow,
+    reconcileNow,
+    emitWrites,
+    reportHouseholdBusy,
+  } = await import("~/server/kernel/api");
   const { emailStateColumns, emailPredictionEvidence } =
     await import("~/server/domains/email/repo/email-state");
-  return householdWrite(source, async (database) => {
+  const { gmailPublicationTransaction } =
+    await import("~/server/domains/purchase-import/repo/gmail/admitted-source");
+  // Inside a Gmail publication the write joins it (see `joinGmailPublication`).
+  const write = (
+    work: (database: Database) => Promise<(typeof email.$inferSelect)[]>,
+  ) =>
+    gmailPublicationTransaction(source)
+      ? reportHouseholdBusy(() => work(source))
+      : householdWrite(source, work);
+  return write(async (database) => {
     const q = repositoryQueries(database);
     const authored = Object.fromEntries(
       Object.entries(values).filter(
@@ -94,12 +127,15 @@ export async function updateEmailStateWhere(
         ids: rows.map((row) => row.id),
         columns: Object.keys(authored),
         discovers: rows.map((row) => ({ kind: "emailState", key: row.id })),
+        // Predictions publish relevance through a reconcile, which rewrites
+        // the rows; without one they are exactly as written.
+        ...(requested.length ? {} : { after: rows }),
       });
     await reconcileNow(
       database,
       rows.map((row) => ({ kind: "emailState", key: row.id })),
     );
-    return rows.length
+    return readBack && rows.length
       ? q
           .select()
           .from(email)

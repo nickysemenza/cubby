@@ -95,6 +95,7 @@ export {
   enterHouseholdGate,
   householdWrite,
   HouseholdWriteBusyError,
+  reportHouseholdBusy,
 } from "./gate";
 export { OwnedColumnWriteError } from "~/server/db/owned-columns";
 export {
@@ -187,6 +188,7 @@ export async function emitWrites(
     entity?: string;
     created?: boolean;
     before?: readonly ColumnValues[];
+    after?: readonly ColumnValues[];
   },
 ): Promise<number> {
   return (await productionKernel()).emitWrites(db, write);

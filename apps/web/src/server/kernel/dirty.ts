@@ -163,3 +163,42 @@ export async function insertFactKeys(
     FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) AS row(key text, kind text, id text)
     ON CONFLICT DO NOTHING`);
 }
+
+/**
+ * Replace the fact keys of the `replaced` facts of one kind with `facts` in
+ * one statement, and return the keys the `previousOf` facts had. Kept keys
+ * are rewritten as a fresh insert writes them; dropped keys are deleted. The
+ * delete and the insert touch disjoint rows, so their order within the
+ * statement does not matter.
+ */
+export async function replaceFactKeys(
+  q: Q,
+  kind: string,
+  replaced: readonly string[],
+  facts: readonly { id: string; keys: readonly Key[] }[],
+  previousOf: readonly string[] = replaced,
+): Promise<Key[]> {
+  const rows = facts.flatMap((fact) =>
+    [...new Set(fact.keys)].map((key) => ({ key, id: fact.id })),
+  );
+  const result = await q.execute<{ key: string }>(sql`
+    WITH previous AS MATERIALIZED (
+      SELECT key FROM "FactKey"
+      WHERE "factKind" = ${kind} AND "factId" = ANY(${textArrayParam(previousOf)})
+    ), next AS MATERIALIZED (
+      SELECT row.key, row.id
+      FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) AS row(key text, id text)
+    ), dropped AS (
+      DELETE FROM "FactKey" fact
+      WHERE fact."factKind" = ${kind} AND fact."factId" = ANY(${textArrayParam(replaced)})
+        AND NOT EXISTS (
+          SELECT 1 FROM next WHERE next.key = fact.key AND next.id = fact."factId"
+        )
+    ), kept AS (
+      INSERT INTO "FactKey" (key, "factKind", "factId")
+      SELECT next.key, ${kind}, next.id FROM next
+      ON CONFLICT (key, "factKind", "factId") DO UPDATE SET "createdAt" = excluded."createdAt"
+    )
+    SELECT key FROM previous`);
+  return result.rows.map((row) => row.key);
+}

@@ -8,6 +8,7 @@
  */
 
 export {
+  boundTransaction,
   databaseForTransaction,
   getDb,
   isTransaction,

@@ -300,6 +300,14 @@ export const unwrapDb = (
   return isTransaction(db) ? db : getDb(db);
 };
 
+/** The open transaction behind a transaction-bound handle; none for a pool handle. */
+export const boundTransaction = (
+  db: Database,
+): DrizzleTransaction | undefined => {
+  const client = getDb(db);
+  return isTransaction(client) ? client : undefined;
+};
+
 export const parentTransactionDatabase = (
   db: Database | RepositoryQueryTransaction,
 ): Database | undefined => {
@@ -371,11 +379,11 @@ export const withHouseholdWrite = async <T>(
   db: Database,
   fn: (tx: DrizzleTransaction) => Promise<T>,
 ): Promise<T> => {
-  const { enterWriteTransaction, HouseholdWriteBusyError } =
+  const { openHouseholdWriteTransaction, HouseholdWriteBusyError } =
     await import("~/server/kernel/gate");
   try {
     return await withTransaction(db, async (tx) => {
-      await enterWriteTransaction(tx, { lane: "money", mode: "member" });
+      await openHouseholdWriteTransaction(tx, "member");
       return fn(tx);
     });
   } catch (error) {

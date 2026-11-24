@@ -34,6 +34,14 @@ import { publishRunFinding } from "~/server/domains/run/repo/run-finding";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
+import { joinGmailPublication } from "./admitted-source";
+
+/** {@link withHouseholdWrite}, joining an enclosing Gmail publication instead. */
+const publicationHouseholdWrite = <T>(
+  db: Database,
+  work: (tx: DrizzleTransaction) => Promise<T>,
+) => joinGmailPublication(db, work, withHouseholdWrite, { busy: true });
+
 /** The caller holds the Email lock; stored unknown telemetry remains unknown. */
 export async function snapshotStoredEmailPrediction(
   tx: DrizzleTransaction,
@@ -137,7 +145,7 @@ export async function recordEmailClassificationObservation(
     publication ?? {},
   );
   const capture = suppliedEvidence.originalCapture;
-  return withHouseholdWrite(db, async (tx) => {
+  return publicationHouseholdWrite(db, async (tx) => {
     const [initial] = await tx
       .select()
       .from(emailTable)
@@ -305,7 +313,7 @@ export async function recordEmailClassificationApplication(
   db: Database,
   predictionId: string,
 ) {
-  return withHouseholdWrite(db, async (tx) => {
+  return publicationHouseholdWrite(db, async (tx) => {
     const rows = await tx
       .update(emailClassificationObservation)
       .set({ application: "applied" })
@@ -315,7 +323,7 @@ export async function recordEmailClassificationApplication(
           ne(emailClassificationObservation.application, "applied"),
         ),
       )
-      .returning({ emailId: emailClassificationObservation.emailId });
+      .returning();
     if (!rows.length) return;
     const { emitWrites, reconcileNow } = await import("~/server/kernel/api");
     const scopes = rows.map((row) => ({
@@ -328,6 +336,7 @@ export async function recordEmailClassificationApplication(
       ids: [predictionId],
       columns: ["application"],
       discovers: scopes,
+      after: rows,
     });
     await reconcileNow(database, scopes);
   });
@@ -345,7 +354,7 @@ export async function recordEmailRetrievalFailure(
     error: string;
   },
 ) {
-  await withHouseholdWrite(db, async (tx) => {
+  await publicationHouseholdWrite(db, async (tx) => {
     const { row } = await findOrCreateWithShortcode(tx, "email", {
       where: and(
         eq(
@@ -394,7 +403,7 @@ export async function recordEmailCandidateObservation(
         "Email candidate index does not name its exact evidence candidate",
       );
   }
-  return withHouseholdWrite(db, async (tx) => {
+  return publicationHouseholdWrite(db, async (tx) => {
     const [email] = await tx
       .select()
       .from(emailTable)

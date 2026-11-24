@@ -791,7 +791,7 @@ async function acquireEligible(
                 }),
               },
             );
-        recordObservation(observation?.id ?? null);
+        recordObservation(observation ?? null);
         const reclassified =
           input.reclassify && current
             ? await reclassifyPublication(
