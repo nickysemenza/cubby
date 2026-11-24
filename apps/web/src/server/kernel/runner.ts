@@ -130,8 +130,26 @@ export async function reconcileNow(
     discovers: scopes,
     reason: "reconcile-now",
   });
-  await wakeAfterCommit(db);
   const transactional = repositoryParentDatabase(db) !== undefined;
+  // Inside a transaction the wake follows the commit. On a pool handle a wake
+  // sent now would hand the fresh scopes to the runner ahead of this call's
+  // own claim, so it is sent when the call fails or leaves work behind.
+  if (transactional) await wakeAfterCommit(db);
+  try {
+    return await reconcileDirtied(db, registry, scopes, options, transactional);
+  } catch (error) {
+    if (!transactional) await wakeAfterCommit(db);
+    throw error;
+  }
+}
+
+async function reconcileDirtied(
+  db: Database,
+  registry: KernelRegistry,
+  scopes: readonly ScopeRef[],
+  options: { waitMs?: number; runId?: string },
+  transactional: boolean,
+): Promise<Outcome[]> {
   const deadline = Date.now() + (transactional ? 0 : (options.waitMs ?? 5_000));
   const pending = new Map(
     scopes.map((scope) => [`${scope.kind}\u0000${scope.key}`, scope]),

@@ -53,7 +53,9 @@ async function runHourlyBackstop(
                 requestDerivedRebuild(db, { force: false }),
             ])
               await step(db).catch((error: unknown) => errors.push(error));
-            await startPass(db, "email.purchase-discovery");
+            await startPass(db, "email.purchase-discovery").catch(
+              (error: unknown) => errors.push(error),
+            );
             await runProductionKernel(db, { budgetMs: 20_000 }).catch(
               (error: unknown) => errors.push(error),
             );

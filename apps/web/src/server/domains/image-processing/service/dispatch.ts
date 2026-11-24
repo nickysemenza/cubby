@@ -110,6 +110,12 @@ export async function dispatchImageProcessingWakeup(
             reason: "Waiting for an Apple device to prepare a JPEG rendition",
             waitReason: executionWaitReason.enum.device,
           });
+          // A rendition stored between the check above and this deferral found
+          // the job leased and skipped it, so look again now the wait is durable.
+          if (await getVerifiedImageRendition(db, claimed.imageId))
+            await (
+              await import("~/server/domains/image-processing/repo/image-processing")
+            ).bringImageProcessingForward(db, claimed.imageId);
           return "deferred";
         }
         const assigned = await assignImageProcessingExecutor(db, {
