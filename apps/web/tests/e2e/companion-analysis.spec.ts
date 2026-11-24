@@ -127,7 +127,6 @@ test("companion normalization preserves originals and rejects stale or corrupt r
     const scheduled = await scheduleImageProcessingJobs(db, {
       id: source.shortcode,
       kinds: ["describe_image"],
-      publish: false,
       runId,
     });
     return { source, jobId: scheduled.jobIds[0] };

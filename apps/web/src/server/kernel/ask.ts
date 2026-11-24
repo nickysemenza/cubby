@@ -23,6 +23,7 @@ import type { UnparsedError } from "~/lib/error-utils";
 import { askResponseClaims } from "~/server/ai/response-cache";
 import type { Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { answer } from "~/server/db/kernel-schema";
 import {
   repositoryQueries,
@@ -150,6 +151,15 @@ export type AskWaiters = {
   /** A pass that continues once this ask settles. */
   pass?: { name: string; key: string };
 };
+
+/**
+ * Whether filing this Ask with these waiters can leave a row the background
+ * runner claims (`runnerAsk`): its producer runs here and someone waits.
+ */
+const runnerOwned = (kind: AskKind, waiters: AskWaiters): boolean =>
+  !!kind.produce &&
+  !kind.hosted &&
+  !!(waiters.scopes?.length || waiters.runId || waiters.record || waiters.pass);
 
 /** Upsert the ask and record its waiters; returns its current state. */
 async function ensureAsk(
@@ -587,41 +597,52 @@ export async function withAsk<I, O>(
   const q = repositoryQueries(db);
   const envelope = askEnvelope(untyped, input);
   const inputHash = await inputHashOf(envelope);
-  const row = await ensureAsk(q, untyped, envelope, inputHash, options);
-  const known = await readAnswerOutput(q, inputHash);
-  if (known !== undefined) return kind.output.parse(known);
-  if (row.cancelled)
-    throw new AskAbandonedError(
-      `A member gave up on the ${kind.feature} answer for ${inputHash}.`,
-    );
-  if (row.state === "answered") {
-    const settled = await readAnswerOutput(q, inputHash);
-    if (settled !== undefined) return kind.output.parse(settled);
+  let row: AskRow;
+  let claimed: NonNullable<Awaited<ReturnType<typeof claimAsk>>>;
+  try {
+    row = await ensureAsk(q, untyped, envelope, inputHash, options);
+    const known = await readAnswerOutput(q, inputHash);
+    if (known !== undefined) return kind.output.parse(known);
+    if (row.cancelled)
+      throw new AskAbandonedError(
+        `A member gave up on the ${kind.feature} answer for ${inputHash}.`,
+      );
+    if (row.state === "answered") {
+      const settled = await readAnswerOutput(q, inputHash);
+      if (settled !== undefined) return kind.output.parse(settled);
+    }
+    if (row.state === "sent" && row.lapsed) await expireAsks(db, registry);
+    if (row.state === "unknown" || (row.state === "sent" && row.lapsed))
+      throw new AskUnknownError(
+        `The ${kind.feature} call for ${inputHash} went out and its outcome is unknown; it is not sent again automatically.`,
+      );
+    if (row.state === "sent")
+      throw inFlight(
+        "Another worker is placing this call; no duplicate call was placed.",
+      );
+    if (row.attempts >= row.maxAttempts)
+      throw new AskExhaustedError(
+        `The ${kind.feature} call for ${inputHash} spent its ${row.maxAttempts} attempts.`,
+      );
+    if (row.waitCause === "funding" && new Date(row.availableAt) > new Date())
+      throw new WorkDeferredError(
+        "The model Ask waits for funding",
+        new Date(row.availableAt),
+        "ai_funding_window",
+      );
+    const held = await claimAsk(db, row.id, kind.claimLimit);
+    if (!held)
+      throw inFlight(
+        "Another worker holds this ask or its claim partition is full.",
+      );
+    claimed = held;
+  } catch (error) {
+    // On a pool handle `ensureAsk` may already have committed a queued Ask
+    // and its waiter, which the runner claims; a failure before this call's
+    // own claim leaves it to the runner.
+    if (runnerOwned(untyped, options)) await wakeAfterCommit(db);
+    throw error;
   }
-  if (row.state === "sent" && row.lapsed) await expireAsks(db, registry);
-  if (row.state === "unknown" || (row.state === "sent" && row.lapsed))
-    throw new AskUnknownError(
-      `The ${kind.feature} call for ${inputHash} went out and its outcome is unknown; it is not sent again automatically.`,
-    );
-  if (row.state === "sent")
-    throw inFlight(
-      "Another worker is placing this call; no duplicate call was placed.",
-    );
-  if (row.attempts >= row.maxAttempts)
-    throw new AskExhaustedError(
-      `The ${kind.feature} call for ${inputHash} spent its ${row.maxAttempts} attempts.`,
-    );
-  if (row.waitCause === "funding" && new Date(row.availableAt) > new Date())
-    throw new WorkDeferredError(
-      "The model Ask waits for funding",
-      new Date(row.availableAt),
-      "ai_funding_window",
-    );
-  const claimed = await claimAsk(db, row.id, kind.claimLimit);
-  if (!claimed)
-    throw inFlight(
-      "Another worker holds this ask or its claim partition is full.",
-    );
   const [result] = await executeClaimed(
     db,
     registry,
@@ -767,7 +788,10 @@ export async function expireAsks(
   });
 }
 
-/** Queue an owed answer without running its producer (external executors and passes). */
+/**
+ * Queue an owed answer without running its producer (external executors and
+ * passes). An Ask the runner produces wakes it after commit.
+ */
 export async function queueAsk<I, O>(
   db: Database,
   kind: AskKind<I, O>,
@@ -776,16 +800,22 @@ export async function queueAsk<I, O>(
   preferredId?: string,
 ): Promise<string> {
   const envelope = askEnvelope(kind, input);
-  return (
-    await ensureAsk(
-      repositoryQueries(db),
-      kind,
-      envelope,
-      await inputHashOf(envelope),
-      waiters,
-      preferredId,
-    )
-  ).id;
+  const inputHash = await inputHashOf(envelope);
+  try {
+    return (
+      await ensureAsk(
+        repositoryQueries(db),
+        kind,
+        envelope,
+        inputHash,
+        waiters,
+        preferredId,
+      )
+    ).id;
+  } finally {
+    // Its waiter may commit before a later statement fails.
+    if (runnerOwned(kind, waiters)) await wakeAfterCommit(db);
+  }
 }
 
 export type ExternalAskClaim<I> = {
@@ -858,6 +888,23 @@ export async function releaseExternalAsk(
     WHERE id=${claim.id}::uuid AND "claimToken"=${claim.token}::uuid AND executor=${claim.executor}
       AND state IN (${ASK.sent},${ASK.unknown}) AND "cancelledAt" IS NULL RETURNING id`);
   return result.rows.length > 0;
+}
+
+/**
+ * Make released external Asks claimable now: a deferral their executor set
+ * ends early because what it waited for arrived. Funding waits keep their
+ * deadline. The caller owns the commit wake.
+ */
+export async function bringExternalAsksForward(
+  db: Database,
+  ids: readonly string[],
+): Promise<void> {
+  if (!ids.length) return;
+  await repositoryQueries(db).execute(sql`
+    UPDATE "Ask" SET "availableAt" = now()
+    WHERE id = ANY(${uuidArrayParam(ids)}) AND state = ${ASK.queued} AND "claimToken" IS NULL
+      AND "cancelledAt" IS NULL AND "availableAt" > now()
+      AND "waitCause" IS DISTINCT FROM ${kernelWaitCause.enum.funding}`);
 }
 
 /** Cancellation refuses every later claim and settlement. */

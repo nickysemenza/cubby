@@ -563,9 +563,12 @@ instead.
 Each writer that creates runner-claimable work, or brings it forward, sends a
 commit wake itself, and only then: a dirtying write, append, merge, repoint,
 answer, Ask settlement or expiry that dirtied a scope or made a waiting Pass
-due; a `reconcileNow` that leaves a scope dirty, failed or waiting on a queued
-Ask; `startPass`, a member retry and a Run retry or relaunch that revives its
-Asks. A `startPass` for a Pass that spent its attempts sends none, because no
+due; a member's `reconcileNow` or Drift approval, however it ends; a queued
+Ask the runner produces, including an in-line call that fails before its own
+claim; a prepared rendition that brings device-waiting image work forward;
+`startPass`, a member retry and a Run retry or relaunch that revives its Asks.
+A writer outside one transaction registers the wake right after its first
+durable write, so a later failure cannot skip it. A `startPass` for a Pass that spent its attempts sends none, because no
 runner claims it until a member retries it. A writer that sets only a future
 deadline offers it. A commit that creates no kernel work, including an
 ordinary source write, sends no permit. Offers refused while a permit is

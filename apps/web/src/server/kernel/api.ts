@@ -353,6 +353,7 @@ export {
   claimExternalAsk,
   renewExternalAsk,
   releaseExternalAsk,
+  bringExternalAsksForward,
   cancelExternalAsk,
   settleExternalAsk,
   type ExternalAskClaim,

@@ -114,8 +114,9 @@ export async function runKernel(
 /**
  * Run these scopes now for a waiting member: dirty them, claim them as they
  * become free (up to `waitMs`), and apply with the member lock timeout. A
- * scope another worker still holds when the wait ends reports `waiting`;
- * work left for the runner wakes it after the caller's commit.
+ * scope another worker still holds when the wait ends reports `waiting`.
+ * The dirtied scopes wake the runner after the caller's commit whatever
+ * happens next, so a failed claim or apply cannot strand them.
  */
 export async function reconcileNow(
   db: Database,
@@ -129,6 +130,7 @@ export async function reconcileNow(
     discovers: scopes,
     reason: "reconcile-now",
   });
+  await wakeAfterCommit(db);
   const transactional = repositoryParentDatabase(db) !== undefined;
   const deadline = Date.now() + (transactional ? 0 : (options.waitMs ?? 5_000));
   const pending = new Map(
@@ -178,9 +180,12 @@ export async function reconcileNow(
       status: "waiting",
       gaps: [],
     });
-  // Work this call leaves for the runner: a scope still dirty or backing off,
-  // or an Ask it queued. Applied output wakes from its own publication.
+  // On a pool handle the wake above went out before this call's claims, and a
+  // delivery that found them held offers only their claim deadline. Work this
+  // call leaves for the runner (a scope still dirty or backing off, or an Ask
+  // it queued) is due sooner than that.
   if (
+    !transactional &&
     [...outcomes.values()].some(
       (outcome) =>
         outcome.status === "conflict" ||

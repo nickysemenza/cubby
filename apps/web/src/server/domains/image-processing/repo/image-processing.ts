@@ -1374,34 +1374,43 @@ export async function repairImageProcessingExecution(
 
 /**
  * A result that unblocks an image's other work (a prepared rendition) brings
- * its waiting jobs and their cloud Passes forward, and wakes the runner when
- * a Pass became due. Failure backoff is left alone.
+ * its device-waiting jobs forward with their external Asks and cloud Passes,
+ * and wakes the runner after commit. A Pass held mid-publication is
+ * versioned, so its holder cannot publish the device wait over this. Failure
+ * backoff and funding waits are left alone.
  */
 export async function bringImageProcessingForward(
   db: Database,
   imageId: ImageId,
 ) {
-  const jobs = await getDb(db)
-    .update(imageProcessingJob)
-    .set({ runAt: new Date(), waitReason: null })
-    .where(
-      and(
-        eq(imageProcessingJob.imageId, imageId),
-        eq(imageProcessingJob.state, "pending"),
-        eq(imageProcessingJob.waitReason, "device"),
-        isNull(imageProcessingJob.leaseUntil),
-      ),
-    )
-    .returning({ askId: imageProcessingJob.askId });
-  const keys = jobs.flatMap((job) => (job.askId ? [job.askId] : []));
-  if (!keys.length) return;
-  const woken = await getDb(db).execute<{ woken: number }>(sql`
-    UPDATE "Pass" SET "availableAt" = now(), "wakeVersion" = "wakeVersion" + 1, "updatedAt" = now()
-    WHERE name = ${"image.cloud"} AND key = ANY(${textArrayParam(keys)})
-      AND "doneAt" IS NULL AND "cancelledAt" IS NULL AND "availableAt" > now()
-      AND "waitCause" IS DISTINCT FROM ${kernelWaitCause.enum.funding}
-    RETURNING 1 AS woken`);
-  if (woken.rows.length) await wakeAfterCommit(db);
+  await withTransactionDatabase(db, async (tx) => {
+    const jobs = await getDb(tx)
+      .update(imageProcessingJob)
+      .set({ runAt: new Date(), waitReason: null })
+      .where(
+        and(
+          eq(imageProcessingJob.imageId, imageId),
+          eq(imageProcessingJob.state, "pending"),
+          eq(imageProcessingJob.waitReason, "device"),
+          isNull(imageProcessingJob.leaseUntil),
+        ),
+      )
+      .returning({ askId: imageProcessingJob.askId });
+    const keys = jobs.flatMap((job) => (job.askId ? [job.askId] : []));
+    if (!keys.length) return;
+    await wakeAfterCommit(tx);
+    const { bringExternalAsksForward } = await import("~/server/kernel/api");
+    await bringExternalAsksForward(tx, keys);
+    // A held Pass's funding marker may predate its claim; its publication
+    // re-pauses it if funding is still short.
+    await getDb(tx).execute(sql`
+      UPDATE "Pass" SET "availableAt" = least("availableAt", now()), "waitCause" = NULL,
+        "wakeVersion" = "wakeVersion" + 1, "updatedAt" = now()
+      WHERE name = ${"image.cloud"} AND key = ANY(${textArrayParam(keys)})
+        AND "doneAt" IS NULL AND "cancelledAt" IS NULL
+        AND ("claimToken" IS NOT NULL OR ("availableAt" > now()
+          AND "waitCause" IS DISTINCT FROM ${kernelWaitCause.enum.funding}))`);
+  });
 }
 
 type DescriptionAnalysisIdentity = {
