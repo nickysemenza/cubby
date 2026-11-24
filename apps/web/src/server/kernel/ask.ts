@@ -342,14 +342,18 @@ async function commitAnswer(
 
 /** A hosted turn's publication budget, far inside its request's lifetime. */
 const HOSTED_PUBLISH_BUDGET_MS = 20_000;
+/** The member lock wait a publication's gate entry may take. */
+const GATE_LOCK_WAIT_MS = 2_000;
 
 /**
  * Publish a response already in hand. The in-line host of a hosted Ask retries
  * a publication only the household gate refused, each try a fresh transaction
  * that takes the gate first, never calling the provider again. It renews its
- * claim before each retry and stops on a renewal that fails, or when the
- * budget runs out, rethrowing the refusal so the caller settles it as any
- * failed publication. Every other publication is tried once.
+ * claim as soon as a try is refused, before waiting, and each retry checks
+ * that claim again under the gate. It stops on a renewal that fails, a claim
+ * that moved, or when the budget runs out, rethrowing the first refusal so
+ * the caller settles it as any failed publication. Every other publication
+ * is tried once.
  */
 async function publishAnswer(
   db: Database,
@@ -380,13 +384,18 @@ async function publishAnswer(
       if (refused !== undefined && error === refused) throw error;
       refused ??= error;
       if (!kind.hosted || !gateRefused(error)) throw error;
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      // The whole of the next try, lock wait included, stays inside the budget.
+      if (Date.now() + delay + GATE_LOCK_WAIT_MS >= deadline) throw refused;
+      // Renew before waiting, at the moment the caller would otherwise settle
+      // the failure: a claim about to lapse must not lapse during the wait,
+      // where expiry would settle a held response as unknown.
       const renewed = await renewClaim(
         repositoryQueries(db),
         { table: "Ask", id: ask.id },
         ask.token,
       ).catch(() => false);
-      if (!renewed || Date.now() >= deadline) throw refused;
+      if (!renewed) throw refused;
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 }
