@@ -341,7 +341,11 @@ async function commitAnswer(
   });
 }
 
-/** A hosted turn's publication budget, far inside its request's lifetime. */
+/**
+ * How long a hosted turn may keep starting publication retries, far inside its
+ * request's lifetime. It admits retries; a try already started runs to its own
+ * transaction limits.
+ */
 const HOSTED_PUBLISH_BUDGET_MS = 20_000;
 /** The member lock wait a publication's gate entry may take. */
 const GATE_LOCK_WAIT_MS = 2_000;
