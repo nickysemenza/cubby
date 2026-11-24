@@ -44,6 +44,7 @@ import {
   claimExternalAskRow,
   rawError,
   runnerAskKinds,
+  CLAIM_LEASE_MS,
   renewClaim,
   settleFailure,
   type ClaimedAsk,
@@ -386,16 +387,23 @@ async function publishAnswer(
       if (!kind.hosted || !gateRefused(error)) throw error;
       // The whole of the next try, lock wait included, stays inside the budget.
       if (Date.now() + delay + GATE_LOCK_WAIT_MS >= deadline) throw refused;
-      // Renew before waiting, at the moment the caller would otherwise settle
-      // the failure: a claim about to lapse must not lapse during the wait,
-      // where expiry would settle a held response as unknown.
-      const renewed = await renewClaim(
-        repositoryQueries(db),
-        { table: "Ask", id: ask.id },
-        ask.token,
-      ).catch(() => false);
+      // Extend the claim before waiting, at the moment the caller would
+      // otherwise settle the failure, so it cannot lapse during the wait and
+      // let expiry settle a held response as unknown. The token alone decides:
+      // while it is still this caller's nobody else has claimed the Ask, and
+      // the caller's own failure update depends on the same token, so a
+      // refusal here leaves exactly what a single failed attempt leaves.
+      const renewed = await repositoryQueries(db)
+        .execute<{ id: string }>(sql`
+          UPDATE "Ask" SET "claimDeadline" = now() + make_interval(secs => ${CLAIM_LEASE_MS / 1000})
+          WHERE id = ${ask.id}::uuid AND state = ${ASK.sent}
+            AND "claimToken" = ${ask.token}::uuid AND "cancelledAt" IS NULL
+          RETURNING id`)
+        .then((result) => result.rows.length > 0)
+        .catch(() => false);
       if (!renewed) throw refused;
       await new Promise((resolve) => setTimeout(resolve, delay));
+      if (Date.now() + GATE_LOCK_WAIT_MS >= deadline) throw refused;
     }
   }
 }
