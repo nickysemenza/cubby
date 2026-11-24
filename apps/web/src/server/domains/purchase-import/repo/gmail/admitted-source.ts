@@ -206,7 +206,9 @@ export async function publishGmailEvidence<T>(
           .orderBy(asc(run.id))
           .for("no key update")
       : [];
-    const requester = lockedRuns.find((row) => row.id === input.runId);
+    // The lock returns canonical ids; the requester's may arrive in any case.
+    const requesterId = input.runId?.toLowerCase();
+    const requester = lockedRuns.find((row) => row.id === requesterId);
     if (input.runId)
       (
         await import("~/server/domains/run/repo/execution-context")

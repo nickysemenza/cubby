@@ -186,7 +186,7 @@ export async function replaceFactKeys(
       SELECT key FROM "FactKey"
       WHERE "factKind" = ${kind} AND "factId" = ANY(${textArrayParam(previousOf)})
     ), next AS MATERIALIZED (
-      SELECT row.key, row.id
+      SELECT DISTINCT row.key, row.id
       FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) AS row(key text, id text)
     ), dropped AS (
       DELETE FROM "FactKey" fact
