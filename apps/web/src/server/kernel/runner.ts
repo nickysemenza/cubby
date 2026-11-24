@@ -91,13 +91,15 @@ export type KernelRun = { ran: number; exhausted: boolean };
 export async function runKernel(
   db: Database,
   registry: KernelRegistry,
-  options: { budgetMs: number },
+  options: { budgetMs: number; rulesCheck?: boolean },
 ): Promise<KernelRun> {
   return withWorkContext(async () => {
     const deadline = Date.now() + options.budgetMs;
     await stopUnregisteredWork(db, registry);
     await expireAsks(db, registry);
-    await ensureVersionSweep(db, registry);
+    // Queue deliveries skip the rules check: it walks every scope a held
+    // proposal keeps stale, and the hourly cron's run performs it.
+    if (options.rulesCheck !== false) await ensureVersionSweep(db, registry);
     let ran = 0;
     while (Date.now() < deadline) {
       const scopes = await runScopeBatch(db, registry);

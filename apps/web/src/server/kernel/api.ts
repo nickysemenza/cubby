@@ -299,7 +299,7 @@ export async function cancelWork(
 /** Run due kernel work within the queue or cron time budget. */
 export async function runProductionKernel(
   db: Database,
-  options: { budgetMs: number },
+  options: { budgetMs: number; rulesCheck?: boolean },
 ): Promise<KernelRun> {
   return (await productionKernel()).run(db, options);
 }

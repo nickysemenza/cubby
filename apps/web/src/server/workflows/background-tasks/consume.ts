@@ -57,6 +57,7 @@ export async function handleBackgroundQueueBatch(
     const { result, future } = await collectDeliveryWakes(async () => {
       const { ran, exhausted } = await runProductionKernel(db, {
         budgetMs: BUDGET_MS,
+        rulesCheck: false,
       });
       let alertAt: Date | null;
       try {

@@ -192,7 +192,10 @@ export type Kernel = {
     ids: readonly string[],
   ): Promise<Map<string, MachineryListRow>>;
   /** Run due kernel work within a time budget; returns units run. */
-  run(db: Database, options: { budgetMs: number }): Promise<KernelRun>;
+  run(
+    db: Database,
+    options: { budgetMs: number; rulesCheck?: boolean },
+  ): Promise<KernelRun>;
 };
 
 export function createKernel(modules: readonly DomainModule[]): Kernel {

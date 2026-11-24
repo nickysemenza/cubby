@@ -52,7 +52,7 @@ due. Dispatch event admission and funding resets can use the same sequence.
 | `email.purchase-discovery` | `default`   | Retained Email evidence linked to purchase records, 50 UUIDs per page, restarting hourly                                                                      |
 | `calendar.invalidate`      | origin      | Retries an idempotent dirty mark after the post-commit fast path failed                                                                                       |
 
-The kernel also registers its version sweep. Model, embedding and image calls are Asks. External image/device producers use `queueAsk`, `claimExternalAsk`, `renewExternalAsk`, `releaseExternalAsk`, `cancelExternalAsk` and `settleExternalAsk`; accepted results become retained Answers. Inline model calls use `withAsk` with their Run and Pass requester. Hosted agent Asks retain each turn's answer while the coordinator owns its transcript and tools.
+The kernel also registers its version sweep. The hourly cron run starts it when scopes sit on older rules; queue deliveries do not check. Model, embedding and image calls are Asks. External image/device producers use `queueAsk`, `claimExternalAsk`, `renewExternalAsk`, `releaseExternalAsk`, `cancelExternalAsk` and `settleExternalAsk`; accepted results become retained Answers. Inline model calls use `withAsk` with their Run and Pass requester. Hosted agent Asks retain each turn's answer while the coordinator owns its transcript and tools.
 
 ## Waits and limits
 
