@@ -136,11 +136,33 @@ export type ApplyOptions = {
 /** Baseline-hidden computations of held scopes, by scope id. */
 type Proposals = ReadonlyMap<string, Computed>;
 
+/**
+ * A lost race against another writer. A busy gate is not one: no input moved,
+ * so it counts against no scope even though it wraps a lock timeout.
+ */
 const isConflict = (error: UnparsedError) =>
-  error instanceof KernelConflict ||
-  error instanceof LockedReadChangedError ||
-  isEntityShortcodeCollision(error, "Entity") ||
-  ["40001", "40P01", "55P03"].includes(findPgError(error)?.code ?? "");
+  !(error instanceof HouseholdWriteBusyError) &&
+  (error instanceof KernelConflict ||
+    error instanceof LockedReadChangedError ||
+    isEntityShortcodeCollision(error, "Entity") ||
+    ["40001", "40P01", "55P03"].includes(findPgError(error)?.code ?? ""));
+
+/**
+ * Admit an apply transaction. A lock timeout in admission is the gate held by
+ * another apply, so it surfaces as the busy-gate error rather than a conflict.
+ */
+async function admitApply(
+  q: Q,
+  options: Parameters<typeof enterWriteTransaction>[1],
+) {
+  try {
+    await enterWriteTransaction(q, options);
+  } catch (error) {
+    if (findPgError(error)?.code === "55P03")
+      throw new HouseholdWriteBusyError(error);
+    throw error;
+  }
+}
 
 /** The tables of the new rows `entry` references by id, among `pending`. */
 function newReferences(
@@ -753,19 +775,31 @@ async function fenceBatch(
     }
     active.push({ computed: item, claim });
   }
-  if (conflicted.length) await releaseConflicts(q, conflicted);
+  if (conflicted.length) await releaseClaims(q, conflicted, "conflict");
   return { active, outcomes };
 }
 
-/** One retry mutation for a batch; a conflict spends no attempt. */
-async function releaseConflicts(
+const CONFLICT_COUNT = {
+  conflict: sql`d.conflicts + 1`,
+  busy: sql`d.conflicts`,
+  unlock: sql`least(d.conflicts, ${LOCKED_RUN_AFTER_CONFLICTS - 1})`,
+} as const;
+
+/**
+ * One retry mutation for a batch; a release spends no attempt. `conflict`
+ * counts a lost race against these scopes. `busy` keeps the count. `unlock`
+ * returns a locked scope that never reached the gate to one conflict short of
+ * the locked path.
+ */
+async function releaseClaims(
   q: Q,
   claims: readonly ClaimedScope[],
+  count: keyof typeof CONFLICT_COUNT,
   delayMs = 0,
 ) {
   if (!claims.length) return;
   await q.execute(sql`
-    UPDATE "ScopeDirty" d SET "claimToken" = NULL, "claimDeadline" = NULL, conflicts = d.conflicts + 1
+    UPDATE "ScopeDirty" d SET "claimToken" = NULL, "claimDeadline" = NULL, conflicts = ${CONFLICT_COUNT[count]}
       ${delayMs > 0 ? sql`, "availableAt" = greatest(d."availableAt", now() + make_interval(secs => ${delayMs / 1000}))` : sql``}
     FROM unnest(${orderedTextArrayParam(claims.map((item) => item.kind))}, ${orderedTextArrayParam(claims.map((item) => item.key))}, ${orderedTextArrayParam(claims.map((item) => item.token))}) AS wanted(kind, key, token)
     WHERE d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key AND d."claimToken" = wanted.token::uuid`);
@@ -912,7 +946,7 @@ async function applyBatch(
   }
   for (const item of fenced.active) {
     if (isConflict(item.computed.error)) {
-      await releaseConflicts(q, [item.claim]);
+      await releaseClaims(q, [item.claim], "conflict");
       outcomes.push(outcome(item.computed.scope, "conflict"));
       continue;
     }
@@ -1369,7 +1403,8 @@ async function applyBatch(
           WHERE d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key AND d.seq = wanted.seq AND d."claimToken" = wanted.token
           RETURNING d."scopeKind", d."scopeKey"
         ), released AS (
-          UPDATE "ScopeDirty" d SET "claimToken" = NULL, "claimDeadline" = NULL
+          -- A publication ends the scope's run of conflicts.
+          UPDATE "ScopeDirty" d SET "claimToken" = NULL, "claimDeadline" = NULL, conflicts = 0
           FROM wanted
           WHERE d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key AND d."claimToken" = wanted.token
             AND NOT EXISTS (SELECT 1 FROM done WHERE done."scopeKind" = d."scopeKind" AND done."scopeKey" = d."scopeKey")
@@ -1558,7 +1593,8 @@ async function redirectMergedScopes(
 
 /**
  * Compute claimed scopes outside any transaction, then apply them. Scopes
- * past three conflicts run locked, one per transaction.
+ * past three conflicts run locked, one per transaction, until one finds the
+ * gate busy.
  */
 export async function runClaimedScopes(
   db: Database,
@@ -1610,8 +1646,32 @@ async function runHeldScopes(
     (scope) => scope.conflicts < LOCKED_RUN_AFTER_CONFLICTS,
   );
   const outcomes: Outcome[] = [...ended.values()];
-  for (const scope of locked)
-    outcomes.push(await runLocked(db, registry, reconciler, scope, options));
+  // A busy gate ends the batch's locked runs: the rest would find it busy
+  // too. Each released scope drops to one conflict short of the locked path,
+  // so its next claim publishes in a batch whose bounded gate wait queues
+  // behind the holder. A scope that still loses its race there returns to the
+  // locked path on that conflict, so it gets a locked attempt at least every
+  // other claim, and each one fails only while another apply holds the gate.
+  const busy: ClaimedScope[] = [];
+  for (const scope of locked) {
+    const result = busy.length
+      ? GATE_BUSY
+      : await runLocked(db, registry, reconciler, scope, options);
+    if (result === GATE_BUSY) busy.push(scope);
+    else outcomes.push(result);
+  }
+  if (busy.length) {
+    await releaseClaims(
+      repositoryQueries(db),
+      busy,
+      "unlock",
+      // A waiting member retries within its own deadline.
+      options.mode === "background" ? LOCKED_GATE_BUSY_DELAY_MS : 0,
+    );
+    outcomes.push(
+      ...busy.map(({ kind, key }) => outcome({ kind, key }, "conflict")),
+    );
+  }
   if (!loose.length) return outcomes;
   const computed = await computeBatch(
     repositoryQueries(db),
@@ -1635,6 +1695,9 @@ async function runHeldScopes(
 
 /** A locked background run that found the gate busy waits this long before its next claim. */
 const LOCKED_GATE_BUSY_DELAY_MS = 5_000;
+
+/** A locked run that never got the gate; its caller releases it. */
+const GATE_BUSY = Symbol("gate busy");
 
 // Leave room under the background deadline for fences, output writes and gate admission.
 const BACKGROUND_PUBLICATION_WEIGHT = 10_000;
@@ -1789,7 +1852,7 @@ async function applyPage(
   try {
     const results = await repositoryTransactionDatabase(db, async (tx) => {
       const q = repositoryQueries(tx);
-      await enterWriteTransaction(q, {
+      await admitApply(q, {
         lane: reconciler.lane,
         mode: options.mode,
       });
@@ -1815,15 +1878,19 @@ async function applyPage(
       } catch (error) {
         if (!isConflict(error)) throw error;
         after = undefined;
-        await releaseConflicts(q, claimed);
+        await releaseClaims(q, claimed, "conflict");
         return computed.map((item) => outcome(item.scope, "conflict"));
       }
     });
     if (before && after) advanceSiblingFences(siblings, before, after);
     return results;
   } catch (error) {
+    if (error instanceof HouseholdWriteBusyError) {
+      await releaseClaims(repositoryQueries(db), claimed, "busy");
+      return computed.map((item) => outcome(item.scope, "conflict"));
+    }
     if (isConflict(error)) {
-      await releaseConflicts(repositoryQueries(db), claimed);
+      await releaseClaims(repositoryQueries(db), claimed, "conflict");
       return computed.map((item) => outcome(item.scope, "conflict"));
     }
     const failure = classifyWorkFailure(error, { publication: true });
@@ -1866,7 +1933,7 @@ async function runLocked(
   reconciler: Reconciler,
   claimed: ClaimedScope,
   options: ApplyOptions & { mode: WriteMode; hideBaseline?: boolean },
-): Promise<Outcome> {
+): Promise<Outcome | typeof GATE_BUSY> {
   const scope = { kind: claimed.kind, key: claimed.key };
   const [prepared] = await computeBatch(
     repositoryQueries(db),
@@ -1900,7 +1967,7 @@ async function runLocked(
           const result = await repositoryTransactionDatabase(db, async (tx) => {
             const q = repositoryQueries(tx);
             advance("gate");
-            await enterWriteTransaction(q, {
+            await admitApply(q, {
               lane: reconciler.lane,
               mode: options.mode,
               nonblockingGate: options.mode === "background",
@@ -1990,15 +2057,9 @@ async function runLocked(
     if ("error" in traced) throw traced.error;
     return traced.result;
   } catch (error) {
-    if (isConflict(error) || error instanceof HouseholdWriteBusyError) {
-      // A busy gate retries after other applies, not in a recompute loop.
-      await releaseConflicts(
-        repositoryQueries(db),
-        [claimed],
-        error instanceof HouseholdWriteBusyError
-          ? LOCKED_GATE_BUSY_DELAY_MS
-          : 0,
-      );
+    if (error instanceof HouseholdWriteBusyError) return GATE_BUSY;
+    if (isConflict(error)) {
+      await releaseClaims(repositoryQueries(db), [claimed], "conflict");
       return outcome(scope, "conflict");
     }
     const [failed] = await settleBatchFailure(

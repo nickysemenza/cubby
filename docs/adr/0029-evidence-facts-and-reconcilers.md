@@ -461,10 +461,14 @@ wait rather than a terminated session. A nested writer that already holds the
 gate retains the outer transaction's timeouts and does not reset its budget.
 
 A locked background fallback tries the gate without waiting before it reads
-inside the transaction. Busy admission releases its claim as a conflict,
-retains the dirty work and makes it claimable again after a short delay, so a
-gate wait cannot consume the budget needed for recomputation and a busy gate
-does not drive a recompute loop. Admitted work keeps every revision and sequence fence. Member
+inside the transaction. Busy admission is not a conflict. It releases that
+claim and the batch's remaining locked claims untried, retains the dirty work,
+makes it claimable again after a short delay and returns each scope to one
+conflict short of the locked path, so its next claim publishes in a batch. A
+gate wait cannot consume the budget needed for recomputation, a busy gate does
+not drive a recompute loop, and it costs a batch one locked attempt. A scope
+that still loses its race in a batch returns to the locked path on that
+conflict. Admitted work keeps every revision and sequence fence. Member
 work retains its bounded gate wait. A failed locked load settles its original
 cause before issuing another query on that transaction.
 
@@ -503,7 +507,11 @@ writer the gate serialized before them. The gate binds that order: a
 transaction holding it may raise revisions after dirty or record locks
 without a cycle, because no other kernel writer runs beside it. A
 conflict on `seq` or `rev`, a deadlock or a serialization failure does not
-count as a failed attempt. After three
+count as a failed attempt. It counts as a conflict against the scopes the fence
+names, or against every scope of the page when the apply itself loses the race;
+the page rolls back and each scope recomputes from fresh inputs on its next
+claim. A gate lock timeout at admission is a busy gate, not a conflict, and a
+publication ends the scope's run of conflicts. After three
 conflicts in a row the runner makes an exception to loading outside the
 transaction: it discovers the read set, takes the gate,
 reads the revisions of the union of input and planned output keys, 0 for an
