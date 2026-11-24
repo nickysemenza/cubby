@@ -41,8 +41,10 @@ async function runHourlyBackstop(
         await withTrace(
           "cf.scheduled.job",
           async () => {
-            await ringDueDeviceWork(db);
             const errors: unknown[] = [];
+            await ringDueDeviceWork(db).catch((error: unknown) =>
+              errors.push(error),
+            );
             for (const step of [
               scheduleRunsReconcile,
               (db: Parameters<typeof startPass>[0]) =>
