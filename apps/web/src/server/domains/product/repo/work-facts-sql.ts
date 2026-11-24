@@ -13,21 +13,24 @@ import { expense } from "~/server/db/schema";
 import { ownershipExitExpensePredicate } from "./ownership";
 import {
   expectedQuantitySql,
+  knownNonpositiveQuantitySql,
   onHandUnitsSql,
-  unknownAcquisitionLinesSql,
   unknownQuantityLinesSql,
 } from "./quantity-ledger";
 
 const qb = new QueryBuilder();
 
-/** Whole kits its live parts could reassemble; null without component edges. */
-export const partsAccountedKitsSql = (productId: SQL) =>
-  sql`(SELECT min(floor(COALESCE(${sql.raw(onHandUnitsSql("kac_p"))}, 0) / kac."quantity"))
+const partsAccountedKits = (productId: SQL) =>
+  sql`SELECT min(floor(COALESCE(${sql.raw(onHandUnitsSql("kac_p"))}, 0) / kac."quantity")) AS accounted
        FROM "EntityLink" kac
        JOIN "Product" kac_p
          ON kac_p."id" = kac."toEntityId" AND ${notDeleted("kac_p")}
       WHERE kac."fromEntityId" = ${productId}
-        AND ${notDeleted("kac")} AND kac."kind" = 'productComponent')`;
+        AND ${notDeleted("kac")} AND kac."kind" = 'productComponent'`;
+
+/** Whole kits its live parts could reassemble; null without component edges. */
+export const partsAccountedKitsSql = (productId: SQL) =>
+  sql`(${partsAccountedKits(productId)})`;
 
 /** Products with a live recorded disposal; unlinked disposal Expenses count. */
 const disposedProductIds = () =>
@@ -48,13 +51,17 @@ export const productWorkFactsSql = (productAlias: string) => {
   const onHand = sql.raw(onHandUnitsSql(productAlias));
   const expected = sql.raw(expectedQuantitySql(productAlias));
   const id = sql.raw(`${productAlias}."id"`);
-  const accounted = partsAccountedKitsSql(id);
+  // CASE keeps the recursive ledger behind the stock and disposal gates
+  // when Work projects these predicates for every live Product.
   return {
-    kitAccounting: sql<boolean>`COALESCE(${onHand} > 0 AND ${accounted} > 0
-      AND ${onHand} + ${accounted} > ${expected}, false)`,
-    ownershipReconciliation: sql<boolean>`COALESCE(${id} IN (${disposedProductIds()})
-      AND ${onHand} > 0 AND ${expected} <= 0
-      AND ${sql.raw(unknownAcquisitionLinesSql(productAlias))} = 0, false)`,
+    kitAccounting: sql<boolean>`(SELECT CASE WHEN parts.accounted > 0 THEN
+      CASE WHEN ${onHand} > 0 THEN ${onHand} + parts.accounted > ${expected}
+        ELSE false END
+      ELSE false END FROM (${partsAccountedKits(id)}) parts)`,
+    ownershipReconciliation: sql<boolean>`CASE WHEN ${id} IN (${disposedProductIds()}) THEN
+      CASE WHEN ${onHand} > 0 THEN ${sql.raw(knownNonpositiveQuantitySql(productAlias))}
+        ELSE false END
+      ELSE false END`,
     unknownQuantityLines: sql<boolean>`${sql.raw(unknownQuantityLinesSql(productAlias))} > 0`,
   };
 };

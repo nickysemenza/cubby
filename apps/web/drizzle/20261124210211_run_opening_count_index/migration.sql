@@ -1,0 +1,1 @@
+CREATE INDEX "Run_live_routine_purpose_trigger_idx" ON "Run" ("routine","purpose","trigger") WHERE "deletedAt" IS NULL;

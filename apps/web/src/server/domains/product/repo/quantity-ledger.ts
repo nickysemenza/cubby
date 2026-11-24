@@ -100,10 +100,11 @@ export const expectedQuantitySql = (productAlias = '"product"') =>
     SELECT ${PROJECTED_EXPECTED}
     ${QUANTITY_PROJECTION_FROM})`;
 
-/** Projected unquantified acquisition lines, matching the batch ledger loader. */
-export const unknownAcquisitionLinesSql = (productAlias = '"product"') =>
+/** Nonpositive projected balance with no unquantified acquisitions. */
+export const knownNonpositiveQuantitySql = (productAlias = '"product"') =>
   `(${kitAncestorCteText(kitSeedForProductAlias(productAlias))}
-    SELECT COALESCE(sum(ko."unknownAcquisitionLines"), 0)::int
+    SELECT ${PROJECTED_EXPECTED} <= 0
+      AND COALESCE(sum(ko."unknownAcquisitionLines"), 0)::int = 0
     ${QUANTITY_PROJECTION_FROM})`;
 
 /** Projected unquantified acquisition and exit lines together. */
