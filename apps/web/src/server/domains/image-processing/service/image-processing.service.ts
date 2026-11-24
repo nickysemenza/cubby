@@ -49,7 +49,6 @@ import {
   recordImageProcessingEvent,
   createImageProcessingSubmission,
 } from "~/server/domains/image-processing/repo/image-processing-history";
-import { publishImageProcessingWakeups } from "~/server/domains/image-processing/repo/image-processing-maintenance";
 import { ringDeviceWorkAt } from "~/server/domains/image-processing/repo/image-processing-ring";
 import {
   persistImageProcessingSubmission,
@@ -71,25 +70,21 @@ import { reserveImageAnalysisInput } from "~/server/generic/activity/repo/activi
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 /**
- * Persist independent jobs before publishing their lightweight wakeups. The caller
- * never waits for a companion: durable rows repair a missed publication.
+ * Persist independent jobs; each queues its Ask, whose cloud Pass or device
+ * ring wakes its executor. The caller never waits for a companion.
  */
-export async function scheduleImageProcessingJobs(
+export function scheduleImageProcessingJobs(
   db: Database,
   input: {
     id: string;
     kinds: readonly ImageProcessingJobKind[];
-    publish?: boolean;
     automatic?: boolean;
     submission?: { id: string; publicId: string };
     /** The Run that requested this scheduling, when the caller has one. */
     runId?: RunId | null;
   },
 ): Promise<{ jobIds: ImageJobId[]; submissionId?: string }> {
-  const scheduled = await persistImageProcessingSubmission(db, input);
-  if (input.publish !== false)
-    await publishImageProcessingWakeups(db, scheduled.jobIds);
-  return scheduled;
+  return persistImageProcessingSubmission(db, input);
 }
 
 /** Remove only orphan outputs whose signed upload window has elapsed. */
@@ -108,10 +103,7 @@ export async function scheduleAppleImageDescriptionEvaluation(
   db: Database,
   input: { id: string },
 ): Promise<{ jobId: ImageJobId | null }> {
-  const scheduled = await persistAppleImageDescriptionSubmission(db, input);
-  if (scheduled.jobId)
-    await publishImageProcessingWakeups(db, [scheduled.jobId]);
-  return scheduled;
+  return persistAppleImageDescriptionSubmission(db, input);
 }
 
 type TransparentOutputCheck = {
@@ -491,7 +483,6 @@ export async function retryImageProcessingFailures(
     imageId,
     submissionId: submission.id,
   });
-  await publishImageProcessingWakeups(db, jobs);
   return { retried: jobs.length, submissionId: submission.publicId };
 }
 

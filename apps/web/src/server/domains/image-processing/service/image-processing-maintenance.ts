@@ -6,7 +6,6 @@ import { createImageProcessingSubmission } from "~/server/domains/image-processi
 import {
   ALL_IMAGE_PROCESSING_KINDS,
   imagesMissingCurrentProcessing,
-  publishImageProcessingWakeups,
   type ImageProcessingBacklogCursor,
 } from "~/server/domains/image-processing/repo/image-processing-maintenance";
 
@@ -15,10 +14,7 @@ import {
   scheduleImageProcessingJobs,
 } from "./image-processing.service";
 
-/**
- * Schedules one keyset page of images missing a current job. `publish: false`
- * leaves the wakeups to a caller that dispatches the jobs itself.
- */
+/** Schedules one keyset page of images missing a current job. */
 export async function backfillImageProcessing(
   db: Database,
   input: {
@@ -26,7 +22,6 @@ export async function backfillImageProcessing(
     kinds?: readonly ImageProcessingJobKind[];
     after?: ImageProcessingBacklogCursor | null;
     runId?: RunId;
-    publish?: boolean;
   },
 ) {
   const kinds = input.kinds ?? ALL_IMAGE_PROCESSING_KINDS;
@@ -43,17 +38,11 @@ export async function backfillImageProcessing(
     const jobs = await scheduleImageProcessingJobs(db, {
       id: candidate.shortcode,
       kinds,
-      publish: false,
       submission,
       runId: input.runId ?? null,
     });
     scheduled.push({ ...candidate, jobIds: jobs.jobIds });
   }
-  if (input.publish !== false)
-    await publishImageProcessingWakeups(
-      db,
-      scheduled.flatMap((candidate) => candidate.jobIds),
-    );
   return {
     scheduled: images.length,
     submissionId: submission.publicId,

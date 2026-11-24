@@ -540,8 +540,12 @@ fences its claim and commits the callback with its cursor and completion.
 A page without a callback fences its claim and settles only its own Pass row
 in a transaction without the gate. The wake version governs cursor and
 completion updates in both cases. Queue permits
-and the hourly cron stay as the wake and the backstop (ADR 0025 item 2); the
-next wake is the least `availableAt` across the three tables. Exactly one
+and the hourly cron stay as the wake and the backstop (ADR 0025 item 2). A
+permit is sent only for claimable work: runner-claimable work that is due now
+or falls due at a known time. The next wake is the least time a runner claim
+could select a row, read with the claim statements' own predicates; exhausted,
+hosted, externally executed, unregistered, cancelled and finished rows never
+count. Exactly one
 future wake is pending, in the single `KernelWake` row: an offer for time T
 sends a delayed permit carrying T only when it sets the row's `at` to T, which
 it may when the row is empty, already due or later than T. A delivery clears
@@ -552,18 +556,29 @@ future only after the caller's commit, and the offer is one statement after
 that commit, never inside a gated transaction. Immediate commit wakes and
 device ring wakes do not touch the row. A delivery whose runner stopped on its
 budget with work due sends an immediate continuation; one whose runner found
-an empty round but still sees due work offers a short retry instead. Offers
-refused while a permit is pending rely on its delivery, so a lost permit, or a
-send whose retries are exhausted, leaves their deadlines to the next offer
-after its `at` passes, or the hourly cron. Deadline writers that send no wake
-of their own are bounded the same way: writes inside a delivery (its offer
-covers them), failures settled by a member's `reconcileNow` (its
-claim-recovery wake covers them), and any other future `availableAt` written
-without a wake, such as a Run's funding pause or an external executor's
-delayed release. Writes that make work due now send a commit wake, including
-a Run retry or relaunch that revives its Asks. Commit wakes and
-`household.changed` freshness notifications stay with `generic/changes`, and a
-kernel apply emits the same change record as any other write.
+an empty round but still sees due work met a row that became free without a
+writer, or one another transaction held locked, and offers a short retry
+instead.
+
+Each writer that creates runner-claimable work, or brings it forward, sends a
+commit wake itself, and only then: a dirtying write, append, merge, repoint,
+answer, Ask settlement or expiry that dirtied a scope or made a waiting Pass
+due; a member's `reconcileNow` or Drift approval, however it ends; a queued
+Ask the runner produces, including an in-line call that fails before its own
+claim; a prepared rendition that brings device-waiting image work forward;
+`startPass`, a member retry and a Run retry or relaunch that revives its Asks.
+A writer outside one transaction registers the wake right after its first
+durable write, so a later failure cannot skip it. A `startPass` for a Pass that spent its attempts sends none, because no
+runner claims it until a member retries it. A writer that sets only a future
+deadline offers it. A commit that creates no kernel work, including an
+ordinary source write, sends no permit. Offers refused while a permit is
+pending rely on its delivery, so a lost permit, or a send whose retries are
+exhausted, leaves their deadlines to the next offer after its `at` passes, or
+the hourly cron. Deadline writers that send no wake of their own are bounded
+the same way: writes inside a delivery (its offer covers them) and backoffs
+settled by an in-line producer call outside a delivery. `household.changed` freshness notifications stay
+with `generic/changes`, and a kernel apply emits the same change record as any
+other write.
 
 The `Job` table, `AiEvaluation`, `AiEvaluationRequest`, the embedding
 scheduling columns, `ImageProcessingAttempt`, `DerivedRebuild`, `WorkItem`,

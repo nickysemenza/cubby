@@ -32,6 +32,7 @@ import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { getVerifiedImageRendition } from "~/server/domains/image/repo/image-identification";
 
 import {
+  bringImageProcessingForward,
   claimImageProcessingJob,
   completeImageProcessingJob,
 } from "./image-processing";
@@ -200,6 +201,17 @@ describe("independent durable image identification", () => {
       attempts: 0,
       waitReason: "device",
     });
+    // The arriving rendition makes the external Ask claimable again, not
+    // only the job and its Pass.
+    const askDue = async () =>
+      (
+        await getDb(ctx.db).execute<{ due: boolean }>(
+          sql`SELECT a."availableAt" <= now() AS due FROM "Ask" a JOIN ${imageProcessingJob} ON ${imageProcessingJob.askId} = a.id WHERE ${imageProcessingJob.id} = ${identification.id}`,
+        )
+      ).rows[0]?.due;
+    expect(await askDue()).toBe(false);
+    await bringImageProcessingForward(ctx.db, parseEntityId("image", row.id));
+    expect(await askDue()).toBe(true);
   });
 
   it("reuses only a verified snapshot for the current source, never staging or old source bytes", async () => {

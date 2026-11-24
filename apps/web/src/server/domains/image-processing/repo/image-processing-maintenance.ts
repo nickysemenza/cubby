@@ -15,14 +15,12 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { runAfterCommit } from "~/server/db/helpers/core";
 import {
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
   IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
 } from "~/server/domains/image-processing/repo/processor-policy";
-import { wakeKernel } from "~/server/workflows/background-tasks/publish";
 
 import { imageJobDisplayStateSql } from "./image-job-state";
 
@@ -127,17 +125,4 @@ export async function imagesMissingCurrentProcessing(
       shortcode,
       cursor: { createdAt, id },
     }));
-}
-
-const IMAGE_PROCESSING_WAKEUP_SOURCE = "image-processing";
-
-/** The wake only reaches durable rows, so repeats and repairs are harmless. */
-export async function publishImageProcessingWakeups(
-  db: Database,
-  jobIds: readonly string[],
-): Promise<void> {
-  if (jobIds.length === 0) return;
-  await runAfterCommit(db, () =>
-    wakeKernel({ source: IMAGE_PROCESSING_WAKEUP_SOURCE }),
-  );
 }

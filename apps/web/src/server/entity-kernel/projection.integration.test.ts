@@ -13,6 +13,7 @@ import { readSnapshotState as readDerivedRebuildStatus } from "~/server/generic/
 import {
   captureBackgroundQueue,
   drainDerivedRefreshFrontier,
+  hasClaimableWork,
 } from "~/server/testing/background-queue";
 let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
 beforeEach(() => {
@@ -107,6 +108,9 @@ describe("entity kernel search projections", () => {
     expect(
       await getSearchDocumentEmbeddingText(ctx.db, "ingredient", entityId),
     ).toBeNull();
+    // Projection is the scheduled derived pass's work, not the runner's: a
+    // write wakes the runner only for kernel work it left claimable.
+    expect(published.length > 0).toBe(await hasClaimableWork(ctx.db));
     await drainDerivedRefreshFrontier(ctx.db);
     const first = await getSearchDocumentEmbeddingText(
       ctx.db,
@@ -115,12 +119,14 @@ describe("entity kernel search projections", () => {
     );
     expect(first?.embeddingText).toContain("Projected saffron");
 
+    published.length = 0;
     await executeEntity(context(), {
       action: "update",
       entity: "ingredient",
       id: parseShortcodeFor("ingredient", created.item.id),
       data: { name: "Projected turmeric" },
     });
+    expect(published.length > 0).toBe(await hasClaimableWork(ctx.db));
     await drainDerivedRefreshFrontier(ctx.db);
     const second = await getSearchDocumentEmbeddingText(
       ctx.db,
@@ -129,11 +135,6 @@ describe("entity kernel search projections", () => {
     );
     expect(second?.embeddingText).toContain("Projected turmeric");
     expect(second?.embeddingText).not.toContain("Projected saffron");
-
-    expect(published.length).toBeGreaterThanOrEqual(2);
-    expect([...new Set(published.map((message) => message.queueType))]).toEqual(
-      ["background"],
-    );
   });
 
   it("projects a planting by its plant name and re-projects it when the plant is renamed", async () => {

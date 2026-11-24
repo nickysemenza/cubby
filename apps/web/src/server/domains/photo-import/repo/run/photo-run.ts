@@ -47,7 +47,6 @@ import {
   user,
 } from "~/server/db/schema";
 import { createImageProcessingSubmission } from "~/server/domains/image-processing/repo/image-processing-history";
-import { publishImageProcessingWakeups } from "~/server/domains/image-processing/repo/image-processing-maintenance";
 import { persistImageProcessingSubmission } from "~/server/domains/image-processing/repo/image-processing-submission";
 import { IMAGE_DESCRIPTION_PROCESSOR_REVISION } from "~/server/domains/image-processing/repo/processor-policy";
 import {
@@ -572,17 +571,13 @@ export async function schedulePhotoRunImageProcessing(
   imageCodes: readonly string[],
 ) {
   const submission = await createImageProcessingSubmission(db);
-  const jobIds: string[] = [];
-  for (const shortcode of imageCodes) {
-    const scheduled = await persistImageProcessingSubmission(db, {
+  for (const shortcode of imageCodes)
+    await persistImageProcessingSubmission(db, {
       id: shortcode,
       kinds: ["describe_image", "subject_lift", "identify_image"],
       submission: { id: submission.id, publicId: submission.publicId },
       runId,
     });
-    jobIds.push(...scheduled.jobIds);
-  }
-  await publishImageProcessingWakeups(db, jobIds);
   return submission;
 }
 

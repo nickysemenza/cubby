@@ -154,11 +154,16 @@ export async function resumeFundingPausedRuns(
   }: { now?: Date; anyWindow?: boolean } = {},
 ) {
   let woken = 0;
-  for (const entry of fundingWaiters)
-    if (anyWindow || entry.name === "runs")
-      woken += await entry.wake(db, now, anyWindow);
-  await (
-    await import("~/server/workflows/background-tasks/publish")
-  ).wakeKernel({ source: "funding-window" });
+  let failed = true;
+  try {
+    for (const entry of fundingWaiters)
+      if (anyWindow || entry.name === "runs")
+        woken += await entry.wake(db, now, anyWindow);
+    failed = false;
+  } finally {
+    // A failing waiter may follow another's committed release.
+    if (woken || failed)
+      await (await import("~/server/kernel/wake")).wakeAfterCommit(db);
+  }
   return woken;
 }

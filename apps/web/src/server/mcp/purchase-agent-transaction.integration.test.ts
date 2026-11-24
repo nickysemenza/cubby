@@ -117,7 +117,7 @@ describe("purchase-agent transaction", () => {
   };
 
   it(
-    "merges ingredients on the agent path without deadlocking, publishing only after commit",
+    "merges ingredients on the agent path without deadlocking",
     { timeout: 15_000 },
     async () => {
       const { keeper, alias, recipeId } = await seedAliasRecipe();
@@ -137,7 +137,6 @@ describe("purchase-agent transaction", () => {
       expect(await selectStaleRecipeIds(ctx.db, [recipeId])).toEqual([
         recipeId,
       ]);
-      expect(published).toContain("background");
       expect(
         await resolveLiveShortcode(ctx.db, alias.shortcode, "ingredient"),
       ).toBeNull();

@@ -208,6 +208,11 @@ export async function describeOriginalImage(
     renditionKey: key,
     renditionHash: inspected.sha256,
   });
+  // The recorded rendition unblocks the image's identification now; the
+  // provider call below can stall or fail without holding it back.
+  await (
+    await import("~/server/domains/image-processing/repo/image-processing")
+  ).bringImageProcessingForward(db, source.id);
   if (exactCached)
     return {
       result: imageDescriptionResult.parse(exactCached),

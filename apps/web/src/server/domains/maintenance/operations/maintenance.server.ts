@@ -7,8 +7,8 @@ import {
   readMaintenanceStatus,
 } from "~/server/domains/maintenance/service/maintenance.service";
 import { requestDerivedRebuild } from "~/server/generic/derived/repo/rebuild";
+import { wakeAfterCommit } from "~/server/kernel/wake";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
-import { wakeAt } from "~/server/workflows/background-tasks/publish";
 import { requestCatchUp } from "~/server/workflows/catch-up";
 
 export const maintenanceHandlers = implementOperationDomain(
@@ -20,10 +20,7 @@ export const maintenanceHandlers = implementOperationDomain(
     status: (context) => readMaintenanceStatus(context.db),
     rebuildDerived: async (context) => {
       const receipt = await requestDerivedRebuild(context.db);
-      await wakeAt(new Date(), {
-        source: "manual-derived-rebuild",
-        db: context.db,
-      });
+      await wakeAfterCommit(context.db);
       return receipt;
     },
     repairImageDimensions: (context, input) =>

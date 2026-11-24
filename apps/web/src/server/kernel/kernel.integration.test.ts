@@ -95,6 +95,7 @@ import {
   fenceClaim,
   scopeClaimOrder,
 } from "./claim";
+import * as kernelClaim from "./claim";
 import { computeBatch } from "./compute";
 import type { Reconciler } from "./define";
 import { markDirty } from "./dirty";
@@ -332,6 +333,17 @@ describe("evidence-facts kernel", () => {
       columns: ["sourceRef"],
       discovers: [scope],
     });
+    // A member run that fails after dirtying still leaves the runner a wake.
+    const claimFailure = vi
+      .spyOn(kernelClaim, "claimScopes")
+      .mockRejectedValueOnce(new Error("Synthetic claim failure"));
+    const wake = vi.spyOn(backgroundTasks, "wakeKernel").mockResolvedValue();
+    await expect(kernel.reconcileNow(ctx.db, [scope])).rejects.toThrow(
+      "Synthetic claim failure",
+    );
+    expect(wake).toHaveBeenCalled();
+    wake.mockRestore();
+    claimFailure.mockRestore();
     await kernel.reconcileNow(ctx.db, [scope]);
     expect(seen.at(-1)).toBe(0);
     await kernel.append(ctx.db, [
@@ -3286,6 +3298,7 @@ describe("evidence-facts kernel", () => {
     // A proposal stored under older rules is replaced, never applied.
     const { kernel: later } = kernelWith({ purchaseVersion: 3 });
     const [older] = proposals.slice(1);
+    const wake = vi.spyOn(backgroundTasks, "wakeKernel").mockResolvedValue();
     await expect(
       later.approveDrift(
         ctx.db,
@@ -3294,6 +3307,9 @@ describe("evidence-facts kernel", () => {
         older!.proposalHash,
       ),
     ).resolves.toBe("stale");
+    // The dirty row the approval claimed and released is the runner's.
+    expect(wake).toHaveBeenCalled();
+    wake.mockRestore();
     const [current] = await repositoryQueries(ctx.db)
       .select()
       .from(drift)

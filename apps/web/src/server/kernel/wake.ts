@@ -1,8 +1,15 @@
 import type { Database } from "~/server/db/database";
-import { repositoryAfterCommit } from "~/server/db/repository-access.boundary";
+import {
+  repositoryAfterCommit,
+  type RepositoryQueryInput,
+} from "~/server/db/repository-access.boundary";
 
-/** Wake the background runner once the dirtying transaction commits. */
-export async function wakeAfterCommit(db: Database): Promise<void> {
+/**
+ * Wake the background runner once a transaction that created or brought
+ * forward runner-claimable work commits. Writers call it only then: a commit
+ * that made nothing claimable sends no permit (ADR 0029 section 7).
+ */
+export async function wakeAfterCommit(db: RepositoryQueryInput): Promise<void> {
   await repositoryAfterCommit(
     db,
     async () => {

@@ -277,10 +277,42 @@ export type ClaimedScope = {
   deadline: Date;
 };
 
+/** A row whose claim admits a holder now: free, or held past its deadline. */
+const freeNow = (t: SQL): SQL =>
+  sql`${t}."availableAt" <= now() AND (${t}."claimToken" IS NULL OR ${t}."claimDeadline" <= now())`;
+
+/**
+ * When `freeNow` first holds for a row: its `availableAt`, or for a held
+ * claim the later of that and the claim deadline. A held row without a
+ * deadline never frees, so it has no time.
+ */
+const freeAt = (t: SQL): SQL =>
+  sql`CASE WHEN ${t}."claimToken" IS NULL THEN ${t}."availableAt"
+    WHEN ${t}."claimDeadline" IS NOT NULL THEN greatest(${t}."availableAt", ${t}."claimDeadline") END`;
+
 /** Dirty rows a runner may claim now. */
 const claimableScope = (d: SQL): SQL =>
-  sql`${d}."availableAt" <= now() AND ${d}.attempts < ${MAX_SCOPE_ATTEMPTS}
-    AND (${d}."claimToken" IS NULL OR ${d}."claimDeadline" <= now())`;
+  sql`${d}.attempts < ${MAX_SCOPE_ATTEMPTS} AND ${freeNow(d)}`;
+
+/**
+ * Asks of these features the background runner claims once free: queued,
+ * run by this Worker's producer (not hosted, no external executor), with
+ * attempts left and a waiter that still wants the answer. An Ask nobody waits
+ * on is its in-line caller's to retry.
+ */
+const runnerAsk = (a: SQL, features: readonly string[]): SQL =>
+  sql`${a}.state = ${ASK.queued} AND NOT ${a}.hosted AND ${a}.executor IS NULL AND ${a}."cancelledAt" IS NULL
+    AND ${a}.attempts < ${a}."maxAttempts" AND ${a}.feature = ANY(${textArrayParam(features)})
+    AND EXISTS (SELECT 1 FROM "AskScope" s WHERE s."askId" = ${a}.id AND s."cancelledAt" IS NULL)`;
+
+/** Unfinished Passes of these names with attempts left; exhausted ones wait for a member retry. */
+const runnerPass = (p: SQL, names: readonly string[]): SQL =>
+  sql`${p}."doneAt" IS NULL AND ${p}."cancelledAt" IS NULL AND ${p}.attempts < ${p}."maxAttempts"
+    AND ${p}.name = ANY(${textArrayParam(names)})`;
+
+/** The Ask kinds the background runner produces. */
+export const runnerAskKinds = (registry: KernelRegistry): AskKind[] =>
+  [...registry.asks.values()].filter((kind) => kind.produce && !kind.hosted);
 
 /** Scope kinds in claim order: money lane first, upstream kinds first. */
 export const scopeClaimOrder = (registry: KernelRegistry): Reconciler[] =>
@@ -588,11 +620,7 @@ async function claimAskGroup(
       }>(sql`
     WITH picked AS (
       SELECT id FROM "Ask"
-      WHERE state = ${ASK.queued} AND NOT hosted AND executor IS NULL AND "cancelledAt" IS NULL AND "availableAt" <= now()
-        AND attempts < "maxAttempts" AND feature = ANY(${textArrayParam(features)})
-        AND ("claimToken" IS NULL OR "claimDeadline" <= now())
-        -- An ask nobody waits on is its in-line caller's to retry.
-        AND EXISTS (SELECT 1 FROM "AskScope" s WHERE s."askId" = "Ask".id AND s."cancelledAt" IS NULL)
+      WHERE ${runnerAsk(sql`"Ask"`, features)} AND ${freeNow(sql`"Ask"`)}
       ORDER BY "availableAt", "createdAt" LIMIT ${limit}
       FOR UPDATE SKIP LOCKED
     )
@@ -642,8 +670,10 @@ export async function claimPass(
   }>(sql`SELECT name FROM (SELECT name,
       row_number() OVER (PARTITION BY name ORDER BY ${passOrder()}) AS rank,
       row_number() OVER (ORDER BY ${passOrder()}) AS position FROM "Pass"
-    WHERE name = ANY(${textArrayParam(passes.map((pass) => pass.name))}) AND "doneAt" IS NULL AND "cancelledAt" IS NULL
-      AND attempts < "maxAttempts" AND "availableAt" <= now() AND ("claimToken" IS NULL OR "claimDeadline" <= now())
+    WHERE ${runnerPass(
+      sql`"Pass"`,
+      passes.map((pass) => pass.name),
+    )} AND ${freeNow(sql`"Pass"`)}
     ) ranked WHERE rank = 1 ORDER BY position`);
   for (const candidate of candidates.rows) {
     const pass = passes.find((entry) => entry.name === candidate.name);
@@ -678,9 +708,7 @@ async function claimPassGroup(
       }>(sql`
     WITH picked AS (
       SELECT name, key FROM "Pass"
-      WHERE "doneAt" IS NULL AND "cancelledAt" IS NULL AND "availableAt" <= now()
-        AND attempts < "maxAttempts" AND name = ANY(${textArrayParam(names)})
-        AND ("claimToken" IS NULL OR "claimDeadline" <= now())
+      WHERE ${runnerPass(sql`"Pass"`, names)} AND ${freeNow(sql`"Pass"`)}
       ORDER BY ${passOrder()} LIMIT 1
       FOR UPDATE SKIP LOCKED
     )
@@ -703,41 +731,46 @@ async function claimPassGroup(
 }
 
 /**
- * The next wake across the three tables: the least `availableAt` of claimable
- * work, or the deadline of a claim that would lapse into claimable work. Any
- * due scope is claimable, so a due wake always finds work. Scope heads come from `ScopeDirty_claim_idx` and
- * held claims from `ScopeDirty_held_idx`. Scalar SQL, also the drain's `next`.
+ * The next time the runner can claim work: the least `freeAt` over the rows
+ * its claim statements select, built from the same predicates
+ * (`claimableScope`, `runnerAsk`, `runnerPass`), plus the deadline of a sent
+ * Ask's claim, whose expiry `expireAsks` settles at the runner's start. Rows no
+ * runner claim selects (exhausted, hosted, externally executed, unregistered,
+ * cancelled or done work) never count, so a delivery offers a successor only
+ * for claimable work. Scope heads come from `ScopeDirty_claim_idx` and held
+ * claims from `ScopeDirty_held_idx`. Scalar SQL, also the drain's `next`.
  */
 export const nextWakeSql = (registry: KernelRegistry): SQL => {
   const kinds = [...registry.reconcilers.values()];
+  const known = sql`(VALUES ${sql.join(
+    kinds.map(
+      (reconciler) =>
+        sql`(${reconciler.lane}::text, ${reconciler.scope}::text)`,
+    ),
+    sql`, `,
+  )}) AS known(lane, kind)`;
   const scopes = kinds.length
-    ? sql`(SELECT min(head."availableAt") FROM (VALUES ${sql.join(
-        kinds.map(
-          (reconciler) =>
-            sql`(${reconciler.lane}::text, ${reconciler.scope}::text)`,
-        ),
-        sql`, `,
-      )}) AS known(lane, kind) CROSS JOIN LATERAL (
+    ? sql`(SELECT min(head."availableAt") FROM ${known} CROSS JOIN LATERAL (
         SELECT d."availableAt" FROM "ScopeDirty" d
         WHERE d.lane = known.lane AND d."scopeKind" = known.kind
           AND d.attempts < ${MAX_SCOPE_ATTEMPTS} AND d."claimToken" IS NULL
         ORDER BY d."availableAt", d.seq LIMIT 1) head),
-    (SELECT min(greatest("availableAt", "claimDeadline")) FROM "ScopeDirty"
-      WHERE "claimToken" IS NOT NULL AND attempts < ${MAX_SCOPE_ATTEMPTS}
-        AND "scopeKind" = ANY(${textArrayParam(kinds.map((reconciler) => reconciler.scope))}))`
+    (SELECT min(${freeAt(sql`d`)}) FROM "ScopeDirty" d
+      WHERE d."claimToken" IS NOT NULL AND d.attempts < ${MAX_SCOPE_ATTEMPTS}
+        AND (d.lane, d."scopeKind") IN (SELECT lane, kind FROM ${known}))`
     : sql`NULL::timestamp`;
   return sql`(
   SELECT least(
     ${scopes},
-    (SELECT min(CASE WHEN "claimToken" IS NULL THEN "availableAt" ELSE greatest("availableAt", "claimDeadline") END)
-      FROM "Ask" WHERE state = ${ASK.queued} AND "cancelledAt" IS NULL AND executor IS NULL AND NOT hosted AND attempts < "maxAttempts"
-        AND feature = ANY(${textArrayParam([...registry.asks.values()].filter((kind) => kind.produce && !kind.hosted).map((kind) => kind.feature))})
-        AND EXISTS (SELECT 1 FROM "AskScope" s WHERE s."askId" = "Ask".id AND s."cancelledAt" IS NULL)),
+    (SELECT min(${freeAt(sql`"Ask"`)}) FROM "Ask"
+      WHERE ${runnerAsk(
+        sql`"Ask"`,
+        runnerAskKinds(registry).map((kind) => kind.feature),
+      )}),
     (SELECT min("claimDeadline") FROM "Ask" WHERE state = ${ASK.sent}
       AND feature = ANY(${textArrayParam([...registry.asks.keys()])})),
-    (SELECT min(CASE WHEN "claimToken" IS NULL THEN "availableAt" ELSE greatest("availableAt", "claimDeadline") END)
-      FROM "Pass" WHERE "doneAt" IS NULL AND "cancelledAt" IS NULL AND attempts < "maxAttempts"
-        AND name = ANY(${textArrayParam([...registry.passes.keys()])}))
+    (SELECT min(${freeAt(sql`"Pass"`)}) FROM "Pass"
+      WHERE ${runnerPass(sql`"Pass"`, [...registry.passes.keys()])})
   )::timestamp)`;
 };
 

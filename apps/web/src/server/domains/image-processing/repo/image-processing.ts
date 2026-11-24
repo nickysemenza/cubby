@@ -28,6 +28,7 @@ import type {
   ImageProcessingTerminalResult as ImageProcessingResult,
 } from "@cubby/schemas/image-processing";
 import type { ImageRepresentations } from "@cubby/schemas/image-summary";
+import { kernelWaitCause } from "@cubby/schemas/kernel/machinery";
 import { runStatus, VISIBLE_RUN_PURPOSES } from "@cubby/schemas/run-fields";
 import {
   and,
@@ -66,6 +67,7 @@ import {
   withTransactionDatabase,
   databaseForTransaction,
 } from "~/server/db/helpers";
+import { textArrayParam } from "~/server/db/helpers/array-param";
 import { uuidArrayParam } from "~/server/db/helpers/query";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { requestedRows } from "~/server/db/helpers/requested";
@@ -98,6 +100,7 @@ import { MAIL_ATTACHMENT_UPLOAD_REASON } from "~/server/domains/mail/repo/mail-a
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { enterHouseholdGate } from "~/server/kernel/gate";
+import { wakeAfterCommit } from "~/server/kernel/wake";
 import { WorkSupersededError } from "~/server/kernel/work-errors";
 
 import { queueImageAsk } from "./image-asks";
@@ -1371,23 +1374,43 @@ export async function repairImageProcessingExecution(
 
 /**
  * A result that unblocks an image's other work (a prepared rendition) brings
- * its waiting jobs forward. Failure backoff is left alone.
+ * its device-waiting jobs forward with their external Asks and cloud Passes,
+ * and wakes the runner after commit. A Pass held mid-publication is
+ * versioned, so its holder cannot publish the device wait over this. Failure
+ * backoff and funding waits are left alone.
  */
 export async function bringImageProcessingForward(
   db: Database,
   imageId: ImageId,
 ) {
-  await getDb(db)
-    .update(imageProcessingJob)
-    .set({ runAt: new Date(), waitReason: null })
-    .where(
-      and(
-        eq(imageProcessingJob.imageId, imageId),
-        eq(imageProcessingJob.state, "pending"),
-        eq(imageProcessingJob.waitReason, "device"),
-        isNull(imageProcessingJob.leaseUntil),
-      ),
-    );
+  await withTransactionDatabase(db, async (tx) => {
+    const jobs = await getDb(tx)
+      .update(imageProcessingJob)
+      .set({ runAt: new Date(), waitReason: null })
+      .where(
+        and(
+          eq(imageProcessingJob.imageId, imageId),
+          eq(imageProcessingJob.state, "pending"),
+          eq(imageProcessingJob.waitReason, "device"),
+          isNull(imageProcessingJob.leaseUntil),
+        ),
+      )
+      .returning({ askId: imageProcessingJob.askId });
+    const keys = jobs.flatMap((job) => (job.askId ? [job.askId] : []));
+    if (!keys.length) return;
+    await wakeAfterCommit(tx);
+    const { bringExternalAsksForward } = await import("~/server/kernel/api");
+    await bringExternalAsksForward(tx, keys);
+    // A held Pass's funding marker may predate its claim; its publication
+    // re-pauses it if funding is still short.
+    await getDb(tx).execute(sql`
+      UPDATE "Pass" SET "availableAt" = least("availableAt", now()), "waitCause" = NULL,
+        "wakeVersion" = "wakeVersion" + 1, "updatedAt" = now()
+      WHERE name = ${"image.cloud"} AND key = ANY(${textArrayParam(keys)})
+        AND "doneAt" IS NULL AND "cancelledAt" IS NULL
+        AND ("claimToken" IS NOT NULL OR ("availableAt" > now()
+          AND "waitCause" IS DISTINCT FROM ${kernelWaitCause.enum.funding}))`);
+  });
 }
 
 type DescriptionAnalysisIdentity = {

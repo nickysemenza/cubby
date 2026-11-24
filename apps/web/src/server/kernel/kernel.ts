@@ -192,7 +192,10 @@ export type Kernel = {
     ids: readonly string[],
   ): Promise<Map<string, MachineryListRow>>;
   /** Run due kernel work within a time budget; returns units run. */
-  run(db: Database, options: { budgetMs: number }): Promise<KernelRun>;
+  run(
+    db: Database,
+    options: { budgetMs: number; rulesCheck?: boolean },
+  ): Promise<KernelRun>;
 };
 
 export function createKernel(modules: readonly DomainModule[]): Kernel {
@@ -214,11 +217,7 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
     machineryCapability: (entity) => bound.machinery.get(entity) ?? null,
     needsYou: (db, options) => readNeedsYou(db, bound, options),
     runWork: (db, runId) => readRunWork(db, bound, runId),
-    async append(db, rows, options) {
-      const facts = await append(db, bound, rows, options);
-      if (facts.length) await wakeAfterCommit(db);
-      return facts;
-    },
+    append: (db, rows, options) => append(db, bound, rows, options),
     async decide(db, actor, decisions, writers) {
       const moneyEntities = new Set(
         [...bound.reconcilers.values()]

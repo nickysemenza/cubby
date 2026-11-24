@@ -41,8 +41,10 @@ async function runHourlyBackstop(
         await withTrace(
           "cf.scheduled.job",
           async () => {
-            await ringDueDeviceWork(db);
             const errors: unknown[] = [];
+            await ringDueDeviceWork(db).catch((error: unknown) =>
+              errors.push(error),
+            );
             for (const step of [
               scheduleRunsReconcile,
               (db: Parameters<typeof startPass>[0]) =>
@@ -53,7 +55,9 @@ async function runHourlyBackstop(
                 requestDerivedRebuild(db, { force: false }),
             ])
               await step(db).catch((error: unknown) => errors.push(error));
-            await startPass(db, "email.purchase-discovery");
+            await startPass(db, "email.purchase-discovery").catch(
+              (error: unknown) => errors.push(error),
+            );
             await runProductionKernel(db, { budgetMs: 20_000 }).catch(
               (error: unknown) => errors.push(error),
             );

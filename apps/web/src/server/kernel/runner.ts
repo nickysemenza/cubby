@@ -32,7 +32,7 @@ import { markDirty } from "./dirty";
 import { hasStaleScopes, VERSION_SWEEP } from "./drift";
 import { startPass, runOnePass } from "./pass";
 import type { KernelRegistry } from "./registry";
-import { wakeClaimRecovery } from "./wake";
+import { wakeAfterCommit, wakeClaimRecovery } from "./wake";
 
 const SCOPE_BATCH = 64;
 const ASK_BATCH = 4;
@@ -91,13 +91,15 @@ export type KernelRun = { ran: number; exhausted: boolean };
 export async function runKernel(
   db: Database,
   registry: KernelRegistry,
-  options: { budgetMs: number },
+  options: { budgetMs: number; rulesCheck?: boolean },
 ): Promise<KernelRun> {
   return withWorkContext(async () => {
     const deadline = Date.now() + options.budgetMs;
     await stopUnregisteredWork(db, registry);
     await expireAsks(db, registry);
-    await ensureVersionSweep(db, registry);
+    // Queue deliveries skip the rules check: it walks every scope a held
+    // proposal keeps stale, and the hourly cron's run performs it.
+    if (options.rulesCheck !== false) await ensureVersionSweep(db, registry);
     let ran = 0;
     while (Date.now() < deadline) {
       const scopes = await runScopeBatch(db, registry);
@@ -115,6 +117,8 @@ export async function runKernel(
  * Run these scopes now for a waiting member: dirty them, claim them as they
  * become free (up to `waitMs`), and apply with the member lock timeout. A
  * scope another worker still holds when the wait ends reports `waiting`.
+ * The dirtied scopes wake the runner after the caller's commit whatever
+ * happens next, so a failed claim or apply cannot strand them.
  */
 export async function reconcileNow(
   db: Database,
@@ -129,6 +133,25 @@ export async function reconcileNow(
     reason: "reconcile-now",
   });
   const transactional = repositoryParentDatabase(db) !== undefined;
+  // Inside a transaction the wake follows the commit. On a pool handle a wake
+  // sent now would hand the fresh scopes to the runner ahead of this call's
+  // own claim, so it is sent when the call fails or leaves work behind.
+  if (transactional) await wakeAfterCommit(db);
+  try {
+    return await reconcileDirtied(db, registry, scopes, options, transactional);
+  } catch (error) {
+    if (!transactional) await wakeAfterCommit(db);
+    throw error;
+  }
+}
+
+async function reconcileDirtied(
+  db: Database,
+  registry: KernelRegistry,
+  scopes: readonly ScopeRef[],
+  options: { waitMs?: number; runId?: string },
+  transactional: boolean,
+): Promise<Outcome[]> {
   const deadline = Date.now() + (transactional ? 0 : (options.waitMs ?? 5_000));
   const pending = new Map(
     scopes.map((scope) => [`${scope.kind}\u0000${scope.key}`, scope]),
@@ -177,6 +200,20 @@ export async function reconcileNow(
       status: "waiting",
       gaps: [],
     });
+  // On a pool handle no wake has gone out yet. Work this call leaves for the
+  // runner (a scope still dirty or backing off, or an Ask it queued) needs one.
+  if (
+    !transactional &&
+    [...outcomes.values()].some(
+      (outcome) =>
+        outcome.status === "conflict" ||
+        outcome.status === "failed" ||
+        (outcome.status === "waiting" &&
+          (!outcome.gaps.length ||
+            outcome.gaps.some((gap) => gap.askState === "queued"))),
+    )
+  )
+    await wakeAfterCommit(db);
   if (options.runId) {
     const q = repositoryQueries(db);
     await q.execute(sql`

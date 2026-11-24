@@ -412,7 +412,6 @@ describe("row-set filters", () => {
       const { jobIds } = await scheduleImageProcessingJobs(ctx.db, {
         id: source.shortcode,
         kinds: ["describe_image"],
-        publish: false,
       });
       return jobIds;
     };

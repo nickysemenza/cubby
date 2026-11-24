@@ -423,6 +423,12 @@ const disagreementsOf = (difference: unknown): unknown[] =>
  * other rules, or whose re-derived proposal hash moved, is replaced and must
  * be approved again. A matching one applies exactly that difference under the
  * input fence and files the asks it counted.
+ *
+ * Approval wakes the runner after commit however it ends: its decision
+ * dirties the scopes that read it, its publication can file queued Asks
+ * without dirtying anything, and a stale, conflicting or failed approval
+ * releases or backs off the dirty row it claimed. None of those wakes on its
+ * own outside a delivery.
  */
 export async function approveDrift(
   db: Database,
@@ -430,7 +436,21 @@ export async function approveDrift(
   actor: ActorContext,
   scope: ScopeRef,
   proposalHash: string,
-  options: { recorded?: boolean } = {},
+): Promise<ApprovalOutcome> {
+  try {
+    return await approveOne(db, registry, actor, scope, proposalHash, false);
+  } finally {
+    await wakeAfterCommit(db);
+  }
+}
+
+async function approveOne(
+  db: Database,
+  registry: KernelRegistry,
+  actor: ActorContext,
+  scope: ScopeRef,
+  proposalHash: string,
+  recorded: boolean,
 ): Promise<ApprovalOutcome> {
   const q = repositoryQueries(db);
   const [proposal] = await q
@@ -443,7 +463,7 @@ export async function approveDrift(
   if (proposal.proposalHash !== proposalHash) return "stale";
   // Evidence or a decision resolves a disagreement; approval cannot.
   if (disagreementsOf(proposal.difference).length) return "stale";
-  if (!options.recorded)
+  if (!recorded)
     await decide(db, registry, actor, [
       {
         channel: "assignment",
@@ -500,8 +520,21 @@ export async function approveDrift(
     : "stale";
 }
 
-/** Approve every current proposal of one scope kind: one decision, each proposal applied. */
+/** Approve every current proposal of one scope kind: one decision, each proposal applied, one wake. */
 export async function approveDriftClass(
+  db: Database,
+  registry: KernelRegistry,
+  actor: ActorContext,
+  kind: string,
+): Promise<Record<ApprovalOutcome, number>> {
+  try {
+    return await approveClass(db, registry, actor, kind);
+  } finally {
+    await wakeAfterCommit(db);
+  }
+}
+
+async function approveClass(
   db: Database,
   registry: KernelRegistry,
   actor: ActorContext,
@@ -529,15 +562,13 @@ export async function approveDriftClass(
   >;
   for (const proposal of proposals)
     counts[
-      await approveDrift(
+      await approveOne(
         db,
         registry,
         actor,
         { kind, key: proposal.key },
         proposal.proposalHash,
-        {
-          recorded: true,
-        },
+        true,
       )
     ]++;
   return counts;

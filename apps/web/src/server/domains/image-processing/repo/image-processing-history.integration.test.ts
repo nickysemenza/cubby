@@ -71,7 +71,6 @@ describe("image execution history conservation", () => {
     const scheduled = await scheduleImageProcessingJobs(ctx.db, {
       id: source.shortcode,
       kinds: ["describe_image"],
-      publish: false,
     });
     const jobId = scheduled.jobIds[0];
     if (!jobId) throw new Error("Missing test job");
@@ -180,7 +179,6 @@ describe("image execution history conservation", () => {
     const repeated = await scheduleImageProcessingJobs(ctx.db, {
       id: source.shortcode,
       kinds: ["describe_image"],
-      publish: false,
     });
     expect(repeated.jobIds).toContain(jobId);
     expect(repeated.jobIds).toHaveLength(2);
