@@ -2864,6 +2864,12 @@ export const { definition, readSchemas } = defineEntityModel({
     ],
     indexes: [
       {
+        // Narrow the opening population before evaluating the live phase.
+        name: "Run_live_routine_purpose_trigger_idx",
+        on: ["routine", "purpose", "trigger"],
+        where: "{deletedAt} IS NULL",
+      },
+      {
         // Current execution and repair reads must not scan retained Run payloads.
         name: "Run_live_status_failure_purpose_idx",
         on: ["status", "failureCode", "purpose"],
