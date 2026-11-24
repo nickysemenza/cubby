@@ -626,7 +626,13 @@ before the result is applied anywhere; a streamed agent turn may be displayed
 as it arrives and is an Answer only when the whole turn is stored. A failed
 response is never an Answer. Every transport, including the agent host's,
 records in the produce ledger what it sent and what refused before sending,
-so a hosted turn proves unsent the same way.
+so a hosted turn proves unsent the same way. The in-line host of a hosted Ask
+retries publishing a response it already holds, fresh or replayed, when only
+the household gate refused it in time: fresh gated transactions for about 20
+seconds of its request, renewing its claim before each try and stopping when
+the renewal fails, without calling the provider again; past that the failed
+publication settles as any other. A replayed agent turn carries the transport
+that carried the original, so its usage records the same billing.
 
 The response-cache Durable Object is the single in-flight claim for every
 producer call on every transport, including ChatGPT-plan traffic and agent

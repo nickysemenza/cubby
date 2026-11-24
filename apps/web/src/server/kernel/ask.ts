@@ -30,6 +30,7 @@ import {
   repositoryTransactionDatabase,
   type RepositoryQueryClient,
 } from "~/server/db/repository-access.boundary";
+import { findPgError } from "~/server/errors/db-errors";
 import {
   WorkDeferredError,
   WorkEvidenceObsoleteError,
@@ -274,6 +275,11 @@ async function waitingScopes(q: Q, askId: string): Promise<ScopeRef[]> {
   return result.rows;
 }
 
+/** Errors {@link commitAnswer} met entering the gate: a lock wait that gave up (55P03). */
+const gateRefusals = new WeakSet<object>();
+const gateRefused = (error: unknown) =>
+  error instanceof Object && gateRefusals.has(error);
+
 async function commitAnswer(
   db: Database,
   registry: KernelRegistry,
@@ -283,7 +289,14 @@ async function commitAnswer(
   runId: string | null,
 ): Promise<void> {
   await repositoryTransactionDatabase(db, async (tx) => {
-    await enterHouseholdGate(tx);
+    try {
+      await enterHouseholdGate(tx);
+    } catch (error) {
+      // Marked, not wrapped: every caller still observes the error it threw.
+      if (error instanceof Object && findPgError(error)?.code === "55P03")
+        gateRefusals.add(error);
+      throw error;
+    }
     const q = repositoryQueries(tx);
     await q
       .insert(answer)
@@ -315,6 +328,43 @@ async function commitAnswer(
     const passes = await wakeWaitingPasses(q, ask.id);
     if (dirtied || passes) await wakeAfterCommit(tx);
   });
+}
+
+/** A hosted turn's publication budget, far inside its request's lifetime. */
+const HOSTED_PUBLISH_BUDGET_MS = 20_000;
+
+/**
+ * Publish a response already in hand. The in-line host of a hosted Ask retries
+ * a publication only the household gate refused, each try a fresh transaction
+ * that takes the gate first, never calling the provider again. It renews its
+ * claim before each retry and stops on a renewal that fails, or when the
+ * budget runs out, rethrowing the refusal so the caller settles it as any
+ * failed publication. Every other publication is tried once.
+ */
+async function publishAnswer(
+  db: Database,
+  registry: KernelRegistry,
+  kind: AskKind,
+  ask: { id: string; inputHash: string; token: string },
+  produced: Produced<unknown>,
+  runId: string | null,
+): Promise<void> {
+  const deadline = Date.now() + HOSTED_PUBLISH_BUDGET_MS;
+  for (let delay = 250; ; delay = Math.min(delay * 2, 4_000)) {
+    try {
+      return await commitAnswer(db, registry, kind, ask, produced, runId);
+    } catch (error) {
+      if (!kind.hosted || !gateRefused(error) || Date.now() + delay >= deadline)
+        throw error;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      const renewed = await renewClaim(
+        repositoryQueries(db),
+        { table: "Ask", id: ask.id },
+        ask.token,
+      ).catch(() => false);
+      if (!renewed) throw error;
+    }
+  }
 }
 
 /**
@@ -431,7 +481,7 @@ async function executeClaimed(
       const claim = await askResponseClaims.claim(entry.ask.inputHash);
       if (claim.kind === "hit") {
         const replay = storedProduced.parse(JSON.parse(claim.value));
-        await commitAnswer(
+        await publishAnswer(
           db,
           registry,
           entry.kind,
@@ -546,7 +596,7 @@ async function executeClaimed(
         .publish(ask.inputHash, cacheToken, JSON.stringify(produced))
         .catch(() => false);
       try {
-        await commitAnswer(
+        await publishAnswer(
           db,
           registry,
           kind,
@@ -633,7 +683,9 @@ export async function withAsk<I, O>(
     const held = await claimAsk(db, row.id, kind.claimLimit);
     if (!held)
       throw inFlight(
-        "Another worker holds this ask or its claim partition is full.",
+        new Date(row.availableAt) > new Date()
+          ? `The ${kind.feature} call waits until ${row.availableAt}${row.waitCause ? ` for ${row.waitCause}` : " before its next try"}; no call was placed.`
+          : `Another request holds this ask${kind.claimLimit ? " or its claim partition is full" : ""}; no duplicate call was placed.`,
       );
     claimed = held;
   } catch (error) {
