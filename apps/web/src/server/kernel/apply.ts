@@ -2061,7 +2061,7 @@ async function runLocked(
           span.setAttribute("kernel.scope.failure_phase", phase);
           span.setAttribute(
             "kernel.scope.outcome",
-            error instanceof HouseholdWriteBusyError
+            gateBusyAtAdmission(error)
               ? "gate_busy"
               : isConflict(error)
                 ? "conflict"
@@ -2080,8 +2080,17 @@ async function runLocked(
     return traced.result;
   } catch (error) {
     if (gateBusyAtAdmission(error)) return GATE_BUSY;
-    if (isConflict(error)) {
-      await releaseClaims(repositoryQueries(db), [claimed], "conflict");
+    if (isConflict(error) || error instanceof HouseholdWriteBusyError) {
+      // A busy error raised after admission retries this one scope after
+      // other applies, counted as the lost race it is.
+      await releaseClaims(
+        repositoryQueries(db),
+        [claimed],
+        "conflict",
+        error instanceof HouseholdWriteBusyError
+          ? LOCKED_GATE_BUSY_DELAY_MS
+          : 0,
+      );
       return outcome(scope, "conflict");
     }
     const [failed] = await settleBatchFailure(
