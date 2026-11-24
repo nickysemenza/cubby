@@ -234,22 +234,34 @@ const sqlRelatedView = (key: RelatedViewKey) => {
   };
 };
 
-/** Union named evidence sources once so parallel paths do not multiply records. */
-const compileRelatedJoins = (
+interface RelatedBranch {
+  root: string;
+  leaf: string;
+  joins: SQL;
+}
+
+/** One traversal per relationship path, from the source alias `s` to `t` when there is only one. */
+const compileRelatedBranches = (
   view: RelatedViewDefinition,
-  materializePrincipalProjects = false,
-): SQL => {
+  materializePrincipalProjects: boolean,
+): RelatedBranch[] => {
   const paths = relatedViewPaths(view);
   const primary = paths[0];
   if (!primary) throw new Error(`No relationship paths for ${view.key}`);
   if (paths.length === 1)
-    return compileTraversal(view.source, primary, "related", {
-      root: "s",
-      leaf: "t",
-      to: view.target,
-      materializePrincipalProjects,
-    }).joins;
-  const branches = paths.map((path, index) => {
+    return [
+      {
+        root: "s",
+        leaf: "t",
+        joins: compileTraversal(view.source, primary, "related", {
+          root: "s",
+          leaf: "t",
+          to: view.target,
+          materializePrincipalProjects,
+        }).joins,
+      },
+    ];
+  return paths.map((path, index) => {
     const root = `related_source_${index}`;
     const leaf = `related_target_${index}`;
     const traversal = compileTraversal(view.source, path, `related_${index}`, {
@@ -258,39 +270,85 @@ const compileRelatedJoins = (
       to: view.target,
       materializePrincipalProjects,
     });
-    return sql`SELECT ${sql.raw(`${leaf}."id"`)} AS id
-      FROM ${sql.raw(`"${entityManifest[view.source].dbTable}" ${root}`)}
-      ${traversal.joins}
-      WHERE ${sql.raw(`${root}."id"`)} = s."id"`;
+    return { root, leaf, joins: traversal.joins };
   });
+};
+
+const targetTableSql = (view: RelatedViewDefinition): SQL =>
+  sql.raw(`"${entityManifest[view.target].dbTable}"`);
+
+/** Union named evidence sources once per source row so parallel paths do not multiply records. */
+const compileRelatedJoins = (view: RelatedViewDefinition): SQL => {
+  const branches = compileRelatedBranches(view, false);
+  if (branches.length === 1 && branches[0]) return branches[0].joins;
   return sql`INNER JOIN LATERAL (
-      SELECT DISTINCT candidates.id FROM (${sql.join(branches, sql` UNION ALL `)}) candidates
+      SELECT DISTINCT candidates.id FROM (${sql.join(
+        branches.map(
+          ({ root, leaf, joins }) => sql`SELECT ${sql.raw(`${leaf}."id"`)} AS id
+      FROM ${sql.raw(`"${entityManifest[view.source].dbTable}" ${root}`)}
+      ${joins}
+      WHERE ${sql.raw(`${root}."id"`)} = s."id"`,
+        ),
+        sql` UNION ALL `,
+      )}) candidates
     ) related_pairs ON true
-    INNER JOIN ${sql.raw(`"${entityManifest[view.target].dbTable}"`)} t
+    INNER JOIN ${targetTableSql(view)} t
       ON t."id" = related_pairs.id`;
 };
 const COMPILED_RELATED_JOINS = new Map<RelatedViewKey, SQL>(
   relatedViewRegistry.map((view) => [view.key, compileRelatedJoins(view)]),
 );
 // Cache SQL templates only; assignments are resolved afresh in each statement.
-const COMPILED_FILTER_JOINS = new Map<RelatedViewKey, SQL>();
+const COMPILED_FILTER_BRANCHES = new Map<RelatedViewKey, RelatedBranch[]>();
 
-const compiledRelatedJoins = (
-  key: RelatedViewKey,
-  scope: "row" | "filter" = "row",
-): SQL => {
-  if (scope === "filter") {
-    const cached = COMPILED_FILTER_JOINS.get(key);
-    if (cached) return cached;
-    const definition = relatedViewsByKey.get(key);
-    if (!definition) throw new Error(`Unknown related view: ${key}`);
-    const joins = compileRelatedJoins(definition, true);
-    COMPILED_FILTER_JOINS.set(key, joins);
-    return joins;
-  }
+const relatedViewDefinition = (key: RelatedViewKey): RelatedViewDefinition => {
+  const definition = relatedViewsByKey.get(key);
+  if (!definition) throw new Error(`Unknown related view: ${key}`);
+  return definition;
+};
+
+/** Per-row joins for previews, branches, options and sorts over one source row. */
+const compiledRelatedJoins = (key: RelatedViewKey): SQL => {
   const joins = COMPILED_RELATED_JOINS.get(key);
   if (!joins) throw new Error(`Missing compiled traversal for ${key}`);
   return joins;
+};
+
+/**
+ * Set-wide joins from source `s` to target `t` for list filters and
+ * memberships. Paths are not correlated on one source row, so the planner can
+ * start from a selective target instead of expanding every path for every
+ * candidate source. `targets` selects target ids over alias `t` and
+ * restricts each path at its leaf; a planned semi-join keeps its estimate
+ * honest when a row-wise `FILTER` re-evaluates the predicate per source. A
+ * single path already joins `t` directly, where the caller's predicate
+ * restricts it.
+ */
+const compiledFilterJoins = (key: RelatedViewKey, targets?: SQL): SQL => {
+  const view = relatedViewDefinition(key);
+  const branches =
+    COMPILED_FILTER_BRANCHES.get(key) ?? compileRelatedBranches(view, true);
+  COMPILED_FILTER_BRANCHES.set(key, branches);
+  if (branches.length === 1 && branches[0]) return branches[0].joins;
+  const leafTargets = (leaf: string) =>
+    targets
+      ? sql`WHERE ${sql.raw(`${leaf}."id"`)} IN (SELECT t."id" FROM ${targetTableSql(view)} t WHERE ${targets})`
+      : sql``;
+  return sql`INNER JOIN (${sql.join(
+    branches.map(
+      ({
+        root,
+        leaf,
+        joins,
+      }) => sql`SELECT ${sql.raw(`${root}."id"`)} AS source_id, ${sql.raw(`${leaf}."id"`)} AS id
+      FROM ${sql.raw(`"${entityManifest[view.source].dbTable}" ${root}`)}
+      ${joins}
+      ${leafTargets(leaf)}`,
+    ),
+    sql` UNION ALL `,
+  )}) related_pairs ON related_pairs.source_id = s."id"
+    INNER JOIN ${targetTableSql(view)} t
+      ON t."id" = related_pairs.id`;
 };
 
 const previewRowSchema = z.object({
@@ -549,7 +607,7 @@ export const relatedRecordMembershipsSql = (
     );
   return sql`SELECT DISTINCT s."id" AS owner, t."id"
     FROM ${sql.identifier(view.sourceTable)} s
-    ${compiledRelatedJoins(parsed.data, "filter")}
+    ${compiledFilterJoins(parsed.data)}
     WHERE ${notDeleted("s")} AND t."id" IS NOT NULL ${viewWhere(view)}`;
 };
 
@@ -1004,7 +1062,7 @@ export function relatedWhereConditions<TFilters extends object>(
       const exists = (extra?: SQL) => sql`EXISTS (
         SELECT 1
         FROM ${sql.raw(`"${view.sourceTable}"`)} s
-        ${compiledRelatedJoins(definition.key, "filter")}
+        ${compiledFilterJoins(definition.key, extra)}
         WHERE s."id" = ${sourceId}
           AND ${notDeleted("s")}
           ${viewWhere(view)}
