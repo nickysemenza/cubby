@@ -198,10 +198,8 @@ async function reconcileDirtied(
       status: "waiting",
       gaps: [],
     });
-  // On a pool handle the wake above went out before this call's claims, and a
-  // delivery that found them held offers only their claim deadline. Work this
-  // call leaves for the runner (a scope still dirty or backing off, or an Ask
-  // it queued) is due sooner than that.
+  // On a pool handle no wake has gone out yet. Work this call leaves for the
+  // runner (a scope still dirty or backing off, or an Ask it queued) needs one.
   if (
     !transactional &&
     [...outcomes.values()].some(
