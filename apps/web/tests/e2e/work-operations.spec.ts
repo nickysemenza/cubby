@@ -9,6 +9,11 @@ import { expect, test } from "./support/e2e-test";
 import { dispatchesOperation, operationResult } from "./support/dispatch-wire";
 
 const createdIdentity = z.object({ item: z.object({ id: z.string() }) });
+/** A records page filtered by Reason, as a summary or pivot drill requests it. */
+const drilledPage = z.object({
+  pageSize: z.number().positive(),
+  reason: z.array(z.string()).nonempty(),
+});
 
 test("understand maintenance, preview a manual recipe repair, and verify its stored outcome", async ({
   page,
@@ -95,12 +100,13 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
     .getByRole("button", { expanded: false })
     .click();
   const count = summary.getByRole("button", { name: "Open in Records" });
+  // A drill applies its layout and its filters as separate updates, so the
+  // page can request (and the URL can show) the table before its filters.
   const drilled = page.waitForResponse((response) =>
     dispatchesOperation(
       response.request(),
       "workQueue.queue",
-      ({ input }) =>
-        z.object({ pageSize: z.number() }).parse(input).pageSize > 0,
+      ({ input }) => drilledPage.safeParse(input).success,
     ),
   );
   await count.click();
@@ -114,8 +120,10 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
     ).meta.totalCount,
   ).toBe(expectedCount);
   await expect(page).toHaveURL(/layout=table/);
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("reason"))
+    .toBeTruthy();
   const reason = new URL(page.url()).searchParams.get("reason");
-  expect(reason).toBeTruthy();
   await page.getByRole("button", { name: "Summary", exact: true }).click();
   await expect(summary).toBeVisible();
   await page.getByRole("button", { name: "Pivot", exact: true }).click();
@@ -138,7 +146,9 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
       response.request(),
       "workQueue.queue",
       ({ input }) =>
-        z.object({ pageSize: z.number() }).parse(input).pageSize > 0,
+        drilledPage
+          .extend({ entity: z.array(z.string()).nonempty() })
+          .safeParse(input).success,
     ),
   );
   await cell.click();
@@ -152,8 +162,10 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
     ).meta.totalCount,
   ).toBe(expectedCellCount);
   await expect(page).toHaveURL(/layout=table/);
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("entity"))
+    .toBeTruthy();
   expect(new URL(page.url()).searchParams.get("reason")).toBe(reason);
-  expect(new URL(page.url()).searchParams.get("entity")).toBeTruthy();
   await page.reload();
   await expect(
     page

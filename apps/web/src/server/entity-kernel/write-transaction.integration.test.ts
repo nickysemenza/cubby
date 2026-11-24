@@ -11,8 +11,11 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { drainRecipeRefreshJobs } from "~/server/testing/background-queue";
-import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
+import {
+  drainDerivedRefreshFrontier,
+  drainRecipeRefreshJobs,
+  hasClaimableWork,
+} from "~/server/testing/background-queue";
 import { makeRecipeInput } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -50,7 +53,7 @@ describe("entity kernel write transaction", () => {
   };
 
   it(
-    "updates a fresh recipe without deadlocking on its own stale mark, and publishes after commit",
+    "updates a fresh recipe without deadlocking on its own stale mark, and wakes only for claimable work",
     { timeout: 10_000 },
     async () => {
       const published = recordingQueue();
@@ -77,10 +80,11 @@ describe("entity kernel write transaction", () => {
         id: parseShortcodeFor("recipe", created.item.id),
         data: { name: "Kernel write tx (renamed)" },
       });
+      // Stale totals are the scheduled derived pass's work, not the runner's.
+      expect(published.length > 0).toBe(await hasClaimableWork(ctx.db));
 
       await drainRecipeRefreshJobs(ctx.db, context().services.recipeCosting);
       expect(await selectStaleRecipeIds(ctx.db, [entityId])).toEqual([]);
-      expect(published.map((m) => m.queueType)).toContain("background");
     },
   );
 

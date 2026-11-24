@@ -6,12 +6,14 @@ import {
 } from "@cubby/schemas/queue-messages";
 import { releaseId, usdaReleaseObjectName } from "@cubby/usda/release";
 import { fromPartial } from "@total-typescript/shoehorn";
+import { sql } from "drizzle-orm";
 
 import { setCfEnv } from "~/server/cf-env";
 import { getUsdaReleaseEnv } from "~/server/cf-env";
 import { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { entityStoredDerivedDeclarations } from "~/server/db/derived-declarations";
+import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { productFoodCompute } from "~/server/domains/product/repo/read-facts";
 import { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import { commitRecipeTotals } from "~/server/domains/recipe/repo/totals";
@@ -250,4 +252,20 @@ export function captureBackgroundQueue() {
     },
     restore: () => setCfEnv(undefined),
   };
+}
+
+/**
+ * Whether a runner claim would select any kernel work now or at a known time,
+ * read with the claim statements' own predicates. A write sends a queue permit
+ * exactly when it leaves such work (ADR 0029 section 7).
+ */
+export async function hasClaimableWork(db: Database): Promise<boolean> {
+  const { productionKernel } = await import("~/server/kernel/kernel");
+  const { kernelNextSql } = await import("~/server/kernel/runner");
+  const { rows } = await repositoryQueries(db).execute<{
+    claimable: boolean;
+  }>(
+    sql`SELECT (${kernelNextSql((await productionKernel()).registry)}) IS NOT NULL AS claimable`,
+  );
+  return rows[0]?.claimable ?? false;
 }
