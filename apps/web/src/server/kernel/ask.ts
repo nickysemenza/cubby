@@ -287,8 +287,9 @@ async function commitAnswer(
   ask: { id: string; inputHash: string },
   produced: Produced<unknown>,
   runId: string | null,
-): Promise<void> {
-  await repositoryTransactionDatabase(db, async (tx) => {
+  holder?: string,
+): Promise<boolean> {
+  return repositoryTransactionDatabase(db, async (tx) => {
     try {
       await enterHouseholdGate(tx);
     } catch (error) {
@@ -298,6 +299,14 @@ async function commitAnswer(
       throw error;
     }
     const q = repositoryQueries(tx);
+    // A retry publishes only for the caller that still holds a live claim on
+    // an Ask nobody cancelled while it waited; the row lock follows the gate.
+    if (holder) {
+      const held = await q.execute<{ held: number }>(sql`
+        SELECT 1 AS held FROM "Ask" WHERE id = ${ask.id}::uuid AND "claimToken" = ${holder}::uuid
+          AND "claimDeadline" > now() AND "cancelledAt" IS NULL FOR UPDATE`);
+      if (!held.rows.length) return false;
+    }
     await q
       .insert(answer)
       .values({
@@ -327,6 +336,7 @@ async function commitAnswer(
     });
     const passes = await wakeWaitingPasses(q, ask.id);
     if (dirtied || passes) await wakeAfterCommit(tx);
+    return true;
   });
 }
 
@@ -350,19 +360,33 @@ async function publishAnswer(
   runId: string | null,
 ): Promise<void> {
   const deadline = Date.now() + HOSTED_PUBLISH_BUDGET_MS;
+  let refused: unknown;
   for (let delay = 250; ; delay = Math.min(delay * 2, 4_000)) {
     try {
-      return await commitAnswer(db, registry, kind, ask, produced, runId);
+      // The first try is the one every publication makes. A retry also checks
+      // its claim under the gate and publishes nothing once it is lost.
+      const published = await commitAnswer(
+        db,
+        registry,
+        kind,
+        ask,
+        produced,
+        runId,
+        refused === undefined ? undefined : ask.token,
+      );
+      if (published) return;
+      throw refused;
     } catch (error) {
-      if (!kind.hosted || !gateRefused(error) || Date.now() + delay >= deadline)
-        throw error;
+      if (refused !== undefined && error === refused) throw error;
+      refused ??= error;
+      if (!kind.hosted || !gateRefused(error)) throw error;
       await new Promise((resolve) => setTimeout(resolve, delay));
       const renewed = await renewClaim(
         repositoryQueries(db),
         { table: "Ask", id: ask.id },
         ask.token,
       ).catch(() => false);
-      if (!renewed) throw error;
+      if (!renewed || Date.now() >= deadline) throw refused;
     }
   }
 }
