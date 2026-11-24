@@ -9,6 +9,7 @@ import { shipmentIdentityDdl } from "~/server/db/shipment-identity-ddl";
 import { productBrandDdl } from "./product-brand-ddl";
 import { searchPrefixDdl } from "./search-prefix-ddl";
 import { suggestionHistoryDdl } from "./suggestion-ddl";
+import { versionSweepDdl } from "./version-sweep-ddl";
 
 /**
  * One CHECK per field of an enforced same-record classification policy:
@@ -65,5 +66,5 @@ const classificationConstraintSql = (): string =>
  * this whole script.
  */
 export function renderDerivedDdl(): string {
-  return `${productBrandDdl()}\n\n${mailDiscoveryDdl()}\n\n${entityIdentityDropTriggerSql()}\n\n${entityLinkDropLivenessTriggerSql()}\n\n${classificationConstraintSql()}\n\n${suggestionHistoryDdl()}\n\n${searchPrefixDdl()}\n\n${nameMatchDdl()}\n\n${shipmentIdentityDdl()}\n`;
+  return `${productBrandDdl()}\n\n${mailDiscoveryDdl()}\n\n${entityIdentityDropTriggerSql()}\n\n${entityLinkDropLivenessTriggerSql()}\n\n${classificationConstraintSql()}\n\n${suggestionHistoryDdl()}\n\n${searchPrefixDdl()}\n\n${nameMatchDdl()}\n\n${shipmentIdentityDdl()}\n\n${versionSweepDdl()}\n`;
 }

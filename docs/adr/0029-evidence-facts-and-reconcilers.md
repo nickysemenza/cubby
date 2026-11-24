@@ -795,9 +795,16 @@ A version change dirties a scope only when filing asks is its whole change, as
 below. Otherwise `ScopeDirty` rows come only from input mutations, so a scope
 runs under the current rules only when one of its own inputs changed.
 
-After a deploy that changes a reconciler `version` or a `promptVersion`, a
-`version.sweep` Pass visits each scope whose `ScopeState.version` is older. It
-computes the desired output from existing answers only and issues no asks.
+The hourly check starts the `version.sweep` Pass when a registered scope has
+different rules, has no dirty row and has no Drift proposal under the current
+rules. A negative check is stored in a reserved, unclaimable Pass row for the
+exact registry rules vector. Scope writes that can introduce an eligible scope invalidate it in
+the same transaction. A changed vector or an invalidated check runs the exact
+eligibility query. A scan records a negative result only while its token is
+current, so an intervening write or another check can discard it.
+
+The sweep visits eligible scopes and computes the desired output from existing
+answers only and issues no asks.
 With no record difference and no missing answer it advances the scope's
 version and refreshes its gaps, input provenance and dependencies under the
 input revision fence. This metadata refresh creates no dirty work or asks.

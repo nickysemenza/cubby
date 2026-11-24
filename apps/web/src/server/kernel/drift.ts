@@ -359,7 +359,19 @@ export async function hasStaleScopes(
 ): Promise<boolean> {
   const reconcilers = [...registry.reconcilers.values()];
   if (!reconcilers.length) return false;
-  const result = await repositoryQueries(db).execute<{ stale: boolean }>(sql`
+  const q = repositoryQueries(db);
+  const rules = JSON.stringify(
+    Object.fromEntries(reconcilers.map(({ scope, rules }) => [scope, rules])),
+  );
+  const token = crypto.randomUUID();
+  const check = await q.execute<{ scan: boolean }>(sql`
+    SELECT CASE WHEN EXISTS (
+      SELECT 1 FROM "Pass" WHERE name = ${VERSION_SWEEP} AND key = 'eligibility'
+        AND cursor = jsonb_build_object('rules', ${rules}::jsonb)
+    ) THEN false ELSE cubby_begin_sweep_check(${rules}::jsonb, ${token}::uuid) END AS scan`);
+  if (!check.rows[0]?.scan) return false;
+
+  const result = await q.execute<{ stale: boolean }>(sql`
     SELECT ${sql.join(
       reconcilers.flatMap((reconciler) =>
         [sql`<`, sql`>`].map(
@@ -369,7 +381,13 @@ export async function hasStaleScopes(
       ),
       sql` OR `,
     )} AS stale`);
-  return result.rows[0]?.stale ?? false;
+  const staleScopes = result.rows[0]?.stale ?? false;
+  if (!staleScopes)
+    await q.execute(sql`
+      UPDATE "Pass" SET cursor = jsonb_build_object('rules', ${rules}::jsonb)
+      WHERE name = ${VERSION_SWEEP} AND key = 'eligibility'
+        AND cursor->>'token' = ${token}`);
+  return staleScopes;
 }
 
 /** Claim a scope for an approval, dirtying it if it was clean. */
