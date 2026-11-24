@@ -22,7 +22,7 @@ import {
   isTransaction,
 } from "~/server/db/helpers";
 import { email as emailTable } from "~/server/db/schema";
-import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
+import { writeEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import {
   lockMailAttachmentUpload,
   discardMailAttachmentUpload,
@@ -454,7 +454,7 @@ export async function publishPreparedEmailRelevanceCorrection(
     { originalCapture },
   );
   // Email retains its original checksum; the resolution owns reviewed bytes.
-  await updateEmailStateWhere(
+  await writeEmailStateWhere(
     tx,
     {
       contentClearedAt: null,

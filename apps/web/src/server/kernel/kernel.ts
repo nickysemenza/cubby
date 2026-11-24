@@ -12,12 +12,11 @@ import {
 } from "@cubby/schemas/kernel/capability";
 import type { Machinery } from "@cubby/schemas/kernel/machinery";
 import type { NeedsYouPage, RunWork } from "@cubby/schemas/kernel/work";
-import { and, eq, getTableName, inArray } from "drizzle-orm";
+import { getTableName, inArray } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db/database";
 import { withKernelApply } from "~/server/db/kernel-apply-context";
-import { factKey } from "~/server/db/kernel-schema";
 import { registerOwnedColumns } from "~/server/db/owned-columns";
 import {
   repositoryQueries,
@@ -43,7 +42,7 @@ import {
   type Pass,
   type ScopeRef,
 } from "./define";
-import { insertFactKeys, markDirty } from "./dirty";
+import { markDirty, replaceFactKeys } from "./dirty";
 import {
   approveDrift,
   approveDriftClass,
@@ -123,6 +122,11 @@ export type Kernel = {
        * not a stored membership exists.
        */
       before?: readonly ColumnValues[];
+      /**
+       * Every written row's complete current values (a `returning()` of all
+       * columns with no later write), so they are not read again.
+       */
+      after?: readonly ColumnValues[];
     },
   ): Promise<number>;
   /** Raise derived keys under the household write gate the caller holds. */
@@ -287,23 +291,21 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
           : [];
       const discovers = [...(write.discovers ?? []), ...started];
       const evidenceKeys: string[] = [];
+      // One read of the written rows serves every evidence kind and index of
+      // the table: nothing below writes them.
+      let written: Promise<ColumnValues[]> | undefined = write.after
+        ? Promise.resolve([...write.after])
+        : undefined;
+      const writtenRows = (table: PgTable) =>
+        (written ??= repositoryQueries(db)
+          .select()
+          .from(table)
+          .where(inArray(idColumn(table), [...write.ids])));
       for (const evidence of bound.evidence.values()) {
         if (getTableName(evidence.table) !== name || !write.ids.length)
           continue;
         const q = repositoryQueries(db);
-        const previous = await q
-          .select({ key: factKey.key })
-          .from(factKey)
-          .where(
-            and(
-              eq(factKey.factKind, evidence.kind),
-              inArray(factKey.factId, [...write.ids]),
-            ),
-          );
-        const rows = await q
-          .select()
-          .from(evidence.table)
-          .where(inArray(idColumn(evidence.table), [...write.ids]));
+        const rows = await writtenRows(evidence.table);
         const indexed = rows.map((row) => {
           // SAFETY: selected from this evidence kind's own table.
           const typed = row as Parameters<typeof evidence.keys>[0];
@@ -314,17 +316,8 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
             keys: evidence.keys(typed),
           };
         });
-        await q
-          .delete(factKey)
-          .where(
-            and(
-              eq(factKey.factKind, evidence.kind),
-              inArray(factKey.factId, [...write.ids]),
-            ),
-          );
-        await insertFactKeys(q, indexed);
         evidenceKeys.push(
-          ...previous.map((row) => row.key),
+          ...(await replaceFactKeys(q, evidence.kind, write.ids, indexed)),
           ...indexed.flatMap((row) => row.keys),
         );
       }
@@ -336,10 +329,7 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
           .flatMap((index) => index.related?.tables ?? [])
           .find((table) => getTableName(table) === name);
       if (indexed && write.ids.length) {
-        const rows: ColumnValues[] = await repositoryQueries(db)
-          .select()
-          .from(indexed)
-          .where(inArray(idColumn(indexed), [...write.ids]));
+        const rows = await writtenRows(indexed);
         const before = new Map(
           (write.before ?? []).map((row) => [String(row.id), row]),
         );

@@ -10,9 +10,11 @@ import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db/database";
 import {
+  repositoryParentDatabase,
   repositoryQueries,
   repositoryTransactionDatabase,
   type RepositoryQueryClient,
+  type RepositoryQueryTransaction,
 } from "~/server/db/repository-access.boundary";
 import { findPgError } from "~/server/errors/db-errors";
 import { WorkRetryableError } from "~/server/kernel/work-errors";
@@ -76,11 +78,39 @@ const GATE_LOCK = sql`pg_advisory_xact_lock(hashtextextended('cubby:household-wr
 export const takeHouseholdGate = sql`${writeLimits("member")} AS limits, ${GATE_LOCK} AS gate`;
 
 /**
+ * Top-level transactions whose first statement took the gate
+ * ({@link openHouseholdWriteTransaction}). Everything nested in one runs while
+ * it holds the gate and limits, so a nested entry is a no-op statement and is
+ * skipped. Only a first statement is recorded: no savepoint is open then, so
+ * no rollback to a savepoint can release the lock while the transaction lives.
+ */
+const gatedTransactions = new WeakSet<Q>();
+
+const parentTransaction = (q: Q): Q | undefined => {
+  if (!("rollback" in q)) return undefined;
+  // SAFETY: a query client carrying `rollback` is a native transaction.
+  const parent = repositoryParentDatabase(q as RepositoryQueryTransaction);
+  return parent ? repositoryQueries(parent) : undefined;
+};
+
+/** Whether `q` runs inside a top-level transaction recorded as holding the gate. */
+const gateHeld = (q: Q): boolean => {
+  for (
+    let candidate: Q | undefined = q;
+    candidate && "rollback" in candidate;
+    candidate = parentTransaction(candidate)
+  )
+    if (gatedTransactions.has(candidate)) return true;
+  return false;
+};
+
+/**
  * Take the gate in a statement of its own, ahead of a writer's revision reads
  * and kernel-keyed row writes. A revision read belongs in a later statement:
  * at read committed a statement's snapshot predates a gate wait inside it.
  */
 export async function admitHouseholdGate(q: Q): Promise<void> {
+  if (gateHeld(q)) return;
   await q.execute(sql`SELECT ${takeHouseholdGate}`);
 }
 
@@ -103,6 +133,7 @@ async function enterGate(
   mode: WriteMode,
   nonblocking = false,
 ): Promise<boolean> {
+  if (gateHeld(q)) return true;
   const lock = nonblocking
     ? sql`pg_try_advisory_xact_lock(hashtextextended('cubby:household-write', 0))`
     : sql`${GATE_LOCK}::text IS NOT NULL`;
@@ -154,9 +185,36 @@ export async function enterWriteTransaction(
     if (!acquired) throw new HouseholdWriteBusyError();
     return;
   }
+  if (gateHeld(q)) return;
   await q.execute(
     sql`SELECT ${writeLimits(options.mode)} AS limits, ${GATE_LOCK}::text IS NOT NULL AS gate`,
   );
+}
+
+/**
+ * The first statement of a gated transaction: a money-lane entry. A top-level
+ * transaction records that it holds the gate for its nested entries.
+ */
+export async function openHouseholdWriteTransaction(
+  q: Q,
+  mode: WriteMode,
+): Promise<void> {
+  await enterWriteTransaction(q, { lane: "money", mode });
+  const parent = parentTransaction(q);
+  if (parent && !("rollback" in parent)) gatedTransactions.add(q);
+}
+
+/** Report a lock timeout from member `work` as {@link HouseholdWriteBusyError}. */
+export async function reportHouseholdBusy<T>(
+  work: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    if (findPgError(error)?.code === "55P03")
+      throw new HouseholdWriteBusyError(error);
+    throw error;
+  }
 }
 
 /**
@@ -168,17 +226,10 @@ export async function householdWrite<T>(
   work: (tx: Database) => Promise<T>,
   options: { mode: WriteMode } = { mode: "member" },
 ): Promise<T> {
-  try {
-    return await repositoryTransactionDatabase(db, async (tx) => {
-      await enterWriteTransaction(repositoryQueries(tx), {
-        lane: "money",
-        mode: options.mode,
-      });
+  const write = () =>
+    repositoryTransactionDatabase(db, async (tx) => {
+      await openHouseholdWriteTransaction(repositoryQueries(tx), options.mode);
       return work(tx);
     });
-  } catch (error) {
-    if (options.mode === "member" && findPgError(error)?.code === "55P03")
-      throw new HouseholdWriteBusyError(error);
-    throw error;
-  }
+  return options.mode === "member" ? reportHouseholdBusy(write) : write();
 }

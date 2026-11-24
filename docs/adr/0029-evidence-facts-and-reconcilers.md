@@ -458,7 +458,9 @@ dies. Loading, matching, planning and producer calls
 happen before the transaction opens. The lock timeout stays below the transaction
 timeout, including for locked fallback runs, so contention is a retryable lock
 wait rather than a terminated session. A nested writer that already holds the
-gate retains the outer transaction's timeouts and does not reset its budget.
+gate retains the outer transaction's timeouts and does not reset its budget;
+inside a transaction whose first statement took the gate, its entry issues no
+statement.
 
 A locked background fallback tries the gate without waiting before it reads
 inside the transaction. Busy admission is not a conflict. It releases that

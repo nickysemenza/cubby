@@ -44,6 +44,13 @@ export async function assertRunExecutable(db: Database, runId: RunId) {
     .from(run)
     .where(and(eq(run.id, runId), notDeleted(run)))
     .limit(1);
+  return assertExecutableRun(current);
+}
+
+/** {@link assertRunExecutable} over a live Run row the caller already holds locked. */
+export function assertExecutableRun<
+  T extends Pick<typeof run.$inferSelect, "status" | "retiredAt" | "trigger">,
+>(current: T | undefined): T {
   if (!current || current.retiredAt)
     throw new Error("Run is no longer available for paid work.");
   if (

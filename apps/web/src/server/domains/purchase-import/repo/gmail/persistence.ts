@@ -47,7 +47,7 @@ import {
   run,
 } from "~/server/db/schema";
 import { hasAcceptedEmailAssociation } from "~/server/domains/email/repo/email";
-import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
+import { writeEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import {
   reserveMailAttachmentUpload,
   lockMailAttachmentUpload,
@@ -72,7 +72,10 @@ import { recordChange } from "~/server/generic/changes/repo/change";
 import { append, evidenceRow } from "~/server/kernel/api";
 import { enterWriteTransaction } from "~/server/kernel/gate";
 
-import { deferClassificationRefresh } from "./admitted-source";
+import {
+  deferClassificationRefresh,
+  joinGmailPublication,
+} from "./admitted-source";
 import {
   orderMailAttachmentKey,
   type OrderMailAttachmentStorage,
@@ -83,6 +86,12 @@ import type {
   GmailAccountTokenRecord,
   GmailAccountTokenStore,
 } from "./tokens";
+
+/** {@link withTransaction}, joining an enclosing Gmail publication instead. */
+const publicationTransaction = <T>(
+  db: Database,
+  work: (tx: DrizzleTransaction) => Promise<T>,
+) => joinGmailPublication(db, work, withTransaction);
 
 /** Share provider backpressure across the member's independent search clients. */
 export async function readGmailProviderRetryAt(
@@ -339,7 +348,7 @@ export async function saveEmail(
     status: input.status,
     orderMailId: input.orderMailId,
   };
-  await withTransaction(db, async (tx) => {
+  await publicationTransaction(db, async (tx) => {
     await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     const { row, created } = await (
       await import("~/server/domains/purchase-import/repo/order-evidence")
@@ -373,7 +382,7 @@ export async function saveEmail(
       (row.status === "unsettled" || row.status === "completed");
     const status = keepsSettlement ? row.status : fields.status;
     // Routine routing and provider removal cannot resolve historical ownership.
-    await updateEmailStateWhere(
+    await writeEmailStateWhere(
       tx,
       {
         ...fields,
@@ -406,7 +415,7 @@ export async function markEmailRemoved(
     status: "deleted" | "excluded";
   },
 ) {
-  await withTransaction(db, async (tx) => {
+  await publicationTransaction(db, async (tx) => {
     await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     const { row } = await (
       await import("~/server/domains/purchase-import/repo/order-evidence")
@@ -447,7 +456,7 @@ export async function saveMailboxMetadata(
     mailboxId: input.mail.mailboxId,
     messageId: input.mail.messageId,
   };
-  await withTransaction(db, async (tx) => {
+  await publicationTransaction(db, async (tx) => {
     await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     const { row, created } = await (
       await import("~/server/domains/purchase-import/repo/order-evidence")
@@ -476,7 +485,7 @@ export async function saveMailboxMetadata(
       ).some((key) => fields[key] !== row[key]) ||
       fields.searchExpiresAt?.getTime() !== row.searchExpiresAt?.getTime();
     if (changed)
-      await updateEmailStateWhere(
+      await writeEmailStateWhere(
         tx,
         { ...fields, updatedAt: new Date() },
         eq(emailTable.id, row.id),
@@ -511,7 +520,7 @@ export async function clearUnrelatedOriginal(
   input: { ledgerPartyId: string; mailboxId: string; messageId: string },
   storage: OrderMailAttachmentStorage,
 ): Promise<{ orderMailId: string; checksum: string } | null> {
-  return withTransaction(db, async (tx) => {
+  return publicationTransaction(db, async (tx) => {
     const [original] = await readRetainedMail(
       tx,
       {
@@ -788,7 +797,7 @@ export const upsertOrderMail = async (
       headers: mail.headers,
     }),
   };
-  return withTransaction(db, async (tx) => {
+  return publicationTransaction(db, async (tx) => {
     await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     const [email] = await tx
       .select()
@@ -970,7 +979,7 @@ async function preserveExistingAttachment(
   if (existing?.pendingObjectKey || existing?.imageId) return true;
   if (
     !existing &&
-    (await withTransaction(db, async (tx) => {
+    (await publicationTransaction(db, async (tx) => {
       const adopted = await adoptLegacyAttachment(tx, input);
       if (adopted)
         await recordChange(tx, { kind: "source", categories: ["email"] });
@@ -993,7 +1002,7 @@ async function writeAttachmentMetadata(
     checksum,
     ...(stagedKey === null ? {} : { pendingObjectKey: stagedKey }),
   };
-  return withTransaction(db, async (tx) => {
+  return publicationTransaction(db, async (tx) => {
     const [row] = await tx
       .insert(orderMailAttachment)
       .values({
