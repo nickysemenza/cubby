@@ -2226,10 +2226,11 @@ export const productMergeEdgeHandlers = (context: ProductMergeEdgeContext) => {
           .set(amountToColumns(to))
           .where(eq(inventoryEntry.id, into.id));
         const absorbedIds = rows.map((row) => row.id);
-        await tx
+        const removed = await tx
           .update(inventoryEntry)
           .set({ deletedAt: now })
-          .where(inArray(inventoryEntry.id, absorbedIds));
+          .where(inArray(inventoryEntry.id, absorbedIds))
+          .returning();
         const entries: AuditEntryInput[] = [
           {
             entityKind: "inventory",
@@ -2242,6 +2243,7 @@ export const productMergeEdgeHandlers = (context: ProductMergeEdgeContext) => {
           entity: "inventory",
           ids: absorbedIds,
           audit: { into: entries },
+          removed: removed.map((row) => ({ ...row, deletedAt: null })),
         });
         await logAuditEntries(tx, actor, entries);
         inventoryMerged += rows.length;

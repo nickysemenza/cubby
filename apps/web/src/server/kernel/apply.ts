@@ -98,6 +98,8 @@ import {
   bindingEventKey,
   bindingFactKey,
   ownerKey,
+  recordOwnerKeys,
+  scopeOwnerKey,
   recordSubject,
   rowKey,
   tableKey,
@@ -631,50 +633,118 @@ function changesOf(diff: Difference): IndexChange[] {
     })),
   ];
 }
-/**
- * Read the union's revisions once behind the gate the transaction admitted on
- * entry, then compare every scope against that one input fence.
- */
-async function fenceBatch(
+async function claimedRows(
   q: Q,
-  computed: readonly Computed[],
   claimed: readonly ClaimedScope[],
-  outputKeys: readonly Key[],
+  lock: boolean,
 ) {
-  const keys = [
-    ...new Set([
-      ...computed.flatMap((item) => [...item.keys.keys()]),
-      ...outputKeys,
-    ]),
-  ].sort();
-  const revisions = await readGatedKeyRevs(q, keys);
   const rows = await q.execute<{
     kind: string;
     key: string;
     seq: string | number;
     live: boolean;
+    attempts: number;
   }>(sql`
-    SELECT d."scopeKind" AS kind, d."scopeKey" AS key, d.seq,
+    SELECT d."scopeKind" AS kind, d."scopeKey" AS key, d.seq, d.attempts,
       (d."claimToken" = wanted.token::uuid AND d."claimDeadline" > now()) AS live
     FROM "ScopeDirty" d JOIN unnest(
       ${orderedTextArrayParam(claimed.map((item) => item.kind))},
       ${orderedTextArrayParam(claimed.map((item) => item.key))},
       ${orderedTextArrayParam(claimed.map((item) => item.token))}
     ) AS wanted(kind, key, token) ON d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key
-    ORDER BY d."scopeKind", d."scopeKey" FOR UPDATE OF d`);
-  const current = new Map(rows.rows.map((row) => [scopeId(row), row]));
+    ORDER BY d."scopeKind", d."scopeKey" ${lock ? sql`FOR UPDATE OF d` : sql``}`);
+  return new Map(rows.rows.map((row) => [scopeId(row), row]));
+}
+
+type PendingPublication = {
+  computed: Computed;
+  claim: ClaimedScope;
+  /** Latest seq attributable to committed sibling pages, for the fence only. */
+  fenceSeq?: number;
+};
+
+/** Capture the changes attributable to one page while no other writer can raise its fences. */
+async function siblingFences(q: Q, siblings: readonly PendingPublication[]) {
+  return {
+    revisions: await readGatedKeyRevs(q, [
+      ...new Set(siblings.flatMap(({ computed }) => [...computed.keys.keys()])),
+    ]),
+    claims: await claimedRows(
+      q,
+      siblings.map(({ claim }) => claim),
+      false,
+    ),
+  };
+}
+
+type SiblingFences = Awaited<ReturnType<typeof siblingFences>>;
+
+function advanceSiblingFences(
+  siblings: readonly PendingPublication[],
+  before: SiblingFences,
+  after: SiblingFences,
+) {
+  for (const sibling of siblings) {
+    const keys = new Map(sibling.computed.keys);
+    for (const [key, seen] of keys) {
+      const next = after.revisions.get(key);
+      if (
+        next !== undefined &&
+        next !== seen &&
+        before.revisions.get(key) === seen
+      )
+        keys.set(key, next);
+    }
+    sibling.computed = { ...sibling.computed, keys };
+    const id = scopeId(sibling.claim);
+    const previous = before.claims.get(id);
+    const next = after.claims.get(id);
+    const fenceSeq = sibling.fenceSeq ?? sibling.claim.seq;
+    if (
+      previous?.live &&
+      next?.live &&
+      Number(previous.seq) === fenceSeq &&
+      Number(next.seq) !== fenceSeq
+    ) {
+      sibling.fenceSeq = Number(next.seq);
+      // Settle with the load's seq so a scope dirtied by a sibling runs again.
+      sibling.claim = { ...sibling.claim, attempts: next.attempts };
+    }
+  }
+}
+
+/**
+ * Read the union's revisions once behind the gate the transaction admitted on
+ * entry, then compare every scope against that one input fence.
+ */
+async function fenceBatch(
+  q: Q,
+  page: readonly PendingPublication[],
+  outputKeys: readonly Key[],
+) {
+  const keys = [
+    ...new Set([
+      ...page.flatMap(({ computed }) => [...computed.keys.keys()]),
+      ...outputKeys,
+    ]),
+  ].sort();
+  const revisions = await readGatedKeyRevs(q, keys);
+  const current = await claimedRows(
+    q,
+    page.map(({ claim }) => claim),
+    true,
+  );
   const active: { computed: Computed; claim: ClaimedScope }[] = [];
   const conflicted: ClaimedScope[] = [];
   const outcomes: Outcome[] = [];
-  for (const [index, item] of computed.entries()) {
-    const claim = claimed[index]!;
+  for (const { computed: item, claim, fenceSeq } of page) {
     const row = current.get(scopeId(item.scope));
     if (!row?.live) {
       outcomes.push(outcome(item.scope, "failed", [], new ClaimLapsedError()));
       continue;
     }
     if (
-      Number(row.seq) !== claim.seq ||
+      Number(row.seq) !== (fenceSeq ?? claim.seq) ||
       [...item.keys].some(([key, seen]) => (revisions.get(key) ?? 0) !== seen)
     ) {
       conflicted.push(claim);
@@ -802,18 +872,19 @@ async function heldProposals(
 async function applyBatch(
   tx: Database,
   registry: KernelRegistry,
-  computed: readonly Computed[],
-  claims: readonly ClaimedScope[],
+  page: readonly PendingPublication[],
   options: ApplyOptions,
   proposals: Proposals,
+  captureSiblings?: () => Promise<void>,
 ): Promise<Outcome[]> {
   const q = repositoryQueries(tx);
+  const computed = page.map((item) => item.computed);
   const membershipsBefore = await relatedMemberships(
     tx,
     registry,
     indexChanges(computed, options),
   );
-  const fenced = await fenceBatch(q, computed, claims, [
+  const fenced = await fenceBatch(q, page, [
     ...plannedKeys(computed, options, registry),
     ...membershipKeys(membershipsBefore, false),
     ...(await mergeOutputKeys(q, computed, options)),
@@ -1018,8 +1089,7 @@ async function applyBatch(
           for (const row of rows) touch(group[0]!.target, row);
         }
         await insertRows(q, recordKey, recordKeys);
-        for (const row of recordKeys)
-          changed.add(ownerKey(row.entity, row.entityId));
+        for (const key of recordOwnerKeys(recordKeys)) changed.add(key);
         await updateRecords(q, combined.updates);
         // Several scopes may set columns of one row; its membership is one row's.
         const published = new Map<string, Map<string, ColumnValues>>();
@@ -1072,19 +1142,24 @@ async function applyBatch(
             );
         }
         for (const plan of plans)
-          for (const entry of plan.diff.removals)
+          for (const entry of plan.diff.removals) {
             changed.add(ownerKey(recordEntity(entry.target), entry.id));
+            changed.add(scopeOwnerKey(plan.computed.scope));
+          }
         for (const entry of combined.rejections)
           changed.add(ownerKey(recordEntity(entry.target), entry.id));
         if (combined.removals.length)
           await q.execute(sql`
       DELETE FROM "RecordKey" k USING jsonb_to_recordset(${JSON.stringify(plans.flatMap((plan) => plan.diff.removals.map((entry) => ({ kind: plan.computed.scope.kind, key: plan.computed.scope.key, entity: recordEntity(entry.target), id: entry.id }))))}::jsonb) AS r(kind text, key text, entity text, id uuid)
       WHERE k."scopeKind" = r.kind AND k."scopeKey" = r.key AND k.entity = r.entity AND k."entityId" = r.id`);
-        if (combined.rejections.length)
-          await q.execute(sql`
+        if (combined.rejections.length) {
+          const rejected = await q.execute<{ kind: string; key: string }>(sql`
       UPDATE "RecordKey" k SET "rejectedAt" = coalesce(k."rejectedAt", now())
       FROM jsonb_to_recordset(${JSON.stringify(combined.rejections.map((entry) => ({ entity: recordEntity(entry.target), id: entry.id })))}::jsonb) AS r(entity text, id uuid)
-      WHERE k.entity = r.entity AND k."entityId" = r.id`);
+      WHERE k.entity = r.entity AND k."entityId" = r.id
+      RETURNING k."scopeKind" AS kind, k."scopeKey" AS key`);
+          for (const owner of rejected.rows) changed.add(scopeOwnerKey(owner));
+        }
         for (const plan of plans)
           for (const merge of plan.diff.merges) {
             const verdict = await mergeRecords(tx, registry, {
@@ -1229,6 +1304,8 @@ async function applyBatch(
       excludes: plans.map((plan) => plan.computed.scope),
       reason: `output:${plans[0]!.computed.scope.kind}`,
     });
+    // A requested follow-up is a new turn even if its scope is on a later page.
+    await captureSiblings?.();
     const followups = plans.flatMap((plan) => {
       if (isEmptyDifference(plan.diff)) return [];
       const { emits, changeFollowups } = plan.computed.desired!;
@@ -1376,7 +1453,13 @@ async function applyOne(
   proposals: Proposals,
 ): Promise<Outcome> {
   return (
-    await applyBatch(tx, registry, [computed], [claimed], options, proposals)
+    await applyBatch(
+      tx,
+      registry,
+      [{ computed, claim: claimed }],
+      options,
+      proposals,
+    )
   )[0]!;
 }
 
@@ -1647,56 +1730,97 @@ export async function applyComputed(
   const proposals =
     options.proposals ??
     (await heldProposals(db, registry, reconciler, computed, options));
-  if (options.mode === "background" && !repositoryParentDatabase(db)) {
-    const pages = backgroundPublicationPages(computed);
-    if (pages.length) {
-      const outcomes = new Map<string, Outcome>();
-      let transient: { cause: UnparsedError } | undefined;
-      for (const page of pages) {
-        const claims = page.map((index) => claimed[index]!);
-        const results = transient
-          ? await settleTransientBatch(
-              repositoryQueries(db),
-              reconciler,
-              claims,
-              transient.cause,
-            )
-          : await applyComputed(
-              db,
-              registry,
-              reconciler,
-              page.map((index) => computed[index]!),
-              claims,
-              { ...options, proposals },
-            );
-        for (const result of results) {
-          outcomes.set(scopeId(result.scope), result);
-          if (
-            result.status === "failed" &&
-            classifyWorkFailure(result.cause).kind === "transient"
-          )
-            transient = { cause: result.cause };
-        }
-      }
-      return computed.map((item) => outcomes.get(scopeId(item.scope))!);
+  const pending = computed.map((item, index) => ({
+    computed: item,
+    claim: claimed[index]!,
+  }));
+  const pageIndexes =
+    options.mode === "background" && !repositoryParentDatabase(db)
+      ? backgroundPublicationPages(computed)
+      : [];
+  if (!pageIndexes.length)
+    return applyPage(db, registry, reconciler, pending, [], options, proposals);
+
+  const pages = pageIndexes.map((page) => page.map((index) => pending[index]!));
+  const outcomes = new Map<string, Outcome>();
+  let transient: { cause: UnparsedError } | undefined;
+  for (const [index, page] of pages.entries()) {
+    const results = transient
+      ? await settleTransientBatch(
+          repositoryQueries(db),
+          reconciler,
+          page.map(({ claim }) => claim),
+          transient.cause,
+        )
+      : await applyPage(
+          db,
+          registry,
+          reconciler,
+          page,
+          pages.slice(index + 1).flat(),
+          options,
+          proposals,
+        );
+    for (const result of results) {
+      outcomes.set(scopeId(result.scope), result);
+      if (
+        result.status === "failed" &&
+        classifyWorkFailure(result.cause).kind === "transient"
+      )
+        transient = { cause: result.cause };
     }
   }
+  return computed.map((item) => outcomes.get(scopeId(item.scope))!);
+}
+
+async function applyPage(
+  db: Database,
+  registry: KernelRegistry,
+  reconciler: Reconciler,
+  page: readonly PendingPublication[],
+  siblings: readonly PendingPublication[],
+  options: ApplyOptions & { mode: WriteMode },
+  proposals: Proposals,
+): Promise<Outcome[]> {
+  const computed = page.map((item) => item.computed);
+  const claimed = page.map((item) => item.claim);
+  let before: SiblingFences | undefined;
+  let after: SiblingFences | undefined;
   try {
-    return await repositoryTransactionDatabase(db, async (tx) => {
-      await enterWriteTransaction(repositoryQueries(tx), {
+    const results = await repositoryTransactionDatabase(db, async (tx) => {
+      const q = repositoryQueries(tx);
+      await enterWriteTransaction(q, {
         lane: reconciler.lane,
         mode: options.mode,
       });
+      if (siblings.length) before = await siblingFences(q, siblings);
       try {
         return await repositoryTransactionDatabase(tx, (nested) =>
-          applyBatch(nested, registry, computed, claimed, options, proposals),
+          applyBatch(
+            nested,
+            registry,
+            page,
+            options,
+            proposals,
+            siblings.length
+              ? async () => {
+                  after = await siblingFences(
+                    repositoryQueries(nested),
+                    siblings,
+                  );
+                }
+              : undefined,
+          ),
         );
       } catch (error) {
         if (!isConflict(error)) throw error;
-        await releaseConflicts(repositoryQueries(tx), claimed);
+        after = undefined;
+        await releaseConflicts(q, claimed);
         return computed.map((item) => outcome(item.scope, "conflict"));
       }
     });
+    if (before && after) advanceSiblingFences(siblings, before, after);
+    return results;
   } catch (error) {
     if (isConflict(error)) {
       await releaseConflicts(repositoryQueries(db), claimed);
@@ -1710,13 +1834,14 @@ export async function applyComputed(
       const isolated: Outcome[] = [];
       for (let i = 0; i < computed.length; i++)
         isolated.push(
-          ...(await applyComputed(
+          ...(await applyPage(
             db,
             registry,
             reconciler,
-            [computed[i]!],
-            [claimed[i]!],
-            { ...options, proposals },
+            [page[i]!],
+            siblings,
+            options,
+            proposals,
           )),
         );
       return isolated;

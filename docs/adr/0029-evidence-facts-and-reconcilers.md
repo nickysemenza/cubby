@@ -339,9 +339,12 @@ Every mutation of an input dirties the scopes it affects in the transaction
 that makes it. That covers evidence appends, new answers, decisions, a
 reconciler's own applied output, and a write to any authored or catalog column
 a reconciler declares in `reads` (the generator adds the key emission to that
-entity's writer; generic removal, detach and merge-repoint writes report their
+entity's writer; generic removal, detach and merge-repoint writes, merge
+overrides, link repoints and the callers of the removal cascade report their
 rows with their values before the write, after taking the gate ahead of their
-first row lock). The statement inserts the row's `FactKey` rows and upserts
+first row lock; a row reported with its before image raises every
+joined-predicate membership it could hold before or after the write). The
+statement inserts the row's `FactKey` rows and upserts
 `ScopeDirty`, raising `seq`, for:
 
 - every scope the row `discovers`, which is how a scope starts with no
@@ -409,7 +412,10 @@ and the key it joined. A publication and a repoint derive both from the row
 before and after. An authored writer reports after its write, so the kernel
 stores each indexed row's membership as `index:<table>` `FactKey` rows, every
 writer of the row replaces them, and the stored keys stand for the row before
-an authored write. A migration that adds a read index over values a writer can
+an authored write. A joined predicate's membership reads the committed graph
+after the write, so a writer that reports a row's before image raises every
+value that row joins before or after, matched or not: a row an update, soft
+delete or hard delete took out of the predicate raises the key it left. A migration that adds a read index over values a writer can
 change, or changes an index's values, rebuilds those rows from the table; an
 index over columns set once at insert has no before image to store. A plain
 insert into an indexed table outside `append` reports its new rows through the
@@ -418,7 +424,10 @@ replace the affected `FactKey` entries and raise both the old and the new keys
 in their transaction. Raw source observations remain insert-only. Every
 change to a record's `RecordKey` ownership (an insert, delete, rejection or
 its clearing, a merge, or a move to a surviving scope) raises
-`owner:<entity>:<id>`, so a read of a record's owners depends on that key.
+`owner:<entity>:<id>` and the owning scope's `owned:<kind>:<key>`, so a read
+of a record's owners depends on the first and a read of the records a known
+scope owns, such as Email state reading the Purchase that owns its Order, on
+the second.
 
 A lookup value carries only the columns that select rows. A component every
 scope enumerates, such as each live account, belongs in the consumer's filter:
@@ -508,8 +517,14 @@ compares the target record's revision, so a member's concurrent edit of the
 same record wins and the scope reruns.
 
 Background money applies commit after each bounded batch of at most 64 scopes,
-before the next batch can take the gate. A batch's set-based writes publish
-atomically; session timeouts bound in-flight statements. Each record update
+before the next batch can take the gate. Heavy batches publish in bounded
+pages, each with its own atomic writes and fence. A later page accepts an
+earlier page's committed revision and sequence changes at the fence only when
+the earlier page started at the expected values. The later page may publish
+output computed before those writes. If the writes dirtied a later scope, its
+original claim sequence leaves it dirty so it reruns on fresh inputs.
+Intervening writers and explicit follow-ups still invalidate their scopes.
+Session timeouts bound in-flight statements. Each record update
 also compares the columns it sets with the values its load saw, and a changed
 value is a conflict; timestamps compare at the millisecond precision a loaded
 value carries. A member's write

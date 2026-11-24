@@ -14,13 +14,12 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import { purchase, vendor } from "~/server/db/schema";
-import { emailLinkDecisionsForPurchasesSql } from "~/server/domains/email/repo/email-decision-sql";
 import {
   postedRefundPredicate,
   settlementReferencePredicate,
 } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
 import {
-  purchaseMailMembersSql,
+  purchaseMailMembersFromPartiesSql,
   purchaseMembersSql,
   purchasePayingAccountIdsSql,
   settlementPartyConflictSql,
@@ -33,6 +32,7 @@ import {
 } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entity-display-image";
 import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
+import { purchaseQualityLinkDecisionsSql } from "~/server/generic/data-quality/repo/checks/purchase-link-decisions";
 import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
 
 /** Bump when the rules or their declared scoring metadata change. */
@@ -139,26 +139,15 @@ async function loadPurchaseQualityRecords(
     WHERE ${notDeleted("qe")} AND qe."purchaseId" IN (SELECT id FROM ${requested})
     GROUP BY qe."purchaseId"
   `);
+  const acceptedOrders = client.$with("quality_order_evidence", {}).as(sql`
+    SELECT orders."boundPurchaseId", orders."orderKey", orders."emailId", orders."ledgerPartyId"
+    FROM ${acceptedOrdersBoundToSql((id) => sql`${id} IN (SELECT id FROM ${requested})`)} orders
+  `);
   const accepted = client.$with("quality_accepted_orders", {}).as(sql`
     SELECT orders."boundPurchaseId" AS "purchaseId",
       bool_or(orders."orderKey" LIKE '%/order/%') AS "expectsOrderId"
-    FROM ${acceptedOrdersBoundToSql((id) => sql`${id} IN (SELECT id FROM ${requested})`)} orders
+    FROM ${acceptedOrders} orders
     GROUP BY orders."boundPurchaseId"
-  `);
-  // The notice rule applies only to empty Purchases without accepted sources.
-  // Resolve the current lifecycle links for that page subset together.
-  const notices = client.$with("quality_waiting_for_details", {}).as(sql`
-    WITH waiting AS MATERIALIZED (
-      SELECT requested.id FROM ${requested} requested
-      LEFT JOIN ${expenses} expenses ON expenses."purchaseId" = requested.id
-      LEFT JOIN ${accepted} accepted ON accepted."purchaseId" = requested.id
-      WHERE expenses."purchaseId" IS NULL AND accepted."purchaseId" IS NULL
-    )
-    SELECT DISTINCT link."purchaseId"
-    FROM ${emailLinkDecisionsForPurchasesSql(sql`SELECT id FROM waiting`)} link
-    JOIN "OrderMailEvent" event ON event.id = link."eventId"
-    WHERE link.active AND link.decision = ${emailPurchaseLinkState.enum.linked}
-      AND event.event IN (${mailEvent.enum.shipped}, ${mailEvent.enum.delivered})
   `);
   const kinds = sql.join(
     purchaseSettlementKinds.map((kind) => sql`${kind}`),
@@ -186,23 +175,58 @@ async function loadPurchaseQualityRecords(
     ) demand ON demand."purchaseId" = qp.id
     WHERE ${notDeleted("qp")}
   `);
-  const missingMemberPurchases = sql`
-    SELECT qp.id, qp."deletedAt"
+  // Only empty Purchases without accepted sources need the notice rule.
+  const waiting = client.$with("quality_waiting", {}).as(sql`
+    SELECT requested.id FROM ${requested} requested
+    LEFT JOIN ${expenses} expenses ON expenses."purchaseId" = requested.id
+    LEFT JOIN ${accepted} accepted ON accepted."purchaseId" = requested.id
+    WHERE expenses."purchaseId" IS NULL AND accepted."purchaseId" IS NULL
+  `);
+  const missingMember = client.$with("quality_missing_member", {}).as(sql`
+    SELECT qp.id
     FROM ${settlingPurchases} qp
     LEFT JOIN "VendorAccount" va ON va.id = qp."vendorAccountId" AND ${notDeleted("va")}
     WHERE qp."purchaserOverrideId" IS NULL AND va."ledgerPartyId" IS NULL
+  `);
+  const links = client.$with("quality_linked_mail", {}).as(sql`
+    SELECT link."purchaseId", link."emailId", link."eventId"
+    FROM ${purchaseQualityLinkDecisionsSql(sql`
+      SELECT id FROM ${waiting} UNION SELECT id FROM ${missingMember}
+    `)} link
+    WHERE link.active AND link.decision = ${emailPurchaseLinkState.enum.linked}
+  `);
+  const notices = client.$with("quality_waiting_for_details", {}).as(sql`
+    SELECT DISTINCT link."purchaseId" FROM ${links} link
+    JOIN ${waiting} waiting ON waiting.id = link."purchaseId"
+    JOIN "OrderMailEvent" event ON event.id = link."eventId"
+    WHERE event.event IN (${mailEvent.enum.shipped}, ${mailEvent.enum.delivered})
+  `);
+  const mailParties = sql`
+    SELECT evidence."purchaseId", email."ledgerPartyId"
+    FROM (
+      SELECT accepted."boundPurchaseId" AS "purchaseId", email.id AS "emailId"
+      FROM ${acceptedOrders} accepted
+      JOIN ${missingMember} missing ON missing.id = accepted."boundPurchaseId"
+      JOIN "Email" email ON email.id = accepted."emailId" AND email."ledgerPartyId" = accepted."ledgerPartyId"
+      UNION
+      SELECT link."purchaseId", link."emailId" FROM ${links} link
+      JOIN ${missingMember} missing ON missing.id = link."purchaseId"
+    ) evidence
+    JOIN "Email" email ON email.id = evidence."emailId" AND ${notDeleted("email")}
   `;
   const members = client
     .$with("quality_purchase_members", {})
     .as(
       purchaseMembersSql(
         sql`SELECT * FROM ${settlingPurchases}`,
-        purchaseMailMembersSql(missingMemberPurchases),
+        purchaseMailMembersFromPartiesSql(mailParties),
       ),
     );
   const tenders = client.$with("quality_purchase_tenders", {}).as(sql`
-    SELECT qp.id, ${purchasePayingAccountIdsSql("qp")} AS accounts
-    FROM ${settlingPurchases} qp WHERE qp.charge
+    SELECT qp.id, ${purchasePayingAccountIdsSql("qp", sql`party.member`)} AS accounts
+    FROM ${settlingPurchases} qp
+    JOIN ${members} party ON party.id = qp.id
+    WHERE qp.charge
     OFFSET 0
   `);
   const settlements = sql`(SELECT qft."purchaseId",
@@ -225,10 +249,14 @@ async function loadPurchaseQualityRecords(
     .with(
       requested,
       expenses,
+      acceptedOrders,
       accepted,
-      notices,
       settlementRows,
       settlingPurchases,
+      waiting,
+      missingMember,
+      links,
+      notices,
       members,
       tenders,
     )

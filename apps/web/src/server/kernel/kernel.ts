@@ -340,6 +340,26 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
           .select()
           .from(indexed)
           .where(inArray(idColumn(indexed), [...write.ids]));
+        const before = new Map(
+          (write.before ?? []).map((row) => [String(row.id), row]),
+        );
+        const present = new Set(rows.map((row) => String(row.id)));
+        const changes = [
+          ...rows.map((row) => ({
+            table: name,
+            id: String(row.id),
+            before: before.get(String(row.id)) ?? null,
+            after: row,
+          })),
+          ...[...before.values()]
+            .filter((row) => !present.has(String(row.id)))
+            .map((row) => ({
+              table: name,
+              id: String(row.id),
+              before: row,
+              after: null,
+            })),
+        ];
         evidenceKeys.push(
           ...(await reindexRows(
             repositoryQueries(db),
@@ -352,14 +372,22 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
             await relatedMemberships(
               db,
               bound,
-              rows.map((row) => ({
-                table: name,
-                id: String(row.id),
-                before: null,
-                after: row,
-              })),
+              changes.filter((change) => !change.before),
             ),
             true,
+          ),
+          // An authored writer reports after its write, so a joined
+          // predicate's membership reads the graph after it: a row that left
+          // the predicate (it or a joined row updated, soft- or hard-deleted)
+          // no longer matches. A row with a before image raises every value
+          // it joined before or after, whether or not it matched.
+          ...membershipKeys(
+            await relatedMemberships(
+              db,
+              bound,
+              changes.filter((change) => change.before),
+            ),
+            false,
           ),
         );
       }

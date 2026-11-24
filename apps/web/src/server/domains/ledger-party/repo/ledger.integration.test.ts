@@ -41,6 +41,8 @@ import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import { toPublicErrorPayload } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { rowKey } from "~/server/kernel/keys";
+import { dependentScope } from "~/server/kernel/testing/dependent-scope.fixtures";
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 import { makeExpenseInput } from "~/server/testing/repo.fixtures";
 
@@ -406,20 +408,31 @@ describe("consolidated household ledger", () => {
       costType: "materials",
       trade: "other",
     });
-    await insertPurchaseEventRows(ctx.db, "ExpenseAttribution", [
-      {
-        expenseId: expense.id,
-        role: "funder",
-        ledgerPartyId: keep.entityId,
-        weight: 2,
-      },
-      {
-        expenseId: expense.id,
-        role: "funder",
-        ledgerPartyId: lose.entityId,
-        weight: 3,
-      },
-    ]);
+    const [, loserShare] = await insertPurchaseEventRows(
+      ctx.db,
+      "ExpenseAttribution",
+      [
+        {
+          expenseId: expense.id,
+          role: "funder",
+          ledgerPartyId: keep.entityId,
+          weight: 2,
+        },
+        {
+          expenseId: expense.id,
+          role: "funder",
+          ledgerPartyId: lose.entityId,
+          weight: 3,
+        },
+      ],
+    );
+    // The merge override folds attributions with its own writes; a scope that
+    // read the loser's share is dirtied by them.
+    const shareReader = await dependentScope(
+      ctx.db,
+      "purchaseEvent",
+      rowKey("ExpenseAttribution", loserShare!.id),
+    );
     const largeExpense = await insertWithShortcode(ctx.db, "expense", {
       lineKind: "principal",
       name: "Large-weight placeholder expense",
@@ -490,6 +503,7 @@ describe("consolidated household ledger", () => {
       ctx.actor,
     );
     expect(mergeResult.mergeSummary.deletedIds).toEqual([lose.output.id]);
+    expect(await shareReader.dirty()).toBe(true);
     expect(mergeResult.mergeSummary.deletedIds[0]).toMatch(/^LPY-/u);
     const [share] = await unwrapDb(ctx.db)
       .select({

@@ -67,8 +67,13 @@ import { tombstoneEntityIdentities } from "~/server/entity-kernel/repo/entity-id
 import type { AuditEntryInput } from "~/server/generic/audit-log/repo/audit-log";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { softDeleteEntitySearchArtifactsTx } from "~/server/generic/embedding/repo/entity-embedding-cleanup";
-import { reportIdentityWrites } from "~/server/generic/removal/repo/kernel-writes";
+import {
+  reportChangedRows,
+  reportIdentityWrites,
+} from "~/server/generic/removal/repo/kernel-writes";
+import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-tables";
 import { retireSuggestionTargetsTx } from "~/server/generic/suggestions/repo/suggestion-state";
+import type { ColumnValues } from "~/server/kernel/define";
 
 import { assertNoOrdinaryReferences } from "./ordinary-reference-guard";
 
@@ -163,12 +168,20 @@ export const cascadeRemoval = async <E extends RemovableEntity>(
     ids: readonly EntityId<E>[];
     audit: { into: AuditEntryInput[] } | { actor: ActorContext };
     counts?: CascadeCounts;
+    /**
+     * The entity's own rows as they were before the caller removed them. A
+     * reconciler may read them by row or read index, so they report the
+     * columns the removal changed (every column of a hard-deleted row). The
+     * caller entered the household write gate before its first row lock.
+     */
+    removed: readonly ColumnValues[];
   },
 ): Promise<void> => {
   const { entity, ids, audit } = args;
   if (ids.length === 0) return;
 
   await assertNoOrdinaryReferences(tx, entity, ids);
+  await reportChangedRows(tx, SHORTCODE_TABLE[entity], args.removed);
   await reportIdentityWrites(tx, await tombstoneEntityIdentities(tx, ids));
   if (isSearchable(entity)) {
     await softDeleteEntitySearchArtifactsTx(tx, entity, [...ids]);

@@ -65,6 +65,7 @@ import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
+import { enterRemovalGate } from "~/server/generic/removal/repo/kernel-writes";
 
 export type DiscardProductInput = {
   trade: Trade;
@@ -231,14 +232,16 @@ const writeDiscardLine = async (
         remainingValue: remaining,
       };
     } else {
-      await tx
+      const removed = await tx
         .update(inventoryEntry)
         .set({ deletedAt: new Date() })
-        .where(eq(inventoryEntry.id, entry.id));
+        .where(eq(inventoryEntry.id, entry.id))
+        .returning();
       await cascadeRemoval(tx, {
         entity: "inventory",
         ids: [entry.id],
         audit: { actor },
+        removed: removed.map((row) => ({ ...row, deletedAt: null })),
       });
       inventory = {
         entryId: entry.id,
@@ -299,6 +302,8 @@ export const discardProductUnits = async (
   actor: ActorContext,
 ): Promise<DiscardProductResult> =>
   withTransaction(db, async (tx) => {
+    // The gate before the first row lock: removed entries are reported.
+    await enterRemovalGate(tx);
     const pricesBefore = await loadEffectiveProductPricesById(
       tx,
       pricingProductIds([input.productId]),
@@ -356,6 +361,8 @@ export const discardFromInventoryEntries = async (
   actor: ActorContext,
 ): Promise<DiscardFromInventoryResult> =>
   withTransaction(db, async (tx) => {
+    // The gate before the first row lock: removed entries are reported.
+    await enterRemovalGate(tx);
     // Two lines against one entry would each read the amount as it stood
     // BEFORE either was applied, so the second would validate against stock
     // the first already took. There is no way to tell which was meant, so

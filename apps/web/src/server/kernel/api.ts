@@ -114,6 +114,7 @@ export {
   recordIdentity,
   recordSubject,
   rowKey,
+  scopeOwnerKey,
 } from "./keys";
 export {
   MACHINERY_DONE,

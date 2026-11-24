@@ -80,7 +80,11 @@ import {
 } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { enterWriteTransaction } from "~/server/kernel/gate";
 
-import { enterRemovalGate, reportRowWrites } from "./kernel-writes";
+import {
+  enterRemovalGate,
+  reportingWrite,
+  reportRowWrites,
+} from "./kernel-writes";
 
 type Policy = Readonly<Record<string, OperationDisposition>>;
 type Tx = DrizzleTransaction;
@@ -505,10 +509,20 @@ export const applyMergePolicy = async <E extends RemovableEntity>(
     "merge",
   );
   const repointed: Record<string, number> = {};
+  // An override, link repoint or slot fold writes rows of its edge's table
+  // that point at any merged record, the survivor's included, and may fold,
+  // move, insert or remove them. Each reports every row it changed.
+  const reporting = <T>(edge: EdgePhysical, write: () => Promise<T>) =>
+    reportingWrite(
+      tx,
+      edge.table,
+      and(inArray(edge.column, [args.keepId, ...args.loserIds]), edge.scope),
+      write,
+    );
   for (const edge of edges) {
     const override = args.overrides?.[edge.key];
     if (override) {
-      await override(tx, args.loserIds);
+      await reporting(edge, () => override(tx, args.loserIds));
       continue;
     }
     if (edge.disposition.effect === "block") continue;
@@ -520,11 +534,13 @@ export const applyMergePolicy = async <E extends RemovableEntity>(
       (edge.disposition.effect === "repoint" ||
         edge.disposition.effect === "move-dedupe")
     ) {
-      const moved = await repointLinkEnd(tx, {
-        ...link,
-        keepId: args.keepId,
-        loserIds: args.loserIds,
-      });
+      const moved = await reporting(edge, () =>
+        repointLinkEnd(tx, {
+          ...link,
+          keepId: args.keepId,
+          loserIds: args.loserIds,
+        }),
+      );
       repointed[edge.key] = moved.moved;
       continue;
     }
@@ -534,10 +550,12 @@ export const applyMergePolicy = async <E extends RemovableEntity>(
       );
     // Fold exact task slots before repointing their subject.
     if (edge.table === photoRunImage) {
-      await mergePhotoRunImages(
-        tx,
-        parseEntityId("image", args.keepId),
-        args.loserIds.map((id) => parseEntityId("image", id)),
+      await reporting(edge, () =>
+        mergePhotoRunImages(
+          tx,
+          parseEntityId("image", args.keepId),
+          args.loserIds.map((id) => parseEntityId("image", id)),
+        ),
       );
       continue;
     }

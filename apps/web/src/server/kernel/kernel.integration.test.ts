@@ -100,11 +100,13 @@ import { computeBatch } from "./compute";
 import type { Reconciler } from "./define";
 import { markDirty } from "./dirty";
 import { enterWriteTransaction, householdWrite } from "./gate";
+import { scopeOwnerKey } from "./keys";
 import { runOnePass } from "./pass";
 import { claimPassFixture, seedPass } from "./pass.fixtures";
 import { machineryActorSql, machineryStageSql } from "./projection";
 import { publishTransaction } from "./publication";
 import { ownedColumns } from "./registry";
+import { dependentScope } from "./testing/dependent-scope.fixtures";
 import {
   CATEGORY_SCOPE,
   chargeEvidence,
@@ -3119,6 +3121,106 @@ describe("evidence-facts kernel", () => {
     ]);
   });
 
+  it("publishes later pages and reruns only the scopes dirtied by a sibling", async () => {
+    const target = writes(vendor, ["name"], { entity: "vendor" });
+    let publish = false;
+    const external = "synthetic:split:external";
+    const reconciler = defineReconciler<string>({
+      scope: "fixture.splitPublication",
+      lane: "money",
+      version: 1,
+      reads: [source.table(vendor, ["name"])],
+      writes: [target],
+      async load(reads, keys) {
+        await Promise.all(
+          keys
+            .filter((key) => key === "b")
+            .map((key) => reads.for(key).prepare([vendor], async () => null)),
+        );
+        return new Map(keys.map((key) => [key, key]));
+      },
+      reconcile(key, c) {
+        if (publish) {
+          if (key === "c") c.decision("assignment", external, "value");
+          else if (key !== "d")
+            for (let i = 0; i < 5100; i++)
+              c.decision("assignment", `synthetic:split:${key}:${i}`, "value");
+          if (key === "a")
+            c.record(target, key, { name: "Synthetic split seller" });
+        }
+        return c.done();
+      },
+    });
+    const kernel = createKernel([
+      defineModule({ name: "splitPublication", reconcilers: [reconciler] }),
+    ]);
+    const scopes = ["a", "b", "c", "d"].map((key) => ({
+      kind: reconciler.scope,
+      key,
+    }));
+    const q = repositoryQueries(ctx.db);
+    const dirty = () =>
+      markDirty(q, kernel.registry, {
+        keys: [],
+        discovers: scopes,
+        reason: "synthetic split",
+      });
+    await dirty();
+    await settle(kernel);
+    publish = true;
+    await dirty();
+    const claimed = (
+      await claimScopes(q, kernel.registry, "money", scopes.length)
+    ).sort((a, b) => a.key.localeCompare(b.key));
+    const computed = await computeBatch(
+      q,
+      kernel.registry,
+      reconciler,
+      scopes,
+      {
+        db: ctx.db,
+        locked: false,
+        hideBaseline: false,
+      },
+    );
+    await markDirty(q, kernel.registry, {
+      keys: [`decision:${external}`],
+      reason: "synthetic other writer",
+    });
+    const outcomes = await applyComputed(
+      ctx.db,
+      kernel.registry,
+      reconciler,
+      computed,
+      claimed,
+      {
+        releaseBaseline: false,
+        mode: "background",
+      },
+    );
+    expect(outcomes.map(({ status }) => status)).toEqual([
+      "applied",
+      "applied",
+      "conflict",
+      "applied",
+    ]);
+    expect(
+      (
+        await q.execute<{
+          scopeKey: string;
+          conflicts: number;
+          attempts: number;
+          claimToken: string | null;
+          due: boolean;
+        }>(sql`SELECT "scopeKey", conflicts, attempts, "claimToken", "availableAt" <= now() AS due
+        FROM "ScopeDirty" WHERE "scopeKind" = ${reconciler.scope} ORDER BY "scopeKey"`)
+      ).rows,
+    ).toEqual([
+      { scopeKey: "b", conflicts: 0, attempts: 0, claimToken: null, due: true },
+      { scopeKey: "c", conflicts: 1, attempts: 0, claimToken: null, due: true },
+    ]);
+  });
+
   it("reports the final outcome once when a synchronous batch invalidates a sibling scope", async () => {
     const { kernel } = kernelWith();
     await kernel.append(ctx.db, [
@@ -3668,6 +3770,13 @@ describe("evidence-facts kernel", () => {
     await kernel.append(ctx.db, [charge("ORD-M2", 200)]);
     await settle(kernel);
     const [older, newer] = await purchases(ctx.db);
+    // A reader of the absorbed scope's owned records, by scope rather than
+    // record: its RecordKey now names the survivor.
+    const ownerReader = await dependentScope(
+      ctx.db,
+      CATEGORY_SCOPE,
+      scopeOwnerKey({ kind: PURCHASE_SCOPE, key: "ORD-M2" }),
+    );
 
     const verdict = await kernel.merge(ctx.db, {
       target: fixture.purchaseWrites,
@@ -3681,6 +3790,8 @@ describe("evidence-facts kernel", () => {
       keepId: older!.id,
       loserId: newer!.id,
     });
+    expect(await ownerReader.dirty()).toBe(true);
+    await ownerReader.release();
     await settle(kernel);
     // Evidence that still reaches the absorbed scope reruns the survivor; the
     // absorbed scope writes nothing again.

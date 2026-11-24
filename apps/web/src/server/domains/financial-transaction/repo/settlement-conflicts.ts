@@ -104,13 +104,16 @@ export const purchaseRowSql = (purchase: SQL) =>
   sql`SELECT ${purchase}.id, ${purchase}."deletedAt", ${purchase}."vendorAccountId", ${purchase}."purchaserOverrideId", ${purchase}.date`;
 
 /** `("purchaseId", id, shortcode)`: live members whose mailbox holds the order's Email evidence. */
-export const purchaseMailMembersSql = (purchases: SQL) => sql`
+export const purchaseMailMembersFromPartiesSql = (mailParties: SQL) => sql`
   SELECT mail."purchaseId", mail_party.id, mail_party.shortcode
-  FROM (${purchaseMailPartiesSql(purchases)}) mail
+  FROM (${mailParties}) mail
   JOIN "LedgerParty" mail_party ON mail_party.id = mail."ledgerPartyId"
     AND ${notDeleted("mail_party")}
     AND mail_party.kind = ${ledgerPartyKind.enum.member}
 `;
+
+export const purchaseMailMembersSql = (purchases: SQL) =>
+  purchaseMailMembersFromPartiesSql(purchaseMailPartiesSql(purchases));
 
 /** `("purchaseId", id)`: the one mailbox member per purchase, NULL when several. */
 const soleMailMembersSql = (mailMembers: SQL) => sql`
@@ -130,7 +133,7 @@ const soleMailMembersSql = (mailMembers: SQL) => sql`
  * Without `mailMembers`, Email evidence is a correlated fallback read only
  * when no Vendor Account member or override decides, so per-row conflict
  * checks skip it for most orders. A set reader that already reads
- * `purchaseMailMembersSql` passes it to hash-join it once instead.
+ * mailbox members passes it to hash-join it once instead.
  */
 export const purchaseMembersSql = (purchases: SQL, mailMembers?: SQL) => sql`
   SELECT member_purchase.id, coalesce(
@@ -170,14 +173,14 @@ const purchaseMemberSql = (purchase: SQL) =>
  * single matching account resolves, otherwise explicit payment-account evidence is needed.
  */
 // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- 'kind' is the account identity's JSON discriminator property, not a vocabulary value.
-const evidenceAccountSql = (evidence: SQL, purchase: SQL) => sql`(
+const evidenceAccountSql = (evidence: SQL, purchase: SQL, member: SQL) => sql`(
   SELECT CASE WHEN count(*) = 1 THEN (array_agg(fa.id))[1] END
   FROM "FinancialAccount" fa
   WHERE ${notDeleted("fa")} AND (
     (${evidence}.tender = ${paymentTender.enum.stored_value}
       AND fa.identity->>'kind' = ${financialAccountIdentityKind.enum.stored_value}
       AND fa."providerVendorId" = ${purchase}."vendorId"
-      AND fa."ledgerPartyId" = ${purchaseMemberSql(purchase)})
+      AND fa."ledgerPartyId" = ${member})
     OR (${evidence}.tender <> ${paymentTender.enum.stored_value}
       AND ${evidence}."cardLastFour" IS NOT NULL
       AND EXISTS (
@@ -199,7 +202,10 @@ const evidenceAccountSql = (evidence: SQL, purchase: SQL) => sql`(
  * account contributes them (sources of one order agree on amounts, but an order
  * page may omit the tender an export names).
  */
-export const purchasePayingAccountIdsSql = (purchaseAlias: string) => {
+export const purchasePayingAccountIdsSql = (
+  purchaseAlias: string,
+  member?: SQL,
+) => {
   const purchase = sql.raw(purchaseAlias);
   return sql`(
   SELECT CASE
@@ -223,7 +229,7 @@ export const purchasePayingAccountIdsSql = (purchaseAlias: string) => {
           bool_and(line.account_id IS NOT NULL) OVER (PARTITION BY line.claim_id) AS complete
         FROM (
           SELECT pay_evidence."sourceClaimId" AS claim_id,
-            ${evidenceAccountSql(sql.raw("pay_evidence"), purchase)} AS account_id
+            ${evidenceAccountSql(sql.raw("pay_evidence"), purchase, member ?? purchaseMemberSql(purchase))} AS account_id
           FROM "PurchasePaymentEvidence" pay_evidence
           WHERE pay_evidence."purchaseId" = ${purchase}.id
         ) line

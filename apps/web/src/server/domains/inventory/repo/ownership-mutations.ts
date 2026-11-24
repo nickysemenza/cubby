@@ -28,6 +28,7 @@ import {
   logAuditEntries,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
+import { enterRemovalGate } from "~/server/generic/removal/repo/kernel-writes";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { enterWriteTransaction } from "~/server/kernel/gate";
@@ -73,6 +74,8 @@ export const applyInventoryOwnershipInTransaction = async (
   quantity: number | undefined,
   actor: ActorContext,
 ): Promise<InventoryId[]> => {
+  // The gate before the slot locks: a folded entry is reported removed.
+  await enterRemovalGate(tx);
   const [sourceSlot] = await tx
     .select({
       productId: inventoryEntry.productId,
@@ -200,11 +203,15 @@ export const applyInventoryOwnershipInTransaction = async (
   }
 
   if (transferValue === sourceAmount.value && target) {
-    await tx.delete(inventoryEntry).where(eq(inventoryEntry.id, source.id));
+    const removed = await tx
+      .delete(inventoryEntry)
+      .where(eq(inventoryEntry.id, source.id))
+      .returning();
     await cascadeRemoval(tx, {
       entity: "inventory",
       ids: [source.id],
       audit: { into: audit },
+      removed,
     });
   } else if (transferValue < sourceAmount.value) {
     const remaining = {

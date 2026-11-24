@@ -43,6 +43,7 @@ import {
   logAuditEntries,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
+import { enterRemovalGate } from "~/server/generic/removal/repo/kernel-writes";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { readInventoryEntries } from "./crud";
@@ -543,6 +544,7 @@ const persistInventoryMovePlan = async (
 ) => {
   const auditEntries: AuditEntryInput[] = [];
   const hardDeletedSourceIds: InventoryId[] = [];
+  const hardDeletedSources: (typeof inventoryEntry.$inferSelect)[] = [];
   const idBySlot = new Map<string, InventoryId>();
   const sourceById = new Map(sourceEntries.map((entry) => [entry.id, entry]));
   const occupantBySlot = new Map<string, InventoryId>(
@@ -555,7 +557,12 @@ const persistInventoryMovePlan = async (
     if (plan.slotByEntryId.has(item.inventoryEntryId)) continue;
     const entry = sourceById.get(item.inventoryEntryId);
     if (!entry || hardDeletedSourceIds.includes(entry.id)) continue;
-    await tx.delete(inventoryEntry).where(eq(inventoryEntry.id, entry.id));
+    hardDeletedSources.push(
+      ...(await tx
+        .delete(inventoryEntry)
+        .where(eq(inventoryEntry.id, entry.id))
+        .returning()),
+    );
     hardDeletedSourceIds.push(entry.id);
     occupantBySlot.delete(inventorySlotKey(entry));
   }
@@ -629,6 +636,7 @@ const persistInventoryMovePlan = async (
     entity: "inventory",
     ids: hardDeletedSourceIds,
     audit: { into: auditEntries },
+    removed: hardDeletedSources,
   });
   if (auditEntries.length > 0) await logAuditEntries(tx, actor, auditEntries);
   return resultSlots.flatMap((key) => {
@@ -665,6 +673,8 @@ export const moveInventoryEntries = async (
   const processedItems = await withTransaction(
     db,
     async (tx: DrizzleTransaction) => {
+      // The gate before the first row lock: removed entries are reported.
+      await enterRemovalGate(tx);
       const targetLocationIds = uniq(
         payload.items.map((item) => item.targetLocationId),
       );
@@ -803,6 +813,8 @@ export const reconcileLocationSession = async (
   const { processed, removedIds, recomputeNeeded } = await withTransaction(
     db,
     async (tx: DrizzleTransaction) => {
+      // The gate before the first row lock: removed entries are reported.
+      await enterRemovalGate(tx);
       await assertLiveTargets(tx, { locationId });
       const relocationTargets = uniq(
         resolutions
@@ -934,6 +946,7 @@ export const reconcileLocationSession = async (
       const auditEntries: AuditEntryInput[] = [];
       const resultIds: string[] = [];
       const removedIds: InventoryId[] = [];
+      const removedRows: (typeof inventoryEntry.$inferSelect)[] = [];
       let recomputeNeeded = false;
 
       for (const r of resolutions) {
@@ -978,10 +991,14 @@ export const reconcileLocationSession = async (
             auditEntries.push(auditEntry);
           })
           .with({ kind: "remove" }, async () => {
-            await tx
+            const removed = await tx
               .update(inventoryEntry)
               .set({ deletedAt: now })
-              .where(eq(inventoryEntry.id, before.id));
+              .where(eq(inventoryEntry.id, before.id))
+              .returning();
+            removedRows.push(
+              ...removed.map((row) => ({ ...row, deletedAt: null })),
+            );
             recomputeNeeded = true;
             removedIds.push(before.id);
           })
@@ -1023,9 +1040,12 @@ export const reconcileLocationSession = async (
               };
               if (targetChanges) auditEntry.changes = targetChanges;
               auditEntries.push(auditEntry);
-              await tx
-                .delete(inventoryEntry)
-                .where(eq(inventoryEntry.id, before.id));
+              removedRows.push(
+                ...(await tx
+                  .delete(inventoryEntry)
+                  .where(eq(inventoryEntry.id, before.id))
+                  .returning()),
+              );
               removedIds.push(before.id);
               resultIds.push(updatedTarget.id);
               targetRowsByLocationProduct.set(targetKey, {
@@ -1077,6 +1097,7 @@ export const reconcileLocationSession = async (
         entity: "inventory",
         ids: removedIds,
         audit: { into: auditEntries },
+        removed: removedRows,
       });
 
       await tx

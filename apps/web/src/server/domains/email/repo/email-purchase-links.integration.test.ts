@@ -18,13 +18,21 @@ import {
 import { emailLinkDecisionsRead } from "~/server/domains/email/repo/email-decision-sql";
 import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-write";
 import { emailPredictionEvidence } from "~/server/domains/email/repo/email-state";
+import { setMemberLoginParty } from "~/server/domains/ledger-party/repo/member-login";
 import { decideEmailPurchase } from "~/server/domains/purchase-import/repo/email-purchase-decision";
+import { emitEmailRunAssignment } from "~/server/domains/purchase-import/repo/mail-run-kernel";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import {
   mergePurchases,
   deletePurchases,
 } from "~/server/domains/purchase/repo/purchase";
-import { append, evidenceRow, reconcileNow } from "~/server/kernel/api";
+import {
+  append,
+  decide,
+  evidenceRow,
+  reconcileNow,
+  recordSubject,
+} from "~/server/kernel/api";
 
 describe("Email Purchase link decisions", () => {
   const ctx = withTestDb();
@@ -277,6 +285,30 @@ describe("Email Purchase link decisions", () => {
       .where(eq(email.id, second.id));
     expect(published?.classification).toBe("unrelated");
     expect(await dirty()).toEqual([]);
+
+    // Another Email's link decision on this Email's order event changes the
+    // suggestions this Email respects.
+    await decide(ctx.db, ctx.actor, [
+      {
+        channel: "assignment",
+        kind: "set",
+        subject: recordSubject("email", second.id),
+        field: `link:${f.purchase.id}`,
+        value: { decision: "dismissed", eventId: f.event.id },
+      },
+    ]);
+    expect((await dirty()).sort()).toEqual([f.mail.id, second.id].sort());
+    await reconcileNow(
+      ctx.db,
+      keys.map((key) => ({ kind: "emailState", key })),
+    );
+    // A Run assignment changes the Run an import outcome reads.
+    await emitEmailRunAssignment(ctx.db, [f.mail.id]);
+    expect(await dirty()).toEqual([f.mail.id]);
+    await reconcileNow(ctx.db, [{ kind: "emailState", key: f.mail.id }]);
+    // Unlinking the owner's login changes who owns the Email.
+    await setMemberLoginParty(ctx.db, ctx.actor.userId, null, ctx.actor);
+    expect((await dirty()).sort()).toEqual([f.mail.id, second.id].sort());
   });
   it("replays the same link publication without another decision", async () => {
     const f = await fixture();

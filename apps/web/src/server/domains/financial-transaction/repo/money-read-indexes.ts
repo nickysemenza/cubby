@@ -1,5 +1,5 @@
 import { statementMerchantKey } from "@cubby/schemas/statement-answers";
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 
 import {
   columnArrayParam,
@@ -140,18 +140,23 @@ const coarse = (key: string) =>
     .replace(/[A-Z]/gu, (letter) => LOWER[UPPER.indexOf(letter)]!)
     .replace(/[^a-z0-9]/gu, "");
 /**
- * Vendors with a name or alias that can carry a requested key: a superset of
- * the rows whose `values` hold it, of which the kernel keeps only those. A
+ * A superset of merchant names or aliases whose exact JavaScript key matches.
+ * The kernel keeps only rows whose index `values` contain that key. A
  * name whose key equals a requested key is either all ASCII, where trimming,
  * collapsing and lower-casing touch only characters the reduction lower-cases
  * the same way or drops, so both reductions agree; or it holds a non-ASCII
  * character (its UTF-8 byte length exceeds its length), which every lookup
  * selects.
  */
+export const merchantNameCandidatesSql = (
+  merchant: SQL,
+  values: readonly string[],
+) =>
+  sql`(octet_length(${merchant}) <> char_length(${merchant})
+      OR regexp_replace(translate(${merchant}, ${UPPER}, ${LOWER}), '[^abcdefghijklmnopqrstuvwxyz0123456789]', '', 'g') = ANY(${textArrayParam([...new Set(values.map(coarse))])}))`;
 const vendorNamesLike = (values: readonly string[]) =>
   sql`EXISTS (SELECT 1 FROM unnest(array_prepend(${vendor.name}, ${vendor.aliases})) alias
-    WHERE octet_length(alias) <> char_length(alias)
-      OR regexp_replace(translate(alias, ${UPPER}, ${LOWER}), '[^abcdefghijklmnopqrstuvwxyz0123456789]', '', 'g') = ANY(${textArrayParam([...new Set(values.map(coarse))])}))`;
+    WHERE ${merchantNameCandidatesSql(sql`alias`, values)})`;
 export const vendorNames = defineReadIndex(vendor, {
   name: "vendor.name",
   values: (row) =>

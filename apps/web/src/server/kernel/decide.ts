@@ -37,6 +37,7 @@ import {
   decisionKey,
   hashCanonical,
   ownerKey,
+  scopeOwnerKey,
   rowKey,
   tableKey,
   VETO_SEPARATOR,
@@ -205,6 +206,7 @@ export async function decide(
         if (decision.kind === "reject") {
           const owners = await markRejected(q, record.entity, record.id);
           discovered.push(...owners);
+          removalKeys.push(...owners.map(scopeOwnerKey));
           // The owning scope's target names the record's delete policy.
           const owner = owners[0];
           const target = owner
@@ -246,10 +248,11 @@ export async function decide(
             throw new KernelContractError(
               `No reconciler owns ${decision.subject} and no delete policy was supplied`,
             );
-        } else
-          discovered.push(
-            ...(await clearRejected(q, record.entity, record.id)),
-          );
+        } else {
+          const owners = await clearRejected(q, record.entity, record.id);
+          discovered.push(...owners);
+          removalKeys.push(...owners.map(scopeOwnerKey));
+        }
       }
       const askHash = askOfSubject(decision.subject);
       if (askHash && decision.channel === "assignment") {
