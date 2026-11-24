@@ -141,15 +141,21 @@ type Proposals = ReadonlyMap<string, Computed>;
  * so it counts against no scope even though it wraps a lock timeout.
  */
 const isConflict = (error: UnparsedError) =>
-  !(error instanceof HouseholdWriteBusyError) &&
+  !gateBusyAtAdmission(error) &&
   (error instanceof KernelConflict ||
     error instanceof LockedReadChangedError ||
     isEntityShortcodeCollision(error, "Entity") ||
     ["40001", "40P01", "55P03"].includes(findPgError(error)?.code ?? ""));
 
+/** Busy-gate errors raised by {@link admitApply}, and no other busy error. */
+const admissionRefusals = new WeakSet<object>();
+const gateBusyAtAdmission = (error: unknown) =>
+  error instanceof Object && admissionRefusals.has(error);
+
 /**
  * Admit an apply transaction. A lock timeout in admission is the gate held by
  * another apply, so it surfaces as the busy-gate error rather than a conflict.
+ * Only this error is treated as busy: a timeout after admission lost a race.
  */
 async function admitApply(
   q: Q,
@@ -158,8 +164,17 @@ async function admitApply(
   try {
     await enterWriteTransaction(q, options);
   } catch (error) {
-    if (findPgError(error)?.code === "55P03")
-      throw new HouseholdWriteBusyError(error);
+    // A nonblocking admission reports the busy gate itself; a blocking one
+    // times out waiting for it.
+    if (error instanceof HouseholdWriteBusyError) {
+      admissionRefusals.add(error);
+      throw error;
+    }
+    if (findPgError(error)?.code === "55P03") {
+      const busy = new HouseholdWriteBusyError(error);
+      admissionRefusals.add(busy);
+      throw busy;
+    }
     throw error;
   }
 }
@@ -798,11 +813,18 @@ async function releaseClaims(
   delayMs = 0,
 ) {
   if (!claims.length) return;
+  // Rows are locked in the order every dirtying writer locks them (kind, then
+  // key), so a release never waits on a writer that waits on it.
   await q.execute(sql`
+    WITH held AS MATERIALIZED (
+      SELECT d."scopeKind", d."scopeKey" FROM "ScopeDirty" d
+      JOIN unnest(${orderedTextArrayParam(claims.map((item) => item.kind))}, ${orderedTextArrayParam(claims.map((item) => item.key))}, ${orderedTextArrayParam(claims.map((item) => item.token))}) AS wanted(kind, key, token)
+        ON d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key AND d."claimToken" = wanted.token::uuid
+      ORDER BY d."scopeKind", d."scopeKey" FOR UPDATE OF d
+    )
     UPDATE "ScopeDirty" d SET "claimToken" = NULL, "claimDeadline" = NULL, conflicts = ${CONFLICT_COUNT[count]}
       ${delayMs > 0 ? sql`, "availableAt" = greatest(d."availableAt", now() + make_interval(secs => ${delayMs / 1000}))` : sql``}
-    FROM unnest(${orderedTextArrayParam(claims.map((item) => item.kind))}, ${orderedTextArrayParam(claims.map((item) => item.key))}, ${orderedTextArrayParam(claims.map((item) => item.token))}) AS wanted(kind, key, token)
-    WHERE d."scopeKind" = wanted.kind AND d."scopeKey" = wanted.key AND d."claimToken" = wanted.token::uuid`);
+    FROM held WHERE d."scopeKind" = held."scopeKind" AND d."scopeKey" = held."scopeKey"`);
 }
 
 /** Queue the union of missing envelopes and replace all scope links together. */
@@ -1885,7 +1907,7 @@ async function applyPage(
     if (before && after) advanceSiblingFences(siblings, before, after);
     return results;
   } catch (error) {
-    if (error instanceof HouseholdWriteBusyError) {
+    if (gateBusyAtAdmission(error)) {
       await releaseClaims(repositoryQueries(db), claimed, "busy");
       return computed.map((item) => outcome(item.scope, "conflict"));
     }
@@ -2057,7 +2079,7 @@ async function runLocked(
     if ("error" in traced) throw traced.error;
     return traced.result;
   } catch (error) {
-    if (error instanceof HouseholdWriteBusyError) return GATE_BUSY;
+    if (gateBusyAtAdmission(error)) return GATE_BUSY;
     if (isConflict(error)) {
       await releaseClaims(repositoryQueries(db), [claimed], "conflict");
       return outcome(scope, "conflict");
