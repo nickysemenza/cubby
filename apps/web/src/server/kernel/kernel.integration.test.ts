@@ -2987,12 +2987,83 @@ describe("evidence-facts kernel", () => {
       }>(
         sql`SELECT attempts, conflicts, "availableAt" > now() AS delayed FROM "ScopeDirty" WHERE "scopeKind"=${scope.kind}`,
       );
-      // A locked run that found the gate busy waits instead of recomputing at once.
+      // A busy gate is not a conflict. A locked run that found it busy waits
+      // instead of recomputing at once, and its next claim tries a batch.
       expect(dirty.rows).toEqual([
-        { attempts: 0, conflicts: conflicts + 1, delayed: conflicts === 3 },
+        {
+          attempts: 0,
+          conflicts: Math.min(conflicts, 2),
+          delayed: conflicts === 3,
+        },
       ]);
     },
   );
+
+  it("stops a batch's locked runs at a busy gate", async () => {
+    const loaded: string[] = [];
+    const reconciler = defineReconciler<string>({
+      scope: "fixture.lockedBusy",
+      lane: "money",
+      version: 1,
+      reads: [],
+      writes: [],
+      async load(_reads, keys) {
+        loaded.push(...keys);
+        return new Map(keys.map((key) => [key, key]));
+      },
+      reconcile: (_key, c) => c.done(),
+    });
+    const kernel = createKernel([
+      defineModule({ name: "lockedBusy", reconcilers: [reconciler] }),
+    ]);
+    const scopes = ["a", "b"].map((key) => ({ kind: reconciler.scope, key }));
+    const q = repositoryQueries(ctx.db);
+    await markDirty(q, kernel.registry, {
+      keys: [],
+      discovers: scopes,
+      reason: "synthetic locked busy",
+    });
+    await q.execute(
+      sql`UPDATE "ScopeDirty" SET conflicts=3 WHERE "scopeKind"=${reconciler.scope}`,
+    );
+    const claims = await claimScopes(q, kernel.registry, "money", 2, scopes);
+    await repositoryTransactionDatabase(ctx.db, async (tx) => {
+      await enterWriteTransaction(repositoryQueries(tx), {
+        lane: "money",
+        mode: "member",
+      });
+      const outcomes = await runClaimedScopes(
+        ctx.db,
+        kernel.registry,
+        reconciler,
+        claims,
+        { mode: "background", releaseBaseline: false },
+      );
+      expect(outcomes.map((item) => item.status)).toEqual([
+        "conflict",
+        "conflict",
+      ]);
+    });
+    expect(loaded).toHaveLength(1);
+    expect(
+      (
+        await q.execute<{
+          conflicts: number;
+          attempts: number;
+          claimToken: string | null;
+          delayed: boolean;
+        }>(sql`SELECT conflicts, attempts, "claimToken", "availableAt" > now() AS delayed
+        FROM "ScopeDirty" WHERE "scopeKind" = ${reconciler.scope}`)
+      ).rows,
+    ).toEqual(
+      scopes.map(() => ({
+        conflicts: 2,
+        attempts: 0,
+        claimToken: null,
+        delayed: true,
+      })),
+    );
+  });
 
   it("never sends an unknown ask again without a member accepting a possible repeat charge", async () => {
     let calls = 0;

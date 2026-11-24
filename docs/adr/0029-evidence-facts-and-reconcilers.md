@@ -461,10 +461,14 @@ wait rather than a terminated session. A nested writer that already holds the
 gate retains the outer transaction's timeouts and does not reset its budget.
 
 A locked background fallback tries the gate without waiting before it reads
-inside the transaction. Busy admission releases its claim as a conflict,
-retains the dirty work and makes it claimable again after a short delay, so a
-gate wait cannot consume the budget needed for recomputation and a busy gate
-does not drive a recompute loop. Admitted work keeps every revision and sequence fence. Member
+inside the transaction. Busy admission is not a conflict. It releases that
+claim and the batch's remaining locked claims untried, retains the dirty work,
+makes it claimable again after a short delay and returns each scope to one
+conflict short of the locked path, so its next claim publishes in a batch. A
+gate wait cannot consume the budget needed for recomputation, a busy gate does
+not drive a recompute loop, and it costs a batch one locked attempt. A scope
+that still loses its race in a batch returns to the locked path on that
+conflict. Admitted work keeps every revision and sequence fence. Member
 work retains its bounded gate wait. A failed locked load settles its original
 cause before issuing another query on that transaction.
 
@@ -503,7 +507,11 @@ writer the gate serialized before them. The gate binds that order: a
 transaction holding it may raise revisions after dirty or record locks
 without a cycle, because no other kernel writer runs beside it. A
 conflict on `seq` or `rev`, a deadlock or a serialization failure does not
-count as a failed attempt. After three
+count as a failed attempt. It counts as a conflict against the scopes the fence
+names, or against every scope of the page when the apply itself loses the race;
+the page rolls back and each scope recomputes from fresh inputs on its next
+claim. A gate lock timeout at admission is a busy gate, not a conflict, and a
+publication ends the scope's run of conflicts. After three
 conflicts in a row the runner makes an exception to loading outside the
 transaction: it discovers the read set, takes the gate,
 reads the revisions of the union of input and planned output keys, 0 for an
@@ -787,9 +795,16 @@ A version change dirties a scope only when filing asks is its whole change, as
 below. Otherwise `ScopeDirty` rows come only from input mutations, so a scope
 runs under the current rules only when one of its own inputs changed.
 
-After a deploy that changes a reconciler `version` or a `promptVersion`, a
-`version.sweep` Pass visits each scope whose `ScopeState.version` is older. It
-computes the desired output from existing answers only and issues no asks.
+The hourly check starts the `version.sweep` Pass when a registered scope has
+different rules, has no dirty row and has no Drift proposal under the current
+rules. A negative check is stored in a reserved, unclaimable Pass row for the
+exact registry rules vector. Scope writes that can introduce an eligible scope invalidate it in
+the same transaction. A changed vector or an invalidated check runs the exact
+eligibility query. A scan records a negative result only while its token is
+current, so an intervening write or another check can discard it.
+
+The sweep visits eligible scopes and computes the desired output from existing
+answers only and issues no asks.
 With no record difference and no missing answer it advances the scope's
 version and refreshes its gaps, input provenance and dependencies under the
 input revision fence. This metadata refresh creates no dirty work or asks.
