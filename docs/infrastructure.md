@@ -226,18 +226,17 @@ a second one. The invariant is
 `2 × (background max_concurrency + telemetry max_concurrency + cron + live Durable Object requests) ≤ 32` (the background origin cap)
 
 The queue consumers' `max_concurrency` bounds permit and telemetry
-invocations: 8 background (`packages/shared/src/background-queue-consumer.json`)
-and 1 telemetry (`apps/web/cloudflare.config.ts`), so at most 18 sockets. The
+invocations: 4 background (`packages/shared/src/background-queue-consumer.json`)
+and 1 telemetry (`apps/web/cloudflare.config.ts`), so at most 10 sockets. The
 cron runs its backstop and the daily pass one after the other, so 2 more. That
-leaves 12 sockets for Durable Object requests.
+leaves 20 sockets for Durable Object requests.
 
 Purchase coordinators (one `PurchaseImportRunAgent` per import Run) share
 six live `purchase.dispatch` Pass claims in the kernel partition
 `household.agent-turns`. Each Pass holds its slot while Pi works, including
 its model Asks and tools, and renews its 90-second claim every 30 seconds.
-This bounds coordinators to about 12 sockets, the whole remainder: a
-CalendarFeed rebuild or another Durable Object request waits for a slot while
-all six are live. Full partitions wait 15 seconds
+This bounds coordinators to about 12 sockets, which leaves 8 for a
+CalendarFeed rebuild or another Durable Object request while all six are live. Full partitions wait 15 seconds
 with `provider_capacity`; cancellation or expiry frees a slot. Agent services
 fence every database/model turn on the Pass token. Alarms and durable member
 prompts request a Pass; observation reads do not load Pi. Stale-Run expiry
