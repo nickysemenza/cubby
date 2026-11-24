@@ -11,6 +11,7 @@ import {
   gatewayFetchThrough,
   SubscriptionRequiredError,
   type GatewayResponseInfo,
+  gatewayResponseInfo,
   requestUrl,
   runUniversalGateway,
   type InferenceFunding,
@@ -40,6 +41,28 @@ type FundingRefusal = (
   attempt: RefusedAttempt,
 ) => Promise<void>;
 type AgentTransport = Extract<AiUsageTransport, "gateway" | "chatgpt">;
+
+/**
+ * The transport that carried a model turn, stamped on the response its Ask
+ * stores, so a replay reports the original's billing. An entry stored without
+ * it reports none, as before.
+ */
+const TURN_TRANSPORT_HEADER = "x-cubby-turn-transport";
+const turnTransport = z.enum(["gateway", "chatgpt"]);
+
+function withTurnTransport(
+  response: Response,
+  transport: AgentTransport | undefined,
+): Response {
+  if (!transport) return response;
+  const headers = new Headers(response.headers);
+  headers.set(TURN_TRANSPORT_HEADER, transport);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
 
 /**
  * pi ends a run on a terminating tool only when every call of that round
@@ -404,9 +427,21 @@ export function cubbyAgentProviders(
                   funding: funding ?? null,
                   body: await wire.clone().text(),
                 },
-                () => routedFetch(wire),
+                async () =>
+                  withTurnTransport(await routedFetch(wire), finalTransport),
               )
             : await routedFetch(request, init);
+        // A replayed turn sent nothing now; its stored response reports the
+        // original's transport and gateway log, so usage bills as it did.
+        const replayed =
+          !finalTransport &&
+          turnTransport.safeParse(response.headers.get(TURN_TRANSPORT_HEADER))
+            .data;
+        if (replayed) {
+          finalTransport = replayed;
+          input.onTransport?.(replayed);
+          input.onResponse?.(gatewayResponseInfo(response));
+        }
         // Selection can precede quota fallback. Only the final successful
         // plan response is unbilled; HTTP refusals can trigger SDK retries.
         if (response.ok && finalTransport === "chatgpt") onUnbilledResponse?.();

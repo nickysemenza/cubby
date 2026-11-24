@@ -30,6 +30,7 @@ import {
   repositoryTransactionDatabase,
   type RepositoryQueryClient,
 } from "~/server/db/repository-access.boundary";
+import { findPgError } from "~/server/errors/db-errors";
 import {
   WorkDeferredError,
   WorkEvidenceObsoleteError,
@@ -43,6 +44,7 @@ import {
   claimExternalAskRow,
   rawError,
   runnerAskKinds,
+  CLAIM_LEASE_MS,
   renewClaim,
   settleFailure,
   type ClaimedAsk,
@@ -274,6 +276,11 @@ async function waitingScopes(q: Q, askId: string): Promise<ScopeRef[]> {
   return result.rows;
 }
 
+/** Errors {@link commitAnswer} met entering the gate: a lock wait that gave up (55P03). */
+const gateRefusals = new WeakSet<object>();
+const gateRefused = (error: unknown) =>
+  error instanceof Object && gateRefusals.has(error);
+
 async function commitAnswer(
   db: Database,
   registry: KernelRegistry,
@@ -281,10 +288,26 @@ async function commitAnswer(
   ask: { id: string; inputHash: string },
   produced: Produced<unknown>,
   runId: string | null,
-): Promise<void> {
-  await repositoryTransactionDatabase(db, async (tx) => {
-    await enterHouseholdGate(tx);
+  holder?: string,
+): Promise<boolean> {
+  return repositoryTransactionDatabase(db, async (tx) => {
+    try {
+      await enterHouseholdGate(tx);
+    } catch (error) {
+      // Marked, not wrapped: every caller still observes the error it threw.
+      if (error instanceof Object && findPgError(error)?.code === "55P03")
+        gateRefusals.add(error);
+      throw error;
+    }
     const q = repositoryQueries(tx);
+    // A retry publishes only for the caller that still holds a live claim on
+    // an Ask nobody cancelled while it waited; the row lock follows the gate.
+    if (holder) {
+      const held = await q.execute<{ held: number }>(sql`
+        SELECT 1 AS held FROM "Ask" WHERE id = ${ask.id}::uuid AND "claimToken" = ${holder}::uuid
+          AND "claimDeadline" > now() AND "cancelledAt" IS NULL FOR UPDATE`);
+      if (!held.rows.length) return false;
+    }
     await q
       .insert(answer)
       .values({
@@ -314,7 +337,79 @@ async function commitAnswer(
     });
     const passes = await wakeWaitingPasses(q, ask.id);
     if (dirtied || passes) await wakeAfterCommit(tx);
+    return true;
   });
+}
+
+/**
+ * How long a hosted turn may keep starting publication retries, far inside its
+ * request's lifetime. It admits retries; a try already started runs to its own
+ * transaction limits.
+ */
+const HOSTED_PUBLISH_BUDGET_MS = 20_000;
+/** The member lock wait a publication's gate entry may take. */
+const GATE_LOCK_WAIT_MS = 2_000;
+
+/**
+ * Publish a response already in hand. The in-line host of a hosted Ask retries
+ * a publication only the household gate refused, each try a fresh transaction
+ * that takes the gate first, never calling the provider again. It renews its
+ * claim as soon as a try is refused, before waiting, and each retry checks
+ * that claim again under the gate. It stops on a renewal that fails, a claim
+ * that moved, or when the budget runs out, rethrowing the first refusal so
+ * the caller settles it as any failed publication. Every other publication
+ * is tried once.
+ */
+async function publishAnswer(
+  db: Database,
+  registry: KernelRegistry,
+  kind: AskKind,
+  ask: { id: string; inputHash: string; token: string },
+  produced: Produced<unknown>,
+  runId: string | null,
+): Promise<void> {
+  const deadline = Date.now() + HOSTED_PUBLISH_BUDGET_MS;
+  let refused: unknown;
+  for (let delay = 250; ; delay = Math.min(delay * 2, 4_000)) {
+    try {
+      // The first try is the one every publication makes. A retry also checks
+      // its claim under the gate and publishes nothing once it is lost.
+      const published = await commitAnswer(
+        db,
+        registry,
+        kind,
+        ask,
+        produced,
+        runId,
+        refused === undefined ? undefined : ask.token,
+      );
+      if (published) return;
+      throw refused;
+    } catch (error) {
+      if (refused !== undefined && error === refused) throw error;
+      refused ??= error;
+      if (!kind.hosted || !gateRefused(error)) throw error;
+      // The whole of the next try, lock wait included, stays inside the budget.
+      if (Date.now() + delay + GATE_LOCK_WAIT_MS >= deadline) throw refused;
+      // Extend the claim before waiting, at the moment the caller would
+      // otherwise settle the failure, so it cannot lapse during the wait and
+      // let expiry settle a held response as unknown. The token alone decides:
+      // while it is still this caller's nobody else has claimed the Ask, and
+      // the caller's own failure update depends on the same token, so a
+      // refusal here leaves exactly what a single failed attempt leaves.
+      const renewed = await repositoryQueries(db)
+        .execute<{ id: string }>(sql`
+          UPDATE "Ask" SET "claimDeadline" = now() + make_interval(secs => ${CLAIM_LEASE_MS / 1000})
+          WHERE id = ${ask.id}::uuid AND state = ${ASK.sent}
+            AND "claimToken" = ${ask.token}::uuid AND "cancelledAt" IS NULL
+          RETURNING id`)
+        .then((result) => result.rows.length > 0)
+        .catch(() => false);
+      if (!renewed) throw refused;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      if (Date.now() + GATE_LOCK_WAIT_MS >= deadline) throw refused;
+    }
+  }
 }
 
 /**
@@ -431,7 +526,7 @@ async function executeClaimed(
       const claim = await askResponseClaims.claim(entry.ask.inputHash);
       if (claim.kind === "hit") {
         const replay = storedProduced.parse(JSON.parse(claim.value));
-        await commitAnswer(
+        await publishAnswer(
           db,
           registry,
           entry.kind,
@@ -546,7 +641,7 @@ async function executeClaimed(
         .publish(ask.inputHash, cacheToken, JSON.stringify(produced))
         .catch(() => false);
       try {
-        await commitAnswer(
+        await publishAnswer(
           db,
           registry,
           kind,
@@ -633,7 +728,9 @@ export async function withAsk<I, O>(
     const held = await claimAsk(db, row.id, kind.claimLimit);
     if (!held)
       throw inFlight(
-        "Another worker holds this ask or its claim partition is full.",
+        new Date(row.availableAt) > new Date()
+          ? `The ${kind.feature} call waits until ${row.availableAt}${row.waitCause ? ` for ${row.waitCause}` : " before its next try"}; no call was placed.`
+          : `Another request holds this ask${kind.claimLimit ? " or its claim partition is full" : ""}; no duplicate call was placed.`,
       );
     claimed = held;
   } catch (error) {

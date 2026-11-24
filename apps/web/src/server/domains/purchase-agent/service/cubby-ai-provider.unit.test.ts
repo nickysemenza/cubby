@@ -423,6 +423,63 @@ describe("createCubbyGatewayFetch", () => {
     ]);
   });
 
+  // A plan response whose Answer failed to publish is replayed from its Ask's
+  // cache; the replay places no call and keeps the original's unbilled plan.
+  it("bills a replayed plan turn as the plan, with one model call", async () => {
+    const transports: string[] = [];
+    let planCalls = 0;
+    let stored:
+      | { status: number; headers: [string, string][]; body: string }
+      | undefined;
+    const models = createModels();
+    for (const provider of cubbyAgentProviders({
+      gateway: () =>
+        gateway(async () => {
+          throw new Error("Unexpected paid gateway call");
+        }),
+      recorder: createContextRecorder(),
+      subscription: async (_body, options) => {
+        planCalls += 1;
+        options?.onSelected?.();
+        return completedResponse();
+      },
+      onTransport: (transport) => transports.push(transport),
+      modelTurn: async (_request, send) => {
+        if (stored)
+          return new Response(stored.body, {
+            status: stored.status,
+            headers: stored.headers,
+          });
+        const response = await send();
+        stored = {
+          status: response.status,
+          headers: [...response.headers],
+          body: await response.text(),
+        };
+        throw new Error("Synthetic publication failure");
+      },
+    }))
+      models.setProvider(provider);
+    const model = models.getModel("openai", "gpt-6.1-sol");
+    if (!model) throw new Error("Missing test model");
+    const failed = await models.complete(
+      model,
+      { messages: [] },
+      { maxRetries: 0 },
+    );
+    expect(failed.stopReason).toBe("error");
+    expect(failed.usage.input).toBe(0);
+    const replayed = await models.complete(
+      model,
+      { messages: [] },
+      { maxRetries: 0 },
+    );
+    expect(replayed.usage.input).toBe(100);
+    expect(replayed.usage.cost.total).toBe(0);
+    expect(transports).toEqual(["chatgpt", "chatgpt"]);
+    expect(planCalls).toBe(1);
+  });
+
   it("keeps a connected plan's failure on chatgpt without a gateway retry", async () => {
     const run = vi.fn(async () => new Response("stream"));
     const transports: string[] = [];
