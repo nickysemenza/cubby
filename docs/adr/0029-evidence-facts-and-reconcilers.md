@@ -563,8 +563,9 @@ attempt counts and use their own retry delays. A claim that outlives its
 deadline cannot publish. A Pass page with a publish callback takes the gate,
 fences its claim and commits the callback with its cursor and completion.
 A page without a callback fences its claim and settles only its own Pass row
-in a transaction without the gate. The wake version governs cursor and
-completion updates in both cases. Queue permits
+in a transaction without the gate. Settlement appends any duration sample
+and keeps the latest twelve on the Pass row. The wake version governs cursor
+and completion updates in both cases. Queue permits
 and the hourly cron stay as the wake and the backstop (ADR 0025 item 2). A
 permit is sent only for claimable work: runner-claimable work that is due now
 or falls due at a known time. The next wake is the least time a runner claim
@@ -594,7 +595,14 @@ claim; a prepared rendition that brings device-waiting image work forward;
 `startPass`, a member retry and a Run retry or relaunch that revives its Asks.
 A writer outside one transaction registers the wake right after its first
 durable write, so a later failure cannot skip it. A `startPass` for a Pass that spent its attempts sends none, because no
-runner claims it until a member retries it. A writer that sets only a future
+runner claims it until a member retries it or a scheduled start revives it.
+The hourly cron's starts are scheduled starts: each gives a spent singleton
+Pass a fresh attempt budget and keeps its cursor; its last error stands until
+the next attempt settles. A Pass that always fails spends at most one budget
+per cron invocation.
+Keyed Passes such as `fields.reconcile` have no scheduled start; a spent one
+is Stuck in Work until a member retries it, or a Run retry restarts its Pass.
+A writer that sets only a future
 deadline offers it. A commit that creates no kernel work, including an
 ordinary source write, sends no permit. Offers refused while a permit is
 pending rely on its delivery, so a lost permit, or a send whose retries are

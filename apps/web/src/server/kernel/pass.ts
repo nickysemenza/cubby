@@ -28,7 +28,11 @@ import type { KernelRegistry } from "./registry";
 import { isoText } from "./sql-time";
 import { wakeAfterCommit, wakeAtDeadline } from "./wake";
 
-/** Start (or restart a finished) pass instance; a pending one keeps its cursor. */
+/**
+ * Start (or restart a finished) pass instance; a pending one keeps its cursor.
+ * `revive` is a scheduled start: a pending instance that spent its attempts
+ * gets a fresh attempt budget and keeps its cursor and last error.
+ */
 export async function startPass(
   db: Database,
   pass: Pass,
@@ -37,6 +41,7 @@ export async function startPass(
     cursor?: Json | null;
     runId?: string | null;
     availableAt?: Date;
+    revive?: boolean;
   } = {},
 ): Promise<void> {
   // Database time, not the Worker's clock: a skewed clock must not park the pass.
@@ -58,6 +63,7 @@ export async function startPass(
           ELSE excluded.cursor END
         ELSE "Pass".cursor END,
       attempts = CASE WHEN "Pass"."doneAt" IS NOT NULL OR "Pass"."cancelledAt" IS NOT NULL
+          OR (${options.revive ?? false} AND "Pass".attempts >= "Pass"."maxAttempts")
         THEN 0 ELSE "Pass".attempts END,
       "claimToken" = CASE WHEN "Pass"."doneAt" IS NOT NULL OR "Pass"."cancelledAt" IS NOT NULL
         THEN NULL ELSE "Pass"."claimToken" END,
@@ -75,7 +81,8 @@ export async function startPass(
       attempts < "maxAttempts" AS claimable`);
   const row = started.rows[0];
   // A pending Pass that spent its attempts keeps them until a member retries
-  // it, so no runner can claim it and no wake is owed.
+  // it or a scheduled start revives it, so no runner can claim it and no wake
+  // is owed. One revival per scheduled start bounds a Pass that always fails.
   if (!row?.claimable) return;
   // A future start owns its deadline; an immediate wake would find nothing due.
   if (!row.due) await wakeAtDeadline(db, new Date(row.at), "kernel.pass-start");
@@ -161,6 +168,16 @@ export async function runOnePass(
           "availableAt" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${result.availableAt ? sql`${result.availableAt.toISOString()}::timestamp` : sql`now()`} ELSE CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN "availableAt" ELSE least("availableAt", now()) END END,
           attempts = 0, "claimToken" = NULL, "claimDeadline" = NULL,
           "waitCause" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${result.done ? null : (result.waitCause ?? null)} ELSE CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN "waitCause" END END, "lastError" = NULL, "updatedAt" = now()
+          ${
+            result.durationSample
+              ? sql`, "durationHistory" = (
+            SELECT jsonb_agg(sample ORDER BY ordinal)
+            FROM jsonb_array_elements("durationHistory" || ${JSON.stringify([result.durationSample])}::jsonb)
+              WITH ORDINALITY recent(sample, ordinal)
+            WHERE ordinal > jsonb_array_length("durationHistory") - 11
+          )`
+              : sql``
+          }
         WHERE name = ${claimed.name} AND key = ${claimed.key}
         RETURNING ${isoText(sql`"availableAt"`)} AS at, "doneAt" IS NULL AND "availableAt" > now() AS wait`);
         const published = result.publish
