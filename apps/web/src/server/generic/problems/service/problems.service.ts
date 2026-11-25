@@ -20,13 +20,10 @@ import {
   dryRunPruneAliasesOut,
   ingredientWithUnusedAliasesSchema,
   staleIngredientParseSchema,
-  AUTO_FIX_PROBLEM_KEYS,
   ingredientWithPartialCoverageSchema,
   type MaintenanceCounts,
   type ProblemKey,
-  type ProblemsCount,
   type ProblemsFast,
-  problemsCountSchema,
   productWithIslandedMappingsSchema,
   TRACKER_PROBLEM_KEY_BY_TYPE,
   projectAttentionProblemKeys,
@@ -46,7 +43,7 @@ import {
   getErrorMessage,
 } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
-import { sum, sumBy, uniq, uniqBy } from "es-toolkit";
+import { sum, uniq, uniqBy } from "es-toolkit";
 import { z } from "zod";
 
 import { listEntities } from "~/entity/model/list-contracts";
@@ -108,7 +105,7 @@ import {
 } from "~/server/generic/problems/service/problem-rows";
 import { countViewProblem } from "~/server/generic/problems/service/problem-views.service";
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { traceAll, traceAllBounded } from "~/server/observability/tracing";
+import { traceAll } from "~/server/observability/tracing";
 
 // Detect both coverage problems in one pass: ingredient products that are
 // *under-covered* and products whose mappings *island*. Both detectors fetch
@@ -1187,56 +1184,6 @@ const presentTrackerProblem = (
     // visible as a count/rows mismatch rather than silently wrong prose.
     return item ? [item] : [];
   });
-};
-
-/**
- * Count every registered Problem through the same executor that supplies its
- * sample. Entity-backed Problems select the explicit count intent, so list
- * predicates and exact totals stay canonical without constructing card SQL;
- * derived Problems use their dedicated count adapters.
- *
- * The `upc` lane is skipped: its detector calls an external provider, so a
- * count would make the badge depend on that provider's health. Its `byType`
- * key stays 0 and the Problems page loads the section on its own.
- */
-export const findProblemCounts = async (
-  db: Database,
-  upcLookupClient: UpcLookupBatchPort,
-): Promise<ProblemsCount> => {
-  const declarations = problemQueryDeclarations();
-  const tasks: Record<string, () => ReturnType<typeof executeProblem>> = {};
-  for (const definition of declarations) {
-    if (definition.executionLane === "upc") continue;
-    tasks[definition.key] = async () =>
-      executeProblem(db, definition.key, {
-        mode: "count",
-        diagnostic: { upcLookupClient },
-      });
-  }
-  const results = await traceAllBounded(tasks, 4);
-  const byType = problemsCountSchema.shape.byType.parse(
-    Object.fromEntries(
-      declarations.map((definition) => [
-        definition.key,
-        Number(results[definition.key]?.count ?? 0),
-      ]),
-    ),
-  );
-  const totalFor = (problemClass: "defect" | "coverage") =>
-    declarations.reduce(
-      (total, definition) =>
-        definition.problemClass === problemClass
-          ? total + (byType[definition.key] ?? 0)
-          : total,
-      0,
-    );
-  const autoFixTotal = sumBy(AUTO_FIX_PROBLEM_KEYS, (key) => byType[key]);
-  return {
-    total: totalFor("defect") - autoFixTotal,
-    autoFixTotal,
-    coverageTotal: totalFor("coverage"),
-    byType,
-  };
 };
 
 /** Execute only one registry entry for focused MCP/problem consumers. */

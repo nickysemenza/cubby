@@ -94,7 +94,7 @@ export const problemsContract = defineContract(
     report: query({
       exposure: "capability",
       description:
-        'Data-quality problems and optional coverage backlogs across products, inventory, locations, recipes, and vendors, plus household-tracker items needing attention (overdue tasks, stalled/blocked projects, past-due planned expenses, missing budgets, unclassified expenses). countsOnly=true is the cheap triage; type="duplicateInventory" finds unique Products stored in more than one location; type="purchasesNotReconciling" holds only the unexplained Purchase differences.',
+        'Data-quality problems and optional coverage backlogs across products, inventory, locations, recipes, and vendors, plus household-tracker items needing attention (overdue tasks, stalled/blocked projects, past-due planned expenses, missing budgets, unclassified expenses). countsOnly=true returns bounded counts; incompleteTypes names categories that could not be counted, so totals are lower bounds when present; type="duplicateInventory" finds unique Products stored in more than one location; type="purchasesNotReconciling" holds only the unexplained Purchase differences.',
       input: z.object({
         countsOnly: z
           .boolean()
