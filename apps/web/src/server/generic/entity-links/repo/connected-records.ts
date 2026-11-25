@@ -106,6 +106,7 @@ export async function compiledConnectedRoutes(source: Entity, viewKey: string) {
       }
       return {
         traversal,
+        nodes,
         hops: nodes.length - 1,
         path: sql`jsonb_build_array(${sql.join(
           await Promise.all(
@@ -157,30 +158,55 @@ async function prepareConnectedPage(input: ConnectedRecordsInput) {
     WHERE s."shortcode" = ${source.entityId}
       ${rootLiveness}
       ${targetFilter}`;
-  const targetIds = routes.map(
-    (route) => sql`SELECT DISTINCT t."id" ${fromRoute(route)}`,
-  );
-  const evidence = routes.map(
-    (
-      route,
-    ) => sql`SELECT DISTINCT t."shortcode" AS "targetId", ${route.hops}::int AS hops, ${route.path} AS path
-      ${fromRoute(route)} AND t."id" IN (SELECT id FROM page)`,
-  );
+  // Expensive relationship queries produce witnesses once. The IDs feed exact
+  // membership, and only witnesses on the requested page are labeled.
+  const witnessedRoutes: SQL[] = [];
+  const targetIds: SQL[] = [];
+  const evidence: SQL[] = [];
+  for (const [index, route] of routes.entries()) {
+    const path = sql`${route.hops}::int AS hops, ${route.path} AS path`;
+    if (!route.traversal.hops.some((hop) => hop.candidateRows)) {
+      targetIds.push(sql`SELECT t.id ${fromRoute(route)}`);
+      evidence.push(sql`SELECT t.shortcode AS "targetId", ${path}
+        ${fromRoute(route)} AND t.id IN (SELECT id FROM page)`);
+      continue;
+    }
+    const witnesses = sql.identifier(`route_${index}`);
+    const nodeIds = route.nodes.map((node) => sql.identifier(node.alias));
+    witnessedRoutes.push(sql`${witnesses} AS MATERIALIZED (
+      SELECT DISTINCT ${sql.join(
+        nodeIds.map((node) => sql`${node}.id AS ${node}`),
+        sql`, `,
+      )}
+      ${fromRoute(route)}
+    ),`);
+    targetIds.push(sql`SELECT t AS id FROM ${witnesses}`);
+    evidence.push(sql`SELECT page."targetId", ${path}
+      FROM page JOIN ${witnesses} witness ON witness.t = page.id
+      ${sql.join(
+        route.nodes.map((node, nodeIndex) => {
+          const alias = nodeIds[nodeIndex];
+          const table = entityManifest[node.entity].dbTable;
+          if (!alias || !table)
+            throw new Error(`Missing connected node ${node.entity}`);
+          return sql`JOIN ${sql.identifier(table)} ${alias} ON ${alias}.id = witness.${alias}`;
+        }),
+        sql` `,
+      )}`);
+  }
   const targetTable = entityManifest[view.target].dbTable;
   if (!targetTable) throw new Error(`No local table for ${view.target}`);
   const query = sql`
-    WITH target_ids AS (${sql.join(targetIds, sql` UNION `)}),
-      targets AS MATERIALIZED (
-        SELECT t.id, t."shortcode" AS "targetId"
-        FROM target_ids JOIN ${sql.identifier(targetTable)} t USING (id)
-      ),
+    WITH ${sql.join(witnessedRoutes, sql` `)}
+      target_ids AS MATERIALIZED (SELECT DISTINCT id FROM (${sql.join(targetIds, sql` UNION ALL `)}) reached),
       page AS MATERIALIZED (
-        SELECT t.id, targets."targetId", ${await labelSql(view.target, "t")} AS "targetLabel"
-        FROM targets JOIN ${sql.identifier(targetTable)} t USING (id)
+        SELECT t.id, t.shortcode AS "targetId", ${await labelSql(view.target, "t")} AS "targetLabel"
+        FROM target_ids JOIN ${sql.identifier(targetTable)} t USING (id)
         ORDER BY "targetLabel", "targetId"
         LIMIT ${input.limit ?? 20} OFFSET ${input.offset ?? 0}
       ),
-      unique_paths AS (${sql.join(evidence, sql` UNION `)}),
+      unique_paths AS (SELECT DISTINCT "targetId", hops, path
+        FROM (${sql.join(evidence, sql` UNION ALL `)}) witnessed_paths),
       page_items AS (
         SELECT page."targetId", page."targetLabel",
           min(evidence.hops)::int AS "shortestHops",
@@ -188,7 +214,7 @@ async function prepareConnectedPage(input: ConnectedRecordsInput) {
         FROM page JOIN unique_paths evidence USING ("targetId")
         GROUP BY page."targetId", page."targetLabel"
       )
-    SELECT (SELECT count(*)::int FROM targets) AS "totalCount",
+    SELECT (SELECT count(*)::int FROM target_ids) AS "totalCount",
       COALESCE((SELECT jsonb_agg(to_jsonb(page_items) ORDER BY "targetLabel", "targetId") FROM page_items), '[]'::jsonb) AS "items"
   `;
   return { target: view.target, query };

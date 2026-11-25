@@ -155,6 +155,14 @@ export const decision = pgTable(
     index("Decision_link_event_idx")
       .on(sql`(${table.value}->>'eventId')`)
       .where(sql`${table.field} LIKE 'link:%'`),
+    // Purchase-scoped Email reads start from requested identities and their redirects.
+    index("Decision_email_link_purchase_idx")
+      .on(
+        sql`(CASE WHEN ${table.field} LIKE 'link:%' THEN substring(${table.field} from 6)::uuid END)`,
+      )
+      .where(
+        sql`${table.channel} = ${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)} AND ${table.subject} LIKE 'email:%' AND ${table.field} LIKE 'link:%'`,
+      ),
     enumCheck("Decision_channel_check", table.channel, decisionChannel),
     enumCheck("Decision_kind_check", table.kind, decisionKind),
     enumCheck("Decision_actorKind_check", table.actorKind, decisionActorKind),

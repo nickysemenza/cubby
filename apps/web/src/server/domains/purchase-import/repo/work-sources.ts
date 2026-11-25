@@ -99,7 +99,10 @@ const source: WorkSource = {
         sql` `,
       )} END`,
       reasonKeys: sql`ARRAY['finding:' || (${routingKind})]`,
-      owners: sql`CASE WHEN cardinality(${findingSources}) > 0 AND NOT EXISTS (SELECT 1 FROM unnest(${findingSources}) owner WHERE owner IS NULL OR owner <> finding."ledgerPartyId") THEN ARRAY[finding."ledgerPartyId"] ELSE ARRAY[NULL::uuid] END`,
+      owners: sql`(SELECT CASE WHEN cardinality(authority.owners) > 0
+        AND NOT EXISTS (SELECT 1 FROM unnest(authority.owners) owner WHERE owner IS NULL OR owner <> finding."ledgerPartyId")
+        THEN ARRAY[finding."ledgerPartyId"] ELSE ARRAY[NULL::uuid] END
+        FROM (SELECT ${findingSources} AS owners OFFSET 0) authority)`,
       exclusiveOwner: sql`finding."ledgerPartyId"`,
       ...workRecordFacts(sql`identity.kind`, sql`finding."entityId"`),
     })

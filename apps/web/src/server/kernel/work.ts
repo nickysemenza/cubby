@@ -86,6 +86,12 @@ export async function readNeedsYou(
   const offset = Math.max(0, Math.floor(options.offset ?? 0));
   const memberGap = sql`jsonb_path_query_first(s.gaps, '$[*] ? (@.actor == "you")')`;
   const memberActor = sql`s.gaps @> '[{"actor":"you"}]'::jsonb`;
+  const actionTokens = (gap: SQL) => sql`ARRAY(
+    SELECT DISTINCT ref.token
+    FROM jsonb_array_elements(coalesce((${gap})->'actions', '[]'::jsonb)) action
+    CROSS JOIN LATERAL (VALUES (action->>'subject'), (action->>${"field"})) ref(token)
+    WHERE ref.token IS NOT NULL
+  )`;
   const canonicalSubjects = (scopes: SQL) => sql`
     SELECT DISTINCT ON (ref."scopeKind", ref."scopeKey")
       ref."scopeKind", ref."scopeKey", e.id, e.kind AS entity, e.shortcode
@@ -112,11 +118,11 @@ export async function readNeedsYou(
       UNION ALL
       SELECT m."scopeKind", m."scopeKey", parsed.id, split_part(ref.token, ':', 1)
       FROM ${scopes} m
-      CROSS JOIN LATERAL jsonb_array_elements(coalesce(m.gap->'actions', '[]'::jsonb)) action
-      CROSS JOIN LATERAL (VALUES (action->>'subject'), (action->>${"field"})) ref(token)
+      CROSS JOIN LATERAL unnest(m.action_tokens) ref(token)
       CROSS JOIN LATERAL (
         SELECT CASE WHEN pg_input_is_valid(split_part(ref.token, ':', 2), ${"uuid"})
                     THEN split_part(ref.token, ':', 2)::uuid END AS id
+        OFFSET 0
       ) parsed
       WHERE ref.token = split_part(ref.token, ':', 1) || ':' || parsed.id::text
     ) ref
@@ -132,15 +138,19 @@ export async function readNeedsYou(
     WITH consumers AS MATERIALIZED (
       SELECT * FROM jsonb_to_recordset(${JSON.stringify(consumers)}::jsonb) c(entity text, kind text)
     ), member_scopes AS MATERIALIZED (
-      SELECT s."scopeKind", s."scopeKey", s.stage, ${memberGap} AS gap
+      SELECT s."scopeKind", s."scopeKey", s.stage,
+        gap->>${"input"} IS NOT NULL AS actionable, gap->>'since' AS since,
+        ${actionTokens(sql`gap`)} AS action_tokens
       FROM "ScopeState" s
+      CROSS JOIN LATERAL (SELECT ${memberGap} AS gap OFFSET 0) detail
       WHERE s."mergedIntoKey" IS NULL AND ${memberActor}
     ), actionable AS MATERIALIZED (
-      SELECT * FROM member_scopes WHERE gap->>${"input"} IS NOT NULL
+      SELECT "scopeKind", "scopeKey", stage, since, action_tokens
+      FROM member_scopes WHERE actionable
     ), eligible AS MATERIALIZED (
       SELECT DISTINCT ON (entity, shortcode) entity, shortcode, id, "scopeKind", "scopeKey", since, severity
       FROM (
-        SELECT subject.*, m.gap->>'since' AS since,
+        SELECT subject.*, m.since,
           min(${severity}) OVER (PARTITION BY subject.entity, subject.shortcode) AS severity
         FROM (${canonicalSubjects(sql`actionable`)}) subject
         JOIN actionable m USING ("scopeKind", "scopeKey")
@@ -175,15 +185,18 @@ export async function readNeedsYou(
       UNION
       SELECT m."scopeKind", m."scopeKey", p.id
       FROM member_scopes m
-      CROSS JOIN LATERAL jsonb_array_elements(coalesce(m.gap->'actions', '[]'::jsonb)) action
-      CROSS JOIN LATERAL (VALUES (action->>'subject'), (action->>${"field"})) ref(token)
-      JOIN page p ON ref.token = p.entity || ':' || p.id::text
-      WHERE m.gap->>${"input"} IS NULL
+      JOIN page p ON (p.entity || ':' || p.id::text) = ANY(m.action_tokens)
+      WHERE NOT m.actionable
     ), sibling_scopes AS MATERIALIZED (
-      SELECT s."scopeKind", s."scopeKey", s.stage, ${memberGap} AS gap
+      SELECT k."scopeKind", k."scopeKey", detail.stage, detail.action_tokens
       FROM (SELECT DISTINCT "scopeKind", "scopeKey" FROM siblings) k
-      JOIN "ScopeState" s USING ("scopeKind", "scopeKey")
-      WHERE s."mergedIntoKey" IS NULL AND (${memberGap})->>${"input"} IS NULL
+      CROSS JOIN LATERAL (
+        SELECT s.stage, ${actionTokens(memberGap)} AS action_tokens
+        FROM "ScopeState" s
+        WHERE s."scopeKind" = k."scopeKind" AND s."scopeKey" = k."scopeKey"
+          AND s."mergedIntoKey" IS NULL AND (${memberGap})->>${"input"} IS NULL
+        LIMIT 1
+      ) detail
     ), sibling_severity AS (
       SELECT subject.id, min(${severity}) AS severity
       FROM (${canonicalSubjects(sql`sibling_scopes`)}) subject

@@ -1,0 +1,1 @@
+CREATE INDEX "Decision_email_link_purchase_idx" ON "Decision" ((CASE WHEN "field" LIKE 'link:%' THEN substring("field" from 6)::uuid END)) WHERE "channel" = 'assignment' AND "subject" LIKE 'email:%' AND "field" LIKE 'link:%';

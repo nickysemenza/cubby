@@ -39,6 +39,18 @@ const emailLinkDecisionProjection = (
   WITH ${
     subjects
       ? sql`
+  ${
+    "purchaseIds" in subjects
+      ? sql`requested_link_targets AS MATERIALIZED (
+          ${subjects.purchaseIds}
+        ), link_targets AS (
+          SELECT id FROM requested_link_targets
+          UNION ALL
+          SELECT redirect.id FROM requested_link_targets requested
+          JOIN "Entity" redirect ON redirect."mergedIntoId" = requested.id
+        ),`
+      : sql``
+  }
   link_subjects AS MATERIALIZED (${
     "emailId" in subjects
       ? sql`SELECT 'email:'||${subjects.emailId} AS subject`
@@ -54,12 +66,11 @@ const emailLinkDecisionProjection = (
       AND link.subject LIKE 'email:%'`
         : sql`
     SELECT DISTINCT link.subject
-    FROM "Decision" link
-    LEFT JOIN "Entity" link_target ON link_target.id=CASE WHEN link.field LIKE 'link:%' THEN substring(link.field from 6)::uuid END
+    FROM link_targets target
+    JOIN "Decision" link ON
+      (CASE WHEN link.field LIKE 'link:%' THEN substring(link.field from 6)::uuid END) = target.id
     WHERE link.channel=${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)}
-      AND link.subject LIKE 'email:%' AND link.field LIKE 'link:%'
-      AND coalesce(link_target."mergedIntoId",link_target.id,
-        CASE WHEN link.field LIKE 'link:%' THEN substring(link.field from 6)::uuid END) IN (${subjects.purchaseIds})`
+      AND link.subject LIKE 'email:%' AND link.field LIKE 'link:%'`
   }
   ),
   relevant_subjects AS MATERIALIZED (
