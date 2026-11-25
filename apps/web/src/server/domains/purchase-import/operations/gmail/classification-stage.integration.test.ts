@@ -7,6 +7,7 @@ import { decisionChoiceFitsContext } from "~/server/ai/decision-model";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { mailTriagePrompt } from "~/server/ai/policy/prompts/mail";
 import { getDb } from "~/server/db/helpers";
+import { withKernelApply } from "~/server/db/kernel-apply-context";
 import { email as emailTable, orderMail, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 
@@ -260,10 +261,15 @@ describe("Gmail classification stage and reason", () => {
       });
       // Settled, with a verdict stored by an older classifier; the applied
       // prediction for the same bytes is current and not yet projected.
-      await getDb(ctx.db)
-        .update(emailTable)
-        .set({ status: "completed", classificationVersion: "synthetic-older" })
-        .where(eq(emailTable.id, first.id));
+      await withKernelApply(null, () =>
+        getDb(ctx.db)
+          .update(emailTable)
+          .set({
+            status: "completed",
+            classificationVersion: "synthetic-older",
+          })
+          .where(eq(emailTable.id, first.id)),
+      );
       const { emitWrites } = await import("~/server/kernel/api");
       await emitWrites(ctx.db, {
         table: emailTable,
