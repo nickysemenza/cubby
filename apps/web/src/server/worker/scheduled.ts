@@ -46,14 +46,19 @@ async function runHourlyBackstop(
               errors.push(error),
             );
             // A scheduled start revives a Pass that spent its attempts.
+            for (const pass of [runsReconcilePass, retentionPass])
+              await startPass(db, pass, { revive: true }).catch(
+                (error: unknown) => errors.push(error),
+              );
+            // A discovery page can outlive its claim lease, and a lapsed claim
+            // spends no attempt, so a revived one is claimed again while its
+            // statements still run. These stay spent until a member retries.
             for (const pass of [
-              runsReconcilePass,
-              retentionPass,
               purchaseDiscoveryPass,
               "email.purchase-discovery",
             ])
-              await startPass(db, pass, { revive: true }).catch(
-                (error: unknown) => errors.push(error),
+              await startPass(db, pass).catch((error: unknown) =>
+                errors.push(error),
               );
             await requestDerivedRebuild(db, { force: false }).catch(
               (error: unknown) => errors.push(error),
