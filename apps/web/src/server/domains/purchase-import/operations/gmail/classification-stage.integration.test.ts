@@ -261,15 +261,16 @@ describe("Gmail classification stage and reason", () => {
       });
       // Settled, with a verdict stored by an older classifier; the applied
       // prediction for the same bytes is current and not yet projected.
-      await withKernelApply(null, () =>
-        getDb(ctx.db)
+      // The builder runs when awaited, so the await sits inside the context.
+      await withKernelApply(null, async () => {
+        await getDb(ctx.db)
           .update(emailTable)
           .set({
             status: "completed",
             classificationVersion: "synthetic-older",
           })
-          .where(eq(emailTable.id, first.id)),
-      );
+          .where(eq(emailTable.id, first.id));
+      });
       const { emitWrites } = await import("~/server/kernel/api");
       await emitWrites(ctx.db, {
         table: emailTable,
