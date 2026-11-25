@@ -168,6 +168,16 @@ export async function runOnePass(
           "availableAt" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${result.availableAt ? sql`${result.availableAt.toISOString()}::timestamp` : sql`now()`} ELSE CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN "availableAt" ELSE least("availableAt", now()) END END,
           attempts = 0, "claimToken" = NULL, "claimDeadline" = NULL,
           "waitCause" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${result.done ? null : (result.waitCause ?? null)} ELSE CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN "waitCause" END END, "lastError" = NULL, "updatedAt" = now()
+          ${
+            result.durationSample
+              ? sql`, "durationHistory" = (
+            SELECT jsonb_agg(sample ORDER BY ordinal)
+            FROM jsonb_array_elements("durationHistory" || ${JSON.stringify([result.durationSample])}::jsonb)
+              WITH ORDINALITY recent(sample, ordinal)
+            WHERE ordinal > jsonb_array_length("durationHistory") - 11
+          )`
+              : sql``
+          }
         WHERE name = ${claimed.name} AND key = ${claimed.key}
         RETURNING ${isoText(sql`"availableAt"`)} AS at, "doneAt" IS NULL AND "availableAt" > now() AS wait`);
         const published = result.publish

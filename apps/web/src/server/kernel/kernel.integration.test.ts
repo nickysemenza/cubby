@@ -2156,6 +2156,51 @@ describe("evidence-facts kernel", () => {
     ).resolves.toBeUndefined();
   });
 
+  it("keeps the latest Pass durations only from live settlements without a publish callback", async () => {
+    const name = "fixture.pass-duration";
+    const at = "2026-01-01T00:00:00.000Z";
+    const history = Array.from({ length: 12 }, (_, index) => ({
+      ms: index + 1,
+      at,
+    }));
+    const sample = { ms: 20, at };
+    let lapse = true;
+    const pass = definePass({
+      name,
+      async run(db) {
+        if (lapse) {
+          await repositoryQueries(db).execute(
+            sql`UPDATE "Pass" SET "claimDeadline" = now() - interval '1 second' WHERE name = ${name}`,
+          );
+        }
+        return { cursor: { page: 1 }, done: true, durationSample: sample };
+      },
+    });
+    const kernel = createKernel([
+      defineModule({ name: "pass-duration", passes: [pass] }),
+    ]);
+    const q = repositoryQueries(ctx.db);
+    await kernel.startPass(ctx.db, pass);
+    await q.execute(
+      sql`UPDATE "Pass" SET "durationHistory" = ${JSON.stringify(history)}::jsonb WHERE name = ${name}`,
+    );
+    const read = async () =>
+      (
+        await q.execute<{ cursor: unknown; durationHistory: unknown }>(
+          sql`SELECT cursor, "durationHistory" FROM "Pass" WHERE name = ${name}`,
+        )
+      ).rows;
+
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+    expect(await read()).toEqual([{ cursor: null, durationHistory: history }]);
+
+    lapse = false;
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+    expect(await read()).toEqual([
+      { cursor: { page: 1 }, durationHistory: [...history.slice(1), sample] },
+    ]);
+  });
+
   it("keeps a wake and its newer cursor when a holder publishes an older completion or wait", async () => {
     let page = 0;
     const pass = definePass({

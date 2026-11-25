@@ -594,6 +594,8 @@ export type PassResult = {
   done: boolean;
   availableAt?: Date;
   waitCause?: KernelWaitCause;
+  /** Record a page duration in the Pass row at settlement. */
+  durationSample?: { ms: number; at: string };
   /** Publish prepared output in the same fenced transaction as the cursor. */
   publish?(tx: Database): Promise<void>;
 };

@@ -563,8 +563,9 @@ attempt counts and use their own retry delays. A claim that outlives its
 deadline cannot publish. A Pass page with a publish callback takes the gate,
 fences its claim and commits the callback with its cursor and completion.
 A page without a callback fences its claim and settles only its own Pass row
-in a transaction without the gate. The wake version governs cursor and
-completion updates in both cases. Queue permits
+in a transaction without the gate. Settlement appends any duration sample
+and keeps the latest twelve on the Pass row. The wake version governs cursor
+and completion updates in both cases. Queue permits
 and the hourly cron stay as the wake and the backstop (ADR 0025 item 2). A
 permit is sent only for claimable work: runner-claimable work that is due now
 or falls due at a known time. The next wake is the least time a runner claim
