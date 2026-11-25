@@ -60,7 +60,11 @@ async function writeEmailState(
   } = await import("~/server/kernel/api");
   const { emailStateColumns, emailPredictionEvidence } =
     await import("~/server/domains/email/repo/email-state");
-  const { gmailPublicationTransaction, deferEmailStateReconcile } =
+  const {
+    gmailPublicationTransaction,
+    deferEmailStateReconcile,
+    reconcileDeferredEmailState,
+  } =
     await import("~/server/domains/purchase-import/repo/gmail/admitted-source");
   // Inside a Gmail publication the write joins it (see `joinGmailPublication`).
   const write = (
@@ -70,6 +74,8 @@ async function writeEmailState(
       ? reportHouseholdBusy(() => work(source))
       : householdWrite(source, work);
   return write(async (database) => {
+    // The after image and the previous prediction read derived columns.
+    await reconcileDeferredEmailState(source);
     const q = repositoryQueries(database);
     const authored = Object.fromEntries(
       Object.entries(values).filter(

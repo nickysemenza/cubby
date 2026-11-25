@@ -10,12 +10,14 @@ import {
 } from "~/server/db/schema";
 import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-sql";
 import { hasRetainedEmailImportContent } from "~/server/domains/purchase-import/repo/email-content";
+import { reconcileDeferredEmailState } from "~/server/domains/purchase-import/repo/gmail/admitted-source";
 import { recordChange } from "~/server/generic/changes/repo/change";
 
 /** Gmail ingest's own reads and writes on Email and its retained original. */
 
 /** The member's classification override for one Email, if any. */
 export async function readMemberClassification(db: Database, emailId: EmailId) {
+  await reconcileDeferredEmailState(db);
   const [member] = await getDb(db)
     .select({ classification: emailMemberClassificationSql() })
     .from(emailTable)

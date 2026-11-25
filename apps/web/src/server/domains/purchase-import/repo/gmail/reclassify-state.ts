@@ -16,6 +16,8 @@ import { email as emailTable, ledgerParty, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
+import { reconcileDeferredEmailState } from "./admitted-source";
+
 /** Member-owned Gmail Emails and the Runs that hold a member-requested rerun. */
 
 export type OwnedEmail = typeof emailTable.$inferSelect;
@@ -178,6 +180,8 @@ export async function queueSearchClassification(
   actor: ActorContext,
   email: OwnedEmail,
 ) {
+  // Run creation below writes outside the joined writers.
+  await reconcileDeferredEmailState(db);
   const started = await startReclassifyRun(
     db,
     actor,

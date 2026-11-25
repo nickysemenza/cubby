@@ -75,6 +75,7 @@ import { enterWriteTransaction } from "~/server/kernel/gate";
 import {
   deferClassificationRefresh,
   joinGmailPublication,
+  reconcileDeferredEmailState,
 } from "./admitted-source";
 import {
   orderMailAttachmentKey,
@@ -297,6 +298,7 @@ export async function readEmail(
   db: Database,
   input: { ledgerPartyId: string; mailboxId: string; messageId: string },
 ) {
+  await reconcileDeferredEmailState(db);
   const [row] = await getDb(db)
     .select()
     .from(emailTable)
