@@ -16,7 +16,7 @@ export async function updateEmailStateWhere(
   values: Changes,
   where: SQL | undefined,
 ) {
-  return writeEmailState(db, values, where, true);
+  return writeEmailState(db, values, where, "readBack");
 }
 
 /** {@link updateEmailStateWhere} for a writer that does not read the rows back. */
@@ -25,14 +25,29 @@ export async function writeEmailStateWhere(
   values: Changes,
   where: SQL | undefined,
 ): Promise<void> {
-  await writeEmailState(db, values, where, false);
+  await writeEmailState(db, values, where, "write");
+}
+
+/**
+ * {@link updateEmailStateWhere} for a writer that reconciles the returned
+ * Emails itself later in the same transaction. Their derived columns are
+ * still the pre-write values.
+ */
+export async function writeUnreconciledEmailStateWhere(
+  db: DrizzleTransaction,
+  values: Changes,
+  where: SQL | undefined,
+): Promise<string[]> {
+  return (await writeEmailState(db, values, where, "caller")).map(
+    (row) => row.id,
+  );
 }
 
 async function writeEmailState(
   db: Database | DrizzleTransaction,
   values: Changes,
   where: SQL | undefined,
-  readBack: boolean,
+  settle: "readBack" | "write" | "caller",
 ) {
   const source = isTransaction(db) ? databaseForTransaction(db) : db;
   const {
@@ -45,7 +60,11 @@ async function writeEmailState(
   } = await import("~/server/kernel/api");
   const { emailStateColumns, emailPredictionEvidence } =
     await import("~/server/domains/email/repo/email-state");
-  const { gmailPublicationTransaction } =
+  const {
+    gmailPublicationTransaction,
+    deferEmailStateReconcile,
+    reconcileDeferredEmailState,
+  } =
     await import("~/server/domains/purchase-import/repo/gmail/admitted-source");
   // Inside a Gmail publication the write joins it (see `joinGmailPublication`).
   const write = (
@@ -55,6 +74,8 @@ async function writeEmailState(
       ? reportHouseholdBusy(() => work(source))
       : householdWrite(source, work);
   return write(async (database) => {
+    // The after image and the previous prediction read derived columns.
+    await reconcileDeferredEmailState(source);
     const q = repositoryQueries(database);
     const authored = Object.fromEntries(
       Object.entries(values).filter(
@@ -110,7 +131,10 @@ async function writeEmailState(
         ) {
           const { recordEmailClassificationApplication } =
             await import("~/server/domains/purchase-import/repo/gmail/observations");
-          await recordEmailClassificationApplication(database, previous.id);
+          // Reconciled with the written rows below.
+          await recordEmailClassificationApplication(database, previous.id, {
+            reconcile: false,
+          });
         } else {
           await append(database, [
             evidenceRow(emailPredictionEvidence, {
@@ -131,11 +155,20 @@ async function writeEmailState(
         // the rows; without one they are exactly as written.
         ...(requested.length ? {} : { after: rows }),
       });
-    await reconcileNow(
-      database,
-      rows.map((row) => ({ kind: "emailState", key: row.id })),
-    );
-    return readBack && rows.length
+    if (settle === "caller") return rows;
+    // A read-back needs the reconciled rows now.
+    if (
+      settle === "readBack" ||
+      !deferEmailStateReconcile(
+        source,
+        rows.map((row) => row.id),
+      )
+    )
+      await reconcileNow(
+        database,
+        rows.map((row) => ({ kind: "emailState", key: row.id })),
+      );
+    return settle === "readBack" && rows.length
       ? q
           .select()
           .from(email)

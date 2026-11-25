@@ -34,7 +34,10 @@ import { publishRunFinding } from "~/server/domains/run/repo/run-finding";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { joinGmailPublication } from "./admitted-source";
+import {
+  deferEmailStateReconcile,
+  joinGmailPublication,
+} from "./admitted-source";
 
 /** {@link withHouseholdWrite}, joining an enclosing Gmail publication instead. */
 const publicationHouseholdWrite = <T>(
@@ -308,38 +311,57 @@ export async function recordEmailClassificationObservation(
   });
 }
 
-/** Called inside the transaction that publishes the effective Email routing. */
+/**
+ * Called inside the transaction that publishes the effective Email routing.
+ * `reconcile: false` is for a writer that reconciles the Email itself. It
+ * reads no derived Email column, so inside a Gmail publication it joins
+ * without reconciling earlier deferred writes: the next reader or the
+ * publication's last reconcile covers both.
+ */
 export async function recordEmailClassificationApplication(
   db: Database,
   predictionId: string,
+  options: { reconcile?: false } = {},
 ) {
-  return publicationHouseholdWrite(db, async (tx) => {
-    const rows = await tx
-      .update(emailClassificationObservation)
-      .set({ application: "applied" })
-      .where(
-        and(
-          eq(emailClassificationObservation.id, predictionId),
-          ne(emailClassificationObservation.application, "applied"),
-        ),
+  return joinGmailPublication(
+    db,
+    async (tx) => {
+      const rows = await tx
+        .update(emailClassificationObservation)
+        .set({ application: "applied" })
+        .where(
+          and(
+            eq(emailClassificationObservation.id, predictionId),
+            ne(emailClassificationObservation.application, "applied"),
+          ),
+        )
+        .returning();
+      if (!rows.length) return;
+      const { emitWrites, reconcileNow } = await import("~/server/kernel/api");
+      const scopes = rows.map((row) => ({
+        kind: "emailState",
+        key: row.emailId,
+      }));
+      const database = databaseForTransaction(tx);
+      await emitWrites(database, {
+        table: emailClassificationObservation,
+        ids: [predictionId],
+        columns: ["application"],
+        discovers: scopes,
+        after: rows,
+      });
+      if (
+        options.reconcile !== false &&
+        !deferEmailStateReconcile(
+          db,
+          rows.map((row) => row.emailId),
+        )
       )
-      .returning();
-    if (!rows.length) return;
-    const { emitWrites, reconcileNow } = await import("~/server/kernel/api");
-    const scopes = rows.map((row) => ({
-      kind: "emailState",
-      key: row.emailId,
-    }));
-    const database = databaseForTransaction(tx);
-    await emitWrites(database, {
-      table: emailClassificationObservation,
-      ids: [predictionId],
-      columns: ["application"],
-      discovers: scopes,
-      after: rows,
-    });
-    await reconcileNow(database, scopes);
-  });
+        await reconcileNow(database, scopes);
+    },
+    withHouseholdWrite,
+    { busy: true, deferred: true },
+  );
 }
 
 /** Missing originals retain raw provider diagnostics without inventing a prediction. */

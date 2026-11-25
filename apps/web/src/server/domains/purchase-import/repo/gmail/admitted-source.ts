@@ -106,8 +106,14 @@ type GmailPublicationContext = {
   recordObservation: (observation: PublishedObservation | null) => void;
 };
 
-/** The transaction of the Gmail publication running in this async context. */
-const publications = new AsyncLocalStorage<DrizzleTransaction>();
+/**
+ * The Gmail publication running in this async context: its transaction and
+ * the Emails whose state reconcile it has deferred.
+ */
+const publications = new AsyncLocalStorage<{
+  tx: DrizzleTransaction;
+  emails: Set<string>;
+}>();
 
 /**
  * The transaction of the Gmail publication `db` runs inside, if any. A gated
@@ -118,7 +124,7 @@ const publications = new AsyncLocalStorage<DrizzleTransaction>();
 export function gmailPublicationTransaction(
   db: Database,
 ): DrizzleTransaction | undefined {
-  const publication = publications.getStore();
+  const publication = publications.getStore()?.tx;
   const tx = boundTransaction(db);
   let candidate: Database | undefined = publication && tx ? db : undefined;
   while (candidate && boundTransaction(candidate) !== publication)
@@ -127,9 +133,55 @@ export function gmailPublicationTransaction(
 }
 
 /**
+ * Inside a Gmail publication, an Email state write leaves its emailState
+ * scopes dirty instead of reconciling them. The publication reconciles them
+ * before the next step that reads derived Email columns or writes an
+ * emailState input ({@link reconcileDeferredEmailState}), and after its last
+ * write, still under the gate. Every such step therefore sees what a
+ * reconcile after each write showed it; only reconciles no step reads are
+ * merged. Returns false outside a publication: the writer reconciles itself.
+ */
+export function deferEmailStateReconcile(
+  db: Database,
+  emailIds: readonly string[],
+): boolean {
+  if (!gmailPublicationTransaction(db)) return false;
+  const emails = publications.getStore()!.emails;
+  for (const id of emailIds) emails.add(id);
+  return true;
+}
+
+/**
+ * Reconcile the Emails whose state reconcile this publication deferred.
+ * Inside a publication, every read of derived Email columns (classification,
+ * resolution, relationship facts, a prediction snapshot or a write's after
+ * image) and every write of an emailState input calls this first. Gated
+ * writers joined through {@link joinGmailPublication} do so on joining.
+ */
+export async function reconcileDeferredEmailState(db: Database) {
+  if (!gmailPublicationTransaction(db)) return;
+  await reconcileEmailState(db, publications.getStore()!.emails);
+}
+
+async function reconcileEmailState(db: Database, emails: Set<string>) {
+  if (!emails.size) return;
+  const keys = [...emails];
+  emails.clear();
+  await (
+    await import("~/server/kernel/api")
+  ).reconcileNow(
+    db,
+    keys.map((key) => ({ kind: "emailState", key })),
+  );
+}
+
+/**
  * Run a gated writer's `work` joined to its enclosing Gmail publication, or
- * in its own `open` boundary elsewhere. `busy` keeps a member household
- * write's lock-timeout error.
+ * in its own `open` boundary elsewhere. A joined writer first reconciles the
+ * publication's deferred Email state; `deferred: true` is only for a writer
+ * that neither reads derived Email columns nor needs earlier writes
+ * reconciled before its own. `busy` keeps a member household write's
+ * lock-timeout error.
  */
 export function joinGmailPublication<T>(
   db: Database,
@@ -138,11 +190,15 @@ export function joinGmailPublication<T>(
     db: Database,
     work: (tx: DrizzleTransaction) => Promise<T>,
   ) => Promise<T>,
-  options: { busy?: true } = {},
+  options: { busy?: true; deferred?: true } = {},
 ): Promise<T> {
   const tx = gmailPublicationTransaction(db);
   if (!tx) return open(db, work);
-  return options.busy ? reportHouseholdBusy(() => work(tx)) : work(tx);
+  const joined = async () => {
+    if (!options.deferred) await reconcileDeferredEmailState(db);
+    return work(tx);
+  };
+  return options.busy ? reportHouseholdBusy(joined) : joined();
 }
 
 /** Provider/model IO is complete. Admission wins before this publication boundary. */
@@ -280,7 +336,8 @@ export async function publishGmailEvidence<T>(
       ))
     )
       return decline("frozen", current ?? null);
-    const result = await publications.run(tx, () =>
+    const emails = new Set<string>();
+    const result = await publications.run({ tx, emails }, () =>
       publish(txDb, current ?? null, {
         scope,
         recordObservation: (recorded) => {
@@ -289,6 +346,8 @@ export async function publishGmailEvidence<T>(
         },
       }),
     );
+    // Receipts below read the reconciled classification.
+    await reconcileEmailState(txDb, emails);
     if (input.recordHandlingReceipt !== false)
       await (
         await import("~/server/domains/email/repo/discovery-email-audit")

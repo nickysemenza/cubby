@@ -63,7 +63,7 @@ import {
   readEmailAcceptedSourceOrders,
   readEmailPurchaseAssociations,
 } from "~/server/domains/email/repo/email-purchase-associations";
-import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
+import { writeUnreconciledEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import { attachFileToEntity } from "~/server/domains/image/repo/image-storage";
 import {
   readRetainedMail,
@@ -829,11 +829,12 @@ export async function settleMail(
         },
         actor,
       );
-    const settledEmails = await updateEmailStateWhere(
+    // Reconciled once below, after the Run outcome it reads.
+    const settledEmails = await writeUnreconciledEmailStateWhere(
       tx,
       settled,
       identity,
-    ).then((rows) => rows.map((row) => ({ id: row.id })));
+    ).then((ids) => ids.map((id) => ({ id })));
     const outcomes: string[] = [];
     if (input.importRunId && input.mail.id) {
       if (settledEmails.length !== 1)

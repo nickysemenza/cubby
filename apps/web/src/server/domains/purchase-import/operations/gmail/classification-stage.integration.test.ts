@@ -1,3 +1,4 @@
+import { MAILBOX_RESEARCH_VERSION } from "@cubby/schemas/mailbox-research";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
@@ -6,6 +7,7 @@ import { decisionChoiceFitsContext } from "~/server/ai/decision-model";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { mailTriagePrompt } from "~/server/ai/policy/prompts/mail";
 import { getDb } from "~/server/db/helpers";
+import { withKernelApply } from "~/server/db/kernel-apply-context";
 import { email as emailTable, orderMail, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 
@@ -208,4 +210,144 @@ describe("Gmail classification stage and reason", () => {
       ).toEqual([]);
     },
   );
+
+  // An Email whose emailState scope is stale when a publication starts: its
+  // first write's reconcile must reach the publication's later reads.
+  describe("with a stale emailState scope", () => {
+    const observed =
+      (historyId: string): GmailProvider["getMessage"] =>
+      async (id) => ({
+        ...(await message("Order #SYN-7 total $18.00 receipt")(id)),
+        historyId,
+      });
+    const party = (name: string) =>
+      insertWithShortcode(ctx.db, "ledgerParty", {
+        name,
+        kind: "member",
+        userId: ctx.actor.userId,
+      });
+    const read = async (messageId: string) => {
+      const [row] = await getDb(ctx.db)
+        .select({
+          id: emailTable.id,
+          status: emailTable.status,
+          classification: emailTable.classification,
+          classificationVersion: emailTable.classificationVersion,
+          contentClearedAt: emailTable.contentClearedAt,
+          content: orderMail.content,
+        })
+        .from(emailTable)
+        .leftJoin(orderMail, eq(orderMail.id, emailTable.orderMailId))
+        .where(eq(emailTable.messageId, messageId));
+      if (!row) throw new Error("Synthetic Email missing");
+      return row;
+    };
+
+    it("keeps settled mail settled when only its stored verdict version is stale", async () => {
+      const owner = await party("Stale verdict member");
+      const ingest = (historyId: string) =>
+        ingestGmailMessages(ctx.db, provider(observed(historyId)), {
+          ledgerPartyId: owner.id,
+          mailboxId: "synthetic-mailbox",
+          messageIds: ["stale-verdict"],
+          triage: async () => "related",
+          storage,
+        });
+      await ingest("1");
+      const first = await read("stale-verdict");
+      expect(first).toMatchObject({
+        status: "pending",
+        classification: "related",
+      });
+      // Settled, with a verdict stored by an older classifier; the applied
+      // prediction for the same bytes is current and not yet projected.
+      // The builder runs when awaited, so the await sits inside the context.
+      await withKernelApply(null, async () => {
+        await getDb(ctx.db)
+          .update(emailTable)
+          .set({
+            status: "completed",
+            classificationVersion: "synthetic-older",
+          })
+          .where(eq(emailTable.id, first.id));
+      });
+      const { emitWrites } = await import("~/server/kernel/api");
+      await emitWrites(ctx.db, {
+        table: emailTable,
+        ids: [first.id],
+        columns: ["classificationVersion"],
+        discovers: [{ kind: "emailState", key: first.id }],
+      });
+      // A new history id makes the publication write metadata first.
+      await ingest("2");
+      expect(await read("stale-verdict")).toMatchObject({
+        status: "completed",
+        classification: "related",
+        classificationVersion: MAILBOX_RESEARCH_VERSION,
+      });
+    });
+
+    it("keeps a retained original an unprojected member resolution protects from reclassify", async () => {
+      const owner = await party("Pending resolution member");
+      const runId = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "mail_discovery",
+        status: "running",
+        trigger: "manual",
+        input: {
+          mailboxId: "synthetic-mailbox",
+          scopedQueries: [],
+          executionPolicy: "classification_only",
+        },
+      });
+      await ingestGmailMessages(ctx.db, provider(observed("1")), {
+        ledgerPartyId: owner.id,
+        mailboxId: "synthetic-mailbox",
+        messageIds: ["pending-resolution"],
+        triage: async () => "uncertain",
+        relevance: async () => ({ classification: "uncertain" }),
+        runId,
+        storage,
+      });
+      const stored = await read("pending-resolution");
+      expect(stored.classification).toBe("uncertain");
+      await getDb(ctx.db)
+        .update(emailTable)
+        .set({ status: "unsettled" })
+        .where(eq(emailTable.id, stored.id));
+      // The member's related assignment, recorded but not yet projected.
+      const { decide } = await import("~/server/kernel/api");
+      await decide(ctx.db, ctx.actor, [
+        {
+          channel: "assignment",
+          kind: "set",
+          subject: `email:${stored.id}`,
+          field: "classification",
+          value: "related",
+          scopes: [{ kind: "emailState", key: stored.id }],
+        },
+      ]);
+      const outcome = await ingestGmailMessages(
+        ctx.db,
+        provider(observed("2")),
+        {
+          ledgerPartyId: owner.id,
+          mailboxId: "synthetic-mailbox",
+          messageIds: ["pending-resolution"],
+          triage: async () => "unrelated",
+          reclassify: true,
+          storage,
+        },
+      );
+      expect(outcome.kept).toEqual([
+        { messageId: "pending-resolution", reason: "resolution_kept" },
+      ]);
+      expect(outcome.unrelated).toEqual([]);
+      const kept = await read("pending-resolution");
+      expect(kept).toMatchObject({
+        classification: "related",
+        contentClearedAt: null,
+      });
+      expect(kept.content?.bodyText).toBe("Order #SYN-7 total $18.00 receipt");
+    });
+  });
 });
