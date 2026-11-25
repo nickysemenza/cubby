@@ -121,6 +121,8 @@ type DerivedPart =
       readonly sql: SQL;
       readonly nulls?: "high";
       readonly direction?: "asc" | "desc";
+      /** A selective predicate for supported option sets; otherwise use the scalar. */
+      readonly matchOptions?: (values: readonly string[]) => SQL | undefined;
     };
 
 /**
@@ -486,6 +488,22 @@ const derivedValueParts = (
 const isCompound = (
   value: DerivedValue,
 ): value is readonly [DerivedPart, ...DerivedPart[]] => Array.isArray(value);
+
+/** A selective alternative to comparing a derived scalar with option values. */
+export const derivedOptionMatch = (
+  entity: Entity,
+  derived: AnyDerivedSql,
+  key: string,
+  context: ListContext,
+  values: readonly string[],
+): SQL | undefined => {
+  if (!derived[key]) return undefined;
+  const parts = derivedValueParts(entity, derived, key, context);
+  const part = parts[0];
+  return parts.length === 1 && part && !(part instanceof SQL)
+    ? part.matchOptions?.(values)
+    : undefined;
+};
 
 /** A derived value field's single SQL expression in `context`. */
 export const derivedValueSql = (

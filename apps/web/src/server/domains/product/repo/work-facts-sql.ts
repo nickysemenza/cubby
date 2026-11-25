@@ -47,18 +47,24 @@ const disposedProductIds = () =>
     );
 
 /** `productAlias` is the enclosing plain select's alias, e.g. `"Product"`. */
-export const productWorkFactsSql = (productAlias: string) => {
+export const productWorkFactsSql = (
+  productAlias: string,
+  hasPlacement: SQL,
+) => {
   const onHand = sql.raw(onHandUnitsSql(productAlias));
   const expected = sql.raw(expectedQuantitySql(productAlias));
   const id = sql.raw(`${productAlias}."id"`);
-  // CASE keeps the recursive ledger behind the stock and disposal gates
-  // when Work projects these predicates for every live Product.
+  const componentParents = sql`SELECT link."fromEntityId" FROM "EntityLink" link
+    WHERE link."kind" = 'productComponent' AND ${notDeleted("link")}`;
+  // Identify the stock and evidence populations before probing any ledger.
   return {
-    kitAccounting: sql<boolean>`(SELECT CASE WHEN parts.accounted > 0 THEN
-      CASE WHEN ${onHand} > 0 THEN ${onHand} + parts.accounted > ${expected}
-        ELSE false END
-      ELSE false END FROM (${partsAccountedKits(id)}) parts)`,
-    ownershipReconciliation: sql<boolean>`CASE WHEN ${id} IN (${disposedProductIds()}) THEN
+    kitAccounting: sql<boolean>`CASE WHEN (${hasPlacement}) AND ${id} IN (${componentParents}) THEN
+      (SELECT CASE WHEN stock.units > 0 AND parts.accounted > 0
+        THEN stock.units + parts.accounted > ${expected} ELSE false END
+       FROM (SELECT ${onHand} AS units OFFSET 0) stock,
+            (${partsAccountedKits(id)}) parts)
+      ELSE false END`,
+    ownershipReconciliation: sql<boolean>`CASE WHEN (${hasPlacement}) AND ${id} IN (${disposedProductIds()}) THEN
       CASE WHEN ${onHand} > 0 THEN ${sql.raw(knownNonpositiveQuantitySql(productAlias))}
         ELSE false END
       ELSE false END`,

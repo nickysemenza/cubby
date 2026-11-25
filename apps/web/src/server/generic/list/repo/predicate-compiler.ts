@@ -65,6 +65,7 @@ import {
   derivedFieldsOf,
   derivedPredicateSql,
   derivedIntervalSql,
+  derivedOptionMatch,
   derivedValueSet,
   derivedValueSql,
   type AnyDerivedSql,
@@ -494,14 +495,18 @@ const derivedFilterPredicates = (
         ];
       }
       default: {
-        const list = optionalTextList.parse(value);
+        const list = nonEmpty(optionalTextList.parse(value));
+        const match = list
+          ? derivedOptionMatch(entity, derived, derivedKey, context, list)
+          : undefined;
         return [
           or(
-            list === undefined || list.length === 0
-              ? undefined
-              : test(
-                  (column) => sql`${column} = ANY(${columnArrayParam(list)})`,
-                ),
+            match
+              ? (input?.project?.(match) ?? match)
+              : list &&
+                  test(
+                    (column) => sql`${column} = ANY(${columnArrayParam(list)})`,
+                  ),
             valuePresence(field.type, test, presence),
           ),
         ];

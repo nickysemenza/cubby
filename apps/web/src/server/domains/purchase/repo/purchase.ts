@@ -180,7 +180,10 @@ import {
   logAuditEntries,
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
-import { gapCondition } from "~/server/generic/data-quality/repo/sql";
+import {
+  gapCondition,
+  publishedGapMembership,
+} from "~/server/generic/data-quality/repo/sql";
 import {
   loadPurchaseDocumentEvidence,
   loadPurchaseExpenseEvidence,
@@ -379,7 +382,13 @@ export const purchaseScaffold = listScaffold("purchase", purchase, {
       ELSE ${purchaseExpenseStatus.enum.priced}::text END`,
     hasDocuments: sql`${purchaseDocumentCount} > 0`,
     financialReconciliation: sql`CASE WHEN ${gapCondition("purchase", "settlement_mismatch", purchase)} THEN ${purchaseFinancialReconciliation.enum.mismatch}::text END`,
-    reconciliation: reconciliationSql(),
+    reconciliation: {
+      sql: reconciliationSql(),
+      matchOptions: (values) =>
+        values.every((value) => value === purchaseReconciliation.enum.mismatch)
+          ? publishedGapMembership("purchase", "paperwork_mismatch", purchase)
+          : undefined,
+    },
     effectivePurchaser: {
       value: purchasePurchaserSql,
       set: purchasePurchaserSetSql,

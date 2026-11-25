@@ -151,40 +151,41 @@ async function prepareConnectedPage(input: ConnectedRecordsInput) {
   const targetFilter = input.targetIds
     ? sql`AND t."shortcode" = ANY(${textArrayParam(input.targetIds)})`
     : sql``;
-  const routeQueries = await Promise.all(
-    routes.map(
-      async (route) => sql`
-      SELECT t."shortcode" AS "targetId",
-        ${await labelSql(view.target, "t")} AS "targetLabel",
-        ${route.hops}::int AS "hops",
-        ${route.path} AS "path"
-      FROM ${sql.raw(`"${rootTable}"`)} s
-      ${route.traversal.joins}
-      WHERE s."shortcode" = ${source.entityId}
-        ${rootLiveness}
-        ${targetFilter}
-    `,
-    ),
+  const fromRoute = (route: (typeof routes)[number]) => sql`
+    FROM ${sql.raw(`"${rootTable}"`)} s
+    ${route.traversal.joins}
+    WHERE s."shortcode" = ${source.entityId}
+      ${rootLiveness}
+      ${targetFilter}`;
+  const targetIds = routes.map(
+    (route) => sql`SELECT DISTINCT t."id" ${fromRoute(route)}`,
   );
+  const evidence = routes.map(
+    (
+      route,
+    ) => sql`SELECT DISTINCT t."shortcode" AS "targetId", ${route.hops}::int AS hops, ${route.path} AS path
+      ${fromRoute(route)} AND t."id" IN (SELECT id FROM page)`,
+  );
+  const targetTable = entityManifest[view.target].dbTable;
+  if (!targetTable) throw new Error(`No local table for ${view.target}`);
   const query = sql`
-    WITH paths AS (${sql.join(routeQueries, sql` UNION ALL `)}),
-      unique_paths AS (
-        SELECT DISTINCT "targetId", "targetLabel", "hops", "path" FROM paths
+    WITH target_ids AS (${sql.join(targetIds, sql` UNION `)}),
+      targets AS MATERIALIZED (
+        SELECT t.id, t."shortcode" AS "targetId"
+        FROM target_ids JOIN ${sql.identifier(targetTable)} t USING (id)
       ),
-      targets AS (
-        SELECT "targetId", max("targetLabel") AS "targetLabel"
-        FROM unique_paths GROUP BY "targetId"
-      ),
-      page AS (
-        SELECT * FROM targets
+      page AS MATERIALIZED (
+        SELECT t.id, targets."targetId", ${await labelSql(view.target, "t")} AS "targetLabel"
+        FROM targets JOIN ${sql.identifier(targetTable)} t USING (id)
         ORDER BY "targetLabel", "targetId"
         LIMIT ${input.limit ?? 20} OFFSET ${input.offset ?? 0}
       ),
+      unique_paths AS (${sql.join(evidence, sql` UNION `)}),
       page_items AS (
         SELECT page."targetId", page."targetLabel",
-          min(evidence."hops")::int AS "shortestHops",
-          jsonb_agg(evidence."path" ORDER BY evidence."hops", evidence."path"::text) AS "paths"
-        FROM page JOIN unique_paths evidence ON evidence."targetId" = page."targetId"
+          min(evidence.hops)::int AS "shortestHops",
+          jsonb_agg(evidence.path ORDER BY evidence.hops, evidence.path::text) AS "paths"
+        FROM page JOIN unique_paths evidence USING ("targetId")
         GROUP BY page."targetId", page."targetLabel"
       )
     SELECT (SELECT count(*)::int FROM targets) AS "totalCount",

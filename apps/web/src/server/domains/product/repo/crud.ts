@@ -252,6 +252,11 @@ const productIdsServingAsLocations = qb
   .from(location)
   .where(and(notDeleted(location), isNotNull(location.productId)));
 
+const productHasPlacement = sql`(
+  ${product.id} IN (${productIdsWithLiveInventory})
+  OR ${product.id} IN (${productIdsServingAsLocations})
+)`;
+
 const productIdsWithExpenses = qb
   .select({ productId: expense.productId })
   .from(expense)
@@ -336,15 +341,12 @@ export const productScaffold = listScaffold<
     // Live stock/direct-Expense gates; null variance (incomparable
     // quantities) has no state.
     quantityVarianceState: sql`CASE WHEN ${and(
-      or(
-        inArray(product.id, productIdsWithLiveInventory),
-        inArray(product.id, productIdsServingAsLocations),
-      ),
+      productHasPlacement,
       inArray(product.id, productIdsWithExpenses),
     )} THEN CASE ${sql.raw(quantityVarianceSql('"Product"'))} = 0
         WHEN true THEN ${productQuantityVarianceState.enum.matched}::text
         WHEN false THEN ${productQuantityVarianceState.enum.mismatched}::text END END`,
-    ...productWorkFactsSql('"Product"'),
+    ...productWorkFactsSql('"Product"', productHasPlacement),
     // Same fragment the cell renders (relations.ts) and both filters use.
     purchaseDate: productAcquisitionDateFilterSql(product.id),
     upcPresence: inArray(

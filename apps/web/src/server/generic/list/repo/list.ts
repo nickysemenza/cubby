@@ -136,6 +136,7 @@ import {
   derivedFieldsOf,
   derivedOrderBy,
   derivedPrepare,
+  derivedOptionMatch,
   declaredRollup,
   declaredRollups,
   declaredResultProjections,
@@ -689,7 +690,7 @@ export function listScaffold<
         phase.recentBy === null || phase.recentDays === null
           ? null
           : scalarSql(phase.recentBy, context);
-      return sql`(CASE${phase.needs.length ? sql` WHEN ${among(state, phase.needs)} THEN ${"needs"}::text` : sql``}${
+      const value = sql`(CASE${phase.needs.length ? sql` WHEN ${among(state, phase.needs)} THEN ${"needs"}::text` : sql``}${
         phase.stalled === null
           ? sql``
           : sql` WHEN (${scalarSql(phase.stalled, context)}) IS TRUE THEN ${"needs"}::text`
@@ -698,6 +699,21 @@ export function listScaffold<
           ? sql``
           : sql` WHEN ${recentBy} < now() - make_interval(days => ${phase.recentDays}::int) THEN ${"older"}::text`
       } ELSE ${"finished"}::text END)`;
+      return {
+        sql: value,
+        matchOptions: (values) =>
+          values.every((option) => option === "needs") &&
+          phase.stalled === null &&
+          phase.needs.length > 0
+            ? derivedOptionMatch(
+                entity,
+                derivedSql,
+                phase.state,
+                context,
+                phase.needs,
+              )
+            : undefined,
+      };
     });
   }
   const readDeclaration: ListReadDeclaration<Row> = options?.read ?? {};

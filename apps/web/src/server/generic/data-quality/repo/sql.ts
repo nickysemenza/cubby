@@ -63,6 +63,16 @@ export const gapCondition = (
     sql`coalesce(${storedCheckStateSql(entity, check, t)} = ${state("gap")}, false)`,
   );
 
+/** Start a positive gap filter on its publication and join the owning list by id. */
+export const publishedGapMembership = (
+  entity: ScoredEntity,
+  check: DataCheck,
+  t: ScoredTable,
+): SQL => sql`${t.id} IN (
+  SELECT dq."entityId" FROM "QualitySnapshot" dq
+  WHERE dq.kind = ${entity} AND dq.checks->>${check} = ${state("gap")}
+)`;
+
 const orGroup = (conditions: readonly SQL[]): SQL =>
   conditions.length === 0
     ? group(sql`false`)
