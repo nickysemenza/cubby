@@ -215,7 +215,11 @@ import {
   resolveProductPricing,
 } from "./pricing";
 import { storedEffectivePrice } from "./pricing";
-import { expectedQuantitySql, quantityVarianceSql } from "./quantity-ledger";
+import {
+  expectedQuantitySql,
+  productsWithKnownExits,
+  quantityVarianceSql,
+} from "./quantity-ledger";
 import { loadProductStockFacts } from "./stock-facts";
 import { unitMappingColumns } from "./unit-mappings";
 import {
@@ -296,6 +300,8 @@ const readerDatabase = (db: Database | DrizzleTransaction): Database =>
  * The Product read, stated once: list pages, selected projections, totals and
  * the single-record read all select through it.
  */
+const ledgerExpectedQuantity = sql.raw(expectedQuantitySql('"Product"'));
+
 export const productScaffold = listScaffold<
   "product",
   typeof product,
@@ -336,7 +342,16 @@ export const productScaffold = listScaffold<
     expenseCount: productExpenseCountFilterSql(product.id),
     // Ledger sorts and filters read live Expense and Inventory rows, so a
     // member's own write moves the row at once.
-    ledgerExpectedQuantity: sql.raw(expectedQuantitySql('"Product"')),
+    ledgerExpectedQuantity: {
+      sql: ledgerExpectedQuantity,
+      match: (selection) =>
+        "max" in selection && selection.max !== undefined && selection.max < 0
+          ? sql`CASE WHEN ${product.id} IN (${productsWithKnownExits})
+              THEN ${ledgerExpectedQuantity} <= ${selection.max}
+                ${selection.min === undefined ? sql`` : sql`AND ${ledgerExpectedQuantity} >= ${selection.min}`}
+              ELSE false END`
+          : undefined,
+    },
     quantityVariance: sql.raw(quantityVarianceSql('"Product"')),
     // Live stock/direct-Expense gates; null variance (incomparable
     // quantities) has no state.

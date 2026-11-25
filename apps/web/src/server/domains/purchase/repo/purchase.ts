@@ -384,8 +384,11 @@ export const purchaseScaffold = listScaffold("purchase", purchase, {
     financialReconciliation: sql`CASE WHEN ${gapCondition("purchase", "settlement_mismatch", purchase)} THEN ${purchaseFinancialReconciliation.enum.mismatch}::text END`,
     reconciliation: {
       sql: reconciliationSql(),
-      matchOptions: (values) =>
-        values.every((value) => value === purchaseReconciliation.enum.mismatch)
+      match: (selection) =>
+        "options" in selection &&
+        selection.options.every(
+          (value) => value === purchaseReconciliation.enum.mismatch,
+        )
           ? publishedGapMembership("purchase", "paperwork_mismatch", purchase)
           : undefined,
     },

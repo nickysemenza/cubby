@@ -65,7 +65,7 @@ import {
   derivedFieldsOf,
   derivedPredicateSql,
   derivedIntervalSql,
-  derivedOptionMatch,
+  derivedValueMatch,
   derivedValueSet,
   derivedValueSql,
   type AnyDerivedSql,
@@ -375,6 +375,70 @@ const anyOfPredicate = (
       ),
   );
 
+const derivedRangePredicate = (
+  entity: Entity,
+  descriptor: DeclaredFilterDescriptor & { derived: string },
+  fieldType: string,
+  values: ListFilterValues,
+  test: ValueTest,
+  input: DerivedFilterInput | undefined,
+): SQL | undefined => {
+  const derived = input?.derived ?? {};
+  const context = input?.context ?? ListContext.empty;
+  const derivedKey = descriptor.derived;
+  if (fieldType === "dateInterval")
+    return intervalPredicate(
+      entity,
+      derived,
+      derivedKey,
+      context,
+      descriptor,
+      values,
+    );
+  if (descriptor.wire.kind !== "range")
+    throw new Error(
+      `${entity}.${descriptor.columnId} is a range filter without range wire keys`,
+    );
+  const { from, to } = descriptor.wire;
+  const bound = fieldType === "date" ? optionalDate : optionalNumber;
+  const [low, high] = [bound.parse(values[from]), bound.parse(values[to])];
+  const timestamp = entityFieldModels[entity]?.fields.some(
+    (model) => model.key === derivedKey && model.kind === "timestamp",
+  );
+  const match =
+    fieldType === "number" && (low !== undefined || high !== undefined)
+      ? derivedValueMatch(entity, derived, derivedKey, context, {
+          min: optionalNumber.parse(low),
+          max: optionalNumber.parse(high),
+        })
+      : undefined;
+  return rangeOrPresence(
+    // Unbounded reads no value, so an unrequested prepare stays unread.
+    match
+      ? (input?.project?.(match) ?? match)
+      : low === undefined && high === undefined
+        ? undefined
+        : test((column) =>
+            timestamp && fieldType === "date"
+              ? and(
+                  ...householdDayRangeConditions(
+                    column,
+                    optionalDate.parse(low),
+                    optionalDate.parse(high),
+                  ),
+                )
+              : and(
+                  low === undefined ? undefined : sql`${column} >= ${low}`,
+                  high === undefined ? undefined : sql`${column} <= ${high}`,
+                ),
+          ),
+    descriptor.wire.presence === undefined
+      ? undefined
+      : presenceFilter.parse(values[descriptor.wire.presence]),
+    (presence) => valuePresence(fieldType, test, presence),
+  );
+};
+
 /**
  * The predicate of a filter descriptor declared `derived`: a related path
  * compiles to `EXISTS` (any cardinality), a repository value through its
@@ -439,65 +503,23 @@ const derivedFilterPredicates = (
       }
       case "presence":
         return [valuePresence(field.type, test, presenceFilter.parse(value))];
-      case "range": {
-        if (field.type === "dateInterval")
-          return [
-            intervalPredicate(
-              entity,
-              derived,
-              derivedKey,
-              context,
-              descriptor,
-              values,
-            ),
-          ];
-        if (descriptor.wire.kind !== "range")
-          throw new Error(
-            `${entity}.${descriptor.columnId} is a range filter without range wire keys`,
-          );
-        const { from, to } = descriptor.wire;
-        const bound = field.type === "date" ? optionalDate : optionalNumber;
-        const [low, high] = [
-          bound.parse(values[from]),
-          bound.parse(values[to]),
-        ];
-        const timestamp = entityFieldModels[entity]?.fields.some(
-          (model) => model.key === derivedKey && model.kind === "timestamp",
-        );
+      case "range":
         return [
-          rangeOrPresence(
-            // Unbounded reads no value, so an unrequested prepare stays unread.
-            low === undefined && high === undefined
-              ? undefined
-              : test((column) =>
-                  timestamp && field.type === "date"
-                    ? and(
-                        ...householdDayRangeConditions(
-                          column,
-                          optionalDate.parse(low),
-                          optionalDate.parse(high),
-                        ),
-                      )
-                    : and(
-                        low === undefined
-                          ? undefined
-                          : sql`${column} >= ${low}`,
-                        high === undefined
-                          ? undefined
-                          : sql`${column} <= ${high}`,
-                      ),
-                ),
-            descriptor.wire.presence === undefined
-              ? undefined
-              : presenceFilter.parse(values[descriptor.wire.presence]),
-            (presence) => valuePresence(field.type, test, presence),
+          derivedRangePredicate(
+            entity,
+            descriptor,
+            field.type,
+            values,
+            test,
+            input,
           ),
         ];
-      }
       default: {
         const list = nonEmpty(optionalTextList.parse(value));
         const match = list
-          ? derivedOptionMatch(entity, derived, derivedKey, context, list)
+          ? derivedValueMatch(entity, derived, derivedKey, context, {
+              options: list,
+            })
           : undefined;
         return [
           or(

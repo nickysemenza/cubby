@@ -136,7 +136,7 @@ import {
   derivedFieldsOf,
   derivedOrderBy,
   derivedPrepare,
-  derivedOptionMatch,
+  derivedValueMatch,
   declaredRollup,
   declaredRollups,
   declaredResultProjections,
@@ -701,17 +701,14 @@ export function listScaffold<
       } ELSE ${"finished"}::text END)`;
       return {
         sql: value,
-        matchOptions: (values) =>
-          values.every((option) => option === "needs") &&
+        match: (selection) =>
+          "options" in selection &&
+          selection.options.every((option) => option === "needs") &&
           phase.stalled === null &&
           phase.needs.length > 0
-            ? derivedOptionMatch(
-                entity,
-                derivedSql,
-                phase.state,
-                context,
-                phase.needs,
-              )
+            ? derivedValueMatch(entity, derivedSql, phase.state, context, {
+                options: phase.needs,
+              })
             : undefined,
       };
     });
