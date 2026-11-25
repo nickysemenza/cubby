@@ -17,9 +17,13 @@ import type { WorkCte } from "~/server/generic/work-queue/repo/work-source";
 /** Shared by Work sources that route accepted Purchase evidence. */
 export const workAcceptedOrderOwners = {
   name: "work_accepted_order_owners",
-  sql: sql`SELECT DISTINCT "boundPurchaseId", "ledgerPartyId"
-    FROM ${acceptedOrderPurchasesSql} accepted
-    WHERE "boundPurchaseId" IS NOT NULL`,
+  sql: sql`SELECT jsonb_object_agg(owners."boundPurchaseId", owners.parties) AS by_purchase
+    FROM (
+      SELECT "boundPurchaseId", jsonb_agg(DISTINCT "ledgerPartyId") AS parties
+      FROM ${acceptedOrderPurchasesSql} accepted
+      WHERE "boundPurchaseId" IS NOT NULL
+      GROUP BY "boundPurchaseId"
+    ) owners`,
 } satisfies WorkCte;
 
 /** Original item evidence follows current source accounts; a payment does not establish access. */
@@ -34,8 +38,9 @@ export const workPurchaseSourceOwners = (id: SQL): SQL => sql`ARRAY(
     UNION ALL
     SELECT unnest(${workRunOwners(sql`p."runId"`)}) WHERE p."vendorAccountId" IS NULL
     UNION ALL
-    SELECT accepted."ledgerPartyId"
-    FROM ${sql.identifier(workAcceptedOrderOwners.name)} accepted WHERE accepted."boundPurchaseId"::uuid=p.id
+    SELECT party::uuid FROM jsonb_array_elements_text(
+      (SELECT by_purchase FROM ${sql.identifier(workAcceptedOrderOwners.name)}) -> p.id::text
+    ) party
   ) authority
   WHERE p.id = ${id} AND ${notDeleted(alias(purchase, "p"))}
 )`;
@@ -53,6 +58,6 @@ export const workPurchaseOwners = (id: SQL): SQL => sql`ARRAY(
   SELECT DISTINCT owner FROM (
     SELECT CASE WHEN cardinality(original.owners) > 0 THEN original.owners ELSE ARRAY[NULL::uuid] END
       || ${workPurchaseTenderOwners(id)} AS owners
-    FROM (SELECT ${workPurchaseSourceOwners(id)} AS owners) original
+    FROM (SELECT ${workPurchaseSourceOwners(id)} AS owners OFFSET 0) original
   ) authority CROSS JOIN LATERAL unnest(authority.owners) owner
 )`;

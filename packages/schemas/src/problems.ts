@@ -1298,6 +1298,8 @@ const byTypeFields = mapDetectors(
   () => z.number(),
 ) as { [K in ProblemKey]: z.ZodNumber };
 
+const problemCountByType = z.object(byTypeFields);
+
 export const problemsCountSchema = z.object({
   /**
    * Defect rows that need a decision — what the homepage banner and Today show.
@@ -1308,7 +1310,9 @@ export const problemsCountSchema = z.object({
   autoFixTotal: z.number().int(),
   /** Coverage-backlog rows, reported separately so they never inflate `total`. */
   coverageTotal: z.number().int(),
-  byType: z.object(byTypeFields),
+  byType: problemCountByType,
+  /** Categories skipped or timed out. Their zeroes are omitted from the totals. */
+  incompleteTypes: z.array(problemCountByType.keyof()).optional(),
 });
 
 export type AllProblems = z.infer<typeof allProblemsSchema>;

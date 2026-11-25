@@ -6,7 +6,7 @@ import {
   type NeedsYouPage,
   type RunWork,
 } from "@cubby/schemas/kernel/work";
-import { getTableColumns, sql } from "drizzle-orm";
+import { getTableColumns, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db/database";
@@ -86,46 +86,51 @@ export async function readNeedsYou(
   const offset = Math.max(0, Math.floor(options.offset ?? 0));
   const memberGap = sql`jsonb_path_query_first(s.gaps, '$[*] ? (@.actor == "you")')`;
   const memberActor = sql`s.gaps @> '[{"actor":"you"}]'::jsonb`;
-  // Resolve a scope before testing entity membership: one scope can name
-  // several records, including another record that wins the canonical order.
-  const subject = sql`
-    SELECT e.id, e.kind AS entity, e.shortcode
+  const actionTokens = (gap: SQL) => sql`ARRAY(
+    SELECT DISTINCT ref.token
+    FROM jsonb_array_elements(coalesce((${gap})->'actions', '[]'::jsonb)) action
+    CROSS JOIN LATERAL (VALUES (action->>'subject'), (action->>${"field"})) ref(token)
+    WHERE ref.token IS NOT NULL
+  )`;
+  const canonicalSubjects = (scopes: SQL) => sql`
+    SELECT DISTINCT ON (ref."scopeKind", ref."scopeKey")
+      ref."scopeKind", ref."scopeKey", e.id, e.kind AS entity, e.shortcode
     FROM (
-      SELECT k."entityId" AS id, k.entity AS kind
-      FROM "RecordKey" k
-      WHERE k."scopeKind" = m."scopeKind" AND k."scopeKey" = m."scopeKey"
-        AND k."mergedAt" IS NULL AND k."rejectedAt" IS NULL
+      SELECT m."scopeKind", m."scopeKey", k."entityId" AS id, k.entity AS kind
+      FROM ${scopes} m JOIN "RecordKey" k USING ("scopeKind", "scopeKey")
+      WHERE k."mergedAt" IS NULL AND k."rejectedAt" IS NULL
       UNION ALL
-      SELECT CASE WHEN pg_input_is_valid(split_part(m."scopeKey", ':', 2), ${"uuid"})
-                  THEN split_part(m."scopeKey", ':', 2)::uuid END,
-        split_part(m."scopeKey", ':', 1)
+      SELECT m."scopeKind", m."scopeKey", parsed.id, split_part(m."scopeKey", ':', 1)
+      FROM ${scopes} m
+      CROSS JOIN LATERAL (
+        SELECT CASE WHEN pg_input_is_valid(split_part(m."scopeKey", ':', 2), ${"uuid"})
+                    THEN split_part(m."scopeKey", ':', 2)::uuid END AS id
+      ) parsed
       WHERE m."scopeKind" IN ('fields', 'quality')
-        AND m."scopeKey" = split_part(m."scopeKey", ':', 1) || ':' ||
-          CASE WHEN pg_input_is_valid(split_part(m."scopeKey", ':', 2), ${"uuid"})
-               THEN split_part(m."scopeKey", ':', 2)::uuid::text END
+        AND m."scopeKey" = split_part(m."scopeKey", ':', 1) || ':' || parsed.id::text
       UNION ALL
-      SELECT CASE WHEN pg_input_is_valid(m."scopeKey", ${"uuid"}) THEN m."scopeKey"::uuid END, consumer.entity
-      FROM consumers consumer
-      WHERE consumer.kind = m."scopeKind"
-        AND m."scopeKey" = CASE WHEN pg_input_is_valid(m."scopeKey", ${"uuid"}) THEN m."scopeKey"::uuid::text END
+      SELECT m."scopeKind", m."scopeKey", parsed.id, consumer.entity
+      FROM ${scopes} m JOIN consumers consumer ON consumer.kind = m."scopeKind"
+      CROSS JOIN LATERAL (
+        SELECT CASE WHEN pg_input_is_valid(m."scopeKey", ${"uuid"}) THEN m."scopeKey"::uuid END AS id
+      ) parsed
+      WHERE m."scopeKey" = parsed.id::text
       UNION ALL
-      SELECT parsed.id, split_part(ref.token, ':', 1)
-      FROM jsonb_array_elements(coalesce(m.gap->'actions', '[]'::jsonb)) action
-      CROSS JOIN LATERAL (VALUES (action->>'subject'), (action->>${"field"})) ref(token)
+      SELECT m."scopeKind", m."scopeKey", parsed.id, split_part(ref.token, ':', 1)
+      FROM ${scopes} m
+      CROSS JOIN LATERAL unnest(m.action_tokens) ref(token)
       CROSS JOIN LATERAL (
         SELECT CASE WHEN pg_input_is_valid(split_part(ref.token, ':', 2), ${"uuid"})
                     THEN split_part(ref.token, ':', 2)::uuid END AS id
+        OFFSET 0
       ) parsed
       WHERE ref.token = split_part(ref.token, ':', 1) || ':' || parsed.id::text
     ) ref
-    CROSS JOIN LATERAL (
-      SELECT e.id, e.kind, e.shortcode FROM "Entity" e
-      WHERE e.id = ref.id AND e.kind = ref.kind
-        AND ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL
-      OFFSET 0
-    ) e
-    ORDER BY (e.kind = 'sourceOccurrence'), e.kind, e.shortcode
-    LIMIT 1`;
+    JOIN "Entity" e ON e.id = ref.id AND e.kind = ref.kind
+      AND ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL
+    ORDER BY ref."scopeKind", ref."scopeKey", (e.kind = 'sourceOccurrence'), e.kind, e.shortcode`;
+  const severity = sql`CASE stage WHEN ${STAGE.ended} THEN 0 WHEN ${STAGE.stuck} THEN 1
+    WHEN ${STAGE.working} THEN 2 WHEN ${STAGE.needsYou} THEN 3 WHEN ${STAGE.waiting} THEN 4 ELSE 5 END`;
   const result = await repositoryQueries(db).execute<{
     items: unknown;
     count: number;
@@ -133,82 +138,84 @@ export async function readNeedsYou(
     WITH consumers AS MATERIALIZED (
       SELECT * FROM jsonb_to_recordset(${JSON.stringify(consumers)}::jsonb) c(entity text, kind text)
     ), member_scopes AS MATERIALIZED (
-      SELECT s."scopeKind", s."scopeKey", s.stage, ${memberGap} AS gap
+      SELECT s."scopeKind", s."scopeKey", s.stage,
+        gap->>${"input"} IS NOT NULL AS actionable, gap->>'since' AS since,
+        ${actionTokens(sql`gap`)} AS action_tokens
       FROM "ScopeState" s
+      CROSS JOIN LATERAL (SELECT ${memberGap} AS gap OFFSET 0) detail
       WHERE s."mergedIntoKey" IS NULL AND ${memberActor}
     ), actionable AS MATERIALIZED (
-      SELECT m.*, subject.*
-      FROM member_scopes m CROSS JOIN LATERAL (${subject}) subject
-      WHERE m.gap->>${"input"} IS NOT NULL
-    ), candidates AS MATERIALIZED (
-      SELECT DISTINCT id, entity FROM actionable WHERE shortcode IS NOT NULL
-    ), siblings AS (
-      SELECT k."scopeKind", k."scopeKey"
-      FROM candidates c JOIN "RecordKey" k ON k.entity = c.entity AND k."entityId" = c.id
-      WHERE k."mergedAt" IS NULL AND k."rejectedAt" IS NULL
-      UNION
-      SELECT kind, c.entity || ':' || c.id::text
-      FROM candidates c CROSS JOIN (VALUES ('fields'), ('quality')) builtins(kind)
-      UNION
-      SELECT consumer.kind, c.id::text
-      FROM candidates c JOIN consumers consumer ON consumer.entity = c.entity
-      UNION
-      SELECT m."scopeKind", m."scopeKey"
-      FROM member_scopes m
-      CROSS JOIN LATERAL jsonb_array_elements(coalesce(m.gap->'actions', '[]'::jsonb)) action
-      CROSS JOIN LATERAL (VALUES (action->>'subject'), (action->>${"field"})) ref(token)
-      JOIN candidates c ON ref.token = c.entity || ':' || c.id::text
-      WHERE m.gap->>${"input"} IS NULL
-    ), unique_scopes AS (
-      SELECT a."scopeKind", a."scopeKey", a.entity, a.shortcode, a.stage,
-        true AS "hasInput", a.gap->>'since' AS since
-      FROM actionable a WHERE a.shortcode IS NOT NULL
-      UNION ALL
-      SELECT m."scopeKind", m."scopeKey", subject.entity, subject.shortcode, m.stage,
-        false AS "hasInput", m.gap->>'since' AS since
-      FROM siblings k
-      CROSS JOIN LATERAL (
-        SELECT s."scopeKind", s."scopeKey", s.stage, ${memberGap} AS gap
-        FROM "ScopeState" s WHERE s."scopeKind" = k."scopeKind" AND s."scopeKey" = k."scopeKey"
-          AND s."mergedIntoKey" IS NULL
-        OFFSET 0
-      ) m
-      CROSS JOIN LATERAL (${subject}) subject
-      JOIN candidates c ON c.id = subject.id
-      WHERE m.gap->>${"input"} IS NULL
-    ), ranked AS (
-      SELECT *, row_number() OVER (PARTITION BY entity, shortcode ORDER BY NOT "hasInput", since NULLS LAST, "scopeKind", "scopeKey") AS rank,
-        min(CASE stage WHEN ${STAGE.ended} THEN 0 WHEN ${STAGE.stuck} THEN 1
-          WHEN ${STAGE.working} THEN 2 WHEN ${STAGE.needsYou} THEN 3 WHEN ${STAGE.waiting} THEN 4 ELSE 5 END)
-          OVER (PARTITION BY entity, shortcode) AS severity
-      FROM unique_scopes
-    ), eligible AS (
-      SELECT entity, shortcode,
-        CASE severity WHEN 0 THEN ${STAGE.ended} WHEN 1 THEN ${STAGE.stuck} WHEN 2 THEN ${STAGE.working}
-          WHEN 3 THEN ${STAGE.needsYou} WHEN 4 THEN ${STAGE.waiting} ELSE ${STAGE.done} END AS stage,
-        "scopeKind", "scopeKey", since FROM ranked WHERE rank = 1 AND shortcode IS NOT NULL AND "hasInput"
+      SELECT "scopeKind", "scopeKey", stage, since, action_tokens
+      FROM member_scopes WHERE actionable
+    ), eligible AS MATERIALIZED (
+      SELECT DISTINCT ON (entity, shortcode) entity, shortcode, id, "scopeKind", "scopeKey", since, severity
+      FROM (
+        SELECT subject.*, m.since,
+          min(${severity}) OVER (PARTITION BY subject.entity, subject.shortcode) AS severity
+        FROM (${canonicalSubjects(sql`actionable`)}) subject
+        JOIN actionable m USING ("scopeKind", "scopeKey")
+        WHERE subject.shortcode IS NOT NULL
+      ) ranked
+      ORDER BY entity, shortcode, since NULLS LAST, "scopeKind", "scopeKey"
     ), combined AS (
       SELECT *, NULL::text AS "firstGap", 0::bigint AS ordinal FROM eligible
       UNION ALL
-      SELECT extra.item->>'entity', extra.item->>${"shortcode"}, ${STAGE.needsYou},
-        NULL::text, NULL::text, NULL::text, extra.item->>'firstGap', extra.ordinal
+      SELECT extra.item->>'entity', extra.item->>${"shortcode"}, NULL::uuid,
+        NULL::text, NULL::text, NULL::text, 3, extra.item->>'firstGap', extra.ordinal
       FROM jsonb_array_elements(${JSON.stringify(options.additional ?? [])}::jsonb)
         WITH ORDINALITY AS extra(item, ordinal)
       WHERE NOT EXISTS (
         SELECT 1 FROM eligible
         WHERE entity = extra.item->>'entity' AND shortcode = extra.item->>${"shortcode"}
       )
-    ), page AS (
+    ), page AS MATERIALIZED (
       SELECT * FROM combined ORDER BY ordinal, since NULLS LAST, entity, shortcode LIMIT ${limit} OFFSET ${offset}
+    ), siblings AS (
+      SELECT k."scopeKind", k."scopeKey", p.id
+      FROM page p JOIN "RecordKey" k ON k.entity = p.entity AND k."entityId" = p.id
+      WHERE k."mergedAt" IS NULL AND k."rejectedAt" IS NULL
+      UNION
+      SELECT kind, p.entity || ':' || p.id::text, p.id
+      FROM page p CROSS JOIN (VALUES ('fields'), ('quality')) builtins(kind)
+      WHERE p.id IS NOT NULL
+      UNION
+      SELECT consumer.kind, p.id::text, p.id
+      FROM page p JOIN consumers consumer ON consumer.entity = p.entity
+      WHERE p.id IS NOT NULL
+      UNION
+      SELECT m."scopeKind", m."scopeKey", p.id
+      FROM member_scopes m
+      JOIN page p ON (p.entity || ':' || p.id::text) = ANY(m.action_tokens)
+      WHERE NOT m.actionable
+    ), sibling_scopes AS MATERIALIZED (
+      SELECT k."scopeKind", k."scopeKey", detail.stage, detail.action_tokens
+      FROM (SELECT DISTINCT "scopeKind", "scopeKey" FROM siblings) k
+      CROSS JOIN LATERAL (
+        SELECT s.stage, ${actionTokens(memberGap)} AS action_tokens
+        FROM "ScopeState" s
+        WHERE s."scopeKind" = k."scopeKind" AND s."scopeKey" = k."scopeKey"
+          AND s."mergedIntoKey" IS NULL AND (${memberGap})->>${"input"} IS NULL
+        LIMIT 1
+      ) detail
+    ), sibling_severity AS (
+      SELECT subject.id, min(${severity}) AS severity
+      FROM (${canonicalSubjects(sql`sibling_scopes`)}) subject
+      JOIN sibling_scopes USING ("scopeKind", "scopeKey")
+      JOIN siblings USING ("scopeKind", "scopeKey", id)
+      GROUP BY subject.id
     )
     SELECT (SELECT count(*)::int FROM combined) AS count,
       coalesce((
         SELECT jsonb_agg(jsonb_build_object(
-          'entity', page.entity, ${"shortcode"}::text, page.shortcode, 'stage', page.stage, 'since', page.since,
+          'entity', page.entity, ${"shortcode"}::text, page.shortcode, 'stage', CASE least(page.severity, sibling_severity.severity)
+            WHEN 0 THEN ${STAGE.ended} WHEN 1 THEN ${STAGE.stuck} WHEN 2 THEN ${STAGE.working}
+            WHEN 3 THEN ${STAGE.needsYou} WHEN 4 THEN ${STAGE.waiting} ELSE ${STAGE.done} END,
+          'since', page.since,
           'firstGap', CASE WHEN page.ordinal = 0 THEN detail.gap->>${"input"} ELSE page."firstGap" END,
           'actions', CASE WHEN page.ordinal = 0 THEN detail.gap->'actions' ELSE '[]'::jsonb END
         ) ORDER BY page.ordinal, page.since NULLS LAST, page.entity, page.shortcode)
-        FROM page LEFT JOIN LATERAL (
+        FROM page LEFT JOIN sibling_severity USING (id)
+        LEFT JOIN LATERAL (
           SELECT ${memberGap} AS gap
           FROM "ScopeState" s WHERE page.ordinal = 0
             AND s."scopeKind" = page."scopeKind" AND s."scopeKey" = page."scopeKey"

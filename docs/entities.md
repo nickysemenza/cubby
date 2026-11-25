@@ -2871,6 +2871,10 @@ Record machinery holds the complete inputs and actions. A record with no scope
 memberships reads null and retains its declared state badge. Declared needs, header
 facts and open quality checks remain visible alongside machinery.
 
+The `activity.report` count read budgets each detector statement and stops starting detectors when
+the report budget expires. When `incompleteTypes` appears, those categories did not finish and the
+totals count only completed categories.
+
 The browser's separate `/work-queue` list evaluates the composed source union live.
 Filters, search, sorting, groups, counts, summaries and hydration operate over that
 read projection. `workQueue.forRecord` scopes the same sources to one record.
@@ -3100,7 +3104,8 @@ context and named routes once. Only curated multi-step routes need entries (`cur
 in `connected-view-definitions.ts`); new entities inherit direct and inverse coverage.
 `relationship-paths.ts` supplies the directional relationships for table composition and graph
 expansion. The preview reader composes the same paged query as a full connection table into one
-statement for all requested groups, each keeping its count, limit and provenance. Table cells,
+statement for all requested groups, each keeping its count, limit and provenance. The count reads
+distinct target identities. Path nodes and their labels are built for the selected page. Table cells,
 summaries and context disclosures reuse `connection-paths.tsx` for linked trails and batched cover
 references. Distinct records with equal labels show their shortcodes; identity, never label
 equality, controls deduplication. Named routes compose any number of logical steps; physical joins

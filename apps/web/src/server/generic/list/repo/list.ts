@@ -136,6 +136,7 @@ import {
   derivedFieldsOf,
   derivedOrderBy,
   derivedPrepare,
+  derivedValueMatch,
   declaredRollup,
   declaredRollups,
   declaredResultProjections,
@@ -689,7 +690,7 @@ export function listScaffold<
         phase.recentBy === null || phase.recentDays === null
           ? null
           : scalarSql(phase.recentBy, context);
-      return sql`(CASE${phase.needs.length ? sql` WHEN ${among(state, phase.needs)} THEN ${"needs"}::text` : sql``}${
+      const value = sql`(CASE${phase.needs.length ? sql` WHEN ${among(state, phase.needs)} THEN ${"needs"}::text` : sql``}${
         phase.stalled === null
           ? sql``
           : sql` WHEN (${scalarSql(phase.stalled, context)}) IS TRUE THEN ${"needs"}::text`
@@ -698,6 +699,18 @@ export function listScaffold<
           ? sql``
           : sql` WHEN ${recentBy} < now() - make_interval(days => ${phase.recentDays}::int) THEN ${"older"}::text`
       } ELSE ${"finished"}::text END)`;
+      return {
+        sql: value,
+        match: (selection) =>
+          "options" in selection &&
+          selection.options.every((option) => option === "needs") &&
+          phase.stalled === null &&
+          phase.needs.length > 0
+            ? derivedValueMatch(entity, derivedSql, phase.state, context, {
+                options: phase.needs,
+              })
+            : undefined,
+      };
     });
   }
   const readDeclaration: ListReadDeclaration<Row> = options?.read ?? {};
@@ -1909,6 +1922,9 @@ export function listScaffold<
           "requiresResults" in total ? (total.requiresResults ?? []) : [],
         ),
       );
+      const matchingOnly = unresolved
+        ? sql` FILTER (WHERE ${sql.identifier("total_membership")}.matched)`
+        : sql``;
       const currentValues = new Map<string, SQL>();
       const sharedValues: SQL[] = [];
       for (const key of keys) {
@@ -1922,7 +1938,7 @@ export function listScaffold<
         const name = sql.identifier(`v${sharedValues.length}`);
         const value = derivedValueSql(entity, derivedSql, key, prepared);
         sharedValues.push(
-          sql`${unresolved ? sql`CASE WHEN ${where ?? sql`true`} THEN ${value} END` : value} AS ${name}`,
+          sql`${unresolved ? sql`CASE WHEN total_membership.matched THEN ${value} END` : value} AS ${name}`,
         );
         currentValues.set(key, sql`${sql.identifier("total_values")}.${name}`);
       }
@@ -1931,10 +1947,10 @@ export function listScaffold<
         const stored = fieldModel?.storage.find((field) => field.key === key);
         selections[`sum_${index}`] =
           stored?.specialized === "minor-unit-money"
-            ? sql<string>`COALESCE(sum(${storedFieldValueSql(entity, `"${getTableName(table)}"`, stored.column, "stored")}) FILTER (WHERE ${where ?? sql`true`}), 0)::text`.mapWith(
+            ? sql<string>`COALESCE(sum(${storedFieldValueSql(entity, `"${getTableName(table)}"`, stored.column, "stored")})${matchingOnly}, 0)::text`.mapWith(
                 (value) => minorToMoney(BigInt(value)),
               )
-            : sql<number>`COALESCE(sum((${currentValues.get(key) ?? listMetricSql(entity, key, derivedSql, table, prepared)})::numeric) FILTER (WHERE ${where ?? sql`true`}), 0)::double precision`;
+            : sql<number>`COALESCE(sum((${currentValues.get(key) ?? listMetricSql(entity, key, derivedSql, table, prepared)})::numeric)${matchingOnly}, 0)::double precision`;
       }
       if (unresolved)
         selections.unresolved = sql<boolean>`COALESCE(bool_or(${unresolved}), false)`;
@@ -1973,9 +1989,17 @@ export function listScaffold<
           and(...results),
         );
         selections[`incomplete_${index}`] =
-          sql<boolean>`COALESCE(bool_or((${ready}) IS NOT TRUE) FILTER (WHERE ${where ?? sql`true`}), false)`;
+          sql<boolean>`COALESCE(bool_or((${ready}) IS NOT TRUE)${matchingOnly}, false)`;
       }
-      const query = unwrapDb(db).select(selections).from(listTable);
+      const rootQuery = unwrapDb(db).select(selections).from(listTable);
+      // Unknown candidates establish completeness but never enter known totals.
+      // Evaluate expensive membership once when both populations are needed.
+      const query = unresolved
+        ? rootQuery.innerJoinLateral(
+            sql`(SELECT ${where ?? sql`true`} AS matched OFFSET 0) total_membership`,
+            sql`total_membership.matched OR (${unresolved})`,
+          )
+        : rootQuery;
       // OFFSET 0 keeps sums and completeness from rerunning the same row scalar.
       const summary = sharedValues.length
         ? query.leftJoinLateral(
@@ -1983,9 +2007,7 @@ export function listScaffold<
             sql`true`,
           )
         : query;
-      const [row] = await summary
-        // Unknown candidates establish completeness but never enter the known subtotal.
-        .where(unresolved ? or(where ?? sql`true`, unresolved) : where);
+      const [row] = await summary.where(unresolved ? undefined : where);
       const flags = totalFlagsSchema.parse(row);
       return {
         sums: Object.fromEntries(

@@ -115,12 +115,18 @@ interface PredicateValues {
  * default), and `direction` fixes the part's direction whatever the request
  * (an Email link state reads newest first within each state).
  */
+type DerivedSelection =
+  | { options: readonly string[] }
+  | { min: number | undefined; max: number | undefined };
+
 type DerivedPart =
   | SQL
   | {
       readonly sql: SQL;
       readonly nulls?: "high";
       readonly direction?: "asc" | "desc";
+      /** A selective predicate for supported selections; otherwise use the scalar. */
+      readonly match?: (selection: DerivedSelection) => SQL | undefined;
     };
 
 /**
@@ -486,6 +492,22 @@ const derivedValueParts = (
 const isCompound = (
   value: DerivedValue,
 ): value is readonly [DerivedPart, ...DerivedPart[]] => Array.isArray(value);
+
+/** A selective alternative to comparing a derived scalar with option values. */
+export const derivedValueMatch = (
+  entity: Entity,
+  derived: AnyDerivedSql,
+  key: string,
+  context: ListContext,
+  selection: DerivedSelection,
+): SQL | undefined => {
+  if (!derived[key]) return undefined;
+  const parts = derivedValueParts(entity, derived, key, context);
+  const part = parts[0];
+  return parts.length === 1 && part && !(part instanceof SQL)
+    ? part.match?.(selection)
+    : undefined;
+};
 
 /** A derived value field's single SQL expression in `context`. */
 export const derivedValueSql = (

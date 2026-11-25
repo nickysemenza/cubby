@@ -27,6 +27,7 @@ import {
   kitProjectionFrom,
   kitSeedForProductAlias,
   kitSeedForProductIds,
+  MAX_KIT_PROJECTION_DEPTH,
   ownOnly,
   projectionRows,
   unitWeighted,
@@ -99,6 +100,22 @@ export const expectedQuantitySql = (productAlias = '"product"') =>
   `(${kitAncestorCteText(kitSeedForProductAlias(productAlias))}
     SELECT ${PROJECTED_EXPECTED}
     ${QUANTITY_PROJECTION_FROM})`;
+
+/** A negative balance needs a known exit on the Product or a kit ancestor. */
+export const productsWithKnownExits = sql`
+  WITH RECURSIVE exits(id, depth) AS (
+    SELECT DISTINCT e."productId", 0 FROM "Expense" e
+    WHERE ${notDeleted("e")} AND ${sql.raw(actualExpenseSql("e"))}
+      AND e."productId" IS NOT NULL AND ${sql.raw(expenseSignedUnitsSql("e"))} < 0
+    UNION
+    SELECT link."toEntityId", exits.depth + 1
+    FROM exits
+    JOIN "Product" parent ON parent.id = exits.id AND ${notDeleted("parent")}
+    JOIN "EntityLink" link ON link."fromEntityId" = exits.id
+      AND link."kind" = 'productComponent' AND ${notDeleted("link")}
+    WHERE exits.depth < ${MAX_KIT_PROJECTION_DEPTH}
+  )
+  SELECT DISTINCT id FROM exits`;
 
 /** Nonpositive projected balance with no unquantified acquisitions. */
 export const knownNonpositiveQuantitySql = (productAlias = '"product"') =>
