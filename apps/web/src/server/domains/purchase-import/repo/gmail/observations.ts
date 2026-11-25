@@ -34,7 +34,10 @@ import { publishRunFinding } from "~/server/domains/run/repo/run-finding";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { joinGmailPublication } from "./admitted-source";
+import {
+  deferEmailStateReconcile,
+  joinGmailPublication,
+} from "./admitted-source";
 
 /** {@link withHouseholdWrite}, joining an enclosing Gmail publication instead. */
 const publicationHouseholdWrite = <T>(
@@ -308,10 +311,14 @@ export async function recordEmailClassificationObservation(
   });
 }
 
-/** Called inside the transaction that publishes the effective Email routing. */
+/**
+ * Called inside the transaction that publishes the effective Email routing.
+ * `reconcile: false` is for a writer that reconciles the Email itself.
+ */
 export async function recordEmailClassificationApplication(
   db: Database,
   predictionId: string,
+  options: { reconcile?: false } = {},
 ) {
   return publicationHouseholdWrite(db, async (tx) => {
     const rows = await tx
@@ -338,7 +345,14 @@ export async function recordEmailClassificationApplication(
       discovers: scopes,
       after: rows,
     });
-    await reconcileNow(database, scopes);
+    if (
+      options.reconcile !== false &&
+      !deferEmailStateReconcile(
+        db,
+        rows.map((row) => row.emailId),
+      )
+    )
+      await reconcileNow(database, scopes);
   });
 }
 

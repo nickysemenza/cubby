@@ -106,8 +106,14 @@ type GmailPublicationContext = {
   recordObservation: (observation: PublishedObservation | null) => void;
 };
 
-/** The transaction of the Gmail publication running in this async context. */
-const publications = new AsyncLocalStorage<DrizzleTransaction>();
+/**
+ * The Gmail publication running in this async context: its transaction and
+ * the Emails whose state it reconciles once, after its writes.
+ */
+const publications = new AsyncLocalStorage<{
+  tx: DrizzleTransaction;
+  emails: Set<string>;
+}>();
 
 /**
  * The transaction of the Gmail publication `db` runs inside, if any. A gated
@@ -118,12 +124,27 @@ const publications = new AsyncLocalStorage<DrizzleTransaction>();
 export function gmailPublicationTransaction(
   db: Database,
 ): DrizzleTransaction | undefined {
-  const publication = publications.getStore();
+  const publication = publications.getStore()?.tx;
   const tx = boundTransaction(db);
   let candidate: Database | undefined = publication && tx ? db : undefined;
   while (candidate && boundTransaction(candidate) !== publication)
     candidate = parentTransactionDatabase(candidate);
   return candidate ? tx : undefined;
+}
+
+/**
+ * Inside a Gmail publication, an Email state write leaves its scopes dirty and
+ * the publication reconciles them once after its last write, still under the
+ * gate. Returns false outside a publication: the writer reconciles itself.
+ */
+export function deferEmailStateReconcile(
+  db: Database,
+  emailIds: readonly string[],
+): boolean {
+  if (!gmailPublicationTransaction(db)) return false;
+  const emails = publications.getStore()!.emails;
+  for (const id of emailIds) emails.add(id);
+  return true;
 }
 
 /**
@@ -280,7 +301,8 @@ export async function publishGmailEvidence<T>(
       ))
     )
       return decline("frozen", current ?? null);
-    const result = await publications.run(tx, () =>
+    const emails = new Set<string>();
+    const result = await publications.run({ tx, emails }, () =>
       publish(txDb, current ?? null, {
         scope,
         recordObservation: (recorded) => {
@@ -289,6 +311,14 @@ export async function publishGmailEvidence<T>(
         },
       }),
     );
+    // Receipts below read the reconciled classification.
+    if (emails.size)
+      await (
+        await import("~/server/kernel/api")
+      ).reconcileNow(
+        txDb,
+        [...emails].map((key) => ({ kind: "emailState", key })),
+      );
     if (input.recordHandlingReceipt !== false)
       await (
         await import("~/server/domains/email/repo/discovery-email-audit")
