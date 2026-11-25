@@ -26,7 +26,7 @@ async function runHourlyBackstop(
           { purchaseDiscoveryPass },
           { ringDueDeviceWork },
           { retentionPass },
-          { scheduleRunsReconcile },
+          { runsReconcilePass },
           { runProductionKernel, startPass },
           { requestDerivedRebuild },
         ] = await Promise.all([
@@ -45,17 +45,17 @@ async function runHourlyBackstop(
             await ringDueDeviceWork(db).catch((error: unknown) =>
               errors.push(error),
             );
-            for (const step of [
-              scheduleRunsReconcile,
-              (db: Parameters<typeof startPass>[0]) =>
-                startPass(db, retentionPass),
-              (db: Parameters<typeof startPass>[0]) =>
-                startPass(db, purchaseDiscoveryPass),
-              (db: Parameters<typeof requestDerivedRebuild>[0]) =>
-                requestDerivedRebuild(db, { force: false }),
+            // A scheduled start revives a Pass that spent its attempts.
+            for (const pass of [
+              runsReconcilePass,
+              retentionPass,
+              purchaseDiscoveryPass,
+              "email.purchase-discovery",
             ])
-              await step(db).catch((error: unknown) => errors.push(error));
-            await startPass(db, "email.purchase-discovery").catch(
+              await startPass(db, pass, { revive: true }).catch(
+                (error: unknown) => errors.push(error),
+              );
+            await requestDerivedRebuild(db, { force: false }).catch(
               (error: unknown) => errors.push(error),
             );
             await runProductionKernel(db, { budgetMs: 20_000 }).catch(

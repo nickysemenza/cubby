@@ -594,7 +594,13 @@ claim; a prepared rendition that brings device-waiting image work forward;
 `startPass`, a member retry and a Run retry or relaunch that revives its Asks.
 A writer outside one transaction registers the wake right after its first
 durable write, so a later failure cannot skip it. A `startPass` for a Pass that spent its attempts sends none, because no
-runner claims it until a member retries it. A writer that sets only a future
+runner claims it until a member retries it or a scheduled start revives it.
+The hourly cron's starts are scheduled starts: each gives a spent singleton
+Pass a fresh attempt budget, keeping its cursor and last error until a page
+succeeds, so a Pass that always fails spends at most one budget per hour.
+Keyed Passes such as `fields.reconcile` have no scheduled start; a spent one
+is Stuck in Work until a member retries it, or a Run retry restarts its Pass.
+A writer that sets only a future
 deadline offers it. A commit that creates no kernel work, including an
 ordinary source write, sends no permit. Offers refused while a permit is
 pending rely on its delivery, so a lost permit, or a send whose retries are

@@ -183,6 +183,7 @@ export type Kernel = {
       cursor?: Json | null;
       runId?: string | null;
       availableAt?: Date;
+      revive?: boolean;
     },
   ): Promise<void>;
   repointOwnedReference(

@@ -271,6 +271,7 @@ export async function startPass(
     cursor?: Json | null;
     runId?: string | null;
     availableAt?: Date;
+    revive?: boolean;
   },
 ): Promise<void> {
   const kernel = await productionKernel();
