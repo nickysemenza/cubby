@@ -671,8 +671,8 @@ async function partitionOwnership(
   return { owners, fresh, transfers, reopened };
 }
 
-// An isolated admission can spend at most eight seconds in PostgreSQL,
-// including its gate wait; a single slow statement can spend three.
+// After the gate wait, an isolated admission has an eight-second database
+// transaction timeout. A single slow statement can spend three seconds.
 const RETAINED_STATEMENT_MS = 3_000;
 const RETAINED_TRANSACTION_MS = 8_000;
 

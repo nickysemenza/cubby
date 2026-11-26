@@ -57,7 +57,8 @@ as soon as it finishes. Starts of an active `purchase.mailbox-discovery` coalesc
 | `calendar.invalidate`        | origin      | Retries an idempotent dirty mark after the post-commit fast path failed                                                                                                                                                                                                                                             |
 
 Retained admission uses a 3-second statement cap and an 8-second database
-transaction cap. It stops starting transactions with 30 seconds left on the
+transaction timeout after the household gate, whose wait is capped at 2 seconds.
+It stops starting transactions with 30 seconds left on the
 90-second claim, giving roughly 60 seconds to start work on a page. A budget
 stop settles the partial page successfully and the next claim resumes at the
 saved mailbox, admission stage and sources. A subsequent clean page clears the
