@@ -1371,7 +1371,9 @@ describe("mail research admission", () => {
         (await readPasses(ctx.db, { name: purchaseDiscoveryPass.name }))[0],
       ).toMatchObject({
         attempts: 0,
-        cursor: { retained: { finished: [`:${mail.id}`] } },
+        cursor: {
+          retained: { finished: [`:${mail.id}`], timedOut: [mail.id] },
+        },
         lastError: expect.stringContaining("57014"),
       });
       expect(await readPasses(ctx.db, { name: "runs.reconcile" })).toHaveLength(

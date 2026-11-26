@@ -116,6 +116,7 @@ import {
 } from "~/server/domains/run/repo/ensure-run";
 import { hasLiveRunPassClaim } from "~/server/domains/run/repo/run-execution";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
+import { findPgError } from "~/server/errors/db-errors";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -1202,6 +1203,7 @@ export const retainedAdmissionCursor = z.object({
   mailbox: z.string().nullable(),
   stage: z.number().int().min(0).max(5),
   finished: z.array(z.string()),
+  timedOut: z.array(z.string()).default([]),
 });
 
 export async function importPendingEmails(
@@ -1259,12 +1261,19 @@ export async function importPendingEmails(
   if (!last) return { errors, after, resume: null };
   const checkpoint = options.resume
     ? { ...options.resume }
-    : { through: last.id, mailbox: null, stage: 0, finished: [] };
+    : { through: last.id, mailbox: null, stage: 0, finished: [], timedOut: [] };
   const finished = new Set(checkpoint.finished);
+  const timedOut = new Set(checkpoint.timedOut);
   const pageIds = sql`${emailTable.id} = ANY(${uuidArrayParam(page.map(({ id }) => id))})`;
   const admit = (input: MailImportAdmission) => {
     checkPassPageTime(options.claim);
     return admitMailImport(db, input, options.claim);
+  };
+  const recordItemError = (id: string, error: unknown) => {
+    rethrowPassPageControl(error);
+    errors.push(error);
+    const code = findPgError(error)?.code;
+    if (code === "57014" || code === "57P05") timedOut.add(id);
   };
   const admitBatch = async <Row extends { id: string }>(
     rows: readonly Row[],
@@ -1272,26 +1281,27 @@ export async function importPendingEmails(
     revision = "",
   ) => {
     const key = (row: Row) => `${revision}:${row.id}`;
-    const remaining = rows.filter((row) => !finished.has(key(row)));
+    const remaining = rows.filter(
+      (row) => !timedOut.has(row.id) && !finished.has(key(row)),
+    );
     if (!remaining.length) return;
     try {
       await admitItems(remaining);
       for (const row of remaining) finished.add(key(row));
     } catch (error) {
-      rethrowPassPageControl(error);
       if (remaining.length === 1) {
-        errors.push(error);
+        recordItemError(remaining[0]!.id, error);
         finished.add(key(remaining[0]!));
         return;
       }
+      rethrowPassPageControl(error);
       // The batch rolled back. Admit individually so healthy siblings can
       // progress and a timed-out source is checkpointed like any other failure.
       for (const row of remaining) {
         try {
           await admitItems([row]);
         } catch (itemError) {
-          rethrowPassPageControl(itemError);
-          errors.push(itemError);
+          recordItemError(row.id, itemError);
         }
         finished.add(key(row));
       }
@@ -1760,7 +1770,11 @@ export async function importPendingEmails(
     return {
       errors,
       after: options.after ?? null,
-      resume: { ...checkpoint, finished: [...finished] },
+      resume: {
+        ...checkpoint,
+        finished: [...finished],
+        timedOut: [...timedOut],
+      },
     };
   }
   return { errors, after, resume: null };
