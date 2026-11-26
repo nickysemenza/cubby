@@ -43,6 +43,7 @@ const censusFloor = (cursor: SQL, ms: number) =>
  * Start (or restart a finished) pass instance; a pending one keeps its cursor.
  * `revive` is a scheduled start: a pending instance that spent its attempts
  * gets a fresh attempt budget and keeps its cursor and last error.
+ * Returns whether the instance has attempts left, including a live claim or wait.
  */
 export async function startPass(
   db: Database,
@@ -54,7 +55,7 @@ export async function startPass(
     availableAt?: Date;
     revive?: boolean;
   } = {},
-): Promise<void> {
+): Promise<boolean> {
   // Database time, not the Worker's clock: a skewed clock must not park the pass.
   const at = options.availableAt
     ? sql`${options.availableAt.toISOString()}::timestamp`
@@ -63,8 +64,9 @@ export async function startPass(
   const reviving = sql`${options.revive ?? false} AND "Pass".attempts >= "Pass"."maxAttempts"`;
   const coalesceActive = pass.activeStart === "restart";
   // A queued scan already covers new requests. Flag a rerun once it has started.
-  const recordRestart = sql`"Pass"."claimToken" IS NOT NULL OR "Pass".cursor ? 'restartCursor'
-    ${pass.restartFloorMs ? sql`OR "Pass".cursor ? 'censusStartedAt'` : sql``}`;
+  const recordRestart = sql`("Pass".attempts < "Pass"."maxAttempts" OR ${reviving})
+    AND ("Pass"."claimToken" IS NOT NULL OR "Pass".cursor ? 'restartCursor'
+      ${pass.restartFloorMs ? sql`OR "Pass".cursor ? 'censusStartedAt'` : sql``})`;
   const freshAt = pass.restartFloorMs
     ? sql`greatest(excluded."availableAt", CASE WHEN "Pass"."doneAt" IS NOT NULL
         THEN ${censusFloor(sql`"Pass".cursor`, pass.restartFloorMs)} END)`
@@ -72,6 +74,7 @@ export async function startPass(
   const started = await repositoryQueries(db).execute<{
     at: string;
     due: boolean;
+    live: boolean;
     claimable: boolean;
   }>(sql`
     INSERT INTO "Pass" (name, key, cursor, "runId", "availableAt")
@@ -106,16 +109,18 @@ export async function startPass(
       "availableAt" = CASE WHEN ${coalesceActive} AND (${finished}) THEN ${freshAt} WHEN (${coalesceActive} AND NOT (${reviving})) OR "Pass"."waitCause" = ${kernelWaitCause.enum.funding} THEN "Pass"."availableAt" ELSE least("Pass"."availableAt", excluded."availableAt") END,
       "wakeVersion" = CASE WHEN NOT (${finished}) AND (${coalesceActive} OR "Pass"."waitCause" = ${kernelWaitCause.enum.funding}) THEN "Pass"."wakeVersion" ELSE "Pass"."wakeVersion" + 1 END, "updatedAt" = now()
     RETURNING ${isoText(sql`"availableAt"`)} AS at, "availableAt" <= now() AS due,
+      attempts < "maxAttempts" AS live,
       attempts < "maxAttempts" AND (NOT ${coalesceActive} OR "claimToken" IS NULL
         OR "claimDeadline" <= now()) AS claimable`);
   const row = started.rows[0];
   // A pending Pass that spent its attempts keeps them until a member retries
   // it or a scheduled start revives it, so no runner can claim it and no wake
   // is owed. One revival per scheduled start bounds a Pass that always fails.
-  if (!row?.claimable) return;
+  if (!row?.claimable) return row?.live ?? false;
   // A future start owns its deadline; an immediate wake would find nothing due.
   if (!row.due) await wakeAtDeadline(db, new Date(row.at), "kernel.pass-start");
   else await wakeAfterCommit(db);
+  return true;
 }
 
 // Leave room for one 22 s database transaction and fenced settlement.

@@ -77,7 +77,7 @@ const exactOrderPurchasesSql = (purchaseIds?: SQL): SQL => sql`
       AND (original."vendorId" IS NULL OR p."vendorId" = original."vendorId")`;
 
 /** Includes other subjects' decisions that explicitly name this Email's events. */
-export const correlatedEmailLinkDecisionsSql = emailLinkDecisionsForEmailsSql(
+const correlatedEmailLinkDecisionsSql = emailLinkDecisionsForEmailsSql(
   sql`ARRAY["Email"."id"]`,
 );
 

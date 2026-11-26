@@ -23,7 +23,7 @@ async function runHourlyBackstop(
       async () => {
         const [
           { wakeKernel },
-          { mailboxDiscoveryPass, purchaseDiscoveryPass },
+          { purchaseDiscoveryPass },
           { ringDueDeviceWork },
           { retentionPass },
           { runsReconcilePass },
@@ -45,16 +45,17 @@ async function runHourlyBackstop(
             await ringDueDeviceWork(db).catch((error: unknown) =>
               errors.push(error),
             );
-            // A scheduled start revives a Pass that spent its attempts.
-            for (const pass of [
-              runsReconcilePass,
-              retentionPass,
-              purchaseDiscoveryPass,
-              mailboxDiscoveryPass,
-              "email.purchase-discovery",
-            ])
+            for (const pass of [runsReconcilePass, retentionPass])
               await startPass(db, pass, { revive: true }).catch(
                 (error: unknown) => errors.push(error),
+              );
+            // Spent discovery Passes resume through a member retry in Work.
+            for (const pass of [
+              purchaseDiscoveryPass,
+              "email.purchase-discovery",
+            ])
+              await startPass(db, pass).catch((error: unknown) =>
+                errors.push(error),
               );
             await requestDerivedRebuild(db, { force: false }).catch(
               (error: unknown) => errors.push(error),

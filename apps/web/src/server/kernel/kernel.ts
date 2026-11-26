@@ -185,7 +185,7 @@ export type Kernel = {
       availableAt?: Date;
       revive?: boolean;
     },
-  ): Promise<void>;
+  ): Promise<boolean>;
   repointOwnedReference(
     tx: Database,
     request: OwnedReferenceRepoint,

@@ -5,7 +5,7 @@ import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { emailSuggestedEvidenceSql } from "~/server/domains/email/repo/email-purchase-links";
 
-export const EMAIL_PURCHASE_PAGE = 50;
+const EMAIL_PURCHASE_PAGE = 50;
 
 /** Walk Email UUIDs first. The cursor advances even through pages without suggestions. */
 export async function readEmailPurchaseDiscoveryPage(
