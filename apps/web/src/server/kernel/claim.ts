@@ -87,8 +87,10 @@ const cancellable = (target: ClaimTarget) => target.table !== "ScopeDirty";
 const leaseInterval = (ms: number) => sql`make_interval(secs => ${ms / 1000})`;
 
 /** Attempt `n`'s backoff: 30 s doubling to an hour. */
+const BACKOFF_BASE_MS = 30_000;
+const BACKOFF_MAX_MS = 60 * 60_000;
 const backoffMs = (attempts: number) =>
-  Math.min(60 * 60_000, 30_000 * 2 ** Math.max(0, attempts - 1));
+  Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** Math.max(0, attempts - 1));
 
 const WAIT_CAUSE = {
   provider_capacity: "provider_capacity",
@@ -180,7 +182,8 @@ export async function settleFailure(
 ): Promise<WorkFailure> {
   const failure = classifyWorkFailure(error);
   const raw = rawError(error);
-  const owned = sql`${identity(target)} AND "claimToken" = ${token}::uuid`;
+  const owned = sql`${identity(target)} AND "claimToken" = ${token}::uuid
+    ${target.table === "Pass" ? sql`AND "claimDeadline" > now() AND "cancelledAt" IS NULL` : sql``}`;
   switch (failure.kind) {
     case "interrupted":
       return failure;
@@ -291,6 +294,17 @@ const freeNow = (t: SQL): SQL =>
 const freeAt = (t: SQL): SQL =>
   sql`CASE WHEN ${t}."claimToken" IS NULL THEN ${t}."availableAt"
     WHEN ${t}."claimDeadline" IS NOT NULL THEN greatest(${t}."availableAt", ${t}."claimDeadline") END`;
+
+/** Recover the final lapse at expiry; a replacement claim owes normal backoff. */
+const passRecoveryAt = (p: SQL): SQL =>
+  sql`${p}."claimDeadline" + CASE WHEN ${p}.attempts + 1 >= ${p}."maxAttempts"
+    THEN interval '0 seconds'
+    ELSE make_interval(secs => least(${BACKOFF_MAX_MS / 1000},
+      ${BACKOFF_BASE_MS / 1000} * power(2::double precision, least(7, ${p}.attempts)))) END`;
+
+const passFreeAt = (p: SQL): SQL =>
+  sql`CASE WHEN ${p}."claimToken" IS NULL THEN ${p}."availableAt"
+    WHEN ${p}."claimDeadline" IS NOT NULL THEN greatest(${p}."availableAt", ${passRecoveryAt(p)}) END`;
 
 /** Dirty rows a runner may claim now. */
 const claimableScope = (d: SQL): SQL =>
@@ -448,8 +462,12 @@ async function parkPartition(
   }>(sql`UPDATE ${sql.raw(`"${table}"`)} SET "claimPartition" = ${limit?.partition ?? null},
     "waitCause" = ${kernelWaitCause.enum.provider_capacity}, "availableAt" = now() + interval '15 seconds'
     WHERE ${match} AND "cancelledAt" IS NULL AND "availableAt" <= now()
-      AND attempts < "maxAttempts" AND ("claimToken" IS NULL OR "claimDeadline" <= now())
-      AND ${table === "Ask" ? sql`state = ${ASK.queued}` : sql`"doneAt" IS NULL`} RETURNING 1 AS parked`);
+      AND attempts < "maxAttempts"
+      AND ${
+        table === "Ask"
+          ? sql`state = ${ASK.queued} AND ("claimToken" IS NULL OR "claimDeadline" <= now())`
+          : sql`"doneAt" IS NULL AND ${passFreeAt(sql`"Pass"`)} <= now()`
+      } RETURNING 1 AS parked`);
   return result.rows.length > 0;
 }
 
@@ -655,6 +673,7 @@ export type ClaimedPass = {
   attempts: number;
   token: string;
   deadline: Date;
+  recoveryAt: Date;
 };
 
 /** includes-deleted: priority follows the originating Run's member request. */
@@ -675,14 +694,14 @@ export async function claimPass(
     WHERE ${runnerPass(
       sql`"Pass"`,
       passes.map((pass) => pass.name),
-    )} AND ${freeNow(sql`"Pass"`)}
+    )} AND ${passFreeAt(sql`"Pass"`)} <= now()
     ) ranked WHERE rank = 1 ORDER BY position`);
   for (const candidate of candidates.rows) {
     const pass = passes.find((entry) => entry.name === candidate.name);
     if (!pass) continue;
     const claimed = await claimPassGroup(db, pass);
     if (claimed) {
-      await wakeClaimRecovery(claimed.deadline, db);
+      await wakeClaimRecovery(claimed.recoveryAt, db);
       return claimed;
     }
   }
@@ -707,12 +726,13 @@ async function claimPassGroup(
         cursor: unknown;
         attempts: number;
         deadline: string | null;
+        recoveryAt: string;
       }>(sql`
     WITH picked AS (
       SELECT name, key, attempts + ("claimToken" IS NOT NULL)::int AS spent,
         "claimToken" IS NOT NULL AS lapsed, "maxAttempts"
       FROM "Pass"
-      WHERE ${runnerPass(sql`"Pass"`, names)} AND ${freeNow(sql`"Pass"`)}
+      WHERE ${runnerPass(sql`"Pass"`, names)} AND ${passFreeAt(sql`"Pass"`)} <= now()
       ORDER BY ${passOrder()} LIMIT 1
       FOR UPDATE SKIP LOCKED
     )
@@ -722,10 +742,16 @@ async function claimPassGroup(
       "claimPartition" = ${pass.claimLimit?.partition ?? null},
       "claimDeadline" = CASE WHEN picked.spent < picked."maxAttempts" THEN now() + ${leaseInterval(CLAIM_LEASE_MS)} END
     FROM picked WHERE p.name = picked.name AND p.key = picked.key
-    RETURNING p.name, p.key, p.cursor, p."wakeVersion", p.attempts, ${isoText(sql`p."claimDeadline"`)} AS deadline`);
+    RETURNING p.name, p.key, p.cursor, p."wakeVersion", p.attempts, ${isoText(sql`p."claimDeadline"`)} AS deadline,
+      ${isoText(passRecoveryAt(sql`p`))} AS "recoveryAt"`);
       const row = result.rows[0];
       return row?.deadline
-        ? { ...row, token, deadline: new Date(row.deadline) }
+        ? {
+            ...row,
+            token,
+            deadline: new Date(row.deadline),
+            recoveryAt: new Date(row.recoveryAt),
+          }
         : null;
     },
     async (q) => {
@@ -778,7 +804,7 @@ export const nextWakeSql = (registry: KernelRegistry): SQL => {
       )}),
     (SELECT min("claimDeadline") FROM "Ask" WHERE state = ${ASK.sent}
       AND feature = ANY(${textArrayParam([...registry.asks.keys()])})),
-    (SELECT min(${freeAt(sql`"Pass"`)}) FROM "Pass"
+    (SELECT min(${passFreeAt(sql`"Pass"`)}) FROM "Pass"
       WHERE ${runnerPass(sql`"Pass"`, [...registry.passes.keys()])})
   )::timestamp)`;
 };

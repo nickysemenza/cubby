@@ -2101,10 +2101,11 @@ describe("evidence-facts kernel", () => {
       name,
       async run(db) {
         pages++;
-        await repositoryQueries(db).execute(
-          sql`UPDATE "Pass" SET "claimDeadline" = now() - interval '1 second' WHERE name = ${name}`,
-        );
-        return { cursor: { page: 1 }, done: true };
+        if (pages !== 2)
+          await repositoryQueries(db).execute(
+            sql`UPDATE "Pass" SET "claimDeadline" = now() - interval '1 second' WHERE name = ${name}`,
+          );
+        return { cursor: { page: 1 }, done: false };
       },
     });
     const kernel = createKernel([
@@ -2112,22 +2113,46 @@ describe("evidence-facts kernel", () => {
     ]);
     await seedPass(ctx.db, { name, key: "default", maxAttempts: 2 });
 
-    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+    const read = async () =>
+      (
+        await repositoryQueries(ctx.db).execute<{
+          attempts: number;
+          cursor: unknown;
+          claimToken: string | null;
+          doneAt: string | null;
+        }>(
+          sql`SELECT attempts, cursor, "claimToken", "doneAt" FROM "Pass" WHERE name = ${name}`,
+        )
+      ).rows[0];
+    const elapseBackoff = () =>
+      repositoryQueries(ctx.db).execute(
+        sql`UPDATE "Pass" SET "claimDeadline" = now() - interval '31 seconds' WHERE name = ${name}`,
+      );
+
     expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
     expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
+    expect(pages).toBe(1);
+    await elapseBackoff();
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+    expect(await read()).toEqual({
+      attempts: 0,
+      cursor: { page: 1 },
+      claimToken: null,
+      doneAt: null,
+    });
+
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
     expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
-    expect(pages).toBe(2);
-    const result = await repositoryQueries(ctx.db).execute<{
-      attempts: number;
-      cursor: unknown;
-      claimToken: string | null;
-      doneAt: string | null;
-    }>(
-      sql`SELECT attempts, cursor, "claimToken", "doneAt" FROM "Pass" WHERE name = ${name}`,
-    );
-    expect(result.rows).toEqual([
-      { attempts: 2, cursor: null, claimToken: null, doneAt: null },
-    ]);
+    await elapseBackoff();
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
+    expect(pages).toBe(4);
+    expect(await read()).toEqual({
+      attempts: 2,
+      cursor: { page: 1 },
+      claimToken: null,
+      doneAt: null,
+    });
   });
 
   it("cannot publish a cancelled pass holder's cursor after the pass is restarted", async () => {
