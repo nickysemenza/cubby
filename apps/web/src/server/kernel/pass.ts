@@ -264,22 +264,23 @@ export async function runOnePass(
         const restartAt = floor
           ? sql`greatest(now(), ${censusFloor(sql`cursor`, floor)})`
           : sql`now()`;
-        const resultCursor = sql`${JSON.stringify(result.cursor)}::jsonb`;
-        const nextCursor = floor
-          ? sql`coalesce(nullif(${resultCursor}, 'null'::jsonb), '{}'::jsonb)
-              || jsonb_build_object('censusStartedAt', cursor->'censusStartedAt')`
-          : resultCursor;
-        const checkpoint =
-          pass.activeStart === "restart"
-            ? sql`CASE
-              WHEN ${restart} THEN cursor->${"restartCursor"}
-              WHEN ${restartPending} THEN
-                coalesce(nullif(${nextCursor}, 'null'::jsonb), '{}'::jsonb)
-                || jsonb_build_object(${"restartCursor"}::text, cursor->${"restartCursor"})
-              ELSE ${nextCursor} END`
-            : nextCursor;
-        const settle = (tx: Database) =>
-          repositoryQueries(tx).execute<{
+        const settle = (tx: Database) => {
+          // Publication can update the cursor with the outcome of a page write.
+          const resultCursor = sql`${JSON.stringify(result.cursor)}::jsonb`;
+          const nextCursor = floor
+            ? sql`coalesce(nullif(${resultCursor}, 'null'::jsonb), '{}'::jsonb)
+                || jsonb_build_object('censusStartedAt', cursor->'censusStartedAt')`
+            : resultCursor;
+          const checkpoint =
+            pass.activeStart === "restart"
+              ? sql`CASE
+                WHEN ${restart} THEN cursor->${"restartCursor"}
+                WHEN ${restartPending} THEN
+                  coalesce(nullif(${nextCursor}, 'null'::jsonb), '{}'::jsonb)
+                  || jsonb_build_object(${"restartCursor"}::text, cursor->${"restartCursor"})
+                ELSE ${nextCursor} END`
+              : nextCursor;
+          return repositoryQueries(tx).execute<{
             at: string;
             wait: boolean;
           }>(sql`
@@ -304,6 +305,7 @@ export async function runOnePass(
           }
         WHERE name = ${claimed.name} AND key = ${claimed.key}
         RETURNING ${isoText(sql`"availableAt"`)} AS at, "doneAt" IS NULL AND "availableAt" > now() AS wait`);
+        };
         const published = result.publish
           ? await claim.fenced(async (tx) => {
               await result.publish?.(tx);
