@@ -5,7 +5,10 @@ import {
   mailboxDiscoveryProgress,
   MAIL_DISCOVERY_ADMISSION_WAIT,
 } from "@cubby/schemas/mailbox-research";
-import { type ExecutedRunPurpose } from "@cubby/schemas/run-fields";
+import {
+  RUN_ASK_OUTCOME_WAIT,
+  type ExecutedRunPurpose,
+} from "@cubby/schemas/run-fields";
 import { runStepState } from "@cubby/schemas/run-step";
 import { createLogger } from "@cubby/worker-tracing";
 import { and, not, eq, getTableColumns, isNull, sql } from "drizzle-orm";
@@ -213,6 +216,20 @@ type LaunchWorkflowRunInput = {
   purpose: ExecutedRunPurpose;
   automatic?: boolean;
 };
+
+function launchWaitsOnAsk(
+  owner: Pick<typeof runTable.$inferSelect, "status" | "failureCode">,
+  automatic: boolean | undefined,
+): boolean {
+  if (owner.status !== "paused" || owner.failureCode !== RUN_ASK_OUTCOME_WAIT)
+    return false;
+  if (!automatic)
+    throw createAppError(
+      "RUN_CONTROL_REFUSED",
+      "Settle the request with an unknown outcome in the Run's machinery",
+    );
+  return true;
+}
 type LaunchedWorkflowRun = { attempt: number; instanceId: string };
 
 export async function launchWorkflowRun(
@@ -244,6 +261,7 @@ export async function launchWorkflowRun(
       .where(eq(runTable.id, input.runId))
       .for("update");
     if (!owner) throw new Error("Run no longer exists");
+    if (launchWaitsOnAsk(owner, input.automatic)) return null;
     if (
       input.automatic &&
       owner.purpose === "mail_discovery" &&
@@ -393,6 +411,7 @@ async function launchPassRun(
       .where(eq(runTable.id, input.runId))
       .for("update");
     if (!owner) throw new Error("Run no longer exists");
+    if (launchWaitsOnAsk(owner, input.automatic)) return null;
     if (
       input.automatic &&
       ["completed", "failed", "cancelled"].includes(owner.status)
@@ -521,15 +540,27 @@ export async function yieldClaimedMailDiscovery(
     );
 }
 
-/** A recovered universal Pass restores only its own reconciled failure, under its fence. */
+/** A recovered or woken Run Pass restores its own Run under its fence. */
 export async function resumeClaimedWorkflowRun(
   db: Database,
   params: WorkflowRunParams,
-  reason: "job_failed" | "funding_ready" | "mail_admission" = "job_failed",
+  reason:
+    | "job_failed"
+    | "funding_ready"
+    | "mail_admission"
+    | "ask_outcome" = "job_failed",
 ): Promise<void> {
   const current = currentRunClaim(params);
   if (!current || (reason === "job_failed" && !current.recovered)) return;
   const runId = runEntityId.parse(params.runId);
+  const [pausedStatus, failureCode] = (
+    {
+      job_failed: ["failed", "job_failed"],
+      funding_ready: ["paused_auth", "execution_limit"],
+      mail_admission: ["paused", MAIL_DISCOVERY_ADMISSION_WAIT],
+      ask_outcome: ["paused", RUN_ASK_OUTCOME_WAIT],
+    } as const
+  )[reason];
   try {
     const waiting = await withTransactionDatabase(db, async (tx) => {
       const mailbox = await lockMailDiscoveryRunAdmission(tx, runId);
@@ -562,14 +593,8 @@ export async function resumeClaimedWorkflowRun(
         mailOwner &&
         !mailOwner.deletedAt &&
         !mailOwner.retiredAt &&
-        (reason === "mail_admission"
-          ? mailOwner.status === "paused" &&
-            mailOwner.failureCode === MAIL_DISCOVERY_ADMISSION_WAIT
-          : reason === "funding_ready"
-            ? mailOwner.status === "paused_auth" &&
-              mailOwner.failureCode === "execution_limit"
-            : mailOwner.status === "failed" &&
-              mailOwner.failureCode === "job_failed");
+        mailOwner.status === pausedStatus &&
+        mailOwner.failureCode === failureCode;
       if (
         eligible &&
         mailbox &&
@@ -626,22 +651,8 @@ export async function resumeClaimedWorkflowRun(
         .where(
           and(
             eq(runTable.id, runId),
-            eq(
-              runTable.status,
-              reason === "funding_ready"
-                ? "paused_auth"
-                : reason === "mail_admission"
-                  ? "paused"
-                  : "failed",
-            ),
-            eq(
-              runTable.failureCode,
-              reason === "funding_ready"
-                ? "execution_limit"
-                : reason === "mail_admission"
-                  ? MAIL_DISCOVERY_ADMISSION_WAIT
-                  : "job_failed",
-            ),
+            eq(runTable.status, pausedStatus),
+            eq(runTable.failureCode, failureCode),
             isNull(runTable.deletedAt),
             isNull(runTable.retiredAt),
             not(successor),

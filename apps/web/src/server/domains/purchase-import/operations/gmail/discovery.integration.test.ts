@@ -11,8 +11,10 @@ import {
   mailboxDiscoveryProgress,
 } from "@cubby/schemas/mailbox-research";
 import { eq, sql } from "drizzle-orm";
+import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { account } from "~/server/db/auth.schema";
@@ -31,6 +33,9 @@ import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { readRunPass } from "~/server/domains/run/repo/run-execution";
+import { machineryHandlers } from "~/server/domains/work/operations/machinery.server";
+import { systemPrincipal } from "~/server/http/authenticate";
+import { createKernel, defineAsk, defineModule } from "~/server/kernel/api";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 import { withRunPassFixture } from "~/server/workflows/runs/pass.fixtures";
@@ -759,6 +764,280 @@ describe("scheduled Gmail discovery", () => {
     } finally {
       page.mockRestore();
     }
+  });
+
+  it.each([
+    { classifier: "triage", outcome: "retry" },
+    { classifier: "triage", outcome: "abandoned" },
+    { classifier: "relevance", outcome: "abandoned" },
+  ] as const)(
+    "parks discovery until a member settles the unknown $classifier Ask with $outcome",
+    async ({ classifier, outcome }) => {
+      const state = await seed();
+      const runId = state.params.runId;
+      const { advanceRunPass } =
+        await import("~/server/workflows/runs/pass.fixtures");
+      const discovery = await import("./discovery");
+      const produce = vi.fn(async () => ({ output: "related" as const }));
+      const ask = defineAsk({
+        feature: "synthetic.discovery-classification",
+        producer: "model",
+        promptVersion: "1",
+        input: z.string(),
+        output: z.literal("related"),
+        produce,
+      });
+      const kernel = createKernel([
+        defineModule({
+          name: "synthetic.discovery-classification",
+          asks: [ask],
+        }),
+      ]);
+      const classify = vi.fn(() =>
+        kernel.withAsk(ctx.db, ask, "synthetic email", {
+          runId,
+          initialOutcome: "unknown",
+        }),
+      );
+      const real = discovery.advanceMailDiscoveryPage;
+      const page = vi
+        .spyOn(discovery, "advanceMailDiscoveryPage")
+        .mockImplementation((db, params, cursor) =>
+          real(db, params, cursor, {
+            ...ports(
+              gmail({
+                listMessages: async () => ({
+                  messages: [{ id: "source-one" }],
+                }),
+              }),
+            ),
+            triage:
+              classifier === "triage" ? classify : async () => "uncertain",
+            relevance:
+              classifier === "relevance"
+                ? async () => ({ classification: await classify() })
+                : async () => ({ classification: "uncertain" }),
+          }),
+        );
+      try {
+        expect(await advanceRunPass(ctx.db)).toBe(true);
+        const frozen = await readRun(runId);
+        const frozenPage = mailboxDiscoveryProgress.parse(frozen.progress).page;
+        const queryKey = frozenPage?.scopedKey;
+        if (!queryKey)
+          throw new Error("Synthetic discovery did not freeze a query");
+        const queryCoverage = async () =>
+          (
+            await getDb(ctx.db).select().from(mailboxCursor)
+          )[0]?.coverage?.scoped.find((query) => query.key === queryKey);
+        const waitingRun = await ensureRun(ctx.db, ctx.actor, {
+          purpose: "mail_discovery",
+          trigger: "manual",
+          status: "completed",
+          input: mailboxDiscoveryInput.parse(frozen.input),
+          progress: {
+            ...mailboxDiscoveryProgress.parse(frozen.progress),
+            page: undefined,
+          },
+          execution: false,
+        });
+        await getDb(ctx.db)
+          .update(run)
+          .set({ status: "paused" })
+          .where(eq(run.id, waitingRun));
+        await launchWorkflowRun(ctx.db, {
+          runId: waitingRun,
+          purpose: "mail_discovery",
+        });
+        expect(await advanceRunPass(ctx.db)).toBe(true);
+        expect(await readRunPass(ctx.db, waitingRun)).toMatchObject({
+          state: "waiting",
+        });
+
+        await getDb(ctx.db)
+          .update(kernelPass)
+          .set({ attempts: 1 })
+          .where(eq(kernelPass.key, runId));
+        expect(await advanceRunPass(ctx.db)).toBe(true);
+        expect(await readRun(runId)).toMatchObject({
+          status: "paused",
+          failureCode: "ask_outcome",
+          progress: frozen.progress,
+        });
+        expect(await readRunPass(ctx.db, runId)).toMatchObject({
+          state: "waiting",
+          attempts: 1,
+          availableAt: null,
+        });
+        expect(await readRunPass(ctx.db, waitingRun)).toMatchObject({
+          state: "due",
+        });
+        await controlWorkflowRun(
+          ctx.db,
+          ctx.actor,
+          {
+            runPublicId: (await readRun(waitingRun)).shortcode,
+            action: "cancel",
+          },
+          "mail_discovery",
+        );
+        expect(await queryCoverage()).toMatchObject({ completed: false });
+        expect(await startMailDiscovery(ctx.db)).toMatchObject({ started: 0 });
+        expect(await created()).toHaveLength(2);
+
+        const { startRunPass } =
+          await import("~/server/workflows/runs/run-pass");
+        await startRunPass(ctx.db, {
+          runId,
+          generation: state.params.attempt,
+          purpose: "mail_discovery",
+          restart: false,
+        });
+        expect(await advanceRunPass(ctx.db)).toBe(false);
+        expect(classify).toHaveBeenCalledOnce();
+        expect(produce).not.toHaveBeenCalled();
+
+        const request = {
+          principal: systemPrincipal({
+            ...buildKernelContext(ctx.db, ctx.actor.userId),
+            actorContext: ctx.actor,
+          }),
+          headers: new Headers(),
+          signal: new AbortController().signal,
+        };
+        const record = { entity: "run", id: frozen.shortcode } as const;
+        const read = await machineryHandlers.operations.read({
+          data: record,
+          request,
+        });
+        if (!read.ok) throw new Error(read.error.message);
+        const unknownGaps = read.data.machinery?.gaps.items.filter(
+          (item) => item.askState === "unknown",
+        );
+        expect(unknownGaps).toHaveLength(1);
+        const gap = unknownGaps?.[0];
+        expect(gap?.input).toContain(
+          "the request was sent and its outcome is unknown",
+        );
+        expect(gap?.actions.map((action) => action.value)).toEqual([
+          "retry",
+          "abandoned",
+        ]);
+        const failedRunId = await ensureRun(ctx.db, ctx.actor, {
+          purpose: "mail_discovery",
+          trigger: "manual",
+          status: "completed",
+          execution: false,
+          input: mailboxDiscoveryInput.parse(frozen.input),
+          progress: mailboxDiscoveryProgress.parse(frozen.progress),
+        });
+        await getDb(ctx.db)
+          .update(run)
+          .set({ status: "failed", failureCode: "job_failed" })
+          .where(eq(run.id, failedRunId));
+        await expect(
+          kernel.withAsk(ctx.db, ask, "synthetic email", {
+            runId: failedRunId,
+          }),
+        ).rejects.toMatchObject({ name: "AskUnknownError" });
+        const failedRecord = {
+          entity: "run",
+          id: (await readRun(failedRunId)).shortcode,
+        } as const;
+        const failedRead = await machineryHandlers.operations.read({
+          data: failedRecord,
+          request,
+        });
+        if (!failedRead.ok) throw new Error(failedRead.error.message);
+        const failedGap = failedRead.data.machinery?.gaps.items.find(
+          (item) => item.askState === "unknown",
+        );
+        expect(failedGap?.actions).toEqual(gap?.actions);
+        const action = failedGap?.actions.find(
+          (action) => action.value === outcome,
+        );
+        if (!action) throw new Error("Unknown Ask decision was not offered");
+        const { label: _label, ...decision } = action;
+        expect(
+          await machineryHandlers.operations.decide({
+            data: { ...failedRecord, decisions: [decision] },
+            request,
+          }),
+        ).toMatchObject({ ok: true });
+        expect(await readRunPass(ctx.db, failedRunId)).toBeNull();
+        expect(await readRunPass(ctx.db, runId)).toMatchObject({
+          state: "due",
+        });
+        expect(await advanceRunPass(ctx.db)).toBe(true);
+        expect(produce).toHaveBeenCalledTimes(outcome === "retry" ? 1 : 0);
+        expect(await queryCoverage()).toMatchObject({
+          completed: true,
+          pageToken: null,
+          emailCount: 1,
+        });
+        const [message] = await getDb(ctx.db).select().from(emailTable);
+        expect(message).toMatchObject({
+          classification: outcome === "retry" ? "related" : "uncertain",
+          classificationStage:
+            classifier === "triage" && outcome === "abandoned"
+              ? "model"
+              : "decision",
+          status: "pending",
+          orderMailId: expect.any(String),
+        });
+        expect(await readRun(runId)).toMatchObject({
+          status: "completed",
+          progress: { pagesDone: 1 },
+        });
+      } finally {
+        page.mockRestore();
+      }
+    },
+  );
+
+  it("admits a targeted query while the mailbox history cursor waits on an Ask", async () => {
+    const state = await seed();
+    const baseline = ports(
+      gmail({
+        listMessages: async () => ({ messages: [] }),
+      }),
+    );
+    await listMailDiscovery(ctx.db, state.params, baseline);
+    await saveMailDiscoveryBatch(ctx.db, state.params, 0, baseline);
+    await finishMailDiscovery(ctx.db, state.params);
+    expect(await startMailDiscovery(ctx.db)).toMatchObject({ started: 1 });
+    const history = (await created())[1]!;
+    const provider = gmail({
+      listHistory: async () => ({
+        historyId: "110",
+        history: [
+          { id: "110", messagesAdded: [{ message: { id: "history-source" } }] },
+        ],
+      }),
+    });
+    await listMailDiscovery(ctx.db, history, ports(provider));
+    expect(
+      mailboxDiscoveryProgress.parse((await readRun(history.runId)).progress)
+        .page,
+    ).toMatchObject({ messageIds: ["history-source"] });
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "paused", failureCode: "ask_outcome" })
+      .where(eq(run.id, history.runId));
+
+    expect(await startMailDiscovery(ctx.db)).toMatchObject({ started: 0 });
+    await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic Independent Vendor",
+      orderEmailSenders: ["orders@independent.example.test"],
+    });
+    expect(await startMailDiscovery(ctx.db)).toMatchObject({ started: 1 });
+    const query = (await created())[2]!;
+    expect(await readRun(query.runId)).toMatchObject({
+      status: "running",
+      progress: { discoveryScope: { kind: "query" } },
+    });
+    expect(await startMailDiscovery(ctx.db)).toMatchObject({ started: 0 });
+    expect(await created()).toHaveLength(3);
   });
 
   it("alternates verified Vendor history with new mail and continues only while coverage remains", async () => {

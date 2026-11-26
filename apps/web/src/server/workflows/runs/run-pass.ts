@@ -14,7 +14,7 @@ import {
   MAIL_DISCOVERY_ADMISSION_WAIT,
   mailboxDiscoveryProgress,
 } from "@cubby/schemas/mailbox-research";
-import { RUN_KINDS } from "@cubby/schemas/run-fields";
+import { RUN_ASK_OUTCOME_WAIT, RUN_KINDS } from "@cubby/schemas/run-fields";
 import { and, eq, sql, type SQL } from "drizzle-orm";
 
 import { findErrorCause } from "~/lib/error-diagnostics";
@@ -24,7 +24,10 @@ import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { run } from "~/server/db/retained-tables";
-import { readRun } from "~/server/domains/run/repo/ai-work-state";
+import {
+  readRun,
+  writeRunningAttemptProgress,
+} from "~/server/domains/run/repo/ai-work-state";
 import { pendingFundingResumeAt } from "~/server/domains/run/repo/execution-context";
 import {
   readRunPass,
@@ -36,8 +39,10 @@ import {
 } from "~/server/domains/run/repo/run-execution";
 import { listRunSteps } from "~/server/domains/run/repo/run-step";
 import {
+  AskUnknownError,
   cancelWork,
   definePass,
+  registerUnknownAskWait,
   startPass,
   type Claim,
   type PassResult,
@@ -69,6 +74,41 @@ const passTarget = (runId: string) => ({
   name: RUN_EXECUTE_PASS,
   key: runId,
 });
+
+function waitForAskOutcome(
+  runId: RunId,
+  cursor: RunPassCursor,
+  error: AskUnknownError,
+): PassResult {
+  const result: PassResult = {
+    cursor,
+    done: false,
+    availableAt: null,
+    async publish(tx) {
+      const outcome = await registerUnknownAskWait(
+        tx,
+        error.inputHash,
+        runId,
+        passTarget(runId),
+        () =>
+          writeRunningAttemptProgress(tx, runId, cursor.generation, {
+            status: "paused",
+            failureCode: RUN_ASK_OUTCOME_WAIT,
+            dispatchError:
+              "Waiting for you to settle an AI request with an unknown outcome",
+          }),
+      );
+      if (outcome === "settled") {
+        // The member or a late Answer already settled the Ask. Replay now.
+        delete result.availableAt;
+      }
+      if (outcome === "stopped") result.done = true;
+      if (outcome === "waiting" && cursor.purpose === "mail_discovery")
+        await announceMailDiscoveryVacancy(tx, runId);
+    },
+  };
+  return result;
+}
 
 /** The claim as workflow code sees it: a fence for open transactions and a pre-provider check. */
 const passFence = (claim: Claim) => ({
@@ -132,6 +172,8 @@ async function advance(
   const before = await readRun(db, runId);
   if (!before || before.purpose !== cursor.purpose)
     return { cursor, done: true };
+  if (before.status === "paused" && before.failureCode === RUN_ASK_OUTCOME_WAIT)
+    await resumeClaimedWorkflowRun(db, params, "ask_outcome");
   if (cursor.purpose === "mail_discovery") {
     if (before.status === "running")
       await yieldClaimedMailDiscovery(db, params);
@@ -275,18 +317,31 @@ export const runExecutePass = definePass({
     }, HEARTBEAT_MS);
     const started = performance.now();
     try {
-      const result = await withWorkflowExecution(
-        {
-          runId,
-          attempt: cursor.generation,
-          database: db,
-          recovered: true,
-          claim: passFence(claim),
-          live: passLive(runId, claim.token),
-        },
-        () => advance(db, claim, cursor),
-      );
-      if (!result.waitCause && !result.availableAt) {
+      const withExecution = <T>(work: () => Promise<T>) =>
+        withWorkflowExecution(
+          {
+            runId,
+            attempt: cursor.generation,
+            database: db,
+            recovered: true,
+            claim: passFence(claim),
+            live: passLive(runId, claim.token),
+          },
+          work,
+        );
+      const result = await withExecution(() =>
+        advance(db, claim, cursor),
+      ).catch((error: unknown) => {
+        const ask = findErrorCause(
+          error,
+          (cause): cause is AskUnknownError => cause instanceof AskUnknownError,
+        );
+        if (!ask) throw error;
+        return waitForAskOutcome(runId, cursor, ask);
+      });
+      const publish = result.publish;
+      if (publish) result.publish = (tx) => withExecution(() => publish(tx));
+      if (!result.waitCause && result.availableAt === undefined) {
         return {
           ...result,
           durationSample: {
@@ -355,7 +410,7 @@ export async function wakeRunPasses(db: Database, runIds: SQL) {
     cursor: unknown;
   }>(sql`SELECT p.key, p.cursor FROM "Pass" p
     WHERE p.name = ${RUN_EXECUTE_PASS} AND p."doneAt" IS NULL AND p."cancelledAt" IS NULL
-      AND p."availableAt" > now()
+      AND p."availableAt" > now() AND isfinite(p."availableAt")
       AND p.key IN (SELECT ids."runId"::text FROM (${runIds}) ids("runId"))`);
   for (const row of waiting.rows) {
     const cursor = runPassCursor.safeParse(row.cursor).data;

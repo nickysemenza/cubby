@@ -136,7 +136,7 @@ struct MachineryPanel: View {
                         Text(
                             Words.attemptsLabel(
                                 n: pass.attempts, max: pass.maxAttempts,
-                                nextAt: Words.instant(pass.availableAt)))
+                                nextAt: pass.availableAt.map(Words.instant)))
                         if let error = pass.lastError { MachineryRaw(label: "Raw error", value: error) }
                     }
                 }

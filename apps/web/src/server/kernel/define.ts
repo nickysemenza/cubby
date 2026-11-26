@@ -592,7 +592,8 @@ export type Claim = {
 export type PassResult = {
   cursor: Json | null;
   done: boolean;
-  availableAt?: Date;
+  /** Omit to continue now, or set null to wait for a dependency's wake. */
+  availableAt?: Date | null;
   waitCause?: KernelWaitCause;
   /** Report skipped items while atomically checkpointing the successful page. */
   itemError?: Error;

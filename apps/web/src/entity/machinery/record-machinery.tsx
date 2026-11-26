@@ -365,7 +365,7 @@ function MachineryFactsBody({ read }: { read: Machinery }) {
           </p>
           <p>
             Updated: {pass.updatedAt ?? "Unknown"} · Next attempt:{" "}
-            {pass.availableAt}
+            {pass.availableAt ?? "When the request is settled"}
           </p>
           {pass.lastError ? (
             <pre className="break-words whitespace-pre-wrap">

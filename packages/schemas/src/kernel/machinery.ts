@@ -158,7 +158,7 @@ export const passWork = z.object({
   name: z.string(),
   key: z.string(),
   stage: kernelStage,
-  availableAt: z.iso.datetime(),
+  availableAt: z.iso.datetime().nullable(),
   waitCause: kernelWaitCause.nullable(),
   attempts: z.number().int().nonnegative(),
   maxAttempts: z.number().int().positive(),

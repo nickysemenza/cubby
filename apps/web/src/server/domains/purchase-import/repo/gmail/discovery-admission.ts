@@ -7,8 +7,12 @@ import {
   MAIL_DISCOVERY_CAPACITY,
   MAIL_DISCOVERY_ADMISSION_WAIT,
 } from "@cubby/schemas/mailbox-research";
-import { runStatus, runPurpose } from "@cubby/schemas/run-fields";
-import { and, eq, sql, or, isNull, notExists } from "drizzle-orm";
+import {
+  RUN_ASK_OUTCOME_WAIT,
+  runStatus,
+  runPurpose,
+} from "@cubby/schemas/run-fields";
+import { and, eq, inArray, sql, or, isNull, notExists } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db/database";
@@ -60,6 +64,8 @@ export function retainedMailDiscoveryScope(
   const declared = mailboxDiscoveryInput.parse(input.input);
   const progress = mailboxDiscoveryProgress.parse(input.progress);
   if (declared.controlled) return { kind: "mailbox" };
+  if (input.failureCode === RUN_ASK_OUTCOME_WAIT && progress.page?.scopedKey)
+    return { kind: "query", key: progress.page.scopedKey };
   if (progress.discoveryScope) {
     // Authorization also pauses initialization before a page freezes; only
     // the admission-wait owner establishes legacy queued history intent.
@@ -149,7 +155,10 @@ async function readMailDiscoveryOwners(
               ),
               and(
                 eq(run.status, runStatus.enum.paused),
-                eq(run.failureCode, MAIL_DISCOVERY_ADMISSION_WAIT),
+                inArray(run.failureCode, [
+                  MAIL_DISCOVERY_ADMISSION_WAIT,
+                  RUN_ASK_OUTCOME_WAIT,
+                ]),
                 runHasLivePass(execution),
               ),
               and(
@@ -186,6 +195,19 @@ async function readMailDiscoveryOwners(
   });
 }
 
+/** A parked page owns its coverage cursor while it waits for a member. */
+function parkedAskOwnsScope(
+  owner: MailDiscoveryOwner,
+  scope: MailboxDiscoveryScope,
+): boolean {
+  if (owner.status !== "paused" || owner.failureCode !== RUN_ASK_OUTCOME_WAIT)
+    return false;
+  const declared = owner.progress?.discoveryScope;
+  const queryKey =
+    owner.pageScopedKey ?? (declared?.kind === "query" ? declared.key : null);
+  return scope.kind === "query" ? queryKey === scope.key : queryKey === null;
+}
+
 /** Coalesce normal history demand while independent query owners finish. */
 export async function findQueuedAutomaticMailboxDiscovery(
   db: Database,
@@ -196,6 +218,7 @@ export async function findQueuedAutomaticMailboxDiscovery(
       const progress = owner.progress;
       return (
         owner.status !== "running" &&
+        owner.failureCode !== RUN_ASK_OUTCOME_WAIT &&
         progress?.admissionClass === "automatic" &&
         progress.discoveryScope?.kind === "mailbox"
       );
@@ -208,7 +231,11 @@ type AdmissionRequest = {
   runId?: RunId;
   recovery: boolean;
 };
-type AdmissionDecision = "available" | "scope_busy" | "capacity";
+type AdmissionDecision =
+  | "available"
+  | "scope_busy"
+  | "capacity"
+  | typeof RUN_ASK_OUTCOME_WAIT;
 
 /** Call only while holding this mailbox's admission lock in the same transaction. */
 export async function mailDiscoveryAdmission(
@@ -225,13 +252,26 @@ function admissionDecision(
   const active = owners.filter(
     (owner) => owner.id !== input.runId && owner.status === "running",
   );
-  const queued = owners.filter(
-    (owner) => owner.id !== input.runId && owner.status !== "running",
-  );
   const scopeOf = (owner: (typeof owners)[number]): MailboxDiscoveryScope =>
     owner.progress?.discoveryScope ?? {
       kind: "mailbox",
     };
+  if (
+    owners.some(
+      (owner) =>
+        owner.id !== input.runId && parkedAskOwnsScope(owner, input.scope),
+    )
+  )
+    return RUN_ASK_OUTCOME_WAIT;
+  // A parked owner reserves its cursor. Work queued behind that cursor waits
+  // outside admission priority so unrelated work can use the free slots.
+  const queueOwners = owners.filter(
+    (owner) =>
+      owner.status !== "running" &&
+      owner.failureCode !== RUN_ASK_OUTCOME_WAIT &&
+      !owners.some((parked) => parkedAskOwnsScope(parked, scopeOf(owner))),
+  );
+  const queued = queueOwners.filter((owner) => owner.id !== input.runId);
   const conflicts = (
     left: MailboxDiscoveryScope,
     right: MailboxDiscoveryScope,
@@ -280,11 +320,9 @@ function admissionDecision(
       (owner.progress?.admissionClass === "recovery" ||
         precedes(owner, candidate)) &&
       !active.some((current) => conflicts(scopeOf(current), scopeOf(owner))) &&
-      !owners.some(
+      !queueOwners.some(
         (prior) =>
-          prior.status !== "running" &&
-          precedes(prior, owner) &&
-          conflicts(scopeOf(prior), scopeOf(owner)),
+          precedes(prior, owner) && conflicts(scopeOf(prior), scopeOf(owner)),
       ),
   );
   return input.recovery ||
@@ -382,9 +420,11 @@ export async function mailDiscoveryShouldYield(
         (owner) =>
           owner.id !== input.runId &&
           owner.status !== "running" &&
-          (owner.progress?.discoveryScope?.kind === "query"
-            ? owner.progress.discoveryScope.key === scope.key
-            : !owner.historyOnly),
+          (owner.failureCode === RUN_ASK_OUTCOME_WAIT
+            ? parkedAskOwnsScope(owner, scope)
+            : owner.progress?.discoveryScope?.kind === "query"
+              ? owner.progress.discoveryScope.key === scope.key
+              : !owner.historyOnly),
       )
     )
       return false;

@@ -62,6 +62,8 @@ export async function startPass(
     : sql`now()`;
   const finished = sql`"Pass"."doneAt" IS NOT NULL OR "Pass"."cancelledAt" IS NOT NULL`;
   const reviving = sql`${options.revive ?? false} AND "Pass".attempts >= "Pass"."maxAttempts"`;
+  const keepsWait = sql`"Pass"."waitCause" = ${kernelWaitCause.enum.funding}
+    OR (NOT (${finished}) AND "Pass"."availableAt" = 'infinity'::timestamp)`;
   const coalesceActive = pass.activeStart === "restart";
   // A queued scan already covers new requests. Flag a rerun once it has started.
   const recordRestart = sql`("Pass".attempts < "Pass"."maxAttempts" OR ${reviving})
@@ -72,7 +74,7 @@ export async function startPass(
         THEN ${censusFloor(sql`"Pass".cursor`, pass.restartFloorMs)} END)`
     : sql`excluded."availableAt"`;
   const started = await repositoryQueries(db).execute<{
-    at: string;
+    at: string | null;
     due: boolean;
     live: boolean;
     claimable: boolean;
@@ -106,11 +108,12 @@ export async function startPass(
         THEN NULL ELSE "Pass"."lastError" END,
       "runId" = coalesce(excluded."runId", "Pass"."runId"),
       "doneAt" = NULL, "cancelledAt" = NULL,
-      "availableAt" = CASE WHEN ${coalesceActive} AND (${finished}) THEN ${freshAt} WHEN (${coalesceActive} AND NOT (${reviving})) OR "Pass"."waitCause" = ${kernelWaitCause.enum.funding} THEN "Pass"."availableAt" ELSE least("Pass"."availableAt", excluded."availableAt") END,
-      "wakeVersion" = CASE WHEN NOT (${finished}) AND (${coalesceActive} OR "Pass"."waitCause" = ${kernelWaitCause.enum.funding}) THEN "Pass"."wakeVersion" ELSE "Pass"."wakeVersion" + 1 END, "updatedAt" = now()
+      "availableAt" = CASE WHEN ${coalesceActive} AND (${finished}) THEN ${freshAt} WHEN (${coalesceActive} AND NOT (${reviving})) OR (${keepsWait}) THEN "Pass"."availableAt" ELSE least("Pass"."availableAt", excluded."availableAt") END,
+      "wakeVersion" = CASE WHEN NOT (${finished}) AND (${coalesceActive} OR (${keepsWait})) THEN "Pass"."wakeVersion" ELSE "Pass"."wakeVersion" + 1 END, "updatedAt" = now()
     RETURNING ${isoText(sql`"availableAt"`)} AS at, "availableAt" <= now() AS due,
       attempts < "maxAttempts" AS live,
-      attempts < "maxAttempts" AND (NOT ${coalesceActive} OR "claimToken" IS NULL
+      attempts < "maxAttempts" AND isfinite("availableAt")
+        AND (NOT ${coalesceActive} OR "claimToken" IS NULL
         OR "claimDeadline" <= now()) AS claimable`);
   const row = started.rows[0];
   // A pending Pass that spent its attempts keeps them until a member retries
@@ -118,8 +121,9 @@ export async function startPass(
   // is owed. One revival per scheduled start bounds a Pass that always fails.
   if (!row?.claimable) return row?.live ?? false;
   // A future start owns its deadline; an immediate wake would find nothing due.
-  if (!row.due) await wakeAtDeadline(db, new Date(row.at), "kernel.pass-start");
-  else await wakeAfterCommit(db);
+  if (row.due) await wakeAfterCommit(db);
+  else if (row.at)
+    await wakeAtDeadline(db, new Date(row.at), "kernel.pass-start");
   return true;
 }
 
@@ -249,7 +253,7 @@ export async function runOnePass(
         key: claimed.key,
       };
       const claim = passClaim(db, claimed);
-      let wait: { at: string; wait: boolean } | undefined;
+      let wait: { at: string | null; wait: boolean } | undefined;
       try {
         // SAFETY: the cursor column holds the JSON the pass last returned.
         const result = await pass.run(db, claimed.cursor as Json | null, claim);
@@ -265,6 +269,12 @@ export async function runOnePass(
           ? sql`greatest(now(), ${censusFloor(sql`cursor`, floor)})`
           : sql`now()`;
         const settle = (tx: Database) => {
+          const parked = !result.done && result.availableAt === null;
+          const nextAt = parked
+            ? sql`'infinity'::timestamp`
+            : result.availableAt
+              ? sql`${result.availableAt.toISOString()}::timestamp`
+              : sql`now()`;
           // Publication can update the cursor with the outcome of a page write.
           const resultCursor = sql`${JSON.stringify(result.cursor)}::jsonb`;
           const nextCursor = floor
@@ -281,7 +291,7 @@ export async function runOnePass(
                 ELSE ${nextCursor} END`
               : nextCursor;
           return repositoryQueries(tx).execute<{
-            at: string;
+            at: string | null;
             wait: boolean;
           }>(sql`
         UPDATE "Pass" SET cursor = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN
@@ -290,8 +300,9 @@ export async function runOnePass(
               ELSE ${checkpoint} END
             ELSE cursor END,
           "doneAt" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} AND ${result.done} AND NOT (${restartPending}) THEN now() ELSE NULL END,
-          "availableAt" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN CASE WHEN ${restart} THEN ${restartAt} ELSE ${result.availableAt ? sql`${result.availableAt.toISOString()}::timestamp` : sql`now()`} END ELSE CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN "availableAt" ELSE least("availableAt", now()) END END,
-          attempts = 0, "claimToken" = NULL, "claimDeadline" = NULL,
+          "availableAt" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN CASE WHEN ${restart} THEN ${restartAt} ELSE ${nextAt} END ELSE CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN "availableAt" ELSE least("availableAt", now()) END END,
+          attempts = CASE WHEN ${parked} THEN attempts ELSE 0 END,
+          "claimToken" = NULL, "claimDeadline" = NULL,
           "waitCause" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${result.done ? null : (result.waitCause ?? null)} ELSE CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN "waitCause" END END, "lastError" = ${itemError}, "updatedAt" = now()
           ${
             result.durationSample
@@ -304,17 +315,25 @@ export async function runOnePass(
               : sql``
           }
         WHERE name = ${claimed.name} AND key = ${claimed.key}
-        RETURNING ${isoText(sql`"availableAt"`)} AS at, "doneAt" IS NULL AND "availableAt" > now() AS wait`);
+        RETURNING ${isoText(sql`"availableAt"`)} AS at, "doneAt" IS NULL AND "availableAt" > now()
+          AND isfinite("availableAt") AS wait`);
         };
-        const published = result.publish
-          ? await claim.fenced(async (tx) => {
-              await result.publish?.(tx);
-              return settle(tx);
-            })
-          : await repositoryTransactionDatabase(db, async (tx) => {
-              await claim.fence(tx);
-              return settle(tx);
-            });
+        const published =
+          result.publish && result.availableAt !== null
+            ? await claim.fenced(async (tx) => {
+                await result.publish?.(tx);
+                return settle(tx);
+              })
+            : await repositoryTransactionDatabase(db, async (tx) => {
+                // Register a dependency under the gate before locking the Pass.
+                // Settlement locks the same dependency before waking the Pass.
+                if (result.publish) {
+                  await enterHouseholdGate(tx);
+                  await result.publish(tx);
+                }
+                await claim.fence(tx);
+                return settle(tx);
+              });
         wait = published.rows[0];
         if (itemError) {
           span.setError("Pass page skipped items");
@@ -339,7 +358,7 @@ export async function runOnePass(
         );
       }
       // The page's wait is a deadline it set; a delivery's own offer also covers it.
-      if (wait?.wait)
+      if (wait?.wait && wait.at)
         await wakeAtDeadline(db, new Date(wait.at), "kernel.pass-wait");
       return true;
     }),
