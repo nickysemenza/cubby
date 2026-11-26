@@ -2117,7 +2117,12 @@ describe("evidence-facts kernel", () => {
     expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
     expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
     expect(pages).toBe(2);
-    const result = await repositoryQueries(ctx.db).execute(
+    const result = await repositoryQueries(ctx.db).execute<{
+      attempts: number;
+      cursor: unknown;
+      claimToken: string | null;
+      doneAt: string | null;
+    }>(
       sql`SELECT attempts, cursor, "claimToken", "doneAt" FROM "Pass" WHERE name = ${name}`,
     );
     expect(result.rows).toEqual([

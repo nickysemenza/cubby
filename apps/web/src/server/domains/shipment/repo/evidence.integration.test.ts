@@ -795,7 +795,7 @@ describe("Shipment retained evidence", () => {
     });
     // Order numbers are unique only per Vendor: a notice naming no Vendor never links.
     await linkShipmentsByOrderIdPage(ctx.db, null);
-    expect((await read()).purchaseId).toBeNull();
+    expect(await read()).toMatchObject({ purchaseId: null });
     await getDb(ctx.db)
       .update(orderMail)
       .set({ vendorId: seller.id })
