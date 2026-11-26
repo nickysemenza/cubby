@@ -4,7 +4,7 @@ import {
   vendorEmailSenderList,
   vendorEmailSenderPolicies,
 } from "@cubby/schemas/vendor-import-fields";
-import { and, arrayOverlaps, eq, inArray, or, sql } from "drizzle-orm";
+import { and, arrayOverlaps, eq, or, sql } from "drizzle-orm";
 
 import { broadcastSender, senderAddress } from "~/lib/vendor/domains";
 import type { Database } from "~/server/db/database";
@@ -88,7 +88,9 @@ export async function readSenderAttributions(
         and(
           notDeleted(email),
           emailSourceClaimCandidateSql,
-          requested ? inArray(normalizedSender, requested) : undefined,
+          requested
+            ? sql`${normalizedSender} = ANY(${textArrayParam(requested)})`
+            : undefined,
         ),
       ),
   ]);

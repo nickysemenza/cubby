@@ -486,6 +486,8 @@ export async function startMailDiscovery(
     throw new Error(
       "Selected discovery mailbox is not connected to this member.",
     );
+  // The mailbox admission lock precedes the Run locks. Each mailbox commits
+  // before the next one can take its admission lock.
   for (const target of selected) {
     const count = await transaction(async (db) => {
       if (await findControlledMailImport(db, target.mailboxId)) {

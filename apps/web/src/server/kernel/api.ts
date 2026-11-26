@@ -82,7 +82,6 @@ export {
 } from "./define";
 export {
   checkPassPageTime,
-  passPageHasTime,
   rethrowPassPageControl,
   withPassPageTransaction,
   type PassPageTransaction,

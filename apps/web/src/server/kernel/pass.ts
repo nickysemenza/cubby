@@ -105,7 +105,7 @@ export async function startPass(
 }
 
 // Leave room for one 22 s database transaction and fenced settlement.
-export const passPageHasTime = (claim: Pick<Claim, "deadline">) =>
+const passPageHasTime = (claim: Pick<Claim, "deadline">) =>
   claim.deadline.getTime() - Date.now() > 30_000;
 
 class PassPageBudgetError extends Error {}

@@ -13,7 +13,6 @@ import {
 } from "~/server/domains/connection/repo/entity-connections";
 import {
   definePass,
-  passPageHasTime,
   rethrowPassPageControl,
   withPassPageTransaction,
 } from "~/server/kernel/api";
@@ -72,9 +71,11 @@ export const emailPurchaseDiscoveryPass = definePass({
     );
     const prepared: PreparedEntityConnection[][] = [];
     let checkpoint = after;
-    let processed = cursor.after;
+    let processed: string | null = null;
     for (const email of emails) {
-      if (processed && !passPageHasTime(claim)) {
+      // Reserve time for a preparation transaction already in flight and for
+      // publication under the write gate.
+      if (processed && claim.deadline.getTime() - Date.now() <= 45_000) {
         checkpoint = processed;
         break;
       }
@@ -87,7 +88,7 @@ export const emailPurchaseDiscoveryPass = definePass({
               entityId: email.shortcode,
             }),
           claim,
-          1_000,
+          10_000,
         );
         if (group.length) prepared.push(group);
       } catch (error) {

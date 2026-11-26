@@ -1297,6 +1297,10 @@ describe("mail research admission", () => {
         messageId: `synthetic-backlog-${index}`,
         checksum: "b".repeat(64),
       });
+    await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic mailbox seller",
+      orderEmailSenders: ["receipts@shop.example"],
+    });
     await getDb(ctx.db).execute(sql`
       CREATE FUNCTION synthetic_reject_email_admission() RETURNS trigger
       LANGUAGE plpgsql AS $$
@@ -1305,7 +1309,9 @@ describe("mail research admission", () => {
           RAISE EXCEPTION 'Synthetic Email admission failure';
         END IF;
         RETURN NEW;
-      END; $$;
+      END; $$
+    `);
+    await getDb(ctx.db).execute(sql`
       CREATE TRIGGER synthetic_reject_email_admission BEFORE UPDATE OF status ON "Email"
       FOR EACH ROW WHEN (NEW.status = ${sqlEnumConstant(emailStatus, emailStatus.enum.researching)})
       EXECUTE FUNCTION synthetic_reject_email_admission();
@@ -1367,6 +1373,12 @@ describe("mail research admission", () => {
       ).toHaveLength(owners.length);
     } finally {
       configured.mockRestore();
+      await getDb(ctx.db).execute(
+        sql`DROP TRIGGER synthetic_reject_email_admission ON "Email"`,
+      );
+      await getDb(ctx.db).execute(
+        sql`DROP FUNCTION synthetic_reject_email_admission()`,
+      );
     }
   });
 

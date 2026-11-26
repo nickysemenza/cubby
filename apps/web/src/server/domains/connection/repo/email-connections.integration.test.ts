@@ -2,9 +2,9 @@ import type { ConnectionCandidate } from "@cubby/schemas/entity-connections";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { importExtractionOutcome } from "@cubby/schemas/purchase-import";
 import { moneyToMinor } from "@cubby/shared";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db";
@@ -32,8 +32,10 @@ import {
   evidenceRow,
 } from "~/server/kernel/api";
 import { runOnePass } from "~/server/kernel/pass";
+import { readPasses } from "~/server/kernel/pass.fixtures";
 import { activeEmailPurchaseDecision } from "~/server/testing/email-link.fixtures";
 
+import * as emailConnections from "./email-connections";
 import { retrieveEmailConnectionCandidates as readConnectionCandidates } from "./email-connections";
 import { readEmailPurchaseDiscoveryPage } from "./email-purchase-cursor";
 import {
@@ -147,6 +149,31 @@ describe("fresh retained Email connection recommendations", () => {
     const kernel = createKernel([
       defineModule({ name: "discovery", passes: [emailPurchaseDiscoveryPass] }),
     ]);
+    const slowEmail = vi
+      .spyOn(emailConnections, "retrieveEmailConnectionCandidates")
+      .mockImplementationOnce(async (tx) => {
+        await getDb(tx).execute(sql`
+          DO $$ BEGIN RAISE SQLSTATE '57014' USING MESSAGE = 'Synthetic Email statement timeout'; END $$
+        `);
+        return [];
+      });
+    try {
+      await kernel.startPass(ctx.db, emailPurchaseDiscoveryPass);
+      expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+      expect(
+        (
+          await readPasses(ctx.db, { name: emailPurchaseDiscoveryPass.name })
+        )[0],
+      ).toMatchObject({
+        attempts: 0,
+        cursor: { after: null },
+        lastError: null,
+      });
+      expect(slowEmail).toHaveBeenCalledOnce();
+      expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
+    } finally {
+      slowEmail.mockRestore();
+    }
     await kernel.startPass(ctx.db, emailPurchaseDiscoveryPass);
     expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
     const [proposal] = await readEntityConnections(ctx.db, f.source);
