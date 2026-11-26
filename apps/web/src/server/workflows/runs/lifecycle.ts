@@ -26,6 +26,7 @@ import {
 } from "~/server/db/repository-access.boundary";
 import { run as runTable } from "~/server/db/retained-tables";
 import {
+  isMailDiscoveryBackfill,
   lockMailDiscoveryRunAdmission,
   mailDiscoveryAdmission,
   mailDiscoveryShouldYield,
@@ -275,6 +276,15 @@ export async function launchWorkflowRun(
         scope,
         runId: owner.id,
         recovery,
+        backfill: isMailDiscoveryBackfill(
+          {
+            trigger: owner.trigger,
+            controlled: Boolean(
+              mailboxDiscoveryInput.parse(owner.input).controlled,
+            ),
+          },
+          scope,
+        ),
       })) === "available";
     const admissionProgress = scope
       ? {
@@ -485,6 +495,7 @@ export async function yieldClaimedMailDiscovery(
       !(await mailDiscoveryShouldYield(tx, {
         ...mailbox,
         runId,
+        trigger: owner.trigger,
         controlled: Boolean(input.controlled),
         progress,
       }))
@@ -575,6 +586,15 @@ export async function resumeClaimedWorkflowRun(
           scope,
           runId: runId,
           recovery,
+          backfill: isMailDiscoveryBackfill(
+            {
+              trigger: mailOwner.trigger,
+              controlled: Boolean(
+                mailboxDiscoveryInput.parse(mailOwner.input).controlled,
+              ),
+            },
+            scope,
+          ),
         })) !== "available"
       ) {
         const [queued] = await getDb(tx)

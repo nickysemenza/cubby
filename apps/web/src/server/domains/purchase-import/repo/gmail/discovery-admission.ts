@@ -79,9 +79,26 @@ export function retainedMailDiscoveryScope(
     : { kind: "mailbox" };
 }
 
+/**
+ * Active scheduled targeted Runs per mailbox: the backfill's share of the four
+ * lanes. Each backfill page is many gated publications, so this bounds how
+ * many backfill writers compete for the household gate.
+ */
+export const MAIL_DISCOVERY_BACKFILL_CAPACITY = 1;
+
+/**
+ * Backfill is a scheduled query search: the cron's and continuations'. History,
+ * controlled and member-requested discovery never count against its limit.
+ */
+export const isMailDiscoveryBackfill = (
+  owner: { trigger: string; controlled: boolean },
+  scope: MailboxDiscoveryScope,
+): boolean =>
+  owner.trigger === "scheduled" && !owner.controlled && scope.kind === "query";
+
 type MailDiscoveryOwner = Pick<
   typeof run.$inferSelect,
-  "id" | "status" | "failureCode"
+  "id" | "status" | "failureCode" | "trigger"
 > & {
   progress: MailboxDiscoveryProgress | null;
   historyOnly: boolean;
@@ -109,6 +126,7 @@ async function readMailDiscoveryOwners(
       mailboxId: sql<string | null>`${run.input}->>'mailboxId'`,
       status: run.status,
       failureCode: run.failureCode,
+      trigger: run.trigger,
       controlled: sql<boolean>`${run.input}->'controlled' IS NOT NULL`,
       hasFrozenPage: sql<boolean>`${run.progress}->${mailboxDiscoveryProgress.keyof().enum.page} IS NOT NULL`,
       pageScopedKey: sql<
@@ -207,6 +225,8 @@ type AdmissionRequest = {
   scope: MailboxDiscoveryScope;
   runId?: RunId;
   recovery: boolean;
+  /** {@link isMailDiscoveryBackfill} of the requesting Run. */
+  backfill: boolean;
 };
 type AdmissionDecision = "available" | "scope_busy" | "capacity";
 
@@ -246,6 +266,11 @@ function admissionDecision(
     return "capacity";
   if (active.some((owner) => conflicts(scopeOf(owner), input.scope)))
     return "scope_busy";
+  const backfill = (owner: MailDiscoveryOwner) =>
+    isMailDiscoveryBackfill(owner, scopeOf(owner));
+  const backfillFull =
+    active.filter(backfill).length >= MAIL_DISCOVERY_BACKFILL_CAPACITY;
+  if (input.backfill && backfillFull) return "capacity";
   const requestTime = (owner: (typeof owners)[number]) =>
     owner.progress?.admissionRequestedAt ?? "";
   const candidate = owners.find(
@@ -265,6 +290,13 @@ function admissionDecision(
     return "capacity";
   if (older.some((owner) => conflicts(scopeOf(owner), input.scope)))
     return "scope_busy";
+  // Backfill waiters take the backfill vacancy in queue order, before a fresh
+  // continuation. A running Run checking whether to yield keeps its slot: it
+  // releases it when its page completes.
+  const running = owners.some(
+    (owner) => owner.id === input.runId && owner.status === "running",
+  );
+  if (input.backfill && !running && older.some(backfill)) return "capacity";
   const recoveryCapacity =
     active.filter((owner) => owner.progress?.admissionClass === "recovery")
       .length <
@@ -276,6 +308,8 @@ function admissionDecision(
   const eligibleWaiter = queued.some(
     (owner) =>
       scopeOf(owner).kind === "query" &&
+      // A backfill waiter cannot take this vacancy while backfill is full.
+      !(backfillFull && backfill(owner)) &&
       (owner.progress?.admissionClass !== "recovery" || recoveryCapacity) &&
       (owner.progress?.admissionClass === "recovery" ||
         precedes(owner, candidate)) &&
@@ -336,8 +370,12 @@ export async function mailDiscoveryWaitersToRelease(
           : { kind: "mailbox" }));
     const recovery = waiter.progress?.admissionClass !== "automatic";
     if (
-      admissionDecision(owners, { scope, runId: waiter.id, recovery }) !==
-      "available"
+      admissionDecision(owners, {
+        scope,
+        runId: waiter.id,
+        recovery,
+        backfill: isMailDiscoveryBackfill(waiter, scope),
+      }) !== "available"
     )
       continue;
     released.push(waiter.id);
@@ -366,6 +404,7 @@ export async function mailDiscoveryShouldYield(
     ledgerPartyId: string;
     mailboxId: string;
     runId: RunId;
+    trigger: string;
     controlled: boolean;
     progress: MailboxDiscoveryProgress;
   },
@@ -394,6 +433,7 @@ export async function mailDiscoveryShouldYield(
       ...input,
       scope,
       recovery: input.progress.admissionClass === "recovery",
+      backfill: isMailDiscoveryBackfill(input, scope),
     })) !== "available"
   );
 }

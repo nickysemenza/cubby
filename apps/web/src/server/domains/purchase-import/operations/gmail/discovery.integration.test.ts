@@ -826,6 +826,58 @@ describe("scheduled Gmail discovery", () => {
     });
   });
 
+  it("admits one scheduled targeted Run per mailbox while a member-requested search still starts", async () => {
+    const state = await seed({ targeted: false });
+    const baseline = ports(gmail());
+    await listMailDiscovery(ctx.db, state.params, baseline);
+    await saveMailDiscoveryBatch(ctx.db, state.params, 0, baseline);
+    await finishMailDiscovery(ctx.db, state.params);
+    for (const name of ["Synthetic First Vendor", "Synthetic Second Vendor"])
+      await insertWithShortcode(ctx.db, "vendor", {
+        name,
+        orderEmailSenders: [
+          `orders@${name.split(" ")[1]!.toLowerCase()}.example.test`,
+        ],
+      });
+    const targeted = async () =>
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(run)
+          .where(eq(run.purpose, "mail_discovery"))
+      ).filter(
+        (row) =>
+          row.status === "running" &&
+          mailboxDiscoveryProgress.parse(row.progress).discoveryScope?.kind ===
+            "query",
+      );
+
+    // Two searches remain, but backfill holds one slot.
+    await startMailDiscovery(ctx.db);
+    const [backfill, ...extra] = await targeted();
+    expect(extra).toHaveLength(0);
+    expect(backfill?.trigger).toBe("scheduled");
+    expect(await startMailDiscovery(ctx.db)).toEqual({
+      started: 0,
+      running: 1,
+    });
+    expect(await targeted()).toHaveLength(1);
+
+    // A member's search takes the other key beside the running backfill.
+    expect(
+      await startMailDiscovery(ctx.db, { requestedBy: ctx.actor }),
+    ).toEqual({ started: 1, running: 0 });
+    const active = await targeted();
+    expect(active.map((row) => row.trigger).sort()).toEqual([
+      "manual",
+      "scheduled",
+    ]);
+    const keys = active.map(
+      (row) => mailboxDiscoveryProgress.parse(row.progress).discoveryScope,
+    );
+    expect(new Set(keys.map((scope) => JSON.stringify(scope))).size).toBe(2);
+  });
+
   // A classifier's uncertainty must remain actionable after the page checkpoint;
   // otherwise an unfamiliar acquisition is lost without a Mail import owner.
   it("retains uncertain discovery mail and its attachment and admits it once across replay", async () => {

@@ -41,6 +41,7 @@ import {
 import {
   lockMailDiscoveryAdmission,
   lockMailDiscoveryRunAdmission,
+  isMailDiscoveryBackfill,
   mailDiscoveryAdmission,
   findQueuedAutomaticMailboxDiscovery,
 } from "~/server/domains/purchase-import/repo/gmail/discovery-admission";
@@ -263,6 +264,13 @@ async function createDiscoveryPasses(
         ...identity,
         scope,
         recovery: false,
+        backfill: isMailDiscoveryBackfill(
+          {
+            trigger: input.trigger,
+            controlled: Boolean(input.frozen.controlled),
+          },
+          scope,
+        ),
       });
       if (decision !== "available") {
         if (
