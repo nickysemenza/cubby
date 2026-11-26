@@ -10,7 +10,10 @@ import { fieldsReconcilePass } from "./fields-reconcile-pass";
  * reconciliation, retention, purchase admission and calendar invalidation.
  */
 import { locationInventoryPass } from "./location-inventory-pass";
-import { purchaseDiscoveryPass } from "./purchase-discovery-pass";
+import {
+  mailboxDiscoveryPass,
+  purchaseDiscoveryPass,
+} from "./purchase-discovery-pass";
 import { purchaseDispatchPass } from "./purchase-dispatch-pass";
 import { retentionPass } from "./retention-pass";
 import { runsReconcilePass } from "./runs/reconcile-pass";
@@ -24,6 +27,7 @@ const WORKFLOW_PASSES: readonly Pass[] = [
   purchaseDispatchPass,
   retentionPass,
   purchaseDiscoveryPass,
+  mailboxDiscoveryPass,
   calendarInvalidatePass,
   runExecutePass,
   runsReconcilePass,

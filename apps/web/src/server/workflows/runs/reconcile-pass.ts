@@ -19,7 +19,11 @@ import {
 } from "~/server/db/repository-access.boundary";
 import { reconcileCoordinatorDispatches } from "~/server/domains/run/repo/coordinator-dispatch";
 import { RUN_EXECUTE_PASS } from "~/server/domains/run/repo/run-execution";
-import { definePass, startPass } from "~/server/kernel/api";
+import {
+  definePass,
+  startPass,
+  type PassPageTransaction,
+} from "~/server/kernel/api";
 
 import { announceMailDiscoveryVacancy } from "./lifecycle";
 
@@ -116,10 +120,13 @@ async function reconcileStuckRunPasses(db: Database): Promise<number> {
 }
 
 /** Every stopped execution's Run, projected; returns how many Runs changed. */
-export async function reconcileRunPasses(db: Database): Promise<number> {
+export async function reconcileRunPasses(
+  db: Database,
+  transaction: PassPageTransaction = (work) => work(db),
+): Promise<number> {
   return (
-    (await reconcileCoordinatorDispatches(db)) +
-    (await reconcileStuckRunPasses(db))
+    (await transaction(reconcileCoordinatorDispatches)) +
+    (await transaction(reconcileStuckRunPasses))
   );
 }
 

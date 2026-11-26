@@ -4,7 +4,6 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { emailSuggestedEvidenceSql } from "~/server/domains/email/repo/email-purchase-links";
-import { withPassPageTransaction } from "~/server/kernel/api";
 
 export const EMAIL_PURCHASE_PAGE = 50;
 
@@ -13,9 +12,8 @@ export async function readEmailPurchaseDiscoveryPage(
   db: Database,
   after: string | null,
 ) {
-  const rows = await withPassPageTransaction(db, (tx) =>
-    getDb(tx).execute(
-      sql`
+  const rows = await getDb(db).execute(
+    sql`
       WITH page AS MATERIALIZED (
         SELECT "id", "shortcode", "orderMailId", "ledgerPartyId", "receivedAt", "deletedAt"
         FROM "Email"
@@ -27,8 +25,7 @@ export async function readEmailPurchaseDiscoveryPage(
           ELSE false END AS suggested
       FROM page "Email" ORDER BY "Email"."id"
     `,
-      "objects",
-    ),
+    "objects",
   );
   const page = z
     .array(

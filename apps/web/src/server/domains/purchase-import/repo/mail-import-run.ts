@@ -116,7 +116,13 @@ import { hasLiveRunPassClaim } from "~/server/domains/run/repo/run-execution";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { withPassPageTransaction } from "~/server/kernel/api";
+import {
+  checkPassPageTime,
+  rethrowPassPageControl,
+  withPassPageTransaction,
+  type Claim,
+  type PassPageTransaction,
+} from "~/server/kernel/api";
 import { WorkDeferredError } from "~/server/kernel/work-errors";
 
 import { mailReadContent } from "./gmail/read-content";
@@ -1172,6 +1178,7 @@ export async function importPendingEmails(
   options: {
     after?: string | null;
     learnSenders?: boolean;
+    claim?: Pick<Claim, "deadline">;
   } = {},
 ) {
   const { listMemberMailboxes } =
@@ -1180,28 +1187,32 @@ export async function importPendingEmails(
     await import("~/server/domains/purchase-import/repo/mail-import-settings");
   const { retainedEmailImportContentCondition } =
     await import("~/server/domains/purchase-import/repo/email-content");
+  const transaction: PassPageTransaction = (work) =>
+    withPassPageTransaction(db, work, options.claim);
   const size = 50;
   // includes-deleted: the UUID cursor advances past every row before eligibility checks.
-  const page = await getDb(db)
-    .select({
-      id: emailTable.id,
-      sender: emailTable.sender,
-      mailboxId: emailTable.mailboxId,
-      ledgerPartyId: emailTable.ledgerPartyId,
-      orderMailId: emailTable.orderMailId,
-    })
-    .from(emailTable)
-    .where(
-      options.after
-        ? gt(emailTable.id, emailId.parse(options.after))
-        : undefined,
-    )
-    .orderBy(emailTable.id)
-    .limit(size);
+  const page = await transaction((tx) =>
+    getDb(tx)
+      .select({
+        id: emailTable.id,
+        sender: emailTable.sender,
+        mailboxId: emailTable.mailboxId,
+        ledgerPartyId: emailTable.ledgerPartyId,
+        orderMailId: emailTable.orderMailId,
+      })
+      .from(emailTable)
+      .where(
+        options.after
+          ? gt(emailTable.id, emailId.parse(options.after))
+          : undefined,
+      )
+      .orderBy(emailTable.id)
+      .limit(size),
+  );
   const after = page.length === size ? page.at(-1)!.id : null;
   if (!page.length) return { errors: [], after };
   const pageIds = sql`${emailTable.id} = ANY(${uuidArrayParam(page.map(({ id }) => id))})`;
-  const knownAttributions = await withPassPageTransaction(db, (tx) =>
+  const knownAttributions = await transaction((tx) =>
     readSenderAttributions(tx, [
       ...new Set(
         page.flatMap(({ sender }) => {
@@ -1212,7 +1223,7 @@ export async function importPendingEmails(
     ]),
   );
   if (options.learnSenders)
-    await withPassPageTransaction(db, (tx) =>
+    await transaction((tx) =>
       learnAcceptedSenders(tx, systemActor(), knownAttributions),
     );
   const identities = knownAttributions.filter(
@@ -1229,8 +1240,38 @@ export async function importPendingEmails(
     })),
   );
   const errors: unknown[] = [];
+  // A batch admission rolls back on error. Keep the normal grouping, then
+  // isolate a failed batch so one source cannot suppress its healthy peers.
+  const admitBatch = async <Row>(
+    rows: readonly Row[],
+    admit: (items: readonly Row[]) => Promise<object>,
+  ) => {
+    if (!rows.length) return;
+    try {
+      await admit(rows);
+    } catch (error) {
+      rethrowPassPageControl(error);
+      if (rows.length === 1) {
+        errors.push(error);
+        return;
+      }
+      for (const row of rows) {
+        try {
+          await admit([row]);
+        } catch (itemError) {
+          rethrowPassPageControl(itemError);
+          errors.push(itemError);
+        }
+      }
+    }
+  };
+  // These rechecks own the root Email evidence transaction and its gate limits.
+  const recheck = (input: MailImportAdmission) => {
+    checkPassPageTime(options.claim);
+    return admitMailImport(db, input);
+  };
   const importerRevision = await capabilityRevision();
-  const mailboxes = await listMemberMailboxes(db);
+  const mailboxes = await transaction(listMemberMailboxes);
   for (const target of mailboxes) {
     if (
       !page.some(
@@ -1243,9 +1284,11 @@ export async function importPendingEmails(
       continue;
     const actorId = target.userId;
     if (!actorId) continue;
-    if (!(await mailImportEnabled(db, target.mailboxId))) continue;
-    if (await mailImportHeldBack(db, target.ledgerPartyId)) continue;
-    const pending = await withPassPageTransaction(db, (tx) =>
+    if (!(await transaction((tx) => mailImportEnabled(tx, target.mailboxId))))
+      continue;
+    if (await transaction((tx) => mailImportHeldBack(tx, target.ledgerPartyId)))
+      continue;
+    const pending = await transaction((tx) =>
       getDb(tx)
         .select({ id: orderMail.id })
         .from(emailTable)
@@ -1288,32 +1331,18 @@ export async function importPendingEmails(
         )
         .orderBy(asc(emailTable.createdAt), asc(emailTable.id)),
     );
-    const admit = (messageIds: readonly string[]) =>
-      withPassPageTransaction(db, (tx) =>
+    await admitBatch(pending, (items) =>
+      transaction((tx) =>
         startMailImport(tx, {
           ledgerPartyId: target.ledgerPartyId,
           userId: actorId,
           mailboxId: target.mailboxId,
           automatic: true,
-          messageIds,
+          messageIds: items.map(({ id }) => id),
         }),
-      );
-    if (pending.length)
-      try {
-        await admit(pending.map(({ id }) => id));
-      } catch {
-        // SILENT: retry each source below; persistent errors are returned and reported after discovery.
-        // A source may change after selection. Isolate it without abandoning
-        // other sources; admission replay preserves ownership on a retry.
-        for (const { id } of pending) {
-          try {
-            await admit([id]);
-          } catch (error) {
-            errors.push(error);
-          }
-        }
-      }
-    const changed = await withPassPageTransaction(db, (tx) =>
+      ),
+    );
+    const changed = await transaction((tx) =>
       getDb(tx)
         .select({ id: orderMail.id, checksum: orderMail.rawChecksum })
         .from(emailTable)
@@ -1345,24 +1374,21 @@ export async function importPendingEmails(
         )
         .orderBy(asc(emailTable.createdAt), asc(emailTable.id)),
     );
-    if (changed.length)
-      try {
-        await admitMailImport(db, {
-          ledgerPartyId: target.ledgerPartyId,
-          userId: actorId,
-          mailboxId: target.mailboxId,
-          automatic: true,
-          sourceRecheck: true,
-          messageIds: changed.map((row) => row.id),
-          expectedChecksums: changed.map((row) => ({
-            orderMailId: row.id,
-            checksum: row.checksum,
-          })),
-        });
-      } catch (error) {
-        errors.push(error);
-      }
-    const waiting = await withPassPageTransaction(db, (tx) =>
+    await admitBatch(changed, (items) =>
+      recheck({
+        ledgerPartyId: target.ledgerPartyId,
+        userId: actorId,
+        mailboxId: target.mailboxId,
+        automatic: true,
+        sourceRecheck: true,
+        messageIds: items.map((row) => row.id),
+        expectedChecksums: items.map((row) => ({
+          orderMailId: row.id,
+          checksum: row.checksum,
+        })),
+      }),
+    );
+    const waiting = await transaction((tx) =>
       getDb(tx)
         .select({
           id: orderMail.id,
@@ -1409,7 +1435,7 @@ export async function importPendingEmails(
     );
     for (const row of waiting)
       try {
-        await admitMailImport(db, {
+        await recheck({
           ledgerPartyId: target.ledgerPartyId,
           userId: actorId,
           mailboxId: target.mailboxId,
@@ -1424,9 +1450,10 @@ export async function importPendingEmails(
           },
         });
       } catch (error) {
+        rethrowPassPageControl(error);
         errors.push(error);
       }
-    const outdated = await withPassPageTransaction(db, (tx) =>
+    const outdated = await transaction((tx) =>
       getDb(tx)
         .select({ id: orderMail.id, checksum: orderMail.rawChecksum })
         .from(emailTable)
@@ -1464,25 +1491,22 @@ export async function importPendingEmails(
         )
         .orderBy(asc(emailTable.createdAt), asc(emailTable.id)),
     );
-    if (outdated.length)
-      try {
-        await admitMailImport(db, {
-          ledgerPartyId: target.ledgerPartyId,
-          userId: actorId,
-          mailboxId: target.mailboxId,
-          automatic: true,
-          capabilityRecheck: true,
-          messageIds: outdated.map((row) => row.id),
-          expectedChecksums: outdated.map((row) => ({
-            orderMailId: row.id,
-            checksum: row.checksum,
-          })),
-        });
-      } catch (error) {
-        errors.push(error);
-      }
+    await admitBatch(outdated, (items) =>
+      recheck({
+        ledgerPartyId: target.ledgerPartyId,
+        userId: actorId,
+        mailboxId: target.mailboxId,
+        automatic: true,
+        capabilityRecheck: true,
+        messageIds: items.map((row) => row.id),
+        expectedChecksums: items.map((row) => ({
+          orderMailId: row.id,
+          checksum: row.checksum,
+        })),
+      }),
+    );
     if (!recheckIdentities.length) continue;
-    const senderRows = await withPassPageTransaction(db, (tx) =>
+    const senderRows = await transaction((tx) =>
       getDb(tx)
         .select({
           id: orderMail.id,
@@ -1548,21 +1572,22 @@ export async function importPendingEmails(
         .orderBy(asc(emailTable.id)),
     );
     if (!senderRows.length) continue;
-    const originals = await readRetainedMail(db, {
-      ledgerPartyIds: [parseEntityId("ledgerParty", target.ledgerPartyId)],
-      orderMailIds: senderRows.map((row) => row.id),
-    });
+    const originals = await transaction((tx) =>
+      readRetainedMail(tx, {
+        ledgerPartyIds: [parseEntityId("ledgerParty", target.ledgerPartyId)],
+        orderMailIds: senderRows.map((row) => row.id),
+      }),
+    );
     const complete = originals.filter((original) => {
       const content = mailReadContent(original.content, {});
       return !content.truncated && content.nextByteOffset === null;
     });
     const identifiers = new Map(
-      [...(await readEmailMailKeysForMails(db, complete))].map(([id, keys]) => [
-        id,
-        keys.orderKeys,
-      ]),
+      [
+        ...(await transaction((tx) => readEmailMailKeysForMails(tx, complete))),
+      ].map(([id, keys]) => [id, keys.orderKeys]),
     );
-    const imported = await withPassPageTransaction(db, (tx) =>
+    const imported = await transaction((tx) =>
       importedPurchaseRechecks(tx, target.ledgerPartyId, {
         orderIds: [...new Set([...identifiers.values()].flat())],
         vendorIds: [...new Set(senderRows.map((row) => row.vendorId))],
@@ -1616,22 +1641,20 @@ export async function importPendingEmails(
     for (const group of groups.values()) {
       const identity = group[0];
       if (!identity) continue;
-      try {
-        await admitMailImport(db, {
+      await admitBatch(group, (items) =>
+        recheck({
           ledgerPartyId: target.ledgerPartyId,
           userId: actorId,
           mailboxId: target.mailboxId,
           automatic: true,
-          messageIds: group.map((row) => row.id),
+          messageIds: items.map((row) => row.id),
           senderRecheck: {
             sender: identity.sender,
             vendorId: identity.vendorId,
             ...(identity.purchase ? { purchase: identity.purchase } : {}),
           },
-        });
-      } catch (error) {
-        errors.push(error);
-      }
+        }),
+      );
     }
   }
   return { errors, after };

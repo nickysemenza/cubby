@@ -2,7 +2,7 @@ import type { EntityRef } from "@cubby/schemas/entity";
 import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
 
-import { scrubErrorMessage } from "~/lib/error-diagnostics";
+import { describeErrorCauses } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
 import { retrieveEmailConnectionCandidates } from "~/server/domains/connection/repo/email-connections";
 import { readEmailPurchaseDiscoveryPage } from "~/server/domains/connection/repo/email-purchase-cursor";
@@ -11,8 +11,12 @@ import {
   publishPreparedEntityConnections,
   type PreparedEntityConnection,
 } from "~/server/domains/connection/repo/entity-connections";
-import { isStatementTimeout } from "~/server/errors/db-errors";
-import { definePass, withPassPageTransaction } from "~/server/kernel/api";
+import {
+  definePass,
+  passPageHasTime,
+  rethrowPassPageControl,
+  withPassPageTransaction,
+} from "~/server/kernel/api";
 
 const log = createLogger("email-purchase-discovery");
 
@@ -25,9 +29,9 @@ function nextUtcHour(now = Date.now()) {
 }
 
 function discoveryError(error: unknown) {
-  if (isStatementTimeout(error)) throw error;
+  rethrowPassPageControl(error);
   log.warn("Email purchase discovery skipped an Email", {
-    error: scrubErrorMessage(String(error)),
+    error: describeErrorCauses(error),
   });
 }
 
@@ -57,32 +61,44 @@ export async function discoverEmailPurchaseConnections(
 /** One resumable deterministic census over retained Email evidence. */
 export const emailPurchaseDiscoveryPass = definePass({
   name: "email.purchase-discovery",
-  async run(db, raw) {
+  async run(db, raw, claim) {
     const cursor = z
       .object({ after: z.uuid().nullable().default(null) })
       .parse(raw ?? {});
-    const { emails, after } = await readEmailPurchaseDiscoveryPage(
+    const { emails, after } = await withPassPageTransaction(
       db,
-      cursor.after,
+      (tx) => readEmailPurchaseDiscoveryPage(tx, cursor.after),
+      claim,
     );
     const prepared: PreparedEntityConnection[][] = [];
+    let checkpoint = after;
+    let processed = cursor.after;
     for (const email of emails) {
+      if (processed && !passPageHasTime(claim)) {
+        checkpoint = processed;
+        break;
+      }
       try {
-        const group = await withPassPageTransaction(db, (tx) =>
-          prepareEmailPurchaseConnections(tx, {
-            entityKind: "email",
-            entityId: email.shortcode,
-          }),
+        const group = await withPassPageTransaction(
+          db,
+          (tx) =>
+            prepareEmailPurchaseConnections(tx, {
+              entityKind: "email",
+              entityId: email.shortcode,
+            }),
+          claim,
+          1_000,
         );
         if (group.length) prepared.push(group);
       } catch (error) {
         discoveryError(error);
       }
+      processed = email.id;
     }
     return {
-      cursor: { after },
+      cursor: { after: checkpoint },
       done: false,
-      availableAt: after ? new Date() : nextUtcHour(),
+      availableAt: checkpoint ? new Date() : nextUtcHour(),
       async publish(tx) {
         for (const group of prepared)
           try {

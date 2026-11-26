@@ -594,6 +594,8 @@ export type PassResult = {
   done: boolean;
   availableAt?: Date;
   waitCause?: KernelWaitCause;
+  /** Report skipped items while atomically checkpointing the successful page. */
+  itemError?: Error;
   /** Record a page duration in the Pass row at settlement. */
   durationSample?: { ms: number; at: string };
   /** Publish prepared output in the same fenced transaction as the cursor. */
@@ -604,6 +606,7 @@ export type Pass = {
   readonly type: "pass";
   readonly claimLimit?: ClaimLimit;
   readonly name: string;
+  readonly restartCooldownMs?: number;
   readonly key?: (input: Json) => string;
   run(db: Database, cursor: Json | null, claim: Claim): Promise<PassResult>;
 };
@@ -611,6 +614,8 @@ export type Pass = {
 export function definePass(spec: {
   name: string;
   claimLimit?: ClaimLimit;
+  /** Coalesce pending starts and suppress restarts until this long after completion. */
+  restartCooldownMs?: number;
   key?(input: Json): string;
   run(db: Database, cursor: Json | null, claim: Claim): Promise<PassResult>;
 }): Pass {

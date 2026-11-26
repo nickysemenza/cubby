@@ -50,7 +50,7 @@ import { constraintViolation, createAppError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { finalizeMerge, mergeNotes } from "~/server/generic/merge/repo/core";
-import { withPassPageTransaction } from "~/server/kernel/api";
+import { withPassPageTransaction, type Claim } from "~/server/kernel/api";
 
 import {
   deduplicateShipmentTrackingReferences,
@@ -306,22 +306,27 @@ async function linkShipmentsByOrderId(
 export async function linkShipmentsByOrderIdPage(
   db: Database,
   after: ShipmentId | null,
+  claim?: Pick<Claim, "deadline">,
 ) {
-  return withPassPageTransaction(db, async (tx) => {
-    const size = 50;
-    // includes-deleted: page by primary key before evaluating linking eligibility.
-    const page = await getDb(tx)
-      .select({ id: shipment.id })
-      .from(shipment)
-      .where(after ? gt(shipment.id, after) : undefined)
-      .orderBy(shipment.id)
-      .limit(size);
-    await linkShipmentsByOrderId(
-      tx,
-      page.map(({ id }) => id),
-    );
-    return page.length === size ? page.at(-1)!.id : null;
-  });
+  return withPassPageTransaction(
+    db,
+    async (tx) => {
+      const size = 50;
+      // includes-deleted: page by primary key before evaluating linking eligibility.
+      const page = await getDb(tx)
+        .select({ id: shipment.id })
+        .from(shipment)
+        .where(after ? gt(shipment.id, after) : undefined)
+        .orderBy(shipment.id)
+        .limit(size);
+      await linkShipmentsByOrderId(
+        tx,
+        page.map(({ id }) => id),
+      );
+      return page.length === size ? page.at(-1)!.id : null;
+    },
+    claim,
+  );
 }
 
 export async function editShipmentObservation(

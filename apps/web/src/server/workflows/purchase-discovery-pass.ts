@@ -1,11 +1,49 @@
-import { definePass } from "~/server/kernel/api";
+import { createLogger } from "@cubby/worker-tracing";
+
+import {
+  definePass,
+  withPassPageTransaction,
+  type PassPageTransaction,
+} from "~/server/kernel/api";
 
 import { discoverPurchases, purchaseDiscoveryCursor } from "./catch-up";
+import { reconcileRunPasses } from "./runs/reconcile-pass";
+
+const log = createLogger("catch-up");
 
 /** One bounded admission page; domain repositories retain eligibility and evidence. */
 export const purchaseDiscoveryPass = definePass({
   name: "purchase.discovery",
-  async run(db, raw) {
-    return discoverPurchases(db, purchaseDiscoveryCursor.parse(raw ?? {}));
+  restartCooldownMs: 15 * 60_000,
+  async run(db, raw, claim) {
+    return discoverPurchases(
+      db,
+      purchaseDiscoveryCursor.parse(raw ?? {}),
+      claim,
+    );
+  },
+});
+
+/** Hourly admission is independent of either retained census cursor. */
+export const mailboxDiscoveryPass = definePass({
+  name: "purchase.mailbox-discovery",
+  restartCooldownMs: 0,
+  async run(db, cursor, claim) {
+    const { gmailOAuthConfigured } =
+      await import("~/server/domains/purchase-import/repo/gmail/provider");
+    if (gmailOAuthConfigured()) {
+      const pageTransaction: PassPageTransaction = (work) =>
+        withPassPageTransaction(db, work, claim);
+      // Project terminal execution before checking the mailbox admission slot.
+      await reconcileRunPasses(db, pageTransaction);
+      const { startMailDiscovery } =
+        await import("~/server/domains/purchase-import/operations/gmail/discovery");
+      const mail = await startMailDiscovery(db, { pageTransaction });
+      log.info("purchase discovery", {
+        mailPassesStarted: mail.started,
+        mailPassesRunning: mail.running,
+      });
+    }
+    return { cursor, done: true };
   },
 });

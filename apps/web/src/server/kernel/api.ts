@@ -80,7 +80,13 @@ export {
   type ScopeRef,
   type SourceRef,
 } from "./define";
-export { withPassPageTransaction } from "./pass";
+export {
+  checkPassPageTime,
+  passPageHasTime,
+  rethrowPassPageControl,
+  withPassPageTransaction,
+  type PassPageTransaction,
+} from "./pass";
 export type { DecisionWriters, StoredDecision } from "./decide";
 export type { Reads, ScopeReads } from "./reads";
 export { effectiveBindings } from "./reads";

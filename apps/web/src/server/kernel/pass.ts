@@ -4,8 +4,10 @@
  * its claim is live; a cancelled or lapsed claim writes nothing.
  */
 import { kernelWaitCause } from "@cubby/schemas/kernel/machinery";
+import { createLogger } from "@cubby/worker-tracing";
 import { sql } from "drizzle-orm";
 
+import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db/database";
 import { withDatabaseRequestMetrics } from "~/server/db/db-observability";
 import {
@@ -15,7 +17,8 @@ import {
 import { withTrace } from "~/server/observability/tracing";
 
 import {
-  CLAIM_LEASE_MS,
+  ClaimLapsedError,
+  rawError,
   claimPass,
   fenceClaim,
   renewClaim,
@@ -24,10 +27,13 @@ import {
   type ClaimTarget,
 } from "./claim";
 import type { Claim, Json, Pass } from "./define";
+import { classifyWorkFailure, stopsPage } from "./failure";
 import { enterHouseholdGate } from "./gate";
 import type { KernelRegistry } from "./registry";
 import { isoText } from "./sql-time";
 import { wakeAfterCommit, wakeAtDeadline } from "./wake";
+
+const log = createLogger("kernel.pass");
 
 /**
  * Start (or restart a finished) pass instance; a pending one keeps its cursor.
@@ -78,6 +84,14 @@ export async function startPass(
       "doneAt" = NULL, "cancelledAt" = NULL,
       "availableAt" = CASE WHEN "Pass"."waitCause" = ${kernelWaitCause.enum.funding} AND "Pass"."doneAt" IS NULL AND "Pass"."cancelledAt" IS NULL THEN "Pass"."availableAt" ELSE least("Pass"."availableAt", excluded."availableAt") END,
       "wakeVersion" = CASE WHEN "Pass"."waitCause" = ${kernelWaitCause.enum.funding} AND "Pass"."doneAt" IS NULL AND "Pass"."cancelledAt" IS NULL THEN "Pass"."wakeVersion" ELSE "Pass"."wakeVersion" + 1 END, "updatedAt" = now()
+    ${
+      pass.restartCooldownMs === undefined
+        ? sql``
+        : sql`
+    WHERE "Pass"."doneAt" <= now() - make_interval(secs => ${pass.restartCooldownMs / 1000})
+      OR "Pass"."cancelledAt" IS NOT NULL
+      OR (${options.revive ?? false} AND "Pass"."doneAt" IS NULL AND "Pass".attempts >= "Pass"."maxAttempts")`
+    }
     RETURNING ${isoText(sql`"availableAt"`)} AS at, "availableAt" <= now() AS due,
       attempts < "maxAttempts" AS claimable`);
   const row = started.rows[0];
@@ -90,21 +104,54 @@ export async function startPass(
   else await wakeAfterCommit(db);
 }
 
-/**
- * Run database-only page work under a server-side timeout. Pass.run may use
- * several transactions or make network calls, so it cannot own one outer
- * transaction. Fenced publication already uses the household gate's limits.
- */
+// Leave room for one 22 s database transaction and fenced settlement.
+export const passPageHasTime = (claim: Pick<Claim, "deadline">) =>
+  claim.deadline.getTime() - Date.now() > 30_000;
+
+class PassPageBudgetError extends Error {}
+
+export function checkPassPageTime(claim?: Pick<Claim, "deadline">): void {
+  if (!claim) return;
+  if (claim.deadline.getTime() <= Date.now()) throw new ClaimLapsedError();
+  if (!passPageHasTime(claim))
+    throw new PassPageBudgetError("Pass page reached its transaction deadline");
+}
+
+/** Keep claim loss and retryable contention out of the per-item error path. */
+export function rethrowPassPageControl(error: UnparsedError): void {
+  const failure = classifyWorkFailure(error);
+  if (
+    error instanceof PassPageBudgetError ||
+    stopsPage(failure) ||
+    failure.kind === "transient"
+  )
+    throw error;
+}
+
+export type PassPageTransaction = <T>(
+  work: (tx: Database) => Promise<T>,
+) => Promise<T>;
+
+/** Bound DB-only work, including the gap between a Worker dying and its lease lapsing. */
 export function withPassPageTransaction<T>(
   db: Database,
   work: (tx: Database) => Promise<T>,
+  claim?: Pick<Claim, "deadline">,
+  statementMs = 20_000,
 ): Promise<T> {
+  checkPassPageTime(claim);
   return repositoryTransactionDatabase(db, async (tx) => {
+    checkPassPageTime(claim);
     await repositoryQueries(tx).execute(sql`
-      SELECT set_config('statement_timeout', (
-        SELECT least(nullif(setting::int, 0), ${CLAIM_LEASE_MS - 30_000})::text
-        FROM pg_settings WHERE name = 'statement_timeout'
-      ), true)`);
+      SELECT
+        set_config('statement_timeout', lim.statement::text, true),
+        set_config('lock_timeout', least(lim.lock, greatest(1, lim.statement / 2))::text, true),
+        set_config('transaction_timeout', lim.transaction::text, true)
+      FROM (SELECT
+        least((SELECT nullif(setting::int, 0) FROM pg_settings WHERE name = 'statement_timeout'), ${statementMs}) AS statement,
+        least((SELECT nullif(setting::int, 0) FROM pg_settings WHERE name = 'lock_timeout'), 500) AS lock,
+        least((SELECT nullif(setting::int, 0) FROM pg_settings WHERE name = 'transaction_timeout'), 22000) AS transaction
+      ) lim`);
     return work(tx);
   });
 }
@@ -174,6 +221,7 @@ export async function runOnePass(
         // SAFETY: the cursor column holds the JSON the pass last returned.
         const result = await pass.run(db, claimed.cursor as Json | null, claim);
         span.setAttribute("kernel.pass.result_done", result.done);
+        const itemError = result.itemError ? rawError(result.itemError) : null;
         const settle = (tx: Database) =>
           repositoryQueries(tx).execute<{
             at: string;
@@ -187,7 +235,7 @@ export async function runOnePass(
           "doneAt" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} AND ${result.done} THEN now() ELSE NULL END,
           "availableAt" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${result.availableAt ? sql`${result.availableAt.toISOString()}::timestamp` : sql`now()`} ELSE CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN "availableAt" ELSE least("availableAt", now()) END END,
           attempts = 0, "claimToken" = NULL, "claimDeadline" = NULL,
-          "waitCause" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${result.done ? null : (result.waitCause ?? null)} ELSE CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN "waitCause" END END, "lastError" = NULL, "updatedAt" = now()
+          "waitCause" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${result.done ? null : (result.waitCause ?? null)} ELSE CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN "waitCause" END END, "lastError" = ${itemError}, "updatedAt" = now()
           ${
             result.durationSample
               ? sql`, "durationHistory" = (
@@ -210,6 +258,13 @@ export async function runOnePass(
               return settle(tx);
             });
         wait = published.rows[0];
+        if (itemError) {
+          span.setError("Pass page skipped items");
+          log.warn("Pass page skipped items", {
+            pass: claimed.name,
+            error: itemError,
+          });
+        }
       } catch (error) {
         span.setError("Pass page failed");
         await settleFailure(

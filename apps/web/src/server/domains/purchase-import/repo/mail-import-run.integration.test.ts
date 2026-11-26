@@ -5,6 +5,7 @@ import {
   vendorShortcode,
 } from "@cubby/schemas/identifiers";
 import { coordinatorModelFor } from "@cubby/schemas/import-run-agent";
+import { emailStatus } from "@cubby/schemas/mailbox-research";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { gatewayFetchThrough } from "@cubby/shared/ai/gateway-request";
 import { pollUntil } from "@cubby/shared/retry";
@@ -34,6 +35,7 @@ import {
   vendorAccount,
   purchase,
 } from "~/server/db/schema";
+import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { emailReviewsRead as emailReview } from "~/server/domains/email/repo/email-decision-sql";
 import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
@@ -65,7 +67,10 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
-import { purchaseDiscoveryPass } from "~/server/workflows/purchase-discovery-pass";
+import {
+  mailboxDiscoveryPass,
+  purchaseDiscoveryPass,
+} from "~/server/workflows/purchase-discovery-pass";
 
 import { startControlledMailImport } from "../operations/gmail/controlled-import";
 import {
@@ -1272,7 +1277,7 @@ describe("mail research admission", () => {
     ).toHaveLength(3);
   });
 
-  it("drains more than one retained Email admission page through the Pass", async () => {
+  it("checkpoints retained Email admission errors and starts mailbox discovery independently", async () => {
     const { party } = await source();
     await getDb(ctx.db).insert(account).values({
       id: crypto.randomUUID(),
@@ -1292,6 +1297,19 @@ describe("mail research admission", () => {
         messageId: `synthetic-backlog-${index}`,
         checksum: "b".repeat(64),
       });
+    await getDb(ctx.db).execute(sql`
+      CREATE FUNCTION synthetic_reject_email_admission() RETURNS trigger
+      LANGUAGE plpgsql AS $$
+      BEGIN
+        IF OLD.id = (SELECT id FROM "Email" ORDER BY id LIMIT 1) THEN
+          RAISE EXCEPTION 'Synthetic Email admission failure';
+        END IF;
+        RETURN NEW;
+      END; $$;
+      CREATE TRIGGER synthetic_reject_email_admission BEFORE UPDATE OF status ON "Email"
+      FOR EACH ROW WHEN (NEW.status = ${sqlEnumConstant(emailStatus, emailStatus.enum.researching)})
+      EXECUTE FUNCTION synthetic_reject_email_admission();
+    `);
     const configured = vi
       .spyOn(gmailProvider, "gmailOAuthConfigured")
       .mockReturnValue(true);
@@ -1309,7 +1327,26 @@ describe("mail research admission", () => {
         owners.flatMap(
           (owner) => mailResearchRunInput.parse(owner.input).sources,
         ),
-      ).toHaveLength(50);
+      ).toHaveLength(49);
+      expect(
+        (await readPasses(ctx.db, { name: purchaseDiscoveryPass.name }))[0],
+      ).toMatchObject({
+        attempts: 0,
+        lastError: expect.stringContaining("Synthetic Email admission failure"),
+      });
+      const mailboxKernel = createKernel([
+        defineModule({ name: "mailbox", passes: [mailboxDiscoveryPass] }),
+      ]);
+      await mailboxKernel.startPass(ctx.db, mailboxDiscoveryPass, {
+        revive: true,
+      });
+      expect(await runOnePass(ctx.db, mailboxKernel.registry)).toBe(true);
+      expect(
+        await getDb(ctx.db)
+          .select({ id: run.id })
+          .from(run)
+          .where(eq(run.purpose, "mail_discovery")),
+      ).toHaveLength(1);
       expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
       owners = await getDb(ctx.db)
         .select()
@@ -1318,8 +1355,9 @@ describe("mail research admission", () => {
       const sources = owners.flatMap(
         (owner) => mailResearchRunInput.parse(owner.input).sources,
       );
-      expect(sources).toHaveLength(51);
-      expect(new Set(sources.map((item) => item.orderMailId)).size).toBe(51);
+      expect(sources).toHaveLength(50);
+      expect(new Set(sources.map((item) => item.orderMailId)).size).toBe(50);
+      await kernel.startPass(ctx.db, purchaseDiscoveryPass);
       expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
       expect(
         await getDb(ctx.db)

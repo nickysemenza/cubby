@@ -54,6 +54,7 @@ import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purcha
 import { readRun } from "~/server/domains/run/repo/ai-work-state";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { recordRunProgress } from "~/server/domains/run/repo/run-progress";
+import type { PassPageTransaction } from "~/server/kernel/api";
 import type { Json } from "~/server/kernel/define";
 import { WorkPausedError } from "~/server/kernel/work-errors";
 import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
@@ -447,6 +448,7 @@ async function fundingPausedDiscovery(
 export async function startMailDiscovery(
   db: Database,
   options: {
+    pageTransaction?: PassPageTransaction;
     target?: Pick<GmailSyncTarget, "ledgerPartyId" | "userId" | "mailboxId">;
     paidGrant?: DiscoveryPaidGrant;
     /** The member who asked for this scan; their Runs are member-started. */
@@ -455,7 +457,9 @@ export async function startMailDiscovery(
     knownAttributions?: Parameters<typeof listGmailSyncTargets>[1];
   } = {},
 ): Promise<MailboxDiscoveryStartOutput> {
-  const grantDiscovery = async (runId: RunId) => {
+  const transaction: PassPageTransaction =
+    options.pageTransaction ?? ((work) => work(db));
+  const grantDiscovery = async (db: Database, runId: RunId) => {
     if (options.paidGrant)
       await grantPaid(
         db,
@@ -466,7 +470,9 @@ export async function startMailDiscovery(
   };
   let started = 0;
   let running = 0;
-  const targets = await listGmailSyncTargets(db, options.knownAttributions);
+  const targets = await transaction((tx) =>
+    listGmailSyncTargets(tx, options.knownAttributions),
+  );
   const requested = options.target;
   const selected = requested
     ? targets.filter(
@@ -481,54 +487,54 @@ export async function startMailDiscovery(
       "Selected discovery mailbox is not connected to this member.",
     );
   for (const target of selected) {
-    if (await findControlledMailImport(db, target.mailboxId)) {
-      await launchQueuedControlledMailImport(db, target.mailboxId);
-      running += 1;
-      continue;
-    }
-    const waiting = await fundingPausedDiscovery(db, target, "paused_auth");
-    if (waiting) {
-      if (!options.paidGrant) {
-        running += 1;
-        continue;
+    const count = await transaction(async (db) => {
+      if (await findControlledMailImport(db, target.mailboxId)) {
+        await launchQueuedControlledMailImport(db, target.mailboxId);
+        return 0;
       }
-      await grantDiscovery(waiting.id);
-      await launchWorkflowRun(db, {
-        runId: waiting.id,
-        purpose: "mail_discovery",
+      const waiting = await fundingPausedDiscovery(db, target, "paused_auth");
+      if (waiting) {
+        if (!options.paidGrant) {
+          return 0;
+        }
+        await grantDiscovery(db, waiting.id);
+        await launchWorkflowRun(db, {
+          runId: waiting.id,
+          purpose: "mail_discovery",
+        });
+        return 1;
+      }
+      const runIds = await createDiscoveryPasses(db, {
+        ledgerPartyId: target.ledgerPartyId,
+        // An inherited `runId` would make `ensureRun` return the caller's Run.
+        actor: options.requestedBy
+          ? { ...options.requestedBy, runId: null }
+          : buildActorContext(userId.parse(target.userId), "system"),
+        trigger: options.requestedBy ? "manual" : "scheduled",
+        cause: options.requestedBy ? "member_request" : "scheduled",
+        notes: options.requestedBy
+          ? "Member-requested Gmail discovery"
+          : "Scheduled Gmail discovery",
+        reconcileRoster: true,
+        paidGrant: options.paidGrant,
+        frozen: {
+          emailAuditVersion: 1,
+          mailboxId: target.mailboxId,
+          scopedQueries: target.scopedQueries,
+          executionPolicy: (await mailImportEnabled(db, target.mailboxId))
+            ? "import"
+            : "classification_only",
+        },
       });
-      started += 1;
-      continue;
-    }
-    const runIds = await createDiscoveryPasses(db, {
-      ledgerPartyId: target.ledgerPartyId,
-      // An inherited `runId` would make `ensureRun` return the caller's Run.
-      actor: options.requestedBy
-        ? { ...options.requestedBy, runId: null }
-        : buildActorContext(userId.parse(target.userId), "system"),
-      trigger: options.requestedBy ? "manual" : "scheduled",
-      cause: options.requestedBy ? "member_request" : "scheduled",
-      notes: options.requestedBy
-        ? "Member-requested Gmail discovery"
-        : "Scheduled Gmail discovery",
-      reconcileRoster: true,
-      paidGrant: options.paidGrant,
-      frozen: {
-        emailAuditVersion: 1,
-        mailboxId: target.mailboxId,
-        scopedQueries: target.scopedQueries,
-        executionPolicy: (await mailImportEnabled(db, target.mailboxId))
-          ? "import"
-          : "classification_only",
-      },
+      if (runIds.length === 0) {
+        const active = await fundingPausedDiscovery(db, target, "running");
+        if (active) await grantDiscovery(db, active.id);
+        return 0;
+      }
+      return runIds.length;
     });
-    if (runIds.length === 0) {
-      const active = await fundingPausedDiscovery(db, target, "running");
-      if (active) await grantDiscovery(active.id);
-      running += 1;
-      continue;
-    }
-    started += runIds.length;
+    if (count) started += count;
+    else running += 1;
   }
   return { started, running };
 }

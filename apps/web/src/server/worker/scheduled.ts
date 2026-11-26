@@ -23,7 +23,7 @@ async function runHourlyBackstop(
       async () => {
         const [
           { wakeKernel },
-          { purchaseDiscoveryPass },
+          { mailboxDiscoveryPass, purchaseDiscoveryPass },
           { ringDueDeviceWork },
           { retentionPass },
           { runsReconcilePass },
@@ -50,6 +50,7 @@ async function runHourlyBackstop(
               runsReconcilePass,
               retentionPass,
               purchaseDiscoveryPass,
+              mailboxDiscoveryPass,
               "email.purchase-discovery",
             ])
               await startPass(db, pass, { revive: true }).catch(
