@@ -606,7 +606,7 @@ export type Pass = {
   readonly type: "pass";
   readonly claimLimit?: ClaimLimit;
   readonly name: string;
-  readonly restartCooldownMs?: number;
+  readonly activeStart?: "coalesce" | "restart";
   readonly key?: (input: Json) => string;
   run(db: Database, cursor: Json | null, claim: Claim): Promise<PassResult>;
 };
@@ -614,8 +614,8 @@ export type Pass = {
 export function definePass(spec: {
   name: string;
   claimLimit?: ClaimLimit;
-  /** Coalesce pending starts and suppress restarts until this long after completion. */
-  restartCooldownMs?: number;
+  /** How a start affects an unfinished instance instead of waking its current page. */
+  activeStart?: "coalesce" | "restart";
   key?(input: Json): string;
   run(db: Database, cursor: Json | null, claim: Claim): Promise<PassResult>;
 }): Pass {

@@ -302,7 +302,7 @@ const passRecoveryAt = (p: SQL): SQL =>
     ELSE make_interval(secs => least(${BACKOFF_MAX_MS / 1000},
       ${BACKOFF_BASE_MS / 1000} * power(2::double precision, least(7, ${p}.attempts)))) END`;
 
-const passFreeAt = (p: SQL): SQL =>
+export const passFreeAt = (p: SQL): SQL =>
   sql`CASE WHEN ${p}."claimToken" IS NULL THEN ${p}."availableAt"
     WHEN ${p}."claimDeadline" IS NOT NULL THEN greatest(${p}."availableAt", ${passRecoveryAt(p)}) END`;
 

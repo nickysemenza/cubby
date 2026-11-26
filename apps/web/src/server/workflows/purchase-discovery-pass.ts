@@ -6,7 +6,11 @@ import {
   type PassPageTransaction,
 } from "~/server/kernel/api";
 
-import { discoverPurchases, purchaseDiscoveryCursor } from "./catch-up";
+import {
+  discoverPurchases,
+  purchaseDiscoveryCursor,
+  recoverMissedWork,
+} from "./catch-up";
 import { reconcileRunPasses } from "./runs/reconcile-pass";
 
 const log = createLogger("catch-up");
@@ -14,8 +18,9 @@ const log = createLogger("catch-up");
 /** One bounded admission page; domain repositories retain eligibility and evidence. */
 export const purchaseDiscoveryPass = definePass({
   name: "purchase.discovery",
-  restartCooldownMs: 15 * 60_000,
+  activeStart: "restart",
   async run(db, raw, claim) {
+    await recoverMissedWork(db);
     return discoverPurchases(
       db,
       purchaseDiscoveryCursor.parse(raw ?? {}),
@@ -24,10 +29,10 @@ export const purchaseDiscoveryPass = definePass({
   },
 });
 
-/** Hourly admission is independent of either retained census cursor. */
+/** Mailbox admission is independent of either retained census cursor. */
 export const mailboxDiscoveryPass = definePass({
   name: "purchase.mailbox-discovery",
-  restartCooldownMs: 0,
+  activeStart: "coalesce",
   async run(db, cursor, claim) {
     const { gmailOAuthConfigured } =
       await import("~/server/domains/purchase-import/repo/gmail/provider");

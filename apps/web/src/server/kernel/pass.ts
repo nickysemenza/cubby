@@ -14,6 +14,7 @@ import {
   repositoryQueries,
   repositoryTransactionDatabase,
 } from "~/server/db/repository-access.boundary";
+import { reportServerError } from "~/server/errors/report-error";
 import { classifyWorkFailure, stopsPage } from "~/server/kernel/failure";
 import { withTrace } from "~/server/observability/tracing";
 
@@ -55,6 +56,9 @@ export async function startPass(
   const at = options.availableAt
     ? sql`${options.availableAt.toISOString()}::timestamp`
     : sql`now()`;
+  const finished = sql`"Pass"."doneAt" IS NOT NULL OR "Pass"."cancelledAt" IS NOT NULL`;
+  const reviving = sql`${options.revive ?? false} AND "Pass".attempts >= "Pass"."maxAttempts"`;
+  const coalesceActive = pass.activeStart !== undefined;
   const started = await repositoryQueries(db).execute<{
     at: string;
     due: boolean;
@@ -68,7 +72,12 @@ export async function startPass(
         THEN CASE WHEN "Pass".cursor ? ${"legacyJobs"} THEN
           coalesce(nullif(excluded.cursor, 'null'::jsonb), '{}'::jsonb) || jsonb_build_object(${"legacyJobs"}::text, "Pass".cursor->${"legacyJobs"})
           ELSE excluded.cursor END
-        ELSE "Pass".cursor END,
+        ELSE ${
+          pass.activeStart === "restart"
+            ? sql`coalesce(nullif("Pass".cursor, 'null'::jsonb), '{}'::jsonb)
+            || jsonb_build_object(${"restartCursor"}::text, excluded.cursor)`
+            : sql`"Pass".cursor`
+        } END,
       attempts = CASE WHEN "Pass"."doneAt" IS NOT NULL OR "Pass"."cancelledAt" IS NOT NULL
           OR (${options.revive ?? false} AND "Pass".attempts >= "Pass"."maxAttempts")
         THEN 0 ELSE "Pass".attempts END,
@@ -82,15 +91,12 @@ export async function startPass(
         THEN NULL ELSE "Pass"."lastError" END,
       "runId" = coalesce(excluded."runId", "Pass"."runId"),
       "doneAt" = NULL, "cancelledAt" = NULL,
-      "availableAt" = CASE WHEN "Pass"."waitCause" = ${kernelWaitCause.enum.funding} AND "Pass"."doneAt" IS NULL AND "Pass"."cancelledAt" IS NULL THEN "Pass"."availableAt" ELSE least("Pass"."availableAt", excluded."availableAt") END,
-      "wakeVersion" = CASE WHEN "Pass"."waitCause" = ${kernelWaitCause.enum.funding} AND "Pass"."doneAt" IS NULL AND "Pass"."cancelledAt" IS NULL THEN "Pass"."wakeVersion" ELSE "Pass"."wakeVersion" + 1 END, "updatedAt" = now()
+      "availableAt" = CASE WHEN ${finished} THEN excluded."availableAt" WHEN (${coalesceActive} AND NOT (${reviving})) OR "Pass"."waitCause" = ${kernelWaitCause.enum.funding} THEN "Pass"."availableAt" ELSE least("Pass"."availableAt", excluded."availableAt") END,
+      "wakeVersion" = CASE WHEN NOT (${finished}) AND (${coalesceActive} OR "Pass"."waitCause" = ${kernelWaitCause.enum.funding}) THEN "Pass"."wakeVersion" ELSE "Pass"."wakeVersion" + 1 END, "updatedAt" = now()
     ${
-      pass.restartCooldownMs === undefined
-        ? sql``
-        : sql`
-    WHERE "Pass"."doneAt" <= now() - make_interval(secs => ${pass.restartCooldownMs / 1000})
-      OR "Pass"."cancelledAt" IS NOT NULL
-      OR (${options.revive ?? false} AND "Pass"."doneAt" IS NULL AND "Pass".attempts >= "Pass"."maxAttempts")`
+      pass.activeStart === "coalesce"
+        ? sql`WHERE (${finished}) OR (${reviving})`
+        : sql``
     }
     RETURNING ${isoText(sql`"availableAt"`)} AS at, "availableAt" <= now() AS due,
       attempts < "maxAttempts" AS claimable`);
@@ -108,7 +114,7 @@ export async function startPass(
 const passPageHasTime = (claim: Pick<Claim, "deadline">) =>
   claim.deadline.getTime() - Date.now() > 30_000;
 
-class PassPageBudgetError extends Error {}
+export class PassPageBudgetError extends Error {}
 
 export function checkPassPageTime(claim?: Pick<Claim, "deadline">): void {
   if (!claim) return;
@@ -222,6 +228,19 @@ export async function runOnePass(
         const result = await pass.run(db, claimed.cursor as Json | null, claim);
         span.setAttribute("kernel.pass.result_done", result.done);
         const itemError = result.itemError ? rawError(result.itemError) : null;
+        const restartPending =
+          pass.activeStart === "restart"
+            ? sql`cursor ? ${"restartCursor"}`
+            : sql`false`;
+        const restart = sql`${result.done} AND (${restartPending})`;
+        const nextCursor = sql`CASE WHEN ${restart} THEN cursor->${"restartCursor"} ELSE ${JSON.stringify(result.cursor)}::jsonb END`;
+        const checkpoint =
+          pass.activeStart === "restart"
+            ? sql`CASE WHEN NOT ${result.done} AND (${restartPending}) THEN
+                coalesce(nullif(${nextCursor}, 'null'::jsonb), '{}'::jsonb)
+                || jsonb_build_object(${"restartCursor"}::text, cursor->${"restartCursor"})
+              ELSE ${nextCursor} END`
+            : nextCursor;
         const settle = (tx: Database) =>
           repositoryQueries(tx).execute<{
             at: string;
@@ -229,11 +248,11 @@ export async function runOnePass(
           }>(sql`
         UPDATE "Pass" SET cursor = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN
             CASE WHEN cursor ? ${"legacyJobs"} THEN
-              coalesce(nullif(${JSON.stringify(result.cursor)}::jsonb, 'null'::jsonb), '{}'::jsonb) || jsonb_build_object(${"legacyJobs"}::text, cursor->${"legacyJobs"})
-              ELSE ${JSON.stringify(result.cursor)}::jsonb END
+              coalesce(nullif(${checkpoint}, 'null'::jsonb), '{}'::jsonb) || jsonb_build_object(${"legacyJobs"}::text, cursor->${"legacyJobs"})
+              ELSE ${checkpoint} END
             ELSE cursor END,
-          "doneAt" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} AND ${result.done} THEN now() ELSE NULL END,
-          "availableAt" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${result.availableAt ? sql`${result.availableAt.toISOString()}::timestamp` : sql`now()`} ELSE CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN "availableAt" ELSE least("availableAt", now()) END END,
+          "doneAt" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} AND ${result.done} AND NOT (${restartPending}) THEN now() ELSE NULL END,
+          "availableAt" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN CASE WHEN ${restart} THEN now() ELSE ${result.availableAt ? sql`${result.availableAt.toISOString()}::timestamp` : sql`now()`} END ELSE CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN "availableAt" ELSE least("availableAt", now()) END END,
           attempts = 0, "claimToken" = NULL, "claimDeadline" = NULL,
           "waitCause" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${result.done ? null : (result.waitCause ?? null)} ELSE CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN "waitCause" END END, "lastError" = ${itemError}, "updatedAt" = now()
           ${
@@ -260,6 +279,10 @@ export async function runOnePass(
         wait = published.rows[0];
         if (itemError) {
           span.setError("Pass page skipped items");
+          reportServerError(result.itemError, {
+            operation: claimed.name,
+            stage: "page-items",
+          });
           log.warn("Pass page skipped items", {
             pass: claimed.name,
             error: itemError,

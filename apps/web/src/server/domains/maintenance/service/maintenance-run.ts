@@ -369,7 +369,7 @@ export function maintenanceStepDrivers(
       return { done: 0, meta: detail({ refreshed: true }) };
     }),
     "mail-discovery": onceStep(async ({ db }) => {
-      // The purchase Pass owns admission and its bounded sender cursor.
+      // Mailbox admission and the retained purchase census run independently.
       const { publishBackgroundTasks } =
         await import("~/server/workflows/background-tasks/publish");
       await publishBackgroundTasks(
