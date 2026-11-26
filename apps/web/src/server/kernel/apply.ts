@@ -20,7 +20,10 @@ import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db/database";
 import { withDatabaseOperationPhase } from "~/server/db/db-observability";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
-import { orderedTextArrayParam } from "~/server/db/helpers/array-param";
+import {
+  columnArrayParam,
+  orderedTextArrayParam,
+} from "~/server/db/helpers/array-param";
 import { withKernelApply } from "~/server/db/kernel-apply-context";
 import {
   evidenceBinding,
@@ -74,7 +77,12 @@ import type {
   Reconciler,
   ScopeRef,
 } from "./define";
-import { difference, isEmptyDifference, type Difference } from "./diff";
+import {
+  difference,
+  isEmptyDifference,
+  newAttachments,
+  type Difference,
+} from "./diff";
 import { markDirty, readGatedKeyRevs } from "./dirty";
 import { recordDrifts } from "./drift";
 import {
@@ -116,6 +124,7 @@ import {
   scopeDependencyChanges,
   scopeDependencyPages,
 } from "./scope-dependencies";
+import { ASK } from "./vocab";
 import { wakeAfterCommit } from "./wake";
 
 type Q = Pick<
@@ -365,9 +374,11 @@ function citesDecisions(
 }
 
 /**
- * Missing asks already linked to their scope, by scope and input hash. An
+ * Missing asks already filed for their scope, by scope and input hash: a live
+ * link to an Ask that is queued or sent with attempts left, or answered. An
  * earlier unheld run or a Drift approval filed them, so owing them again
- * spends nothing new and holds no baseline.
+ * spends nothing new and holds no baseline. A cancelled link or Ask, and an
+ * unknown or exhausted Ask, is not filed: owing it again is a new ask.
  */
 async function filedAsks(
   q: Q,
@@ -387,7 +398,10 @@ async function filedAsks(
     SELECT s."scopeKind" AS kind, s."scopeKey" AS key, a."inputHash"
     FROM "AskScope" s JOIN "Ask" a ON a.id = s."askId"
     JOIN unnest(${orderedTextArrayParam(owing.map((item) => item.scope.kind))}, ${orderedTextArrayParam(owing.map((item) => item.scope.key))}) AS wanted(kind, key)
-      ON s."scopeKind" = wanted.kind AND s."scopeKey" = wanted.key`);
+      ON s."scopeKind" = wanted.kind AND s."scopeKey" = wanted.key
+    WHERE s."cancelledAt" IS NULL AND a."cancelledAt" IS NULL
+      AND (a.state = ${ASK.answered}
+        OR (a.state IN (${ASK.queued}, ${ASK.sent}) AND a.attempts < a."maxAttempts"))`);
   return new Set(
     rows.rows.map((row) => `${scopeId(row)}\u0000${row.inputHash}`),
   );
@@ -416,6 +430,7 @@ function holdsBaseline(
         ) ||
         proposed.merges.length > 0 ||
         proposed.rejections.length > 0 ||
+        newAttachments(computed).length > 0 ||
         (!options.fileAsks &&
           computed.missing.some(
             (missing) =>
@@ -629,6 +644,10 @@ function plannedKeys(
     }
     for (const entry of diff.removals)
       touch(entry.target, entry.row ?? { id: entry.id });
+    for (const entry of diff.rejections) {
+      keys.add(rowKey(entry.target.name, entry.id));
+      keys.add(`record:${recordEntity(entry.target)}:${entry.id}`);
+    }
     for (const entry of [...diff.bindingsAdd, ...diff.bindingsRemove]) {
       keys.add(bindingEventKey(entry.eventKey));
       keys.add(bindingFactKey(entry.fact));
@@ -907,6 +926,33 @@ async function fileBatchAsks(q: Q, plans: readonly Plan[]) {
       )`);
 }
 
+/**
+ * A rejection stamps `RecordKey` because the record is gone. Under the gate,
+ * a record that exists and is live again (restored since the load) is a
+ * conflict: the scope runs again instead of rejecting it.
+ */
+async function recheckRejections(q: Q, rejections: Difference["rejections"]) {
+  const byTarget = new Map<string, Difference["rejections"]>();
+  for (const entry of rejections)
+    byTarget.set(entry.target.name, [
+      ...(byTarget.get(entry.target.name) ?? []),
+      entry,
+    ]);
+  for (const group of byTarget.values()) {
+    const table = group[0]!.target.table;
+    const deletedAt = getTableColumns(table).deletedAt;
+    const live = await q.execute<{ id: string }>(sql`
+      SELECT ${idColumn(table)} AS id FROM ${table}
+      WHERE ${idColumn(table)} = ANY(${columnArrayParam(group.map((entry) => entry.id))})
+        ${deletedAt ? sql`AND ${deletedAt} IS NULL` : sql``}
+      LIMIT 1`);
+    if (live.rows.length)
+      throw new KernelConflict(
+        `${group[0]!.target.name}: a rejected record is live again`,
+      );
+  }
+}
+
 /** One state read for every pending ask of this batch. */
 async function batchAsks(q: Q, plans: readonly Plan[]) {
   // Filing removes every old link for active plans with no missing answers.
@@ -1081,10 +1127,11 @@ async function applyBatch(
       ...plan.diff.inserts
         .filter((entry) => !entry.target.projection)
         .map((entry) => ({ ...entry, minted: true })),
-      ...(plan.computed.desired!.attachments ?? []).map((entry) => ({
-        ...entry,
-        minted: false,
-      })),
+      // A held scope attaches nothing: the attachment is part of its proposal.
+      ...(plan.heldBaseline
+        ? []
+        : (plan.computed.desired!.attachments ?? [])
+      ).map((entry) => ({ ...entry, minted: false })),
     ].map((entry) => ({
       scopeKind: plan.computed.scope.kind,
       scopeKey: plan.computed.scope.key,
@@ -1135,15 +1182,19 @@ async function applyBatch(
   }
   const changed = new Set<Key>(
     plans.flatMap((plan) =>
-      (plan.computed.desired!.attachments ?? []).map(
+      (plan.heldBaseline ? [] : (plan.computed.desired!.attachments ?? [])).map(
         (attachment) =>
           `record:${recordEntity(attachment.target)}:${attachment.id}`,
       ),
     ),
   );
-  const discovered: ScopeRef[] = plans.flatMap((plan) => [
-    ...plan.computed.desired!.emits,
-  ]);
+  // What a scope emits beside an attachment it holds follows that
+  // attachment, so it waits for the approval too.
+  const discovered: ScopeRef[] = plans.flatMap((plan) =>
+    plan.heldBaseline && newAttachments(plan.computed).length
+      ? []
+      : [...plan.computed.desired!.emits],
+  );
   const entities = new Set<string>();
   const touch = (target: ColumnRef, row: ColumnValues) => {
     changed.add(tableKey(target.name));
@@ -1259,6 +1310,7 @@ async function applyBatch(
       DELETE FROM "RecordKey" k USING jsonb_to_recordset(${JSON.stringify(plans.flatMap((plan) => plan.diff.removals.map((entry) => ({ kind: plan.computed.scope.kind, key: plan.computed.scope.key, entity: recordEntity(entry.target), id: entry.id }))))}::jsonb) AS r(kind text, key text, entity text, id uuid)
       WHERE k."scopeKind" = r.kind AND k."scopeKey" = r.key AND k.entity = r.entity AND k."entityId" = r.id`);
         if (combined.rejections.length) {
+          await recheckRejections(q, combined.rejections);
           const rejected = await q.execute<{ kind: string; key: string }>(sql`
       UPDATE "RecordKey" k SET "rejectedAt" = coalesce(k."rejectedAt", now())
       FROM jsonb_to_recordset(${JSON.stringify(combined.rejections.map((entry) => ({ entity: recordEntity(entry.target), id: entry.id })))}::jsonb) AS r(entity text, id uuid)

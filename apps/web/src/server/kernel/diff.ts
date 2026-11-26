@@ -276,6 +276,27 @@ export function difference(
   return result;
 }
 
+/**
+ * The existing records a computation attaches that its scope does not own
+ * yet: each would be a new `RecordKey`, an ownership change.
+ */
+export function newAttachments(
+  computed: Computed,
+): NonNullable<Desired["attachments"]> {
+  const owned = new Set(
+    computed.owned.map(
+      (record) =>
+        `${record.target.name}\u0000${record.naturalKey}\u0000${record.entityId}`,
+    ),
+  );
+  return (computed.desired?.attachments ?? []).filter(
+    (entry) =>
+      !owned.has(
+        `${entry.target.name}\u0000${entry.naturalKey}\u0000${entry.id}`,
+      ),
+  );
+}
+
 export const isEmptyDifference = (diff: Difference) =>
   !diff.inserts.length &&
   !diff.updates.length &&

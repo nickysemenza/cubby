@@ -847,17 +847,21 @@ input revision fence. This metadata refresh creates no dirty work or asks.
 With no record difference and only missing answers that fill a value no
 accepted record holds (asks the reconciler marks `fill`, such as a blank
 field's), it dirties the scope, and the scope's normal run files them.
-Otherwise it writes a `Drift` proposal: the exact difference, the number of
-asks the change would issue and their estimated cost. The scope then carries
+An existing record the scope newly attaches is an ownership change, never a
+metadata refresh.
+Otherwise it writes a `Drift` proposal: the exact difference, the asks the
+change would issue and their estimated cost. The scope then carries
 the member gap a held apply records, so it reads Needs you until an approval
 or a later run replaces its gaps. Each ask costs the
 median of the most recent priced Answers for its feature and requested tier,
 else its ask kind's declared estimate; a source ask is free. The estimate is
 unknown, stored as NULL, when any ask has neither, and it stays outside the
-proposal hash. The proposal also names every ownership write applying it
-makes: each existing record the scope attaches (a new `RecordKey`) and each
-rejection it stamps, so the hash covers them. Approval is a decision bound to
-the proposal hash that names its scope:
+proposal hash. The hash covers each ask by feature and input hash, so a
+changed ask input is a new proposal even at the same count. The proposal also
+names every ownership write applying it makes: each existing record the scope
+newly attaches (a new `RecordKey`) and each rejection it stamps, so the hash
+covers them. Approval is a decision bound to the proposal hash that names its
+scope:
 
 - `item` approves one proposal. It applies the exact difference, files the
   asks and releases the scope's baseline bindings. From then on the scope's
@@ -869,7 +873,11 @@ the proposal hash that names its scope:
   proposals that change no record or ownership: no insert, update, removal,
   merge, rejection, attachment or disagreement; every removed binding a
   baseline `manualEntry`, a member record's accepted snapshot; every added
-  binding re-deriving a removed one. Bindings of order, payment, occurrence
+  binding re-deriving a removed one. It takes only a scope that holds a
+  baseline binding for every record it owns (event key the record id, or its
+  `baseline:snapshot:` key) and at least one baseline binding; any other
+  scope's proposal stays pending, since without a held baseline the answer to
+  a filed ask would publish its value on the next run. Bindings of order, payment, occurrence
   and statement evidence decide which Purchase or bank event owns that
   evidence, so changing one is a record change. It files the asks and clears
   the proposal but releases nothing: the baseline keeps every accepted value,
@@ -880,11 +888,18 @@ Each approved proposal applies in its own gated transaction; a call files at
 most 50 proposals' asks. Approval recomputes the scope with the baseline
 released and applies only when that computation re-derives the approved hash
 under the proposal's rules, and for `class_unchanged` only while the
-recomputed proposal still changes no record or ownership; otherwise it stores
-the recomputed proposal, which must be approved again. A stale, conflicting or
-failed approval deletes the dirty row it inserted to claim the scope, unless
-another writer has dirtied the scope since, so the runner never publishes a
-recomputation the member did not approve.
+recomputed proposal still changes no record or ownership and the scope still
+holds its baseline for every record; otherwise it stores the recomputed
+proposal, which must be approved again. A stored proposal hashed another way
+is re-proposed the same way on approval: the approval writes only the new
+proposal. An approval claims a clean scope with a dirty row whose reason
+carries the approval's own token. No runner claim or wake selects such a row,
+also after its lease lapses, so only an approval runs it. A stale,
+conflicting, failed or throwing approval deletes the row while it still
+carries that reason and otherwise only releases its claim: a writer that
+dirtied the scope since replaced the reason, and its row stays ordinary work.
+A row an approval left behind when it ended without cleaning up is taken over
+by the next approval of its scope and deleted by any later approval.
 
 The sweep loads and computes a page outside any transaction, then publishes it
 with its cursor in the pass's fenced transaction: that transaction admits
@@ -912,8 +927,13 @@ records gets version 0 and an empty baseline.
 
 An input-triggered reconcile also protects accepted baselines. An automatic
 difference records a Drift proposal, computed as approval computes it, and
-applies no record changes or new asks. An ask already linked to the scope,
-filed by an earlier unheld run or an approval, is not new. Decision changes still apply above the
+applies no record changes, attachments or new asks; what the scope emits
+beside an attachment it holds waits with it. An ask already filed for the
+scope by an earlier unheld run or an approval is not new: a live link to an
+Ask that is queued or sent with attempts left, or answered. A cancelled link
+or Ask, or an unknown or exhausted Ask, is new. A rejection stamps `RecordKey`
+only while the record is still gone under the write gate; a record live again
+is a conflict. Decision changes still apply above the
 baseline, also while the scope has a gap, and are not part of the proposal: a
 field assignment on a record or patch whose exact proposed value cites the
 current Decision as its provenance, a new record whose supplied values all cite current

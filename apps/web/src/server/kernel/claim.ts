@@ -294,9 +294,21 @@ const freeAt = (t: SQL): SQL =>
   sql`CASE WHEN ${t}."claimToken" IS NULL THEN ${t}."availableAt"
     WHEN ${t}."claimDeadline" IS NOT NULL THEN greatest(${t}."availableAt", ${t}."claimDeadline") END`;
 
+/**
+ * The `reason` prefix of a dirty row a Drift approval inserted to claim its
+ * scope, followed by that approval's own token. No runner claim or wake
+ * selects such a row, whether or not its lease has lapsed: only the approval
+ * that wrote it, or a later approval, takes or deletes it. Any writer that
+ * dirties the scope replaces the reason, and the row becomes ordinary work.
+ */
+export const APPROVAL_REASON = "drift-approval:";
+
+const notApproval = (d: SQL): SQL =>
+  sql`${d}.reason NOT LIKE ${`${APPROVAL_REASON}%`}`;
+
 /** Dirty rows a runner may claim now. */
 const claimableScope = (d: SQL): SQL =>
-  sql`${d}.attempts < ${MAX_SCOPE_ATTEMPTS} AND ${freeNow(d)}`;
+  sql`${d}.attempts < ${MAX_SCOPE_ATTEMPTS} AND ${notApproval(d)} AND ${freeNow(d)}`;
 
 /**
  * Asks of these features the background runner claims once free: queued,
@@ -789,10 +801,10 @@ export const nextWakeSql = (registry: KernelRegistry): SQL => {
     ? sql`(SELECT min(head."availableAt") FROM ${known} CROSS JOIN LATERAL (
         SELECT d."availableAt" FROM "ScopeDirty" d
         WHERE d.lane = known.lane AND d."scopeKind" = known.kind
-          AND d.attempts < ${MAX_SCOPE_ATTEMPTS} AND d."claimToken" IS NULL
+          AND d.attempts < ${MAX_SCOPE_ATTEMPTS} AND d."claimToken" IS NULL AND ${notApproval(sql`d`)}
         ORDER BY d."availableAt", d.seq LIMIT 1) head),
     (SELECT min(${freeAt(sql`d`)}) FROM "ScopeDirty" d
-      WHERE d."claimToken" IS NOT NULL AND d.attempts < ${MAX_SCOPE_ATTEMPTS}
+      WHERE d."claimToken" IS NOT NULL AND d.attempts < ${MAX_SCOPE_ATTEMPTS} AND ${notApproval(sql`d`)}
         AND (d.lane, d."scopeKind") IN (SELECT lane, kind FROM ${known}))`
     : sql`NULL::timestamp`;
   return sql`(

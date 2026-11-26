@@ -100,6 +100,7 @@ import {
   scopeClaimOrder,
 } from "./claim";
 import * as kernelClaim from "./claim";
+import { APPROVAL_REASON } from "./claim";
 import { computeBatch } from "./compute";
 import type { Reconciler } from "./define";
 import { markDirty } from "./dirty";
@@ -3798,11 +3799,20 @@ describe("evidence-facts kernel", () => {
   });
 
   it("approves a kind's record-free Drift proposals by filing their asks and keeping the baseline", async () => {
-    const [kept, renamed, turned, attacher, spare] = await Promise.all(
-      ["kept", "renamed", "turned", "attacher", "spare"].map((name) =>
-        insertWithShortcode(ctx.db, "vendor", { name: `Synthetic ${name}` }),
-      ),
-    );
+    const [kept, renamed, turned, attacher, retold, bare, spare] =
+      await Promise.all(
+        [
+          "kept",
+          "renamed",
+          "turned",
+          "attacher",
+          "retold",
+          "bare",
+          "spare",
+        ].map((name) =>
+          insertWithShortcode(ctx.db, "vendor", { name: `Synthetic ${name}` }),
+        ),
+      );
     const kind = "fixture.unchangedDrift";
     const target = writes(vendor, ["name"], { entity: "vendor" });
     const asked = defineAsk({
@@ -3813,6 +3823,15 @@ describe("evidence-facts kernel", () => {
       output: z.object({ value: z.string() }),
       policy: { tier: "fast" },
     });
+    // A writer that dirties one scope.
+    const dirty = (key: string) =>
+      markDirty(repositoryQueries(ctx.db), next.registry, {
+        keys: [],
+        discovers: [{ kind, key }],
+        reason: "synthetic writer",
+      });
+    // A writer that dirties this scope while an approval computes it.
+    let interject: string | null = null;
     const module = (version: number) =>
       defineModule({
         name: "unchangedDrift",
@@ -3825,33 +3844,49 @@ describe("evidence-facts kernel", () => {
             reads: [source.table(vendor, ["name", "aliases"])],
             writes: [target],
             asks: [asked],
-            load: (reads, keys) => reads.rows(vendor, keys),
+            async load(reads, keys) {
+              if (interject && keys.includes(interject)) {
+                const key = interject;
+                interject = null;
+                await dirty(key);
+              }
+              return reads.rows(vendor, keys);
+            },
             reconcile(row, c) {
               if (version > 1) {
-                const answered = c.answer(asked, { id: row.id });
+                // Attaching an existing record writes ownership, not a
+                // value; what it emits follows the attachment.
+                if (row.id === attacher!.id) {
+                  c.attach(target, "attached", spare!.id);
+                  c.emit({ kind, key: spare!.id });
+                  return c.done();
+                }
+                // A corrected input re-keys the ask without changing the count.
+                const answered = c.answer(asked, {
+                  id: row.aliases.includes("retold")
+                    ? `${row.id}:retold`
+                    : row.id,
+                });
                 if (answered.status === "answered")
                   c.patch(target, row.id, { name: answered.output.value });
                 if (row.id === renamed!.id || row.aliases.includes("relabel"))
                   c.patch(target, row.id, { name: "Synthetic derived name" });
-                // Attaching an existing record writes ownership, not a value.
-                if (row.id === attacher!.id)
-                  c.attach(target, "attached", spare!.id);
               }
               return c.done();
             },
           }),
         ],
       });
-    const ids = [kept, renamed, turned, attacher].map((row) => row!.id);
+    const ids = [kept, renamed, turned, attacher, retold].map((row) => row!.id);
     const first = createKernel([module(1)]);
     await first.emitWrites(ctx.db, {
       table: vendor,
-      ids,
+      ids: [...ids, bare!.id],
       columns: ["name"],
-      discovers: ids.map((key) => ({ kind, key })),
+      discovers: [...ids, bare!.id].map((key) => ({ kind, key })),
     });
     await settle(first);
-    // Each scope holds the accepted snapshot of its member record.
+    // Each scope but the bare one holds the accepted snapshot of its member record.
     await repositoryQueries(ctx.db)
       .insert(evidenceBinding)
       .values(
@@ -3876,20 +3911,41 @@ describe("evidence-facts kernel", () => {
         ).map((row) => [row.key, row.proposalHash]),
       );
     const proposed = await stored();
-    expect([...proposed.keys()].sort()).toEqual([...ids].sort());
+    // An attachment alone is a proposal, never a clean advance.
+    expect([...proposed.keys()].sort()).toEqual([...ids, bare!.id].sort());
 
-    // The turned scope's proposal becomes a real change after selection.
+    // A held run of the attaching scope attaches nothing, emits nothing and
+    // keeps its proposal.
+    await dirty(attacher!.id);
+    await settle(next);
+    expect((await stored()).get(attacher!.id)).toBe(proposed.get(attacher!.id));
+    const spareScope = async () =>
+      (
+        await repositoryQueries(ctx.db).execute<{ n: number }>(
+          sql`SELECT (SELECT count(*) FROM "ScopeState" WHERE "scopeKind" = ${kind} AND "scopeKey" = ${spare!.id})
+            + (SELECT count(*) FROM "ScopeDirty" WHERE "scopeKind" = ${kind} AND "scopeKey" = ${spare!.id}) AS n`,
+        )
+      ).rows[0]?.n;
+    expect(Number(await spareScope())).toBe(0);
+
+    // The turned scope's proposal becomes a real change after selection, and
+    // the retold scope's asks change input at the same count.
     await repositoryQueries(ctx.db)
       .update(vendor)
       .set({ aliases: ["relabel"] })
       .where(eq(vendor.id, turned!.id));
+    await repositoryQueries(ctx.db)
+      .update(vendor)
+      .set({ aliases: ["retold"] })
+      .where(eq(vendor.id, retold!.id));
     await expect(
       next.approveDriftClass(ctx.db, ctx.actor, kind, "class_unchanged"),
-    ).resolves.toEqual({ applied: 1, stale: 1, busy: 0, missing: 0 });
+    ).resolves.toEqual({ applied: 1, stale: 2, busy: 0, missing: 0 });
 
     const decided = await repositoryQueries(ctx.db).execute<{
       value: { scope: string; proposalHashes: string[] };
     }>(sql`SELECT value FROM "Decision" WHERE subject = ${`drift:${kind}`}`);
+    // The bare scope holds no baseline, so it is never selected.
     expect(
       decided.rows.map((row) => ({
         scope: row.value.scope,
@@ -3898,15 +3954,18 @@ describe("evidence-facts kernel", () => {
     ).toEqual([
       {
         scope: "class_unchanged",
-        hashes: [proposed.get(kept!.id)!, proposed.get(turned!.id)!].sort(),
+        hashes: [kept, turned, retold]
+          .map((row) => proposed.get(row!.id)!)
+          .sort(),
       },
     ]);
     const after = await stored();
     expect(after.has(kept!.id)).toBe(false);
-    expect(after.get(renamed!.id)).toBe(proposed.get(renamed!.id));
-    expect(after.get(attacher!.id)).toBe(proposed.get(attacher!.id));
-    expect(after.get(turned!.id)).not.toBe(proposed.get(turned!.id));
-    // No ownership was attached, and the stale approval left no dirty row.
+    for (const row of [renamed, attacher, bare])
+      expect(after.get(row!.id)).toBe(proposed.get(row!.id));
+    for (const row of [turned, retold])
+      expect(after.get(row!.id)).not.toBe(proposed.get(row!.id));
+    // No ownership was attached, and the stale approvals left no dirty row.
     expect(
       await repositoryQueries(ctx.db)
         .select()
@@ -3948,18 +4007,28 @@ describe("evidence-facts kernel", () => {
       "Synthetic attacher",
       "Synthetic kept",
       "Synthetic renamed",
+      "Synthetic retold",
       "Synthetic turned",
     ];
     expect(await names()).toEqual(original);
 
+    const rerunKept = async () => {
+      await dirty(kept!.id);
+      await settle(next);
+    };
     // A later run while the ask is owed holds nothing new.
-    await next.emitWrites(ctx.db, {
-      table: vendor,
-      ids: [kept!.id],
-      columns: ["name"],
-      discovers: [{ kind, key: kept!.id }],
-    });
-    await settle(next);
+    await rerunKept();
+    expect((await stored()).has(kept!.id)).toBe(false);
+    // A cancelled link is not a filed ask: owing it again is held.
+    const cancelLink = (at: Date | null) =>
+      repositoryQueries(ctx.db).execute(
+        sql`UPDATE "AskScope" SET "cancelledAt" = ${at} WHERE "scopeKind" = ${kind} AND "scopeKey" = ${kept!.id}`,
+      );
+    await cancelLink(new Date());
+    await rerunKept();
+    expect((await stored()).has(kept!.id)).toBe(true);
+    await cancelLink(null);
+    await rerunKept();
     expect((await stored()).has(kept!.id)).toBe(false);
 
     // An answer that would change the accepted name is a new proposal.
@@ -3973,18 +4042,59 @@ describe("evidence-facts kernel", () => {
         output: { value: "Synthetic answered name" },
         tier: "fast",
       });
-    await next.emitWrites(ctx.db, {
-      table: vendor,
-      ids: [kept!.id],
-      columns: ["name"],
-      discovers: [{ kind, key: kept!.id }],
-    });
-    await settle(next);
+    await rerunKept();
     expect((await stored()).has(kept!.id)).toBe(true);
     expect(await keptState()).toBe("needs_you");
     expect(await names()).toEqual(original);
 
-    // Nothing qualifying left: no decision, no counts.
+    // An approval that ended without cleaning up leaves a row no runner
+    // claims, even after its lease, and the next approval removes it.
+    const orphan = `${APPROVAL_REASON}${crypto.randomUUID()}`;
+    await repositoryQueries(ctx.db).execute(sql`
+      INSERT INTO "ScopeDirty" ("scopeKind", "scopeKey", lane, seq, reason, "claimToken", "claimDeadline", "claimedSeq", "availableAt")
+      VALUES (${kind}, ${attacher!.id}, ${next.registry.laneOf(kind)}, 1, ${orphan}, ${crypto.randomUUID()}::uuid,
+        now() - interval '1 second', 1, now() - interval '1 second')`);
+    await settle(next);
+    expect(await dirtyCount(ctx.db, kind)).toBe(1);
+    expect((await stored()).get(attacher!.id)).toBe(proposed.get(attacher!.id));
+
+    // A writer that dirties a scope during its approval keeps its row: the
+    // approval does not apply, and the runner runs the scope held.
+    interject = renamed!.id;
+    await expect(
+      next.approveDrift(
+        ctx.db,
+        ctx.actor,
+        { kind, key: renamed!.id },
+        proposed.get(renamed!.id)!,
+      ),
+    ).resolves.toBe("stale");
+    expect(interject).toBeNull();
+    const rows = await repositoryQueries(ctx.db).execute<{
+      key: string;
+      reason: string;
+      claimToken: string | null;
+    }>(
+      sql`SELECT "scopeKey" AS key, reason, "claimToken" FROM "ScopeDirty" WHERE "scopeKind" = ${kind}`,
+    );
+    expect(rows.rows).toEqual([
+      {
+        key: renamed!.id,
+        reason: expect.not.stringMatching(/^drift-approval:/u),
+        claimToken: null,
+      },
+    ]);
+    await settle(next);
+    expect(await dirtyCount(ctx.db, kind)).toBe(0);
+    expect(await names()).toEqual(original);
+    expect((await stored()).has(renamed!.id)).toBe(true);
+
+    // The retold scope's re-proposal is approved on its own hash; then
+    // nothing qualifying is left: no decision, no counts.
+    await expect(
+      next.approveDriftClass(ctx.db, ctx.actor, kind, "class_unchanged"),
+    ).resolves.toEqual({ applied: 1, stale: 0, busy: 0, missing: 0 });
+    expect((await stored()).has(retold!.id)).toBe(false);
     await expect(
       next.approveDriftClass(ctx.db, ctx.actor, kind, "class_unchanged"),
     ).resolves.toEqual({ applied: 0, stale: 0, busy: 0, missing: 0 });
@@ -3994,7 +4104,7 @@ describe("evidence-facts kernel", () => {
           sql`SELECT count(*)::int AS n FROM "Decision" WHERE subject = ${`drift:${kind}`}`,
         )
       ).rows[0]?.n,
-    ).toBe(1);
+    ).toBe(2);
   });
 
   it("keeps a member's decision through recomputation", async () => {
