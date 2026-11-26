@@ -12,6 +12,7 @@ import { getDb } from "~/server/db/helpers";
 import { evidenceBinding, recordKey } from "~/server/db/schema";
 import { purchase as purchaseTable, vendorAccount } from "~/server/db/schema";
 import { email, orderMail, orderMailEvent } from "~/server/db/schema";
+import { emailPurchaseDiscoveryPass } from "~/server/domains/connection/service/email-purchase-discovery";
 import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { withEmailEvidenceWrite } from "~/server/domains/purchase-import/repo/email-evidence-write-scope";
 import { decideEmailPurchase } from "~/server/domains/purchase-import/repo/email-purchase-decision";
@@ -24,7 +25,13 @@ import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 // misses retained events; subject similarity invents identity; a changed checksum
 // or superseded event applies; foreign members/agents bypass purchase_import.mail_resolve;
 // a failed outer transaction leaks a link and a retry applies twice.
-import { append, evidenceRow } from "~/server/kernel/api";
+import {
+  append,
+  createKernel,
+  defineModule,
+  evidenceRow,
+} from "~/server/kernel/api";
+import { runOnePass } from "~/server/kernel/pass";
 import { activeEmailPurchaseDecision } from "~/server/testing/email-link.fixtures";
 
 import { retrieveEmailConnectionCandidates as readConnectionCandidates } from "./email-connections";
@@ -137,9 +144,13 @@ describe("fresh retained Email connection recommendations", () => {
     expect(await retrieveConnectionCandidates(ctx.db, f.target)).toEqual(
       candidates,
     );
-    const candidate = candidates[0];
-    if (!candidate) throw new Error("Missing synthetic candidate");
-    const proposal = await publishEntityConnection(ctx.db, candidate);
+    const kernel = createKernel([
+      defineModule({ name: "discovery", passes: [emailPurchaseDiscoveryPass] }),
+    ]);
+    await kernel.startPass(ctx.db, emailPurchaseDiscoveryPass);
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+    const [proposal] = await readEntityConnections(ctx.db, f.source);
+    if (!proposal) throw new Error("Synthetic Email proposal missing");
     expect(proposal).toMatchObject({
       relation: "email-purchase",
       source: f.source,
