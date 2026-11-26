@@ -826,7 +826,7 @@ describe("scheduled Gmail discovery", () => {
     });
   });
 
-  it("admits one scheduled targeted Run per mailbox while a member-requested search still starts", async () => {
+  it("creates one scheduled targeted Run per mailbox while a member-requested search still starts", async () => {
     const state = await seed({ targeted: false });
     const baseline = ports(gmail());
     await listMailDiscovery(ctx.db, state.params, baseline);
@@ -852,7 +852,7 @@ describe("scheduled Gmail discovery", () => {
             "query",
       );
 
-    // Two searches remain, but backfill holds one slot.
+    // Two searches remain; the cron creates one backfill, then nothing.
     await startMailDiscovery(ctx.db);
     const [backfill, ...extra] = await targeted();
     expect(extra).toHaveLength(0);
@@ -863,7 +863,7 @@ describe("scheduled Gmail discovery", () => {
     });
     expect(await targeted()).toHaveLength(1);
 
-    // A member's search takes the other key beside the running backfill.
+    // A member's search is created and admitted beside the backfill.
     expect(
       await startMailDiscovery(ctx.db, { requestedBy: ctx.actor }),
     ).toEqual({ started: 1, running: 0 });
@@ -872,10 +872,30 @@ describe("scheduled Gmail discovery", () => {
       "manual",
       "scheduled",
     ]);
-    const keys = active.map(
-      (row) => mailboxDiscoveryProgress.parse(row.progress).discoveryScope,
+    const keys = active.map((row) =>
+      JSON.stringify(
+        mailboxDiscoveryProgress.parse(row.progress).discoveryScope,
+      ),
     );
-    expect(new Set(keys.map((scope) => JSON.stringify(scope))).size).toBe(2);
+    expect(new Set(keys).size).toBe(2);
+
+    // The backfill's page leaves its search unfinished; completing it lets
+    // its continuation create the next backfill, and the cron then waits.
+    const params = (await created()).find((row) => row.runId === backfill?.id);
+    if (!params) throw new Error("Synthetic backfill not launched");
+    await listMailDiscovery(ctx.db, params, baseline);
+    await saveMailDiscoveryBatch(ctx.db, params, 0, baseline);
+    await finishMailDiscovery(ctx.db, params);
+    await continueMailDiscovery(ctx.db, params);
+    const next = (await targeted()).filter(
+      (row) => row.trigger === "scheduled",
+    );
+    expect(next).toHaveLength(1);
+    expect(next[0]?.id).not.toBe(backfill?.id);
+    expect(await startMailDiscovery(ctx.db)).toEqual({
+      started: 0,
+      running: 1,
+    });
   });
 
   // A classifier's uncertainty must remain actionable after the page checkpoint;

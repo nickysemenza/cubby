@@ -41,7 +41,6 @@ import {
 import {
   lockMailDiscoveryAdmission,
   lockMailDiscoveryRunAdmission,
-  isMailDiscoveryBackfill,
   mailDiscoveryAdmission,
   findQueuedAutomaticMailboxDiscovery,
 } from "~/server/domains/purchase-import/repo/gmail/discovery-admission";
@@ -54,6 +53,7 @@ import { mailImportEnabled } from "~/server/domains/purchase-import/repo/mail-im
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { readRun } from "~/server/domains/run/repo/ai-work-state";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { runHasLivePass } from "~/server/domains/run/repo/run-execution";
 import { recordRunProgress } from "~/server/domains/run/repo/run-progress";
 import type { Json } from "~/server/kernel/define";
 import { WorkPausedError } from "~/server/kernel/work-errors";
@@ -171,6 +171,66 @@ async function discoveryAllowed(
   );
 }
 
+/**
+ * Live scheduled targeted Runs per mailbox at which the cron and continuations
+ * stop creating more. Each backfill page is many gated publications, so this
+ * bounds how many backfill writers compete for the household write gate.
+ */
+const MAIL_DISCOVERY_BACKFILL_CAPACITY = 1;
+
+/**
+ * Scheduled, non-controlled query Runs of a mailbox that still run without a
+ * member: running, queued for admission, or failed while their Pass retries,
+ * and only while that current-generation `run.execute` Pass is unfinished,
+ * uncancelled and has attempts left. A Run whose Pass is gone, finished or
+ * exhausted, and one paused for authorization, funding or by a member, or
+ * stopped, does not count. Call under the mailbox admission lock.
+ */
+async function liveMailDiscoveryBackfills(
+  db: Database,
+  identity: { ledgerPartyId: string; mailboxId: string },
+): Promise<number> {
+  const scopeKind: keyof MailboxDiscoveryScope = "kind";
+  const queryScope: MailboxDiscoveryScope["kind"] = "query";
+  const execution = {
+    id: sql`${runTable.id}`,
+    purpose: sql`${runTable.purpose}`,
+    generation: sql`${runTable.progress}->>'attempt'`,
+  };
+  const rows = await getDb(db)
+    .select({ mailboxId: sql<string | null>`${runTable.input}->>'mailboxId'` })
+    .from(runTable)
+    .where(
+      and(
+        eq(runTable.purpose, "mail_discovery"),
+        eq(runTable.ledgerPartyId, ledgerPartyId.parse(identity.ledgerPartyId)),
+        eq(runTable.trigger, "scheduled"),
+        sql`${runTable.input}->'controlled' IS NULL`,
+        sql`${runTable.progress}->${mailboxDiscoveryProgress.keyof().enum.discoveryScope}->>${scopeKind} = ${queryScope}`,
+        or(
+          and(eq(runTable.status, "running"), runHasLivePass(execution)),
+          and(
+            notDeleted(runTable),
+            isNull(runTable.retiredAt),
+            or(
+              and(
+                eq(runTable.status, "paused"),
+                eq(runTable.failureCode, MAIL_DISCOVERY_ADMISSION_WAIT),
+                runHasLivePass(execution),
+              ),
+              and(
+                eq(runTable.status, "failed"),
+                eq(runTable.failureCode, "job_failed"),
+                runHasLivePass({ ...execution, requireAttempt: true }),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  return rows.filter((row) => row.mailboxId === identity.mailboxId).length;
+}
+
 /** The current roster is reconciled once; each execution owns only its selected position. */
 async function createDiscoveryPasses(
   db: Database,
@@ -259,18 +319,22 @@ async function createDiscoveryPasses(
             )
             .map((query) => ({ kind: "query", key: query.key }));
     const scheduled: RunId[] = [];
+    // Backfill paces at creation; admission treats the Runs it creates as any
+    // other search. A full budget creates nothing: the next completion's
+    // continuation or the hourly cron offers again.
+    let backfillBudget =
+      input.trigger === "scheduled" &&
+      !input.frozen.controlled &&
+      scopes[0]?.kind === "query"
+        ? MAIL_DISCOVERY_BACKFILL_CAPACITY -
+          (await liveMailDiscoveryBackfills(tx, identity))
+        : Infinity;
     for (const scope of scopes) {
+      if (backfillBudget <= 0) break;
       const decision = await mailDiscoveryAdmission(tx, {
         ...identity,
         scope,
         recovery: false,
-        backfill: isMailDiscoveryBackfill(
-          {
-            trigger: input.trigger,
-            controlled: Boolean(input.frozen.controlled),
-          },
-          scope,
-        ),
       });
       if (decision !== "available") {
         if (
@@ -353,6 +417,7 @@ async function createDiscoveryPasses(
       // concurrent drain must never claim a half-launched discovery.
       await launch(runId);
       scheduled.push(runId);
+      backfillBudget -= 1;
       // One member action grants one Run's allowance, never one per lane.
       if (input.paidGrant || scheduled.length === MAIL_DISCOVERY_CAPACITY)
         break;
