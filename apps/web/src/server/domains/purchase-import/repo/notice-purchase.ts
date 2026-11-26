@@ -12,7 +12,7 @@ import { and, eq, sql, type SQL } from "drizzle-orm";
 import type { DrizzleTransaction } from "~/server/db";
 import { notDeleted } from "~/server/db/helpers";
 import { purchase, vendorAccount } from "~/server/db/schema";
-import { emailLinkDecisionsSql } from "~/server/domains/email/repo/email-decision-sql";
+import { emailLinkDecisionsForPurchasesSql } from "~/server/domains/email/repo/email-decision-sql";
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { acceptedOrdersBoundToSql } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import { normalizedOrderIdSql } from "~/server/domains/purchase-import/repo/order-identity-sql";
@@ -36,7 +36,7 @@ export const awaitingOrderDetailsSql = (purchaseId: SQL): SQL<boolean> =>
   ) AND NOT EXISTS (
     SELECT 1 FROM ${acceptedOrdersBoundToSql((id) => sql`${id} = ${purchaseId}`)} aod_order
   ) AND EXISTS (
-    SELECT 1 FROM ${emailLinkDecisionsSql} aod_link
+    SELECT 1 FROM ${emailLinkDecisionsForPurchasesSql(sql`SELECT ${purchaseId} AS id`)} aod_link
     JOIN "OrderMailEvent" aod_event ON aod_event.id = aod_link."eventId"
     WHERE aod_link."purchaseId" = ${purchaseId} AND aod_link.active
       AND aod_link.decision = ${"linked" satisfies EmailPurchaseDecisionValue}

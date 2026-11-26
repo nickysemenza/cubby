@@ -37,7 +37,7 @@ import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import {
   emailLinkDecisionsForEmailsSql,
-  emailLinkDecisionsSql,
+  emailLinkDecisionsForOrderMailSql,
 } from "~/server/domains/email/repo/email-decision-sql";
 import { emailAcceptedEvidenceSql } from "~/server/domains/email/repo/email-sql";
 import { matchingOrderIdSql } from "~/server/domains/purchase-import/repo/order-identity-sql";
@@ -186,11 +186,13 @@ export async function readExactOrderLinkCandidates(
             WHERE scoped."id" = ANY(${uuidArrayParam(scope.purchaseIds)}) AND scoped."orderId" IS NOT NULL)`
         : null;
   if (!scoped) return [];
-  // An Email scope's decisions all sit on its own subjects and events.
+  // Both reads below name an event of the row's original: an Email scope's
+  // decisions sit on its own subjects and events; a Purchase scope reads the
+  // original's links per row, since an event's link to any Purchase counts.
   const decisions =
     "emailIds" in scope
       ? emailLinkDecisionsForEmailsSql(uuidArrayParam(scope.emailIds))
-      : emailLinkDecisionsSql;
+      : emailLinkDecisionsForOrderMailSql(sql`original."id"`);
   const result = await unwrapDb(db).execute(
     sql`
     SELECT "Email"."id" AS "emailId", original."id" AS "originalId", event."id" AS "eventId",

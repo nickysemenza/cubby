@@ -11,6 +11,7 @@ import { decision, scopeDirty } from "~/server/db/kernel-schema";
 import { emailReadSnapshot } from "~/server/db/read-snapshot-schema";
 import {
   email,
+  purchase,
   orderMailEvent,
   financialTransactionAllocation,
   expense,
@@ -18,6 +19,7 @@ import {
 import {
   emailLinkDecisionHistoryReadForDecision,
   emailLinkDecisionHistorySql,
+  emailLinkDecisionsForPurchasesSql,
   emailLinkDecisionsRead,
   emailLinkDecisionsReadForDecision,
   emailLinkDecisionsReadForEmail,
@@ -137,6 +139,15 @@ describe("Email Purchase link decisions", () => {
         ),
       ).toEqual(all.filter((row) => row.eventId && ids.has(row.eventId)));
     }
+    // Merged-away ids project nothing; survivors carry their aliases' links.
+    for (const { id } of await q.select({ id: purchase.id }).from(purchase)) {
+      const scoped = await q.execute<{ id: string }>(
+        sql`SELECT id FROM ${emailLinkDecisionsForPurchasesSql(sql`SELECT ${id}::uuid AS id`)} p ORDER BY id`,
+      );
+      expect(scoped.rows.map((row) => row.id)).toEqual(
+        all.filter((row) => row.purchaseId === id).map((row) => row.id),
+      );
+    }
     const history = await q.execute<{
       id: string;
       active: boolean;
@@ -243,6 +254,7 @@ describe("Email Purchase link decisions", () => {
       decision: "dismissed",
       active: true,
     });
+    await expectScopedLinksMatch();
     const survivorCommand = {
       ...command(f, "linked"),
       purchaseId: parseShortcodeFor("purchase", survivor.shortcode),
@@ -264,7 +276,19 @@ describe("Email Purchase link decisions", () => {
   });
   it("keeps a dismissal on its event when another Email now holds the original, alone or batched", async () => {
     const f = await fixture();
-    await decideEmailPurchase(ctx.db, command(f, "dismissed"), ctx.actor);
+    const dismissal = await publishEmailLinkDecision(ctx.db, {
+      eventId: f.event.id.toUpperCase(),
+      purchaseId: f.purchase.id,
+      decision: "dismissed",
+      evidenceChecksum: f.checksum,
+      decidedByUserId: ctx.actor.userId,
+      proposedBy: null,
+    });
+    const [stored] = await getDb(ctx.db)
+      .select({ value: decision.value })
+      .from(decision)
+      .where(eq(decision.id, dismissal.id));
+    expect(stored?.value).toMatchObject({ eventId: f.event.id });
     const other = await syntheticRetainedMail(ctx.db, {
       ledgerPartyId: f.party.id,
       vendorId: f.vendor.id,
@@ -394,7 +418,14 @@ describe("Email Purchase link decisions", () => {
     };
     const first = await publishEmailLinkDecision(ctx.db, input);
     const before = await getDb(ctx.db).select().from(decision);
-    expect((await publishEmailLinkDecision(ctx.db, input)).id).toBe(first.id);
+    expect(
+      (
+        await publishEmailLinkDecision(ctx.db, {
+          ...input,
+          eventId: input.eventId.toUpperCase(),
+        })
+      ).id,
+    ).toBe(first.id);
     expect(await getDb(ctx.db).select().from(decision)).toEqual(before);
     expect(
       await getDb(ctx.db).select().from(emailLinkDecisionsRead),
@@ -424,6 +455,22 @@ describe("Email Purchase link decisions", () => {
         .map((row) => row.purchaseId)
         .sort(),
     ).toEqual([f.purchase.id, second.id].sort());
+    // The Decision writer stores uuid subjects and link fields canonically.
+    const [ref] = await decide(ctx.db, ctx.actor, [
+      {
+        channel: "assignment",
+        kind: "set",
+        subject: `email:${f.mail.id.toUpperCase()}`,
+        field: `link:${second.id.toUpperCase()}`,
+        value: { ...input, eventId: event!.id, purchaseId: second.id },
+      },
+    ]);
+    expect(
+      await getDb(ctx.db)
+        .select({ subject: decision.subject, field: decision.field })
+        .from(decision)
+        .where(eq(decision.id, ref!.id)),
+    ).toEqual([{ subject: `email:${f.mail.id}`, field: `link:${second.id}` }]);
     await expectScopedLinksMatch();
     await getDb(ctx.db)
       .update(email)

@@ -199,9 +199,14 @@ export const emailLinkDecisionsReadForEmail = (emailId: SQL) =>
 /** Includes the owning Email's other links; filter by the decision id. */
 export const emailLinkDecisionsReadForDecision = (decisionId: SQL) =>
   decisionsRead(emailLinkDecisionsForDecisionSql(decisionId));
-/** Every link whose event belongs to one original, from any Email subject. */
+/**
+ * Every link whose event belongs to one original, from any Email subject, and
+ * every link of the original's Emails; correlated per row.
+ */
+export const emailLinkDecisionsForOrderMailSql = (orderMailId: SQL) =>
+  emailLinkDecisionProjection(true, { orderMailId });
 export const emailLinkDecisionsReadForOrderMail = (orderMailId: SQL) =>
-  decisionsRead(emailLinkDecisionProjection(true, { orderMailId }));
+  decisionsRead(emailLinkDecisionsForOrderMailSql(orderMailId));
 
 /**
  * Every retained link receipt remains gradeable after its current slot changes.
