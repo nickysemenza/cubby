@@ -9,6 +9,7 @@ import { is, type SQL, sql } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 
 import {
+  effectiveFieldMatchingRowsSql,
   effectiveFieldSql,
   inheritedFieldOfColumn,
 } from "~/server/db/computed/effective-field";
@@ -349,6 +350,8 @@ export const compileTraversal = (
     expenseProjectRelation?: string;
     /** Broad filters resolve each principal assignment once; narrow reads stay scalar. */
     materializePrincipalProjects?: boolean;
+    /** Resolve derived hops from the source row when enumerating one record's paths. */
+    singleRoot?: boolean;
     /**
      * Names a caller-registered `InheritedRelation` for an incoming inherited
      * edge. Matching a target against each source row's effective value inline
@@ -432,6 +435,27 @@ export const compileTraversal = (
       index,
       aliases?.expenseProjectRelation,
     );
+    const currentId = sql`${sql.identifier(currentAlias)}.id`;
+    const incomingField =
+      !outgoing && aliases?.singleRoot ? inheritedEdge(edge) : null;
+    const inheritedRows = incomingField
+      ? effectiveFieldMatchingRowsSql(
+          incomingField.entity,
+          incomingField.field,
+          (value) => sql`${value} = ${currentId}`,
+        )
+      : null;
+    const candidateRows = inheritedRows
+      ? sql`SELECT candidate.* FROM (${inheritedRows}) matched
+          JOIN ${sql.identifier(nextTable)} candidate USING (id)`
+      : aliases?.singleRoot &&
+          outgoing &&
+          edge.edgeKey === "Expense.projectId" &&
+          !productScopedExpenseAt(steps, index)
+        ? sql`SELECT candidate.* FROM (${expenseDerivedReadSql("projects", {
+            expenseIds: { select: sql`SELECT ${currentId} AS id` },
+          })}) attributed JOIN "Project" candidate ON candidate.id = attributed."projectId"`
+        : undefined;
     const inherited =
       !outgoing && !mappedExpenseProject && aliases?.inheritedRelation
         ? inheritedEdge(edge)
@@ -460,6 +484,7 @@ export const compileTraversal = (
     }
     hops.push({
       table: nextTable,
+      candidateRows,
       relation: mappedExpenseProject
         ? aliases?.expenseProjectRelation
         : undefined,

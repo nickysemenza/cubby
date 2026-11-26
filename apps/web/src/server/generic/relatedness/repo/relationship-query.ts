@@ -6,13 +6,20 @@ import { QueryBuilder } from "drizzle-orm/pg-core";
 import { sourceTransactionSettlements } from "~/server/db/computed/source-transaction-settlement-sql";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { purchase as purchaseTable } from "~/server/db/retained-tables";
-import { emailFinancialAssociationsSql } from "~/server/domains/email/repo/email-decision-sql";
+import {
+  emailFinancialAssociationsForEmailSql,
+  emailFinancialAssociationsSql,
+} from "~/server/domains/email/repo/email-decision-sql";
 import {
   purchaseAssociatedEmailsSql,
   emailPurchaseAssociationsSql,
 } from "~/server/domains/email/repo/email-sql";
+import { purchaseRowSql } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 import { imageExecutionReceipts } from "~/server/domains/image-processing/repo/execution-receipts";
-import { purchasePurchaserSetSql } from "~/server/domains/purchase/repo/purchase-purchaser";
+import {
+  purchasePurchaserSetSql,
+  purchasePurchasersSql,
+} from "~/server/domains/purchase/repo/purchase-purchaser";
 import { sourceObservationFacts } from "~/server/domains/transaction-import/repo/source-observation-state";
 
 const livePurchases = new QueryBuilder()
@@ -103,12 +110,43 @@ export function relationshipQueryTargets(
   outgoing: boolean,
 ): SQL | undefined {
   const query = relationshipQueryDefinition(key);
+  if (query.kind === "memberPurchases" && !outgoing) {
+    const purchase = sql`${sql.identifier(source)}`;
+    return sql`SELECT candidate.*
+      FROM (${purchasePurchasersSql(purchaseRowSql(purchase))}) purchaser
+      JOIN "LedgerParty" candidate ON candidate.shortcode = purchaser.value`;
+  }
   if (query.kind === "purchaseEmails") {
     return outgoing
       ? sql`SELECT candidate.* FROM (${purchaseAssociatedEmailsSql(sql`${sql.identifier(source)}."id"`)}) associated
           JOIN "Email" candidate ON candidate."id" = associated."id"`
       : sql`SELECT candidate.* FROM (${emailAssociatedPurchases(source)}) associated
           JOIN "Purchase" candidate ON candidate."id" = associated."purchaseId"`;
+  }
+  if (
+    query.kind === "reviewedEmailTransactions" ||
+    query.kind === "reviewedEmailAccounts"
+  ) {
+    const transaction = query.kind === "reviewedEmailTransactions";
+    const field = sql.identifier(
+      transaction ? "transactionId" : "reviewedAccountId",
+    );
+    const sourceId = sql`${sql.identifier(source)}.id`;
+    const target = sql.identifier(
+      outgoing
+        ? transaction
+          ? "FinancialTransaction"
+          : "FinancialAccount"
+        : "Email",
+    );
+    const ids = outgoing
+      ? sql`SELECT DISTINCT evidence.${field} AS id
+          FROM ${emailFinancialAssociationsForEmailSql(sourceId)} evidence`
+      : sql`SELECT DISTINCT evidence."emailId" AS id
+          FROM ${emailFinancialAssociationsSql} evidence
+          WHERE evidence.${field} = ${sourceId}`;
+    return sql`SELECT candidate.* FROM (${ids}) associated
+      JOIN ${target} candidate USING (id)`;
   }
   if (query.kind !== "vendorEmails" && query.kind !== "vendorAccountEmails")
     return undefined;

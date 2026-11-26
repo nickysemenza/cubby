@@ -3105,7 +3105,8 @@ in `connected-view-definitions.ts`); new entities inherit direct and inverse cov
 `relationship-paths.ts` supplies the directional relationships for table composition and graph
 expansion. The preview reader composes the same paged query as a full connection table into one
 statement for all requested groups, each keeping its count, limit and provenance. The count reads
-distinct target identities. Path nodes and their labels are built for the selected page. Table cells,
+distinct target identities. The preview and full tables resolve routes from one source record and
+cap the database statement at five seconds. Path nodes and their labels are built for the selected page. Table cells,
 summaries and context disclosures reuse `connection-paths.tsx` for linked trails and batched cover
 references. Distinct records with equal labels show their shortcodes; identity, never label
 equality, controls deduplication. Named routes compose any number of logical steps; physical joins
