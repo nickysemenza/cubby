@@ -56,7 +56,7 @@ import {
   run as runTable,
   vendorAccount,
 } from "~/server/db/schema";
-import { emailLinkDecisionsRead as emailPurchaseDecision } from "~/server/domains/email/repo/email-decision-sql";
+import { emailLinkDecisionsReadForOrderMail } from "~/server/domains/email/repo/email-decision-sql";
 import { readEmailFinancialAssociations } from "~/server/domains/email/repo/email-financial-associations";
 import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-write";
 import {
@@ -629,6 +629,9 @@ async function linkOrderMail(
     await (
       await import("~/server/kernel/api")
     ).emitWrites(db, { table: orderMailEvent, ids: [created.id], columns: [] });
+  const emailPurchaseDecision = emailLinkDecisionsReadForOrderMail(
+    sql`${input.mail.id}::uuid`,
+  );
   // A member's dismissal of this Email for this Purchase, on any of its
   // events, wins over a later automatic or session link.
   const [dismissed] = await tx
@@ -1173,6 +1176,9 @@ export async function resolveMail(
           "MAIL_REQUEST_REFUSED",
           "The Email and a Purchase belong to different members.",
         );
+      const emailPurchaseDecision = emailLinkDecisionsReadForOrderMail(
+        sql`${mail.id}::uuid`,
+      );
       const [dismissed] = await getDb(tdb)
         .select({ id: emailPurchaseDecision.id })
         .from(emailPurchaseDecision)
