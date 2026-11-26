@@ -66,6 +66,12 @@ type Q = Pick<RepositoryQueryClient, "execute" | "insert" | "select">;
 /** The ask's call went out and its outcome is unknown; a member settles it. */
 export class AskUnknownError extends Error {
   override name = "AskUnknownError";
+  constructor(
+    message: string,
+    readonly inputHash: string,
+  ) {
+    super(message);
+  }
 }
 /** A member gave up on this answer; it is not produced unless they ask again. */
 export class AskAbandonedError extends Error {
@@ -213,6 +219,40 @@ async function ensureAsk(
       ON CONFLICT DO NOTHING`);
   await recordAnswerReceipts(q, row.id, inputHash);
   return row;
+}
+
+/**
+ * Link a Run page and its record to the unknown Ask. Lock the Ask through
+ * commit so a settlement either precedes the check or sees both waiters.
+ */
+export async function registerUnknownAskWait(
+  tx: Database,
+  inputHash: string,
+  runId: string,
+  pass: { name: string; key: string },
+  pause: () => Promise<boolean>,
+): Promise<"settled" | "stopped" | "waiting"> {
+  const q = repositoryQueries(tx);
+  const locked = await q.execute<{ id: string }>(sql`
+    SELECT id FROM "Ask" WHERE "inputHash" = ${inputHash}
+      AND state = ${ASK.unknown} AND "cancelledAt" IS NULL FOR UPDATE`);
+  const ask = locked.rows[0];
+  if (!ask) return "settled";
+  if (!(await pause())) return "stopped";
+  const passKey = `${pass.name}:${pass.key}`;
+  // A retained page may meet a second unknown Ask after the first settles.
+  // Keep the old record link, but only the current dependency wakes the Pass.
+  await q.execute(sql`
+    UPDATE "AskScope" SET "cancelledAt" = now()
+    WHERE "scopeKind" = ${PASS_WAITER} AND "scopeKey" = ${passKey}
+      AND "askId" <> ${ask.id}::uuid AND "cancelledAt" IS NULL`);
+  await q.execute(sql`
+    INSERT INTO "AskScope" ("askId", "scopeKind", "scopeKey", "runId")
+    VALUES (${ask.id}::uuid, ${PASS_WAITER}, ${passKey}, ${runId}::uuid),
+      (${ask.id}::uuid, ${RECORD_WAITER}, ${recordScopeKey("run", runId)}, ${runId}::uuid)
+    ON CONFLICT ("askId", "scopeKind", "scopeKey") DO UPDATE
+      SET "cancelledAt" = NULL WHERE "AskScope"."cancelledAt" IS NOT NULL`);
+  return "waiting";
 }
 
 /** Passes waiting on an ask run as soon as it settles; returns how many became due. */
@@ -710,6 +750,7 @@ export async function withAsk<I, O>(
     if (row.state === "unknown" || (row.state === "sent" && row.lapsed))
       throw new AskUnknownError(
         `The ${kind.feature} call for ${inputHash} went out and its outcome is unknown; it is not sent again automatically.`,
+        inputHash,
       );
     if (row.state === "sent")
       throw inFlight(

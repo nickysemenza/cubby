@@ -697,6 +697,13 @@ the provider offers an idempotency key or a result lookup that settles it. A
 receipt that arrives late may settle the original attempt but never authorizes
 an apply against inputs that have since changed.
 
+A Run page that needs an unknown Ask registers its Pass and record as waiters,
+pauses the Run with `ask_outcome` and parks the Pass at the same checkpoint
+without a deadline. These writes commit together under the Pass fence.
+Settlement makes the Pass due, and a woken discovery Pass must regain
+admission before repeating its page. The discovery pause frees its slot and
+announces the vacancy after commit.
+
 A member may explicitly ask again, accepting that the original call may have
 been charged. The same Ask and response-cache identity remain: a retained
 answer replays without another call, and a live in-flight claim defers the retry.
@@ -813,8 +820,10 @@ with its action, and a count line that opens the panel. Everything else,
 including Cubby's routine work, is in the panel.
 
 Needs you is the set of gaps whose actor is a member. A Run is the set of
-facts and asks that carry its `runId`; its page summarizes those scopes. Runs
-stay as cost evidence and as the workspace for Sweeps and photo review.
+facts and asks that carry its `runId`; its page summarizes those scopes and
+offers the same retry and abandon decisions for an unknown Ask as other
+records. Runs stay as cost evidence and as the workspace for Sweeps and photo
+review.
 
 ### 11. Changes that would rewrite history
 

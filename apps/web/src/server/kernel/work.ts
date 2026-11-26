@@ -44,7 +44,7 @@ export async function loadRunPasses(q: Q, runId: string): Promise<PassWork[]> {
     name: string;
     key: string;
     stage: string;
-    availableAt: string;
+    availableAt: string | null;
     waitCause: string | null;
     attempts: number;
     maxAttempts: number;

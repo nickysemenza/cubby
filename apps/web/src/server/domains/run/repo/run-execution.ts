@@ -52,7 +52,7 @@ export type RunPassState = {
   generation: number | null;
   /** `working` while a claim is live; `stuck` once attempts are spent. */
   state: "due" | "waiting" | "working" | "done" | "cancelled" | "stuck";
-  availableAt: Date;
+  availableAt: Date | null;
   waitCause: string | null;
   attempts: number;
   maxAttempts: number;
@@ -66,7 +66,7 @@ type PassRow = {
   name: string;
   runId: string;
   cursor: unknown;
-  availableAt: string;
+  availableAt: string | null;
   waitCause: string | null;
   attempts: number;
   maxAttempts: number;
@@ -123,7 +123,7 @@ export async function readRunPasses(
           runId: row.runId,
           generation: cursor?.generation ?? null,
           state,
-          availableAt: new Date(row.availableAt),
+          availableAt: row.availableAt ? new Date(row.availableAt) : null,
           waitCause: row.waitCause,
           attempts: row.attempts,
           maxAttempts: row.maxAttempts,
@@ -205,6 +205,8 @@ export function runPassRollup(
   if (pass.state === "working")
     return { reason: "leased", group: null, perMinute: null };
   if (pass.state !== "due" && pass.state !== "waiting") return null;
+  if (!pass.availableAt)
+    return { reason: "paused", group: null, perMinute: null };
   const cause =
     // SAFETY: the `in` check narrows the stored cause to a declared key.
     pass.waitCause && pass.waitCause in PASS_GROUP_REASON

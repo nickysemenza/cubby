@@ -14,5 +14,5 @@ export const passRecoveryAt = (p: SQL): SQL =>
       ${BACKOFF_BASE_MS / 1000} * power(2::double precision, least(7, ${p}.attempts)))) END`;
 
 export const passFreeAt = (p: SQL): SQL =>
-  sql`CASE WHEN ${p}."claimToken" IS NULL THEN ${p}."availableAt"
-    WHEN ${p}."claimDeadline" IS NOT NULL THEN greatest(${p}."availableAt", ${passRecoveryAt(p)}) END`;
+  sql`nullif(CASE WHEN ${p}."claimToken" IS NULL THEN ${p}."availableAt"
+    WHEN ${p}."claimDeadline" IS NOT NULL THEN greatest(${p}."availableAt", ${passRecoveryAt(p)}) END, 'infinity'::timestamp)`;

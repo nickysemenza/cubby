@@ -11,8 +11,10 @@ import {
   mailboxDiscoveryProgress,
 } from "@cubby/schemas/mailbox-research";
 import { eq, sql } from "drizzle-orm";
+import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { account } from "~/server/db/auth.schema";
@@ -31,6 +33,9 @@ import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { readRunPass } from "~/server/domains/run/repo/run-execution";
+import { machineryHandlers } from "~/server/domains/work/operations/machinery.server";
+import { systemPrincipal } from "~/server/http/authenticate";
+import { createKernel, defineAsk, defineModule } from "~/server/kernel/api";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 import { withRunPassFixture } from "~/server/workflows/runs/pass.fixtures";
@@ -756,6 +761,153 @@ describe("scheduled Gmail discovery", () => {
       expect((await readRun(state.params.runId)).status).not.toBe(
         "paused_auth",
       );
+    } finally {
+      page.mockRestore();
+    }
+  });
+
+  it("parks discovery on an unknown Ask until the member retries it from the Run", async () => {
+    const state = await seed();
+    const runId = state.params.runId;
+    const { advanceRunPass } =
+      await import("~/server/workflows/runs/pass.fixtures");
+    const discovery = await import("./discovery");
+    const produce = vi.fn(async () => ({ output: "related" as const }));
+    const ask = defineAsk({
+      feature: "synthetic.discovery-triage",
+      producer: "model",
+      promptVersion: "1",
+      input: z.string(),
+      output: z.literal("related"),
+      produce,
+    });
+    const kernel = createKernel([
+      defineModule({ name: "synthetic.discovery-triage", asks: [ask] }),
+    ]);
+    const triage = vi.fn(() =>
+      kernel.withAsk(ctx.db, ask, "synthetic email", {
+        runId,
+        initialOutcome: "unknown",
+      }),
+    );
+    const real = discovery.advanceMailDiscoveryPage;
+    const page = vi
+      .spyOn(discovery, "advanceMailDiscoveryPage")
+      .mockImplementation((db, params, cursor) =>
+        real(db, params, cursor, {
+          ...ports(
+            gmail({
+              listMessages: async () => ({ messages: [{ id: "source-one" }] }),
+            }),
+          ),
+          triage,
+        }),
+      );
+    try {
+      expect(await advanceRunPass(ctx.db)).toBe(true);
+      const frozen = await readRun(runId);
+      const waitingRun = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "mail_discovery",
+        trigger: "manual",
+        status: "completed",
+        input: mailboxDiscoveryInput.parse(frozen.input),
+        progress: {
+          ...mailboxDiscoveryProgress.parse(frozen.progress),
+          page: undefined,
+        },
+        execution: false,
+      });
+      await getDb(ctx.db)
+        .update(run)
+        .set({ status: "paused" })
+        .where(eq(run.id, waitingRun));
+      await launchWorkflowRun(ctx.db, {
+        runId: waitingRun,
+        purpose: "mail_discovery",
+      });
+      expect(await advanceRunPass(ctx.db)).toBe(true);
+      expect(await readRunPass(ctx.db, waitingRun)).toMatchObject({
+        state: "waiting",
+      });
+
+      await getDb(ctx.db)
+        .update(kernelPass)
+        .set({ attempts: 1 })
+        .where(eq(kernelPass.key, runId));
+      expect(await advanceRunPass(ctx.db)).toBe(true);
+      expect(await readRun(runId)).toMatchObject({
+        status: "paused",
+        failureCode: "ask_outcome",
+        progress: frozen.progress,
+      });
+      expect(await readRunPass(ctx.db, runId)).toMatchObject({
+        state: "waiting",
+        attempts: 1,
+        availableAt: null,
+      });
+      expect(await readRunPass(ctx.db, waitingRun)).toMatchObject({
+        state: "due",
+      });
+      await controlWorkflowRun(
+        ctx.db,
+        ctx.actor,
+        {
+          runPublicId: (await readRun(waitingRun)).shortcode,
+          action: "cancel",
+        },
+        "mail_discovery",
+      );
+      const { startRunPass } = await import("~/server/workflows/runs/run-pass");
+      await startRunPass(ctx.db, {
+        runId,
+        generation: state.params.attempt,
+        purpose: "mail_discovery",
+        restart: false,
+      });
+      expect(await advanceRunPass(ctx.db)).toBe(false);
+      expect(triage).toHaveBeenCalledOnce();
+      expect(produce).not.toHaveBeenCalled();
+
+      const request = {
+        principal: systemPrincipal({
+          ...buildKernelContext(ctx.db, ctx.actor.userId),
+          actorContext: ctx.actor,
+        }),
+        headers: new Headers(),
+        signal: new AbortController().signal,
+      };
+      const record = { entity: "run", id: frozen.shortcode } as const;
+      const read = await machineryHandlers.operations.read({
+        data: record,
+        request,
+      });
+      if (!read.ok) throw new Error(read.error.message);
+      const gap = read.data.machinery?.gaps.items.find(
+        (item) => item.askState === "unknown",
+      );
+      expect(gap?.input).toContain(
+        "the request was sent and its outcome is unknown",
+      );
+      expect(gap?.actions.map((action) => action.value)).toEqual([
+        "retry",
+        "abandoned",
+      ]);
+      const retry = gap?.actions.find((action) => action.value === "retry");
+      if (!retry) throw new Error("Unknown Ask retry was not offered");
+      const { label: _label, ...decision } = retry;
+      expect(
+        await machineryHandlers.operations.decide({
+          data: { ...record, decisions: [decision] },
+          request,
+        }),
+      ).toMatchObject({ ok: true });
+      expect(await readRunPass(ctx.db, runId)).toMatchObject({ state: "due" });
+      expect(await advanceRunPass(ctx.db)).toBe(true);
+      expect(produce).toHaveBeenCalledOnce();
+      expect(await readRun(runId)).toMatchObject({
+        status: "completed",
+        progress: { pagesDone: 1 },
+      });
     } finally {
       page.mockRestore();
     }

@@ -79,6 +79,8 @@ export const isMemberStartedRun = (run: {
   (run.cause === "member_request" ||
     run.trigger === "foreground" ||
     run.trigger === "manual");
+export const RUN_ASK_OUTCOME_WAIT = "ask_outcome";
+
 export const runStatus = z.enum([
   "running",
   "paused",
