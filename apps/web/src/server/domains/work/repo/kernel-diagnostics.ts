@@ -164,7 +164,7 @@ export async function retryKernelWork(
           sql`UPDATE "ScopeDirty" SET ${common} WHERE "scopeKind"=${target.kind} AND "scopeKey"=${target.key} AND attempts>=${MAX_SCOPE_ATTEMPTS} AND ${free} RETURNING 1`,
         )
       : await q.execute<{ retried: number }>(
-          sql`UPDATE "Pass" SET ${common} WHERE name=${target.kind} AND key=${target.key} AND attempts>="maxAttempts" AND "doneAt" IS NULL AND "cancelledAt" IS NULL AND ${free} RETURNING 1`,
+          sql`UPDATE "Pass" SET ${common}, "transientFailures" = 0 WHERE name=${target.kind} AND key=${target.key} AND attempts>="maxAttempts" AND "doneAt" IS NULL AND "cancelledAt" IS NULL AND ${free} RETURNING 1`,
         );
   if (!result.rows.length) return { retried: false };
   await wakeAfterCommit(db);

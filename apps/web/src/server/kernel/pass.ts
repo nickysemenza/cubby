@@ -63,7 +63,9 @@ export async function startPass(
   const finished = sql`"Pass"."doneAt" IS NOT NULL OR "Pass"."cancelledAt" IS NOT NULL`;
   const reviving = sql`${options.revive ?? false} AND "Pass".attempts >= "Pass"."maxAttempts"`;
   const keepsWait = sql`"Pass"."waitCause" = ${kernelWaitCause.enum.funding}
-    OR (NOT (${finished}) AND "Pass"."availableAt" = 'infinity'::timestamp)`;
+    OR (NOT (${finished}) AND ("Pass"."availableAt" = 'infinity'::timestamp
+      OR (NOT (${reviving}) AND "Pass"."claimToken" IS NULL AND "Pass"."waitCause" IS NULL
+        AND "Pass"."transientFailures" > 0 AND "Pass"."availableAt" > now())))`;
   const coalesceActive = pass.activeStart === "restart";
   // A queued scan already covers new requests. Flag a rerun once it has started.
   const recordRestart = sql`("Pass".attempts < "Pass"."maxAttempts" OR ${reviving})
@@ -95,9 +97,8 @@ export async function startPass(
             ELSE "Pass".cursor END`
             : sql`"Pass".cursor`
         } END,
-      attempts = CASE WHEN "Pass"."doneAt" IS NOT NULL OR "Pass"."cancelledAt" IS NOT NULL
-          OR (${options.revive ?? false} AND "Pass".attempts >= "Pass"."maxAttempts")
-        THEN 0 ELSE "Pass".attempts END,
+      attempts = CASE WHEN ${finished} OR (${reviving}) THEN 0 ELSE "Pass".attempts END,
+      "transientFailures" = CASE WHEN ${finished} OR (${reviving}) THEN 0 ELSE "Pass"."transientFailures" END,
       "claimToken" = CASE WHEN "Pass"."doneAt" IS NOT NULL OR "Pass"."cancelledAt" IS NOT NULL
         THEN NULL ELSE "Pass"."claimToken" END,
       "claimDeadline" = CASE WHEN "Pass"."doneAt" IS NOT NULL OR "Pass"."cancelledAt" IS NOT NULL
@@ -302,6 +303,7 @@ export async function runOnePass(
           "doneAt" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} AND ${result.done} AND NOT (${restartPending}) THEN now() ELSE NULL END,
           "availableAt" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN CASE WHEN ${restart} THEN ${restartAt} ELSE ${nextAt} END ELSE CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN "availableAt" ELSE least("availableAt", now()) END END,
           attempts = CASE WHEN ${parked} THEN attempts ELSE 0 END,
+          "transientFailures" = 0,
           "claimToken" = NULL, "claimDeadline" = NULL,
           "waitCause" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${result.done ? null : (result.waitCause ?? null)} ELSE CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN "waitCause" END END, "lastError" = ${itemError}, "updatedAt" = now()
           ${

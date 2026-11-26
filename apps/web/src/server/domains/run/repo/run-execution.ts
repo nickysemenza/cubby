@@ -56,6 +56,7 @@ export type RunPassState = {
   waitCause: string | null;
   attempts: number;
   maxAttempts: number;
+  transientFailures: number;
   lastError: string | null;
   claimDeadline: Date | null;
   updatedAt: Date;
@@ -70,6 +71,7 @@ type PassRow = {
   waitCause: string | null;
   attempts: number;
   maxAttempts: number;
+  transientFailures: number;
   lastError: string | null;
   claimDeadline: string | null;
   updatedAt: string;
@@ -91,7 +93,7 @@ export async function readRunPasses(
   if (!runIds.length) return new Map();
   const result = await repositoryQueries(db).execute<PassRow>(sql`
     SELECT name, key AS "runId", cursor, ${iso("availableAt")} AS "availableAt", "waitCause",
-      attempts, "maxAttempts", "lastError",
+      attempts, "maxAttempts", "transientFailures", "lastError",
       (SELECT CASE WHEN count(*) >= 3 THEN percentile_cont(0.5) WITHIN GROUP (ORDER BY (sample->>'ms')::float8) END
         FROM "Pass" history CROSS JOIN LATERAL jsonb_array_elements(history."durationHistory") sample
         WHERE history.name = "Pass".name AND (sample->>'at')::timestamptz > now() - interval '7 days') AS "medianPageMs",
@@ -127,6 +129,7 @@ export async function readRunPasses(
           waitCause: row.waitCause,
           attempts: row.attempts,
           maxAttempts: row.maxAttempts,
+          transientFailures: row.transientFailures,
           lastError: row.lastError,
           claimDeadline: row.claimDeadline ? new Date(row.claimDeadline) : null,
           updatedAt: new Date(row.updatedAt),

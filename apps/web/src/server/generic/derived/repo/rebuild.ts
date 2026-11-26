@@ -157,6 +157,10 @@ export async function requestDerivedRebuild(
   options: { force?: boolean; runId?: string } = {},
 ): Promise<{ existing: boolean }> {
   const existing = await rebuildActive(db);
+  const force = options.force ?? true;
+  const keepsRetry = sql`"Pass"."doneAt" IS NULL AND "Pass"."cancelledAt" IS NULL
+    AND NOT ${force} AND "Pass"."transientFailures" > 0
+    AND "Pass".attempts < "Pass"."maxAttempts"`;
   await getDb(db).execute(sql`INSERT INTO "Pass" (name, key, "runId", cursor)
     VALUES (${DERIVED_SNAPSHOT_PASS}, ${DERIVED_SNAPSHOT_KEY}, ${options.runId ?? null}::uuid, '{}'::jsonb)
     ON CONFLICT (name, key) DO UPDATE SET
@@ -164,8 +168,12 @@ export async function requestDerivedRebuild(
         ${HISTORY_KEY}::text, coalesce("Pass".cursor->${HISTORY_KEY}::text, '[]'::jsonb), 'durationsMs', coalesce("Pass".cursor->'durationsMs', '[]'::jsonb),
         'cleanAt', "Pass".cursor->'cleanAt', 'failures', coalesce("Pass".cursor->'failures', '0'::jsonb)) ELSE "Pass".cursor END,
       "runId" = coalesce(excluded."runId", "Pass"."runId"), "doneAt" = NULL, "cancelledAt" = NULL,
-      attempts = 0, "lastError" = NULL, "availableAt" = now(), "updatedAt" = now()
-    WHERE ("Pass"."doneAt" IS NULL AND "Pass"."cancelledAt" IS NULL) OR ${options.force ?? true}
+      attempts = CASE WHEN ${keepsRetry} THEN "Pass".attempts ELSE 0 END,
+      "transientFailures" = CASE WHEN ${keepsRetry} THEN "Pass"."transientFailures" ELSE 0 END,
+      "lastError" = CASE WHEN ${keepsRetry} THEN "Pass"."lastError" END,
+      "availableAt" = CASE WHEN ${keepsRetry} THEN "Pass"."availableAt" ELSE now() END,
+      "updatedAt" = now()
+    WHERE ("Pass"."doneAt" IS NULL AND "Pass"."cancelledAt" IS NULL) OR ${force}
       OR coalesce(("Pass".cursor->>'startedAt')::timestamp, 'epoch'::timestamp) < date_trunc('hour', now())`);
   return { existing };
 }

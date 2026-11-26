@@ -7,7 +7,7 @@ export class WorkEvidenceObsoleteError extends Error {}
 export class WorkPausedError extends Error {}
 /** A page may retry this target alone after rolling back its shared publication. */
 export class WorkTargetError extends Error {}
-/** Transient external failure: retain the claim backoff without exhausting it. */
+/** Retryable external failure governed by the claim's transient backoff. */
 export class WorkRetryableError extends Error {}
 export class WorkDeferredError extends Error {
   constructor(

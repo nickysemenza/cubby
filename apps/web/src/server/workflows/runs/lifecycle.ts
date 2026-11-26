@@ -47,10 +47,7 @@ import { reportServerError } from "~/server/errors/report-error";
 import { classifyWorkFailure, stopsPage } from "~/server/kernel/failure";
 import type { PassPageTransaction } from "~/server/kernel/pass";
 import { wakeAfterCommit } from "~/server/kernel/wake";
-import {
-  WorkDeferredError,
-  WorkRetryableError,
-} from "~/server/kernel/work-errors";
+import { WorkDeferredError } from "~/server/kernel/work-errors";
 import {
   assertWorkflowEffect,
   currentRunExecution,
@@ -396,7 +393,7 @@ async function reviveRunAsks(tx: Database, runId: RunId) {
 
 /**
  * Launch, resume or retry a step-ledger or AI-work Run through its Pass. A
- * live Pass keeps its generation and becomes due now; a finished, cancelled
+ * live Pass keeps its generation and transient backoff. A finished, cancelled
  * or exhausted one restarts at the next generation. Automatic launches never
  * revive a stopped Pass or a finished Run.
  */
@@ -674,11 +671,15 @@ export async function resumeClaimedWorkflowRun(
     const deferred = mailDiscoveryBackpressure(error);
     if (deferred) throw deferred;
     const pg = findPgError(error);
-    if (pg?.code === "23505" && pg.constraint?.startsWith("Run_one_active_"))
-      throw new WorkRetryableError(
+    if (pg?.code === "23505" && pg.constraint?.startsWith("Run_one_active_")) {
+      const wait = new WorkDeferredError(
         "Run recovery is waiting for another active Run",
-        { cause: error },
+        new Date(Date.now() + 30_000),
+        "provider_capacity",
       );
+      wait.cause = error;
+      throw wait;
+    }
     throw error;
   }
 }
