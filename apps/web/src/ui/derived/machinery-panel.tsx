@@ -215,13 +215,16 @@ function InputDetail({ input }: { input: MachineryInput }) {
   );
 }
 
+/** The `machinery.approveDrift` scopes the panel offers. */
+export type DriftApprovalScope = "item" | "class" | "class_unchanged";
+
 function Drift({
   drift,
   onApproveDrift,
   pending,
 }: {
   drift: NonNullable<Machinery["drift"]>;
-  onApproveDrift?: (scope: "item" | "class") => void;
+  onApproveDrift?: (scope: DriftApprovalScope) => void;
   pending?: boolean;
 }) {
   return (
@@ -260,6 +263,14 @@ function Drift({
           >
             Approve every change like this
           </Button>
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={pending}
+            onClick={() => onApproveDrift("class_unchanged")}
+          >
+            Approve every one like this that changes no record
+          </Button>
         </div>
       ) : null}
       <Disclosure summary="Proposal">
@@ -290,7 +301,7 @@ export function MachineryPanel({
   scope: "record" | "field";
   renderSource?: (code: string) => ReactNode;
   onAction?: (action: KernelGapAction) => void;
-  onApproveDrift?: (scope: "item" | "class") => void;
+  onApproveDrift?: (scope: DriftApprovalScope) => void;
   pending?: boolean;
 }) {
   const empty =

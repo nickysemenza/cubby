@@ -33,6 +33,8 @@ import {
   type ScopeRef,
 } from "./define";
 import {
+  changesNoRecord,
+  changesNoRecordSql,
   describeDifference,
   difference,
   isEmptyDifference,
@@ -429,6 +431,12 @@ async function claimForApproval(
 
 export type ApprovalOutcome = "applied" | "stale" | "busy" | "missing";
 
+/**
+ * Which proposals of a scope kind a class approval takes: every one, or only
+ * those that change no accepted record ({@link changesNoRecord}).
+ */
+export type DriftClass = "all" | "unchanged";
+
 const disagreementsOf = (difference: unknown): unknown[] =>
   z
     .object({ disagreements: z.array(z.unknown()).default([]) })
@@ -456,7 +464,10 @@ export async function approveDrift(
   proposalHash: string,
 ): Promise<ApprovalOutcome> {
   try {
-    return await approveOne(db, registry, actor, scope, proposalHash, false);
+    return await approveOne(db, registry, actor, scope, proposalHash, {
+      recorded: false,
+      unchanged: false,
+    });
   } finally {
     await wakeAfterCommit(db);
   }
@@ -468,7 +479,7 @@ async function approveOne(
   actor: ActorContext,
   scope: ScopeRef,
   proposalHash: string,
-  recorded: boolean,
+  options: { recorded: boolean; unchanged: boolean },
 ): Promise<ApprovalOutcome> {
   const q = repositoryQueries(db);
   const [proposal] = await q
@@ -481,7 +492,9 @@ async function approveOne(
   if (proposal.proposalHash !== proposalHash) return "stale";
   // Evidence or a decision resolves a disagreement; approval cannot.
   if (disagreementsOf(proposal.difference).length) return "stale";
-  if (!recorded)
+  if (options.unchanged && !changesNoRecord(proposal.difference))
+    return "stale";
+  if (!options.recorded)
     await decide(db, registry, actor, [
       {
         channel: "assignment",
@@ -500,17 +513,23 @@ async function approveOne(
     locked: false,
     hideBaseline: true,
   });
+  const rederives = async () => {
+    const recomputed = await proposalOf(
+      computed!,
+      difference(computed!, { releaseBaseline: true }),
+    );
+    return (
+      recomputed.proposalHash === proposalHash &&
+      // An unchanged-class approval never applies a proposal that now changes a record.
+      (!options.unchanged || changesNoRecord(recomputed.difference))
+    );
+  };
   if (
     proposal.rules !== reconciler.rules ||
     computed!.error !== null ||
     !computed!.desired ||
     !!computed!.desired.disagreements.length ||
-    (
-      await proposalOf(
-        computed!,
-        difference(computed!, { releaseBaseline: true }),
-      )
-    ).proposalHash !== proposalHash
+    !(await rederives())
   ) {
     await releaseClaim(
       q,
@@ -538,15 +557,21 @@ async function approveOne(
     : "stale";
 }
 
-/** Approve every current proposal of one scope kind: one decision, each proposal applied, one wake. */
+/**
+ * Approve up to 50 current proposals of one scope kind: one decision, each
+ * proposal applied, one wake. The `unchanged` class takes only proposals that
+ * change no accepted record, in scope-key order, and records no decision
+ * when none qualifies.
+ */
 export async function approveDriftClass(
   db: Database,
   registry: KernelRegistry,
   actor: ActorContext,
   kind: string,
+  only: DriftClass = "all",
 ): Promise<Record<ApprovalOutcome, number>> {
   try {
-    return await approveClass(db, registry, actor, kind);
+    return await approveClass(db, registry, actor, kind, only);
   } finally {
     await wakeAfterCommit(db);
   }
@@ -557,12 +582,25 @@ async function approveClass(
   registry: KernelRegistry,
   actor: ActorContext,
   kind: string,
+  only: DriftClass,
 ): Promise<Record<ApprovalOutcome, number>> {
-  const proposals = await repositoryQueries(db)
+  const unchanged = only === "unchanged";
+  const counts = { applied: 0, stale: 0, busy: 0, missing: 0 } satisfies Record<
+    ApprovalOutcome,
+    number
+  >;
+  const selection = repositoryQueries(db)
     .select({ key: drift.scopeKey, proposalHash: drift.proposalHash })
-    .from(drift)
-    .where(sql`${drift.scopeKind} = ${kind}`)
-    .limit(50);
+    .from(drift);
+  const proposals = unchanged
+    ? await selection
+        .where(
+          sql`${drift.scopeKind} = ${kind} AND ${changesNoRecordSql(sql`${drift.difference}`)}`,
+        )
+        .orderBy(drift.scopeKey)
+        .limit(50)
+    : await selection.where(sql`${drift.scopeKind} = ${kind}`).limit(50);
+  if (unchanged && !proposals.length) return counts;
   await decide(db, registry, actor, [
     {
       channel: "assignment",
@@ -574,10 +612,6 @@ async function approveClass(
       },
     },
   ]);
-  const counts = { applied: 0, stale: 0, busy: 0, missing: 0 } satisfies Record<
-    ApprovalOutcome,
-    number
-  >;
   for (const proposal of proposals)
     counts[
       await approveOne(
@@ -586,7 +620,7 @@ async function approveClass(
         actor,
         { kind, key: proposal.key },
         proposal.proposalHash,
-        true,
+        { recorded: true, unchanged },
       )
     ]++;
   return counts;

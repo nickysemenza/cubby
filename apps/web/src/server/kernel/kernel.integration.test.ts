@@ -3794,6 +3794,140 @@ describe("evidence-facts kernel", () => {
     expect(await proposal()).toEqual({ askCount: 2, estimatedCostMicros: 70 });
   });
 
+  it("approves only a kind's Drift proposals that change no record", async () => {
+    const kept = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic kept",
+    });
+    const renamed = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic renamed",
+    });
+    const turned = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic turned",
+    });
+    const kind = "fixture.unchangedDrift";
+    const target = writes(vendor, ["name"], { entity: "vendor" });
+    const asked = defineAsk({
+      feature: "fixture.unchangedDriftAsk",
+      producer: "model",
+      promptVersion: "1",
+      input: z.object({ id: z.string() }),
+      output: z.object({ value: z.string() }),
+      policy: { tier: "fast" },
+    });
+    const module = (version: number) =>
+      defineModule({
+        name: "unchangedDrift",
+        asks: [asked],
+        reconcilers: [
+          defineReconciler({
+            scope: kind,
+            lane: "catalog",
+            version,
+            reads: [source.table(vendor, ["name", "aliases"])],
+            writes: [target],
+            asks: [asked],
+            load: (reads, keys) => reads.rows(vendor, keys),
+            reconcile(row, c) {
+              if (version > 1) {
+                c.answer(asked, { id: row.id });
+                if (row.id === renamed.id || row.aliases.includes("relabel"))
+                  c.patch(target, row.id, { name: "Synthetic derived name" });
+              }
+              return c.done();
+            },
+          }),
+        ],
+      });
+    const ids = [kept, renamed, turned].map((row) => row.id);
+    const first = createKernel([module(1)]);
+    await first.emitWrites(ctx.db, {
+      table: vendor,
+      ids,
+      columns: ["name"],
+      discovers: ids.map((key) => ({ kind, key })),
+    });
+    await settle(first);
+    // Each scope holds the accepted snapshot of its member record.
+    await repositoryQueries(ctx.db)
+      .insert(evidenceBinding)
+      .values(
+        ids.map((key) => ({
+          factKind: "manualEntry",
+          factId: crypto.randomUUID(),
+          eventKey: key,
+          basis: "baseline" as const,
+          scopeKind: kind,
+          scopeKey: key,
+        })),
+      );
+    const next = createKernel([module(2)]);
+    await settle(next);
+    const stored = async () =>
+      new Map(
+        (
+          await repositoryQueries(ctx.db)
+            .select({ key: drift.scopeKey, proposalHash: drift.proposalHash })
+            .from(drift)
+            .where(eq(drift.scopeKind, kind))
+        ).map((row) => [row.key, row.proposalHash]),
+      );
+    const proposed = await stored();
+    expect([...proposed.keys()].sort()).toEqual([...ids].sort());
+
+    // The turned scope's proposal becomes a real change after selection.
+    await repositoryQueries(ctx.db)
+      .update(vendor)
+      .set({ aliases: ["relabel"] })
+      .where(eq(vendor.id, turned.id));
+    await expect(
+      next.approveDriftClass(ctx.db, ctx.actor, kind, "unchanged"),
+    ).resolves.toEqual({ applied: 1, stale: 1, busy: 0, missing: 0 });
+
+    const decided = await repositoryQueries(ctx.db).execute<{
+      value: { proposalHashes: string[] };
+    }>(sql`SELECT value FROM "Decision" WHERE subject = ${`drift:${kind}`}`);
+    expect(decided.rows.map((row) => row.value.proposalHashes.sort())).toEqual([
+      [proposed.get(kept.id)!, proposed.get(turned.id)!].sort(),
+    ]);
+    const after = await stored();
+    expect(after.has(kept.id)).toBe(false);
+    expect(after.get(renamed.id)).toBe(proposed.get(renamed.id));
+    expect(after.get(turned.id)).not.toBe(proposed.get(turned.id));
+    const baselines = await repositoryQueries(ctx.db)
+      .select({ key: evidenceBinding.scopeKey })
+      .from(evidenceBinding)
+      .where(eq(evidenceBinding.scopeKind, kind));
+    expect(baselines.map((row) => row.key).sort()).toEqual(
+      [renamed.id, turned.id].sort(),
+    );
+    const filed = await repositoryQueries(ctx.db).execute<{ key: string }>(
+      sql`SELECT s."scopeKey" AS key FROM "AskScope" s JOIN "Ask" a ON a.id = s."askId"
+        WHERE a.feature = ${asked.feature} AND s."scopeKind" = ${kind}`,
+    );
+    expect(filed.rows.map((row) => row.key)).toEqual([kept.id]);
+    const names = await repositoryQueries(ctx.db)
+      .select({ name: vendor.name })
+      .from(vendor)
+      .where(inArray(vendor.id, ids));
+    expect(names.map((row) => row.name).sort()).toEqual([
+      "Synthetic kept",
+      "Synthetic renamed",
+      "Synthetic turned",
+    ]);
+
+    // Nothing qualifying left: no decision, no counts.
+    await expect(
+      next.approveDriftClass(ctx.db, ctx.actor, kind, "unchanged"),
+    ).resolves.toEqual({ applied: 0, stale: 0, busy: 0, missing: 0 });
+    expect(
+      (
+        await repositoryQueries(ctx.db).execute<{ n: number }>(
+          sql`SELECT count(*)::int AS n FROM "Decision" WHERE subject = ${`drift:${kind}`}`,
+        )
+      ).rows[0]?.n,
+    ).toBe(1);
+  });
+
   it("keeps a member's decision through recomputation", async () => {
     let calls = 0;
     const { kernel, fixture } = kernelWith({

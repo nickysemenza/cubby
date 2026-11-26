@@ -855,10 +855,19 @@ median of the most recent priced Answers for its feature and requested tier,
 else its ask kind's declared estimate; a source ask is free. The estimate is
 unknown, stored as NULL, when any ask has neither, and it stays outside the
 proposal hash. Approval is a decision
-bound to the proposal hash, by item or by class. Approval recomputes the scope
+bound to the proposal hash, by item, by class, or by the unchanged class. A
+class approval takes up to 50 of a scope kind's proposals per call; the
+unchanged class takes, in scope-key order, only proposals that change no
+record: no insert, update, removal, merge or disagreement, and binding
+changes only to `manualEntry` facts, a member record's accepted snapshot.
+Bindings of order, payment, occurrence and statement evidence decide which
+Purchase or bank event owns that evidence, so changing one is a record
+change. With no such proposal it records no decision. Approval recomputes the scope
 with the baseline released and applies the difference and files the asks only
-when that computation re-derives the approved hash under the proposal's rules;
-otherwise it stores the recomputed proposal, which must be approved again.
+when that computation re-derives the approved hash under the proposal's rules,
+and for the unchanged class only while the recomputed difference still changes
+no record; otherwise it stores the recomputed proposal, which must be approved
+again.
 
 The sweep loads and computes a page outside any transaction, then publishes it
 with its cursor in the pass's fenced transaction: that transaction admits

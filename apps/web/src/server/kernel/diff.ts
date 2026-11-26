@@ -3,6 +3,9 @@
  * scope owns now. Pure; the apply turns the result into set-based writes and
  * the version sweep turns it into a Drift proposal.
  */
+import { sql, type SQL } from "drizzle-orm";
+import { z } from "zod";
+
 import type { Computed } from "./compute";
 import type { Desired, ColumnRef, ColumnValues, FactRef, Json } from "./define";
 import { canonicalJson } from "./keys";
@@ -320,3 +323,69 @@ export function describeDifference(diff: Difference): Json {
     }),
   );
 }
+
+/**
+ * Binding fact kinds whose change cannot move a record value or money amount.
+ * A `manualEntry` binding is the accepted snapshot of a member's record (the
+ * cutover baseline, or a member seed bound to the record it created); no
+ * reconciler or read resolves ownership through it. Order observation,
+ * retained payment, source occurrence and statement observation bindings
+ * decide which Purchase or bank event owns that evidence, so changing one
+ * relinks purchases, payments and allocations elsewhere.
+ */
+const RECORDLESS_BINDING_FACTS = ["manualEntry"] as const;
+
+const storedDifference = z
+  .object({
+    inserts: z.array(z.unknown()),
+    updates: z.array(z.unknown()),
+    removals: z.array(z.unknown()),
+    merges: z.array(z.unknown()),
+    disagreements: z.array(z.unknown()),
+    bindings: z.object({
+      add: z.array(z.object({ fact: z.object({ kind: z.string() }) })),
+      remove: z.array(z.object({ fact: z.object({ kind: z.string() }) })),
+    }),
+  })
+  .loose();
+
+/**
+ * Whether a stored Drift difference ({@link describeDifference} plus its
+ * disagreements) changes no accepted record: no insert, update, removal,
+ * merge or disagreement, and every binding change names a fact kind in
+ * {@link RECORDLESS_BINDING_FACTS}. {@link changesNoRecordSql} is the same
+ * predicate over the stored column.
+ */
+export function changesNoRecord(stored: unknown): boolean {
+  const parsed = storedDifference.safeParse(stored);
+  if (!parsed.success) return false;
+  const diff = parsed.data;
+  return (
+    !diff.inserts.length &&
+    !diff.updates.length &&
+    !diff.removals.length &&
+    !diff.merges.length &&
+    !diff.disagreements.length &&
+    [...diff.bindings.add, ...diff.bindings.remove].every((binding) =>
+      RECORDLESS_BINDING_FACTS.some((kind) => kind === binding.fact.kind),
+    )
+  );
+}
+
+/** {@link changesNoRecord} over a stored `Drift.difference` jsonb column. */
+export const changesNoRecordSql = (difference: SQL) => sql`(
+  ${sql.join(
+    ["inserts", "updates", "removals", "merges", "disagreements"].map(
+      (key) => sql`${difference}->${sql.raw(`'${key}'`)} = '[]'::jsonb`,
+    ),
+    sql` AND `,
+  )}
+  AND jsonb_typeof(${difference} #> '{bindings,add}') = 'array'
+  AND jsonb_typeof(${difference} #> '{bindings,remove}') = 'array'
+  AND NOT EXISTS (
+    SELECT 1 FROM jsonb_array_elements((${difference} #> '{bindings,add}') || (${difference} #> '{bindings,remove}')) AS binding
+    WHERE coalesce(binding #>> '{fact,kind}', '') <> ALL(ARRAY[${sql.join(
+      RECORDLESS_BINDING_FACTS.map((kind) => sql`${kind}`),
+      sql`, `,
+    )}]::text[])
+  ))`;

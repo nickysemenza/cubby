@@ -17,7 +17,10 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { isBrowserRoutedEntity } from "~/entity/entities";
 import { machinery as machineryApi } from "~/integrations/tanstack-query/generated/domains/machinery.gen";
 import { formatInstant } from "~/lib/date-format";
-import { MachineryPanel } from "~/ui/derived/machinery-panel";
+import {
+  MachineryPanel,
+  type DriftApprovalScope,
+} from "~/ui/derived/machinery-panel";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Disclosure } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -76,7 +79,7 @@ export function useMachineryActions(ref: MachineryRef) {
           },
         ],
       }),
-    approveDrift: (proposalHash: string, scope: "item" | "class") =>
+    approveDrift: (proposalHash: string, scope: DriftApprovalScope) =>
       approve.mutate({
         entity: ref.entity,
         id: ref.id,
