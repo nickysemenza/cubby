@@ -826,75 +826,92 @@ describe("scheduled Gmail discovery", () => {
     });
   });
 
-  it("creates one scheduled targeted Run per mailbox while a member-requested search still starts", async () => {
-    const state = await seed({ targeted: false });
-    const baseline = ports(gmail());
-    await listMailDiscovery(ctx.db, state.params, baseline);
-    await saveMailDiscoveryBatch(ctx.db, state.params, 0, baseline);
-    await finishMailDiscovery(ctx.db, state.params);
-    for (const name of ["Synthetic First Vendor", "Synthetic Second Vendor"])
-      await insertWithShortcode(ctx.db, "vendor", {
-        name,
-        orderEmailSenders: [
-          `orders@${name.split(" ")[1]!.toLowerCase()}.example.test`,
-        ],
-      });
-    const targeted = async () =>
+  describe("scheduled targeted backfill", () => {
+    const backfillSetup = async (vendors: string[]) => {
+      const state = await seed({ targeted: false });
+      const baseline = ports(gmail());
+      await listMailDiscovery(ctx.db, state.params, baseline);
+      await saveMailDiscoveryBatch(ctx.db, state.params, 0, baseline);
+      await finishMailDiscovery(ctx.db, state.params);
+      for (const name of vendors)
+        await insertWithShortcode(ctx.db, "vendor", {
+          name: `Synthetic ${name} Vendor`,
+          orderEmailSenders: [`orders@${name.toLowerCase()}.example.test`],
+        });
+      return baseline;
+    };
+    const running = async (trigger: "manual" | "scheduled") =>
       (
         await getDb(ctx.db)
           .select()
           .from(run)
           .where(eq(run.purpose, "mail_discovery"))
-      ).filter(
-        (row) =>
-          row.status === "running" &&
-          mailboxDiscoveryProgress.parse(row.progress).discoveryScope?.kind ===
-            "query",
+      ).flatMap((row) => {
+        const scope = mailboxDiscoveryProgress.parse(
+          row.progress,
+        ).discoveryScope;
+        return row.status === "running" &&
+          row.trigger === trigger &&
+          scope?.kind === "query"
+          ? [{ id: row.id, key: scope.key }]
+          : [];
+      });
+
+    it("creates one while a backfill progresses, another once it misses the progress deadline, and still admits a member's search", async () => {
+      const baseline = await backfillSetup(["Alpha", "Beta", "Gamma"]);
+      await startMailDiscovery(ctx.db);
+      const [first, ...extra] = await running("scheduled");
+      if (!first) throw new Error("Synthetic backfill not created");
+      expect(extra).toEqual([]);
+      expect(await startMailDiscovery(ctx.db)).toMatchObject({ started: 0 });
+
+      // A settled page stamps its progress time; one older than the deadline
+      // stops counting without changing the Run, so the cron creates another.
+      const params = (await created()).find((row) => row.runId === first.id);
+      if (!params) throw new Error("Synthetic backfill not launched");
+      await listMailDiscovery(ctx.db, params, baseline);
+      await saveMailDiscoveryBatch(ctx.db, params, 0, baseline);
+      expect(await startMailDiscovery(ctx.db)).toMatchObject({ started: 0 });
+      await getDb(ctx.db)
+        .update(run)
+        .set({ heartbeatAt: new Date(Date.now() - 31 * 60_000) })
+        .where(eq(run.id, first.id));
+      expect(await startMailDiscovery(ctx.db)).toMatchObject({ started: 1 });
+      const backfills = await running("scheduled");
+      expect(backfills.map((row) => row.id)).toContain(first.id);
+      expect(backfills).toHaveLength(2);
+
+      // The budget is full again, yet a member's search is created and admitted.
+      expect(
+        await startMailDiscovery(ctx.db, { requestedBy: ctx.actor }),
+      ).toMatchObject({ started: 1 });
+      const keys = [...backfills, ...(await running("manual"))].map(
+        (row) => row.key,
       );
-
-    // Two searches remain; the cron creates one backfill, then nothing.
-    await startMailDiscovery(ctx.db);
-    const [backfill, ...extra] = await targeted();
-    expect(extra).toHaveLength(0);
-    expect(backfill?.trigger).toBe("scheduled");
-    expect(await startMailDiscovery(ctx.db)).toEqual({
-      started: 0,
-      running: 1,
+      expect(new Set(keys).size).toBe(3);
     });
-    expect(await targeted()).toHaveLength(1);
 
-    // A member's search is created and admitted beside the backfill.
-    expect(
-      await startMailDiscovery(ctx.db, { requestedBy: ctx.actor }),
-    ).toEqual({ started: 1, running: 0 });
-    const active = await targeted();
-    expect(active.map((row) => row.trigger).sort()).toEqual([
-      "manual",
-      "scheduled",
-    ]);
-    const keys = active.map((row) =>
-      JSON.stringify(
-        mailboxDiscoveryProgress.parse(row.progress).discoveryScope,
-      ),
-    );
-    expect(new Set(keys).size).toBe(2);
-
-    // The backfill's page leaves its search unfinished; completing it lets
-    // its continuation create the next backfill, and the cron then waits.
-    const params = (await created()).find((row) => row.runId === backfill?.id);
-    if (!params) throw new Error("Synthetic backfill not launched");
-    await listMailDiscovery(ctx.db, params, baseline);
-    await saveMailDiscoveryBatch(ctx.db, params, 0, baseline);
-    await finishMailDiscovery(ctx.db, params);
-    await continueMailDiscovery(ctx.db, params);
-    const next = (await targeted()).filter(
-      (row) => row.trigger === "scheduled",
-    );
-    expect(next).toHaveLength(1);
-    expect(next[0]?.id).not.toBe(backfill?.id);
-    expect(await startMailDiscovery(ctx.db)).toEqual({
-      started: 0,
-      running: 1,
+    it("offers an untried search before one whose latest Run failed", async () => {
+      await backfillSetup(["Alpha", "Beta"]);
+      await startMailDiscovery(ctx.db);
+      const [failed] = await running("scheduled");
+      if (!failed) throw new Error("Synthetic backfill not created");
+      await getDb(ctx.db)
+        .update(run)
+        .set({
+          status: "failed",
+          failureCode: "job_failed",
+          endedAt: new Date(),
+        })
+        .where(eq(run.id, failed.id));
+      await repositoryQueries(ctx.db).execute(
+        sql`UPDATE "Pass" SET "doneAt" = now(), "claimToken" = NULL, "claimDeadline" = NULL WHERE name = 'run.execute' AND key = ${failed.id}`,
+      );
+      await startMailDiscovery(ctx.db);
+      const [next, ...extra] = await running("scheduled");
+      expect(extra).toEqual([]);
+      expect(next?.key).toBeDefined();
+      expect(next?.key).not.toBe(failed.key);
     });
   });
 

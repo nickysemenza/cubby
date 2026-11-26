@@ -18,7 +18,17 @@ import {
   MAIL_DISCOVERY_CAPACITY,
   MAIL_DISCOVERY_ADMISSION_WAIT,
 } from "@cubby/schemas/mailbox-research";
-import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 import { z } from "zod";
 
 import type { UnparsedError } from "~/lib/error-utils";
@@ -177,36 +187,59 @@ async function discoveryAllowed(
  * bounds how many backfill writers compete for the household write gate.
  */
 const MAIL_DISCOVERY_BACKFILL_CAPACITY = 1;
+/**
+ * A backfill Run holds its slot only while its last settled page (its start,
+ * before the first) is this recent. A healthy page is one list call, 25
+ * message reads and five short gated saves, minutes even behind a crowded
+ * gate; a lost 90-second claim retries within a 240-second backoff and a
+ * queued Run rechecks admission every five minutes, so several such stalls
+ * fit. A Run that loses every claim or stays queued frees the slot after it
+ * without being changed, and counts again if it later settles a page.
+ */
+const MAIL_DISCOVERY_BACKFILL_PROGRESS_DEADLINE_SECONDS = 30 * 60;
+
+const discoveryScopeSql = sql`${runTable.progress}->${mailboxDiscoveryProgress.keyof().enum.discoveryScope}`;
+const mailboxQueryRuns = (identity: {
+  ledgerPartyId: string;
+  mailboxId: string;
+}) => {
+  const scopeKind: keyof MailboxDiscoveryScope = "kind";
+  const queryScope: MailboxDiscoveryScope["kind"] = "query";
+  return and(
+    eq(runTable.purpose, "mail_discovery"),
+    eq(runTable.ledgerPartyId, ledgerPartyId.parse(identity.ledgerPartyId)),
+    sql`${runTable.input}->>'mailboxId' = ${identity.mailboxId}`,
+    sql`${discoveryScopeSql}->>${scopeKind} = ${queryScope}`,
+  );
+};
 
 /**
  * Scheduled, non-controlled query Runs of a mailbox that still run without a
  * member: running, queued for admission, or failed while their Pass retries,
- * and only while that current-generation `run.execute` Pass is unfinished,
- * uncancelled and has attempts left. A Run whose Pass is gone, finished or
- * exhausted, and one paused for authorization, funding or by a member, or
- * stopped, does not count. Call under the mailbox admission lock.
+ * only while that current-generation `run.execute` Pass is unfinished,
+ * uncancelled and has attempts left, and only within the progress deadline
+ * (`heartbeatAt` is stamped when a page settles). A Run whose Pass is gone,
+ * finished or exhausted, one paused for authorization, funding or by a member,
+ * and a stopped Run do not count. Call under the mailbox admission lock.
  */
 async function liveMailDiscoveryBackfills(
   db: Database,
   identity: { ledgerPartyId: string; mailboxId: string },
 ): Promise<number> {
-  const scopeKind: keyof MailboxDiscoveryScope = "kind";
-  const queryScope: MailboxDiscoveryScope["kind"] = "query";
   const execution = {
     id: sql`${runTable.id}`,
     purpose: sql`${runTable.purpose}`,
     generation: sql`${runTable.progress}->>'attempt'`,
   };
-  const rows = await getDb(db)
-    .select({ mailboxId: sql<string | null>`${runTable.input}->>'mailboxId'` })
+  const [row] = await getDb(db)
+    .select({ live: sql<number>`count(*)::int` })
     .from(runTable)
     .where(
       and(
-        eq(runTable.purpose, "mail_discovery"),
-        eq(runTable.ledgerPartyId, ledgerPartyId.parse(identity.ledgerPartyId)),
+        mailboxQueryRuns(identity),
         eq(runTable.trigger, "scheduled"),
         sql`${runTable.input}->'controlled' IS NULL`,
-        sql`${runTable.progress}->${mailboxDiscoveryProgress.keyof().enum.discoveryScope}->>${scopeKind} = ${queryScope}`,
+        sql`COALESCE(${runTable.heartbeatAt}, ${runTable.startedAt}) > now() - make_interval(secs => ${MAIL_DISCOVERY_BACKFILL_PROGRESS_DEADLINE_SECONDS})`,
         or(
           and(eq(runTable.status, "running"), runHasLivePass(execution)),
           and(
@@ -228,7 +261,25 @@ async function liveMailDiscoveryBackfills(
         ),
       ),
     );
-  return rows.filter((row) => row.mailboxId === identity.mailboxId).length;
+  return row?.live ?? 0;
+}
+
+/** Query keys of a mailbox whose most recent Run, of any trigger, failed. */
+async function failedMailDiscoveryQueries(
+  db: Database,
+  identity: { ledgerPartyId: string; mailboxId: string },
+): Promise<Set<string>> {
+  const key = sql<string>`${discoveryScopeSql}->>'key'`;
+  const latest = await getDb(db)
+    .selectDistinctOn([key], { key, status: runTable.status })
+    .from(runTable)
+    .where(mailboxQueryRuns(identity))
+    .orderBy(key, desc(runTable.createdAt));
+  return new Set(
+    latest
+      .filter((row) => ["failed", "dispatch_failed"].includes(row.status))
+      .map((row) => row.key),
+  );
 }
 
 /** The current roster is reconciled once; each execution owns only its selected position. */
@@ -322,13 +373,22 @@ async function createDiscoveryPasses(
     // Backfill paces at creation; admission treats the Runs it creates as any
     // other search. A full budget creates nothing: the next completion's
     // continuation or the hourly cron offers again.
-    let backfillBudget =
+    // A search whose latest Run failed goes behind the others, so one search
+    // that always fails cannot take every offer; it retries once it is first.
+    const backfill =
       input.trigger === "scheduled" &&
       !input.frozen.controlled &&
-      scopes[0]?.kind === "query"
-        ? MAIL_DISCOVERY_BACKFILL_CAPACITY -
-          (await liveMailDiscoveryBackfills(tx, identity))
-        : Infinity;
+      scopes[0]?.kind === "query";
+    let backfillBudget = backfill
+      ? MAIL_DISCOVERY_BACKFILL_CAPACITY -
+        (await liveMailDiscoveryBackfills(tx, identity))
+      : Infinity;
+    if (backfill && backfillBudget > 0) {
+      const failed = await failedMailDiscoveryQueries(tx, identity);
+      const lastFailed = (scope: MailboxDiscoveryScope) =>
+        scope.kind === "query" && failed.has(scope.key) ? 1 : 0;
+      scopes.sort((left, right) => lastFailed(left) - lastFailed(right));
+    }
     for (const scope of scopes) {
       if (backfillBudget <= 0) break;
       const decision = await mailDiscoveryAdmission(tx, {
