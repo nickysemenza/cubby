@@ -25,7 +25,7 @@ import {
   repositoryQueries,
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
-import { passFreeAt } from "~/server/kernel/sql-time";
+import { passAvailableAt } from "~/server/kernel/api";
 
 export const RUN_EXECUTE_PASS = "run.execute";
 const RUN_PASSES = [RUN_EXECUTE_PASS, "purchase.dispatch"] as const;
@@ -250,7 +250,7 @@ export async function readDuePassPositions(
       SELECT name, key, row_number() OVER (ORDER BY EXISTS (SELECT 1 FROM "Run" r WHERE r.id = "Pass"."runId" AND (r.cause = ${runCause.enum.member_request} OR r.trigger IN (${runTrigger.enum.manual}, ${runTrigger.enum.foreground}))) DESC, "availableAt", "createdAt", name, key)::int AS position,
         count(*) OVER ()::int AS total
       FROM "Pass"
-      WHERE "doneAt" IS NULL AND "cancelledAt" IS NULL AND ${passFreeAt(sql`"Pass"`)} <= now()
+      WHERE "doneAt" IS NULL AND "cancelledAt" IS NULL AND ${passAvailableAt(sql`"Pass"`)} <= now()
         AND attempts < "maxAttempts" AND ("claimToken" IS NULL OR attempts + 1 < "maxAttempts")
     ) ranked
     WHERE ranked.name = ANY(${textArrayParam(RUN_PASSES)}) AND ranked.key = ANY(${textArrayParam(runIds)})`);

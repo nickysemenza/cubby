@@ -7,6 +7,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type { MachineryCapability } from "@cubby/schemas/kernel/capability";
 import type { Machinery } from "@cubby/schemas/kernel/machinery";
 import type { NeedsYouPage, RunWork } from "@cubby/schemas/kernel/work";
+import type { SQL } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db/database";
@@ -16,7 +17,7 @@ import {
 } from "~/server/db/repository-access.boundary";
 
 import type { AskWaiters } from "./ask";
-import { cancelClaimable } from "./claim";
+import { cancelClaimable, passFreeAt } from "./claim";
 import type { DecisionWriters } from "./decide";
 import type {
   AskKind,
@@ -371,6 +372,9 @@ export {
   type ExternalAskClaim,
 } from "./ask";
 export { cancelRunAsks, retryRunAsks } from "./requesters";
+/** Reuse claim timing for repository views of the Pass queue. */
+export const passAvailableAt: (row: SQL) => SQL = passFreeAt;
+
 export { releaseFundingWaits } from "./claim";
 
 export { defineReadIndex } from "./define";

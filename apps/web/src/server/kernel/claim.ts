@@ -32,13 +32,7 @@ import { WorkSupersededError } from "~/server/kernel/work-errors";
 
 import type { AskKind, ClaimLimit, Pass, Reconciler } from "./define";
 import type { KernelRegistry } from "./registry";
-import {
-  backoffMs,
-  fromIso,
-  isoText,
-  passFreeAt,
-  passRecoveryAt,
-} from "./sql-time";
+import { fromIso, isoText } from "./sql-time";
 import { ASK, MEMBER_PASS } from "./vocab";
 import { wakeClaimRecovery } from "./wake";
 
@@ -91,6 +85,12 @@ const identity = (target: ClaimTarget): SQL => {
 const tableOf = (target: ClaimTarget) => sql.raw(`"${target.table}"`);
 const cancellable = (target: ClaimTarget) => target.table !== "ScopeDirty";
 const leaseInterval = (ms: number) => sql`make_interval(secs => ${ms / 1000})`;
+
+/** Attempt `n`'s backoff: 30 s doubling to an hour. */
+const BACKOFF_BASE_MS = 30_000;
+const BACKOFF_MAX_MS = 60 * 60_000;
+const backoffMs = (attempts: number): number =>
+  Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** Math.max(0, attempts - 1));
 
 const WAIT_CAUSE = {
   provider_capacity: "provider_capacity",
@@ -294,6 +294,17 @@ const freeNow = (t: SQL): SQL =>
 const freeAt = (t: SQL): SQL =>
   sql`CASE WHEN ${t}."claimToken" IS NULL THEN ${t}."availableAt"
     WHEN ${t}."claimDeadline" IS NOT NULL THEN greatest(${t}."availableAt", ${t}."claimDeadline") END`;
+
+/** Recover the final lapse at expiry; a replacement claim owes normal backoff. */
+const passRecoveryAt = (p: SQL): SQL =>
+  sql`${p}."claimDeadline" + CASE WHEN ${p}.attempts + 1 >= ${p}."maxAttempts"
+    THEN interval '0 seconds'
+    ELSE make_interval(secs => least(${BACKOFF_MAX_MS / 1000},
+      ${BACKOFF_BASE_MS / 1000} * power(2::double precision, least(7, ${p}.attempts)))) END`;
+
+export const passFreeAt = (p: SQL): SQL =>
+  sql`CASE WHEN ${p}."claimToken" IS NULL THEN ${p}."availableAt"
+    WHEN ${p}."claimDeadline" IS NOT NULL THEN greatest(${p}."availableAt", ${passRecoveryAt(p)}) END`;
 
 /** Dirty rows a runner may claim now. */
 const claimableScope = (d: SQL): SQL =>
