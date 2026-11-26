@@ -185,6 +185,21 @@ export async function machinery(
         key: recordScopeKey(ref.entity, ref.id),
       };
       const waiting = scopeValues([...scopes, recordWaiter]);
+      const askLinks = sql`
+        SELECT s."askId", s."scopeKind" AS kind, s."scopeKey" AS key
+        FROM "AskScope" s JOIN ${waiting} w ON w.kind = s."scopeKind" AND w.key = s."scopeKey"
+        ${
+          ref.entity === "run"
+            ? sql`
+          UNION
+          SELECT s."askId", ${recordWaiter.kind}::text, ${recordWaiter.key}::text
+          FROM "AskScope" s JOIN "Ask" a ON a.id = s."askId"
+          WHERE s."runId" = ${ref.id}::uuid AND s."cancelledAt" IS NULL
+            AND a.state = ${ASK.unknown} AND a."cancelledAt" IS NULL
+        `
+            : sql``
+        }
+      `;
 
       const [states, dirty, asks, drifts, ranks] = await Promise.all([
         q.execute<{
@@ -241,13 +256,13 @@ export async function machinery(
               count(*) OVER ()::int AS of
             FROM "Ask" WHERE state = ${ASK.queued} AND "cancelledAt" IS NULL AND attempts < "maxAttempts"
           )
-          SELECT s."scopeKind" AS kind, s."scopeKey" AS key, a."inputHash", a.feature, a.state,
+          SELECT s.kind, s.key, a."inputHash", a.feature, a.state,
             a.attempts, a."maxAttempts", (a."claimToken" IS NOT NULL AND a."claimDeadline" > now()) AS live,
             a."cancelledAt" IS NOT NULL AS cancelled,
             ${isoText(sql`a."availableAt"`)} AS "availableAt", ${isoText(sql`a."createdAt"`)} AS "createdAt",
             a."lastError", ${isoText(sql`a."sentAt"`)} AS "sentAt", ${isoText(sql`a."answeredAt"`)} AS "answeredAt", queue.position, queue.of
-          FROM "AskScope" s JOIN ${waiting} w ON w.kind = s."scopeKind" AND w.key = s."scopeKey"
-          JOIN "Ask" a ON a.id = s."askId" LEFT JOIN queue ON queue.id = a.id`),
+          FROM (${askLinks}) s JOIN "Ask" a ON a.id = s."askId"
+          LEFT JOIN queue ON queue.id = a.id`),
         q.execute<{
           kind: string;
           key: string;

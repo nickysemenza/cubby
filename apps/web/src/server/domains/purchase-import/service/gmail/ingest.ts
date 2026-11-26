@@ -34,6 +34,7 @@ import {
 } from "~/server/domains/purchase-import/repo/gmail/types";
 import { readEmailMailKeys } from "~/server/domains/purchase-import/repo/mail-rule-evidence";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
+import { AskAbandonedError } from "~/server/kernel/api";
 import { WorkDeferredError } from "~/server/kernel/work-errors";
 
 import {
@@ -215,7 +216,11 @@ async function classifyMessage(
       }
     : await route();
   if (decision.classification !== "uncertain" || !relevance) return decision;
-  const settled = await relevance();
+  const settled = await relevance().catch((error: unknown) => {
+    if (error instanceof AskAbandonedError) return null;
+    throw error;
+  });
+  if (!settled) return decision;
   return {
     classification: settled.classification,
     stage: "model",

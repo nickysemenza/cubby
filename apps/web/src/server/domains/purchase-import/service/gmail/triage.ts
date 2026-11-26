@@ -15,6 +15,7 @@ import type {
   GmailMessagePart,
   GmailNormalizedMessage,
 } from "~/server/domains/purchase-import/repo/gmail/types";
+import { AskAbandonedError } from "~/server/kernel/api";
 import { wasm } from "~/server/wasm";
 
 import { mailRelevanceRule } from "./mail-relevance-rules";
@@ -362,7 +363,10 @@ export async function routeGmailMessage(
     complete: incompleteReasons.length === 0,
     incompleteReasons,
   };
-  const choice = await choose(content);
+  const choice = await choose(content).catch((error: unknown) => {
+    if (error instanceof AskAbandonedError) return "uncertain" as const;
+    throw error;
+  });
   return {
     decision: {
       classification: choice,
