@@ -1,4 +1,5 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import type { KernelJson } from "@cubby/schemas/kernel/machinery";
 import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
 
@@ -14,7 +15,6 @@ import {
 import {
   PassPageBudgetError,
   type Claim,
-  type Json,
   type PassResult,
 } from "~/server/kernel/api";
 
@@ -93,7 +93,7 @@ export async function retireCoordinators(db: Database, before: Date) {
 /** Advance over Shipment and Email UUIDs even when a page is ineligible. */
 export async function discoverPurchases(
   db: Database,
-  raw: Json | null,
+  raw: KernelJson | null,
   claim: Claim,
 ): Promise<PassResult> {
   const { gmailOAuthConfigured } =

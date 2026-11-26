@@ -25,7 +25,7 @@ import {
   repositoryQueries,
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
-import { passFreeAt } from "~/server/kernel/claim";
+import { passFreeAt } from "~/server/kernel/sql-time";
 
 export const RUN_EXECUTE_PASS = "run.execute";
 const RUN_PASSES = [RUN_EXECUTE_PASS, "purchase.dispatch"] as const;
