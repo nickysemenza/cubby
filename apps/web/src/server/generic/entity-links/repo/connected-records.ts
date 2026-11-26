@@ -18,10 +18,15 @@ import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { unwrapDb } from "~/server/db/helpers";
+import {
+  boundTransaction,
+  unwrapDb,
+  withTransactionDatabase,
+} from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { textArrayParam } from "~/server/db/helpers/query";
 import { resolvePublicEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
+import { isStatementTimeout } from "~/server/errors/db-errors";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { compileTraversal } from "~/server/generic/relatedness/repo/traversal";
 
@@ -77,6 +82,7 @@ export async function compiledConnectedRoutes(source: Entity, viewKey: string) {
         root: "s",
         leaf: "t",
         to: view.target,
+        singleRoot: true,
       });
       const nodes: {
         entity: Entity;
@@ -133,6 +139,17 @@ const pageRowSchema = z.object({
   ),
 });
 
+const connectedSource = (source: ConnectedRecordsInput["source"]): SQL => {
+  const definition = entityManifest[source.entityKind];
+  if (!definition.dbTable)
+    throw new Error(`No local table for ${source.entityKind}`);
+  return sql`WITH connected_source AS MATERIALIZED (
+    SELECT * FROM ${sql.identifier(definition.dbTable)} s
+    WHERE s."shortcode" = ${source.entityId}
+      ${definition.softDelete ? sql`AND ${notDeleted("s")}` : sql``}
+  )`;
+};
+
 /** Shared page query for individual tables and the batched detail preview. */
 async function prepareConnectedPage(input: ConnectedRecordsInput) {
   const { source, viewKey } = input;
@@ -144,20 +161,13 @@ async function prepareConnectedPage(input: ConnectedRecordsInput) {
   const routes = await compiledConnectedRoutes(source.entityKind, viewKey);
   if (routes.length === 0)
     throw new Error(`No routes for ${source.entityKind}.${viewKey}`);
-  const rootTable = entityManifest[source.entityKind].dbTable;
-  if (!rootTable) throw new Error(`No local table for ${source.entityKind}`);
-  const rootLiveness = entityManifest[source.entityKind].softDelete
-    ? sql`AND ${notDeleted("s")}`
-    : sql``;
   const targetFilter = input.targetIds
     ? sql`AND t."shortcode" = ANY(${textArrayParam(input.targetIds)})`
     : sql``;
   const fromRoute = (route: (typeof routes)[number]) => sql`
-    FROM ${sql.raw(`"${rootTable}"`)} s
+    FROM connected_source s
     ${route.traversal.joins}
-    WHERE s."shortcode" = ${source.entityId}
-      ${rootLiveness}
-      ${targetFilter}`;
+    WHERE true ${targetFilter}`;
   // Expensive relationship queries produce witnesses once. The IDs feed exact
   // membership, and only witnesses on the requested page are labeled.
   const witnessedRoutes: SQL[] = [];
@@ -275,6 +285,43 @@ async function withCanonicalCovers<T extends ConnectedRecordsOutput>(
 
 const emptyPage = { totalCount: 0, items: [] };
 const emptyPageQuery = sql`SELECT 0::int AS "totalCount", '[]'::jsonb AS "items"`;
+const STATEMENT_BUDGET_MS = 5_000;
+
+async function executeConnectedRead(db: Database, query: SQL) {
+  const nested = boundTransaction(db) !== undefined;
+  try {
+    return await withTransactionDatabase(
+      db,
+      async (tx) => {
+        const client = unwrapDb(tx);
+        const [timeout] = await client.execute(
+          sql`WITH previous AS MATERIALIZED (
+            SELECT setting::int AS ms FROM pg_settings WHERE name = 'statement_timeout'
+          ) SELECT ms, set_config(
+            'statement_timeout', least(nullif(ms, 0), ${STATEMENT_BUDGET_MS})::text, true
+          ) FROM previous`,
+          "objects",
+        );
+        const result = await client.execute(query, "objects");
+        // Releasing a savepoint keeps SET LOCAL changes in the outer transaction.
+        if (nested) {
+          const { ms } = z.object({ ms: z.number() }).parse(timeout);
+          await client.execute(
+            sql`SELECT set_config('statement_timeout', ${String(ms)}, true)`,
+          );
+        }
+        return result;
+      },
+      { accessMode: "read only" },
+    );
+  } catch (error) {
+    if (!isStatementTimeout(error)) throw error;
+    throw new Error(
+      "Loading connected records exceeded the database statement timeout (SQLSTATE 57014).",
+      { cause: error },
+    );
+  }
+}
 
 /** Complete, paged records and every witnessed provenance route. */
 export async function getConnectedRecords(
@@ -285,7 +332,12 @@ export async function getConnectedRecords(
   const page = plan.query
     ? connectedPage(
         plan.target,
-        (await unwrapDb(db).execute(plan.query, "objects"))[0],
+        (
+          await executeConnectedRead(
+            db,
+            sql`${connectedSource(input.source)} SELECT * FROM (${plan.query}) page`,
+          )
+        )[0],
       )
     : connectedPage(plan.target, emptyPage);
   return (await withCanonicalCovers(db, [page]))[0] ?? page;
@@ -308,9 +360,10 @@ export async function getConnectedRecordsPreview(
       return sql`SELECT ${index}::int AS "viewIndex", page."totalCount", page."items" FROM (${query ?? emptyPageQuery}) page`;
     }),
   );
-  const result = await unwrapDb(db).execute(
-    sql`${sql.join(queries, sql` UNION ALL `)} ORDER BY "viewIndex"`,
-    "objects",
+  const result = await executeConnectedRead(
+    db,
+    sql`${connectedSource(input.source)}
+      ${sql.join(queries, sql` UNION ALL `)} ORDER BY "viewIndex"`,
   );
   const rows = z
     .array(pageRowSchema.extend({ viewIndex: z.number().int().nonnegative() }))

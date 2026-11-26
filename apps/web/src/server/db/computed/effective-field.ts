@@ -444,19 +444,15 @@ export const inheritedSourceSql = (
   }) as SQL<{ position: number; id: string } | null>;
 
 /**
- * Whether the record `rowId` names has an effective value in `values` (a SQL
- * value list), in the top-down set form: the records that decide one of the
- * values, then their live descendants that do not decide, resolved once per
- * query rather than walked per row. Only a chain that inherits through its
- * hierarchy alone has this form; null otherwise, and the caller compares
- * `effectiveFieldSql` instead.
+ * Find the records that decide a matching value and their live descendants
+ * that inherit it. Only a hierarchy-only chain without a fallback can be
+ * traversed top down.
  */
-const effectiveFieldMatchingSql = (
+export const effectiveFieldMatchingRowsSql = (
   entity: Entity,
   field: string,
-  rowId: SQL,
   matches: (value: SQL) => SQL,
-): SQL<boolean> | null => {
+): SQL | null => {
   const chain = requireChain(entity, field);
   const [source, ...rest] = chain.from;
   if (
@@ -469,7 +465,7 @@ const effectiveFieldMatchingSql = (
   const { table, softDelete } = tableOf(entity);
   const set = name("ih0s");
   const node = "ih0n";
-  return sql<boolean>`COALESCE(${rowId} IN (
+  return sql`
     WITH RECURSIVE ${set} AS (
       SELECT ${ref(node, "id")}, 0 AS ih_depth, ARRAY[${ref(node, "id")}] AS ih_visited
       FROM ${table} ${name(node)}
@@ -479,8 +475,17 @@ const effectiveFieldMatchingSql = (
       FROM ${set} JOIN ${table} ${name(node)} ON ${ref(node, source.parentColumn)} = ${set}."id"
       WHERE NOT ${ownDecides(chain, node)} AND ${set}."ih_depth" < ${sql.raw(String(source.maxDepth))}
         AND array_position(${set}."ih_visited", ${ref(node, "id")}) IS NULL${live(node, softDelete)}
-    ) SELECT "id" FROM ${set}
-  ), false)`;
+    ) SELECT "id" FROM ${set}`;
+};
+
+const effectiveFieldMatchingSql = (
+  entity: Entity,
+  field: string,
+  rowId: SQL,
+  matches: (value: SQL) => SQL,
+): SQL<boolean> | null => {
+  const rows = effectiveFieldMatchingRowsSql(entity, field, matches);
+  return rows && sql<boolean>`COALESCE(${rowId} IN (${rows}), false)`;
 };
 
 export const effectiveFieldInSql = (
