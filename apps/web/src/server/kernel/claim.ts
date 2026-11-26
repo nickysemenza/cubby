@@ -166,7 +166,9 @@ export async function cancelClaimable(
 /**
  * Settle a failed claim through the single classifier. A wait or a transient
  * failure spends no attempt; a lost claim settles nothing; anything else
- * spends one and backs off. Returns the classification.
+ * spends one and backs off. Pass admission charges an expired token under
+ * the row lock even when the old holder never reached settlement.
+ * Returns the classification.
  */
 export async function settleFailure(
   q: Q,
@@ -704,20 +706,27 @@ async function claimPassGroup(
         key: string;
         cursor: unknown;
         attempts: number;
-        deadline: string;
+        deadline: string | null;
       }>(sql`
     WITH picked AS (
-      SELECT name, key FROM "Pass"
+      SELECT name, key, attempts + ("claimToken" IS NOT NULL)::int AS spent,
+        "claimToken" IS NOT NULL AS lapsed, "maxAttempts"
+      FROM "Pass"
       WHERE ${runnerPass(sql`"Pass"`, names)} AND ${freeNow(sql`"Pass"`)}
       ORDER BY ${passOrder()} LIMIT 1
       FOR UPDATE SKIP LOCKED
     )
-    UPDATE "Pass" p SET "claimToken" = ${token}::uuid, "claimPartition" = ${pass.claimLimit?.partition ?? null},
-      "claimDeadline" = now() + ${leaseInterval(CLAIM_LEASE_MS)}
+    UPDATE "Pass" p SET attempts = picked.spent,
+      "lastError" = CASE WHEN picked.lapsed THEN ${rawError(new ClaimLapsedError())} ELSE p."lastError" END,
+      "claimToken" = CASE WHEN picked.spent < picked."maxAttempts" THEN ${token}::uuid END,
+      "claimPartition" = ${pass.claimLimit?.partition ?? null},
+      "claimDeadline" = CASE WHEN picked.spent < picked."maxAttempts" THEN now() + ${leaseInterval(CLAIM_LEASE_MS)} END
     FROM picked WHERE p.name = picked.name AND p.key = picked.key
     RETURNING p.name, p.key, p.cursor, p."wakeVersion", p.attempts, ${isoText(sql`p."claimDeadline"`)} AS deadline`);
       const row = result.rows[0];
-      return row ? { ...row, token, deadline: new Date(row.deadline) } : null;
+      return row?.deadline
+        ? { ...row, token, deadline: new Date(row.deadline) }
+        : null;
     },
     async (q) => {
       return parkPartition(

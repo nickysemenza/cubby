@@ -2094,6 +2094,37 @@ describe("evidence-facts kernel", () => {
     expect(seen).toEqual([{ page: 3 }]);
   });
 
+  it("exhausts a Pass that repeatedly loses its page lease", async () => {
+    const name = "fixture.pass-lapses";
+    let pages = 0;
+    const pass = definePass({
+      name,
+      async run(db) {
+        pages++;
+        await repositoryQueries(db).execute(
+          sql`UPDATE "Pass" SET "claimDeadline" = now() - interval '1 second' WHERE name = ${name}`,
+        );
+        return { cursor: { page: 1 }, done: true };
+      },
+    });
+    const kernel = createKernel([
+      defineModule({ name: "passes", passes: [pass] }),
+    ]);
+    await seedPass(ctx.db, { name, key: "default", maxAttempts: 2 });
+
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
+    expect(pages).toBe(2);
+    const result = await repositoryQueries(ctx.db).execute(
+      sql`SELECT attempts, cursor, "claimToken", "doneAt" FROM "Pass" WHERE name = ${name}`,
+    );
+    expect(result.rows).toEqual([
+      { attempts: 2, cursor: null, claimToken: null, doneAt: null },
+    ]);
+  });
+
   it("cannot publish a cancelled pass holder's cursor after the pass is restarted", async () => {
     const pass = definePass({
       name: "fixture.restart",
