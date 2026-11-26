@@ -1,7 +1,7 @@
 import { buildActorContext } from "@cubby/schemas/context";
 import { emailRelationshipResult } from "@cubby/schemas/email-relationship-facts";
 import { parseShortcodeFor, userId } from "@cubby/schemas/identifiers";
-import { eq } from "drizzle-orm";
+import { asc, eq, like, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -11,11 +11,20 @@ import { decision, scopeDirty } from "~/server/db/kernel-schema";
 import { emailReadSnapshot } from "~/server/db/read-snapshot-schema";
 import {
   email,
+  purchase,
   orderMailEvent,
   financialTransactionAllocation,
   expense,
 } from "~/server/db/schema";
-import { emailLinkDecisionsRead } from "~/server/domains/email/repo/email-decision-sql";
+import {
+  emailLinkDecisionHistoryReadForDecision,
+  emailLinkDecisionHistorySql,
+  emailLinkDecisionsForPurchasesSql,
+  emailLinkDecisionsRead,
+  emailLinkDecisionsReadForDecision,
+  emailLinkDecisionsReadForEmail,
+  emailLinkDecisionsReadForOrderMail,
+} from "~/server/domains/email/repo/email-decision-sql";
 import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-write";
 import { emailPredictionEvidence } from "~/server/domains/email/repo/email-state";
 import { setMemberLoginParty } from "~/server/domains/ledger-party/repo/member-login";
@@ -85,6 +94,79 @@ describe("Email Purchase link decisions", () => {
       .from(emailReadSnapshot)
       .where(eq(emailReadSnapshot.entityId, id));
     return emailRelationshipResult.parse(row?.relationshipFacts);
+  }
+  /** Each scoped read returns exactly the household projection's rows for its scope. */
+  async function expectScopedLinksMatch() {
+    const q = getDb(ctx.db);
+    const all = await q
+      .select()
+      .from(emailLinkDecisionsRead)
+      .orderBy(asc(emailLinkDecisionsRead.id));
+    expect(all.length).toBeGreaterThan(0);
+    for (const row of all) {
+      const owner = emailLinkDecisionsReadForDecision(sql`${row.id}`);
+      expect(await q.select().from(owner).where(eq(owner.id, row.id))).toEqual([
+        row,
+      ]);
+    }
+    const slots = await q
+      .select({ id: decision.id, subject: decision.subject })
+      .from(decision)
+      .where(like(decision.field, "link:%"));
+    for (const subject of new Set(slots.map((slot) => slot.subject))) {
+      if (!subject.startsWith("email:")) continue;
+      const ids = new Set(
+        slots.filter((slot) => slot.subject === subject).map(({ id }) => id),
+      );
+      const links = emailLinkDecisionsReadForEmail(
+        sql`${subject.slice(6)}::uuid`,
+      );
+      expect(await q.select().from(links).orderBy(asc(links.id))).toEqual(
+        all.filter((row) => ids.has(row.id)),
+      );
+    }
+    const events = await q.select().from(orderMailEvent);
+    for (const orderMailId of new Set(events.map((e) => e.orderMailId))) {
+      const ids = new Set(
+        events.filter((e) => e.orderMailId === orderMailId).map(({ id }) => id),
+      );
+      const links = emailLinkDecisionsReadForOrderMail(
+        sql`${orderMailId}::uuid`,
+      );
+      expect(
+        (await q.select().from(links).orderBy(asc(links.id))).filter(
+          (row) => row.eventId && ids.has(row.eventId),
+        ),
+      ).toEqual(all.filter((row) => row.eventId && ids.has(row.eventId)));
+    }
+    // Merged-away ids project nothing; survivors carry their aliases' links.
+    for (const { id } of await q.select({ id: purchase.id }).from(purchase)) {
+      const scoped = await q.execute<{ id: string }>(
+        sql`SELECT id FROM ${emailLinkDecisionsForPurchasesSql(sql`SELECT ${id}::uuid AS id`)} p ORDER BY id`,
+      );
+      expect(scoped.rows.map((row) => row.id)).toEqual(
+        all.filter((row) => row.purchaseId === id).map((row) => row.id),
+      );
+    }
+    const history = await q.execute<{
+      id: string;
+      active: boolean;
+      status: string;
+    }>(sql`SELECT id, active, status FROM ${emailLinkDecisionHistorySql} h`);
+    expect(history.rows.length).toBeGreaterThan(0);
+    for (const row of history.rows) {
+      const receipt = emailLinkDecisionHistoryReadForDecision(sql`${row.id}`);
+      expect(
+        await q
+          .select({
+            id: receipt.id,
+            active: receipt.active,
+            status: receipt.status,
+          })
+          .from(receipt)
+          .where(eq(receipt.id, row.id)),
+      ).toEqual([row]);
+    }
   }
   const command = (
     f: Awaited<ReturnType<typeof fixture>>,
@@ -172,6 +254,7 @@ describe("Email Purchase link decisions", () => {
       decision: "dismissed",
       active: true,
     });
+    await expectScopedLinksMatch();
     const survivorCommand = {
       ...command(f, "linked"),
       purchaseId: parseShortcodeFor("purchase", survivor.shortcode),
@@ -193,7 +276,19 @@ describe("Email Purchase link decisions", () => {
   });
   it("keeps a dismissal on its event when another Email now holds the original, alone or batched", async () => {
     const f = await fixture();
-    await decideEmailPurchase(ctx.db, command(f, "dismissed"), ctx.actor);
+    const dismissal = await publishEmailLinkDecision(ctx.db, {
+      eventId: f.event.id.toUpperCase(),
+      purchaseId: f.purchase.id,
+      decision: "dismissed",
+      evidenceChecksum: f.checksum,
+      decidedByUserId: ctx.actor.userId,
+      proposedBy: null,
+    });
+    const [stored] = await getDb(ctx.db)
+      .select({ value: decision.value })
+      .from(decision)
+      .where(eq(decision.id, dismissal.id));
+    expect(stored?.value).toMatchObject({ eventId: f.event.id });
     const other = await syntheticRetainedMail(ctx.db, {
       ledgerPartyId: f.party.id,
       vendorId: f.vendor.id,
@@ -231,6 +326,7 @@ describe("Email Purchase link decisions", () => {
         emailRelationshipResult.parse(row?.relationshipFacts).purchaseLinks,
       ).toEqual([]);
     }
+    await expectScopedLinksMatch();
   });
   it("dirties only the Email whose own inputs changed", async () => {
     const f = await fixture();
@@ -322,7 +418,14 @@ describe("Email Purchase link decisions", () => {
     };
     const first = await publishEmailLinkDecision(ctx.db, input);
     const before = await getDb(ctx.db).select().from(decision);
-    expect((await publishEmailLinkDecision(ctx.db, input)).id).toBe(first.id);
+    expect(
+      (
+        await publishEmailLinkDecision(ctx.db, {
+          ...input,
+          eventId: input.eventId.toUpperCase(),
+        })
+      ).id,
+    ).toBe(first.id);
     expect(await getDb(ctx.db).select().from(decision)).toEqual(before);
     expect(
       await getDb(ctx.db).select().from(emailLinkDecisionsRead),
@@ -352,6 +455,23 @@ describe("Email Purchase link decisions", () => {
         .map((row) => row.purchaseId)
         .sort(),
     ).toEqual([f.purchase.id, second.id].sort());
+    // The Decision writer stores uuid subjects and link fields canonically.
+    const [ref] = await decide(ctx.db, ctx.actor, [
+      {
+        channel: "assignment",
+        kind: "set",
+        subject: `email:${f.mail.id.toUpperCase()}`,
+        field: `link:${second.id.toUpperCase()}`,
+        value: { ...input, eventId: event!.id, purchaseId: second.id },
+      },
+    ]);
+    expect(
+      await getDb(ctx.db)
+        .select({ subject: decision.subject, field: decision.field })
+        .from(decision)
+        .where(eq(decision.id, ref!.id)),
+    ).toEqual([{ subject: `email:${f.mail.id}`, field: `link:${second.id}` }]);
+    await expectScopedLinksMatch();
     await getDb(ctx.db)
       .update(email)
       .set({ deletedAt: new Date() })
@@ -361,6 +481,7 @@ describe("Email Purchase link decisions", () => {
     expect(detached.every((row) => !row.active && row.emailId === null)).toBe(
       true,
     );
+    await expectScopedLinksMatch();
   });
   it("refuses a stale checksum and another member before recording intent", async () => {
     const f = await fixture();

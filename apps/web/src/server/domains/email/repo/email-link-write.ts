@@ -12,7 +12,10 @@ import {
   emailPurchaseDecision,
   orderMailEvent,
 } from "~/server/db/retained-tables";
-import { emailLinkDecisionsRead } from "~/server/domains/email/repo/email-decision-sql";
+import {
+  emailLinkDecisionsReadForDecision,
+  emailLinkDecisionsReadForEmail,
+} from "~/server/domains/email/repo/email-decision-sql";
 import { decide, householdWrite, recordSubject } from "~/server/kernel/api";
 
 type Decision = typeof emailPurchaseDecision.$inferSelect;
@@ -35,6 +38,7 @@ export async function publishEmailLinkDecision(
     const q = getDb(database);
     const [subject] = await q
       .select({
+        eventId: orderMailEvent.id,
         emailId: email.id,
         originalId: orderMailEvent.orderMailId,
         checksum: email.checksum,
@@ -46,10 +50,13 @@ export async function publishEmailLinkDecision(
     if (!subject || subject.checksum !== input.evidenceChecksum)
       throw new Error("Email evidence changed; refresh before deciding");
     if (expected) {
+      const heldLinks = emailLinkDecisionsReadForDecision(
+        sql`${expected.decisionId}`,
+      );
       const [held] = await q
         .select()
-        .from(emailLinkDecisionsRead)
-        .where(eq(emailLinkDecisionsRead.id, expected.decisionId));
+        .from(heldLinks)
+        .where(eq(heldLinks.id, expected.decisionId));
       if (
         !held?.active ||
         held.emailId !== expected.emailId ||
@@ -60,19 +67,18 @@ export async function publishEmailLinkDecision(
           "Email decision evidence is stale; refresh before deciding",
         );
     }
+    const links = emailLinkDecisionsReadForEmail(sql`${subject.emailId}::uuid`);
     const current = await q
       .select()
-      .from(emailLinkDecisionsRead)
-      .where(
-        and(
-          eq(emailLinkDecisionsRead.emailId, subject.emailId),
-          eq(emailLinkDecisionsRead.active, true),
-        ),
-      );
+      .from(links)
+      .where(and(eq(links.emailId, subject.emailId), eq(links.active, true)));
+    // The resolved uuid, not the caller's spelling: scoped reads compare the
+    // stored `eventId` to OrderMailEvent ids as exact text.
+    const eventId = subject.eventId;
     const previous = current.find((row) => row.purchaseId === input.purchaseId);
     if (
       previous &&
-      previous.eventId === input.eventId &&
+      previous.eventId === eventId &&
       previous.decision === input.decision &&
       previous.evidenceChecksum === input.evidenceChecksum &&
       previous.authority === authority &&
@@ -84,11 +90,11 @@ export async function publishEmailLinkDecision(
       (row) =>
         row.authority === "member" &&
         row.decision === "linked" &&
-        row.eventId === input.eventId,
+        row.eventId === eventId,
     );
     if (authority === "automatic" && member) return member;
     const root = recordSubject("email", subject.emailId);
-    const value = { ...input, originalId: subject.originalId };
+    const value = { ...input, eventId, originalId: subject.originalId };
     // A member changes the canonical target's choice, including choices made
     // before a merge. Automatic publishers must preserve those older choices.
     const aliases =
@@ -152,7 +158,7 @@ export async function publishEmailLinkDecision(
               {
                 channel: "assignment" as const,
                 kind: "set" as const,
-                subject: `emailEvent:${input.eventId}`,
+                subject: `emailEvent:${eventId}`,
                 field: "purchaseId",
                 value: input.purchaseId,
               },
@@ -160,10 +166,7 @@ export async function publishEmailLinkDecision(
           : []),
       ],
     );
-    const [row] = await q
-      .select()
-      .from(emailLinkDecisionsRead)
-      .where(eq(emailLinkDecisionsRead.id, ref!.id));
+    const [row] = await q.select().from(links).where(eq(links.id, ref!.id));
     if (!row) throw new Error("Email link decision returned no row");
     return row;
   });

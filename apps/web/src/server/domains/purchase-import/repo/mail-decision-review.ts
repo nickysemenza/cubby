@@ -8,7 +8,7 @@ import {
   suggestionSubjects,
   type MailDecisionFamily,
 } from "@cubby/schemas/suggestion";
-import { and, eq, like } from "drizzle-orm";
+import { and, eq, like, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -26,8 +26,8 @@ import {
   runOperation,
 } from "~/server/db/schema";
 import {
-  emailLinkDecisionHistoryRead,
-  emailLinkDecisionsRead,
+  emailLinkDecisionHistoryReadForDecision,
+  emailLinkDecisionsReadForDecision,
 } from "~/server/domains/email/repo/email-decision-sql";
 import { emailReviewsRead } from "~/server/domains/email/repo/email-decision-sql";
 import { emailLinkSubject } from "~/server/domains/email/repo/email-link-decision";
@@ -92,10 +92,11 @@ export async function resolveMailDecisionHandle(
   id: string,
 ): Promise<MailDecisionHandle | null> {
   const client = getDb(db);
+  const history = emailLinkDecisionHistoryReadForDecision(sql`${id}`);
   const [decision] = await client
     .select()
-    .from(emailLinkDecisionHistoryRead)
-    .where(eq(emailLinkDecisionHistoryRead.id, id))
+    .from(history)
+    .where(eq(history.id, id))
     .limit(1);
   if (decision)
     return {
@@ -271,10 +272,11 @@ async function applyReview(
     return suggestionReviewOut.parse(prior.receipt);
   }
   if (handle.family === "email_link") {
+    const links = emailLinkDecisionsReadForDecision(sql`${handle.id}`);
     const [current] = await getDb(db)
       .select()
-      .from(emailLinkDecisionsRead)
-      .where(eq(emailLinkDecisionsRead.id, handle.id))
+      .from(links)
+      .where(eq(links.id, handle.id))
       .limit(1);
     if (!current?.active || current.status === "superseded")
       throw new Error(
@@ -508,13 +510,11 @@ export async function settleMailDecisionReview(
               ? "rejected"
               : "resolved";
         if (handle.family !== "email_link") return next ?? "pending";
+        const links = emailLinkDecisionsReadForDecision(sql`${handle.id}`);
         const [current] = await getDb(transactionDb)
-          .select({
-            active: emailLinkDecisionsRead.active,
-            status: emailLinkDecisionsRead.status,
-          })
-          .from(emailLinkDecisionsRead)
-          .where(eq(emailLinkDecisionsRead.id, handle.id))
+          .select({ active: links.active, status: links.status })
+          .from(links)
+          .where(eq(links.id, handle.id))
           .limit(1);
         if (
           !next ||

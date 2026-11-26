@@ -92,6 +92,26 @@ const ownsField = (registry: KernelRegistry, entity: string, field: string) =>
     ),
   );
 
+const UUID_REF =
+  /^([A-Za-z][\w-]*:)([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/iu;
+
+/**
+ * `prefix:<uuid>` with the uuid in canonical lowercase. Subjects and fields
+ * (`email:`, `emailEvent:`, `link:` and the rest) are stored only in this form,
+ * so readers compare them, and JSON copies of their uuids, as exact text.
+ */
+const canonicalRef = (value: string) =>
+  value.replace(
+    UUID_REF,
+    (_, prefix: string, id: string) => prefix + id.toLowerCase(),
+  );
+
+const canonicalDecision = (decision: DecisionInput): DecisionInput => ({
+  ...decision,
+  subject: canonicalRef(decision.subject),
+  ...(decision.field ? { field: canonicalRef(decision.field) } : {}),
+});
+
 async function normalize(decision: DecisionInput) {
   const allowed: readonly string[] = DECISION_KINDS[decision.channel];
   if (!allowed.includes(decision.kind))
@@ -128,10 +148,11 @@ export async function decide(
   db: Database,
   registry: KernelRegistry,
   actor: ActorContext,
-  decisions: readonly DecisionInput[],
+  inputs: readonly DecisionInput[],
   writers: DecisionWriters = {},
 ): Promise<DecisionRef[]> {
-  if (!decisions.length) return [];
+  if (!inputs.length) return [];
+  const decisions = inputs.map(canonicalDecision);
   const normalized = await Promise.all(decisions.map(normalize));
   return repositoryTransactionDatabase(db, async (tx) => {
     const q = repositoryQueries(tx);
