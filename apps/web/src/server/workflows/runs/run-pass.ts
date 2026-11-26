@@ -47,7 +47,8 @@ import {
   type Claim,
   type PassResult,
 } from "~/server/kernel/api";
-import { classifyWorkFailure } from "~/server/kernel/failure";
+import { classifyWorkFailure, type WorkFailure } from "~/server/kernel/failure";
+import { PASS_TRANSIENT_FAILURES_PER_ATTEMPT } from "~/server/kernel/pass-timing";
 import { WorkSupersededError } from "~/server/kernel/work-errors";
 
 import { withWorkflowExecution } from "./execution";
@@ -260,15 +261,18 @@ async function advance(
 async function reconcileIfLastAttempt(
   db: Database,
   runId: RunId,
-  error: unknown,
+  kind: WorkFailure["kind"],
 ) {
-  const failure = classifyWorkFailure(error);
-  if (failure.kind !== "failed" && failure.kind !== "isolated") return;
+  if (kind !== "failed" && kind !== "isolated" && kind !== "transient") return;
   const pass = await readRunPass(db, runId);
-  if (pass && pass.attempts + 1 >= pass.maxAttempts) {
-    const { scheduleRunsReconcile } = await import("./reconcile-pass");
-    await scheduleRunsReconcile(db, new Date(Date.now() + 5_000));
-  }
+  if (!pass || pass.attempts + 1 < pass.maxAttempts) return;
+  if (
+    kind === "transient" &&
+    (pass.transientFailures + 1) % PASS_TRANSIENT_FAILURES_PER_ATTEMPT !== 0
+  )
+    return;
+  const { scheduleRunsReconcile } = await import("./reconcile-pass");
+  await scheduleRunsReconcile(db, new Date(Date.now() + 5_000));
 }
 
 /** A funding or provider stop is a wait with its cause, never a spent attempt. */
@@ -360,7 +364,7 @@ export const runExecutePass = definePass({
       if (failure.kind === "paused") return { cursor, done: true };
       if (failure.kind === "deferred")
         return waitResult(cursor, failure.until, failure.reason);
-      await reconcileIfLastAttempt(db, runId, error);
+      await reconcileIfLastAttempt(db, runId, failure.kind);
       throw error;
     } finally {
       clearInterval(heartbeat);
@@ -370,8 +374,8 @@ export const runExecutePass = definePass({
 
 /**
  * Start or bring forward a Run's Pass. A live Pass keeps its cursor and
- * generation and becomes due now; a finished, cancelled or exhausted one
- * restarts at `generation`.
+ * generation and preserves transient backoff. A finished, cancelled or exhausted
+ * Pass restarts at `generation`.
  */
 export async function startRunPass(
   db: Database,

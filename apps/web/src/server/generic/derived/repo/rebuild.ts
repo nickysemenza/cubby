@@ -159,8 +159,8 @@ export async function requestDerivedRebuild(
   const existing = await rebuildActive(db);
   const force = options.force ?? true;
   const keepsRetry = sql`"Pass"."doneAt" IS NULL AND "Pass"."cancelledAt" IS NULL
-    AND "Pass"."transientFailures" > 0
-    AND (NOT ${force} OR "Pass".attempts < "Pass"."maxAttempts")`;
+    AND NOT ${force} AND "Pass"."transientFailures" > 0
+    AND "Pass".attempts < "Pass"."maxAttempts"`;
   await getDb(db).execute(sql`INSERT INTO "Pass" (name, key, "runId", cursor)
     VALUES (${DERIVED_SNAPSHOT_PASS}, ${DERIVED_SNAPSHOT_KEY}, ${options.runId ?? null}::uuid, '{}'::jsonb)
     ON CONFLICT (name, key) DO UPDATE SET

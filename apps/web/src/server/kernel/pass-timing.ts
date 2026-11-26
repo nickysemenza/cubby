@@ -1,5 +1,8 @@
 import { sql, type SQL } from "drizzle-orm";
 
+/** A Pass spends an attempt after this many consecutive transient failures. */
+export const PASS_TRANSIENT_FAILURES_PER_ATTEMPT = 5;
+
 /** Attempt `n`'s backoff: 30 s doubling to an hour. */
 const BACKOFF_BASE_MS = 30_000;
 const BACKOFF_MAX_MS = 60 * 60_000;

@@ -29,6 +29,7 @@ import {
 } from "~/server/db/repository-access.boundary";
 import { classifyWorkFailure, type WorkFailure } from "~/server/kernel/failure";
 import {
+  PASS_TRANSIENT_FAILURES_PER_ATTEMPT,
   backoffInterval,
   backoffMs,
   passFreeAt,
@@ -63,8 +64,6 @@ export async function renewScopeClaims(
 export const UNREGISTERED_RECONCILER = "Unregistered reconciler: ";
 /** Non-transient failures before a dirty scope is Stuck. */
 export const MAX_SCOPE_ATTEMPTS = 5;
-/** A fresh Pass tolerates 7.5 minutes of transient retries before spending an attempt. */
-const PASS_TRANSIENT_FAILURES_PER_ATTEMPT = 5;
 const UNREGISTERED_CHECK_MS = 10 * 60_000;
 const lastUnregisteredCheck = new WeakMap<KernelRegistry, number>();
 /** Consecutive `seq`/`rev` conflicts before a scope runs locked. */
