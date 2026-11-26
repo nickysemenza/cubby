@@ -923,15 +923,48 @@ describe("scheduled Gmail discovery", () => {
           "retry",
           "abandoned",
         ]);
-        const action = gap?.actions.find((action) => action.value === outcome);
+        const failedRunId = await ensureRun(ctx.db, ctx.actor, {
+          purpose: "mail_discovery",
+          trigger: "manual",
+          status: "completed",
+          execution: false,
+          input: mailboxDiscoveryInput.parse(frozen.input),
+          progress: mailboxDiscoveryProgress.parse(frozen.progress),
+        });
+        await getDb(ctx.db)
+          .update(run)
+          .set({ status: "failed", failureCode: "job_failed" })
+          .where(eq(run.id, failedRunId));
+        await expect(
+          kernel.withAsk(ctx.db, ask, "synthetic email", {
+            runId: failedRunId,
+          }),
+        ).rejects.toMatchObject({ name: "AskUnknownError" });
+        const failedRecord = {
+          entity: "run",
+          id: (await readRun(failedRunId)).shortcode,
+        } as const;
+        const failedRead = await machineryHandlers.operations.read({
+          data: failedRecord,
+          request,
+        });
+        if (!failedRead.ok) throw new Error(failedRead.error.message);
+        const failedGap = failedRead.data.machinery?.gaps.items.find(
+          (item) => item.askState === "unknown",
+        );
+        expect(failedGap?.actions).toEqual(gap?.actions);
+        const action = failedGap?.actions.find(
+          (action) => action.value === outcome,
+        );
         if (!action) throw new Error("Unknown Ask decision was not offered");
         const { label: _label, ...decision } = action;
         expect(
           await machineryHandlers.operations.decide({
-            data: { ...record, decisions: [decision] },
+            data: { ...failedRecord, decisions: [decision] },
             request,
           }),
         ).toMatchObject({ ok: true });
+        expect(await readRunPass(ctx.db, failedRunId)).toBeNull();
         expect(await readRunPass(ctx.db, runId)).toMatchObject({
           state: "due",
         });
@@ -961,6 +994,51 @@ describe("scheduled Gmail discovery", () => {
       }
     },
   );
+
+  it("admits a targeted query while the mailbox history cursor waits on an Ask", async () => {
+    const state = await seed();
+    const baseline = ports(
+      gmail({
+        listMessages: async () => ({ messages: [] }),
+      }),
+    );
+    await listMailDiscovery(ctx.db, state.params, baseline);
+    await saveMailDiscoveryBatch(ctx.db, state.params, 0, baseline);
+    await finishMailDiscovery(ctx.db, state.params);
+    expect(await startMailDiscovery(ctx.db)).toMatchObject({ started: 1 });
+    const history = (await created())[1]!;
+    const provider = gmail({
+      listHistory: async () => ({
+        historyId: "110",
+        history: [
+          { id: "110", messagesAdded: [{ message: { id: "history-source" } }] },
+        ],
+      }),
+    });
+    await listMailDiscovery(ctx.db, history, ports(provider));
+    expect(
+      mailboxDiscoveryProgress.parse((await readRun(history.runId)).progress)
+        .page,
+    ).toMatchObject({ messageIds: ["history-source"] });
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "paused", failureCode: "ask_outcome" })
+      .where(eq(run.id, history.runId));
+
+    expect(await startMailDiscovery(ctx.db)).toMatchObject({ started: 0 });
+    await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic Independent Vendor",
+      orderEmailSenders: ["orders@independent.example.test"],
+    });
+    expect(await startMailDiscovery(ctx.db)).toMatchObject({ started: 1 });
+    const query = (await created())[2]!;
+    expect(await readRun(query.runId)).toMatchObject({
+      status: "running",
+      progress: { discoveryScope: { kind: "query" } },
+    });
+    expect(await startMailDiscovery(ctx.db)).toMatchObject({ started: 0 });
+    expect(await created()).toHaveLength(3);
+  });
 
   it("alternates verified Vendor history with new mail and continues only while coverage remains", async () => {
     const state = await seed({ targeted: false });

@@ -212,18 +212,17 @@ function parkedAskOwnsScope(
 export async function findQueuedAutomaticMailboxDiscovery(
   db: Database,
   input: { ledgerPartyId: string; mailboxId: string },
-): Promise<Pick<MailDiscoveryOwner, "id" | "failureCode"> | null> {
-  const owners = await readMailDiscoveryOwners(db, input);
+): Promise<RunId | null> {
   return (
-    owners.find((owner) => parkedAskOwnsScope(owner, { kind: "mailbox" })) ??
-    owners.find(
-      (owner) =>
+    (await readMailDiscoveryOwners(db, input)).find((owner) => {
+      const progress = owner.progress;
+      return (
         owner.status !== "running" &&
         owner.failureCode !== RUN_ASK_OUTCOME_WAIT &&
-        owner.progress?.admissionClass === "automatic" &&
-        owner.progress.discoveryScope?.kind === "mailbox",
-    ) ??
-    null
+        progress?.admissionClass === "automatic" &&
+        progress.discoveryScope?.kind === "mailbox"
+      );
+    })?.id ?? null
   );
 }
 
@@ -232,7 +231,11 @@ type AdmissionRequest = {
   runId?: RunId;
   recovery: boolean;
 };
-type AdmissionDecision = "available" | "scope_busy" | "capacity";
+type AdmissionDecision =
+  | "available"
+  | "scope_busy"
+  | "capacity"
+  | typeof RUN_ASK_OUTCOME_WAIT;
 
 /** Call only while holding this mailbox's admission lock in the same transaction. */
 export async function mailDiscoveryAdmission(
@@ -259,7 +262,7 @@ function admissionDecision(
         owner.id !== input.runId && parkedAskOwnsScope(owner, input.scope),
     )
   )
-    return "scope_busy";
+    return RUN_ASK_OUTCOME_WAIT;
   // A parked owner reserves its cursor. Work queued behind that cursor waits
   // outside admission priority so unrelated work can use the free slots.
   const queueOwners = owners.filter(

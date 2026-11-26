@@ -244,21 +244,21 @@ async function createDiscoveryPasses(
         coverage = merged;
       }
     }
+    const queries: MailboxDiscoveryScope[] = (coverage?.scoped ?? [])
+      .filter(
+        (query) =>
+          !query.completed &&
+          input.frozen.scopedQueries.some(
+            (selected) =>
+              selected.key === query.key && selected.query === query.query,
+          ),
+      )
+      .map((query) => ({ kind: "query", key: query.key }));
     const scopes: MailboxDiscoveryScope[] = !coverage
       ? [{ kind: "mailbox" }]
       : discoveryMode(coverage) === "new_mail"
-        ? [{ kind: "mailbox", mode: "new_mail" }]
-        : coverage.scoped
-            .filter(
-              (query) =>
-                !query.completed &&
-                input.frozen.scopedQueries.some(
-                  (selected) =>
-                    selected.key === query.key &&
-                    selected.query === query.query,
-                ),
-            )
-            .map((query) => ({ kind: "query", key: query.key }));
+        ? [{ kind: "mailbox", mode: "new_mail" }, ...queries]
+        : queries;
     const scheduled: RunId[] = [];
     for (const scope of scopes) {
       const decision = await mailDiscoveryAdmission(tx, {
@@ -266,6 +266,7 @@ async function createDiscoveryPasses(
         scope,
         recovery: false,
       });
+      if (decision === RUN_ASK_OUTCOME_WAIT) continue;
       if (decision !== "available") {
         if (
           input.paidGrant &&
@@ -276,13 +277,9 @@ async function createDiscoveryPasses(
           scope.kind === "mailbox" && coverage
             ? await findQueuedAutomaticMailboxDiscovery(tx, identity)
             : null;
-        if (
-          queued &&
-          input.paidGrant &&
-          queued.failureCode !== RUN_ASK_OUTCOME_WAIT
-        ) {
-          await launch(queued.id);
-          scheduled.push(queued.id);
+        if (queued && input.paidGrant) {
+          await launch(queued);
+          scheduled.push(queued);
         } else if (scope.kind === "mailbox" && coverage && !queued) {
           const progress = mailboxDiscoveryProgress.parse({
             attempt: 0,
@@ -352,7 +349,11 @@ async function createDiscoveryPasses(
       await launch(runId);
       scheduled.push(runId);
       // One member action grants one Run's allowance, never one per lane.
-      if (input.paidGrant || scheduled.length === MAIL_DISCOVERY_CAPACITY)
+      if (
+        scope.kind === "mailbox" ||
+        input.paidGrant ||
+        scheduled.length === MAIL_DISCOVERY_CAPACITY
+      )
         break;
     }
     return scheduled;
