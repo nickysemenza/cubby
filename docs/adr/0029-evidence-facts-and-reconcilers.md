@@ -596,13 +596,12 @@ claim; a prepared rendition that brings device-waiting image work forward;
 A writer outside one transaction registers the wake right after its first
 durable write, so a later failure cannot skip it. A `startPass` for a Pass that spent its attempts sends none, because no
 runner claims it until a member retries it or a scheduled start revives it.
-The hourly cron's starts of `runs.reconcile` and `retention` are scheduled
-starts: each gives the spent singleton Pass a fresh attempt budget and keeps its cursor; its last error stands until
-the next attempt settles. A Pass that always fails spends at most one budget
-per cron invocation.
-The discovery Passes `purchase.discovery` and `email.purchase-discovery` are
-started hourly without revival, because a page that outlives its claim lease
-spends no attempt and would be claimed again while it still runs.
+The hourly cron's starts of `runs.reconcile`, `retention`,
+`purchase.discovery` and `email.purchase-discovery` give each spent singleton
+Pass a fresh attempt budget and keep its cursor. Its last error stands until
+the next attempt settles. An expired Pass claim spends one attempt on the
+current page. A Pass that always fails spends at most one budget per cron
+invocation.
 Keyed Passes such as `fields.reconcile` have no scheduled start; a spent one
 is Stuck in Work until a member retries it, or a Run retry restarts its Pass.
 A writer that sets only a future
@@ -621,28 +620,28 @@ scheduling columns, `ImageProcessingAttempt`, `DerivedRebuild`, `WorkItem`,
 `WorkPublication`, `CoordinatorTurn` and the drains go. Each responsibility
 they held has this owner:
 
-| Today                                                            | Owner                                                                                                                                                                     |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `run.execute`: Sweep and maintenance steps, mail discovery pages | A Pass keyed by the Run. Its cursor is the Run's checkpoint; `RunStep` stays as its ledger; the Run's status is its cancellation fence.                                   |
-| `purchase.dispatch`, purchase-agent and mail-agent turns         | A Pass keyed by the Run dispatches; each agent turn is a model Ask that Pass waits on. The mail agent's Durable Object keeps its alarms.                                  |
-| `run.funding-resume`                                             | No row. An Ask refused for funding waits with cause `funding` until the window ends; a funding reset clears those waits in one statement.                                 |
-| Location description refresh                                     | A model Ask read by the Location's `fields` scope.                                                                                                                        |
-| Location inventory detection                                     | A model Ask whose result is appended as photo evidence.                                                                                                                   |
-| Run summary write and its drain                                  | A model Ask read by the Run's `fields` scope.                                                                                                                             |
-| Image metadata extraction, cloud image work                      | Image Asks whose results are appended as Image evidence.                                                                                                                  |
-| Device image work                                                | An image Ask a device claims. The wire's `jobId` is the Ask id and `attemptId` is the claim token; renew, release, cancel, result replay and source-revision checks stay. |
-| Embedding refresh and cleanup                                    | An embedding Ask per search-document revision, and a `vectorize.sync` Pass that uploads, confirms visibility and deletes, keeping its receipts on `EntityEmbedding`.      |
-| AI evaluation drain and requester receipts                       | Model Asks; `AskScope` records the waiting scopes and the requesting Run.                                                                                                 |
-| Derived rebuild and the hourly snapshot pass                     | A `derived.snapshot` Pass with a resumable cursor.                                                                                                                        |
-| Email purchase discovery                                         | Dirtying: an Email evidence row discovers its `emailState` scope and its `paymentMatch` keys.                                                                             |
-| Mailbox discovery                                                | A source Ask per mailbox whose input carries `MailboxCursor`.                                                                                                             |
-| `maintenance.purchase-discovery`                                 | A `purchase.discovery` Pass that owns sender-attribution learning, retained-Email import admission and mailbox-discovery admission; `senderAfter` is in its cursor.       |
-| Field automation events                                          | `fields` scopes dirtied by keys.                                                                                                                                          |
-| Re-asking after a model, prompt or policy revision               | The version sweep (section 11).                                                                                                                                           |
-| Stopped-execution reconciliation                                 | Claim expiry in the claim module, and a `runs.reconcile` Pass for Run status.                                                                                             |
-| Retention and pruning                                            | A `retention` Pass.                                                                                                                                                       |
-| The Needs-you publication                                        | The list projection over `ScopeState` (section 10).                                                                                                                       |
-| Calendar invalidation                                            | The post-commit fast path stays; a failed mark persists a `calendar.invalidate` Pass keyed by origin that retries the idempotent `markDirty` call.                        |
+| Today                                                            | Owner                                                                                                                                                                               |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `run.execute`: Sweep and maintenance steps, mail discovery pages | A Pass keyed by the Run. Its cursor is the Run's checkpoint; `RunStep` stays as its ledger; the Run's status is its cancellation fence.                                             |
+| `purchase.dispatch`, purchase-agent and mail-agent turns         | A Pass keyed by the Run dispatches; each agent turn is a model Ask that Pass waits on. The mail agent's Durable Object keeps its alarms.                                            |
+| `run.funding-resume`                                             | No row. An Ask refused for funding waits with cause `funding` until the window ends; a funding reset clears those waits in one statement.                                           |
+| Location description refresh                                     | A model Ask read by the Location's `fields` scope.                                                                                                                                  |
+| Location inventory detection                                     | A model Ask whose result is appended as photo evidence.                                                                                                                             |
+| Run summary write and its drain                                  | A model Ask read by the Run's `fields` scope.                                                                                                                                       |
+| Image metadata extraction, cloud image work                      | Image Asks whose results are appended as Image evidence.                                                                                                                            |
+| Device image work                                                | An image Ask a device claims. The wire's `jobId` is the Ask id and `attemptId` is the claim token; renew, release, cancel, result replay and source-revision checks stay.           |
+| Embedding refresh and cleanup                                    | An embedding Ask per search-document revision, and a `vectorize.sync` Pass that uploads, confirms visibility and deletes, keeping its receipts on `EntityEmbedding`.                |
+| AI evaluation drain and requester receipts                       | Model Asks; `AskScope` records the waiting scopes and the requesting Run.                                                                                                           |
+| Derived rebuild and the hourly snapshot pass                     | A `derived.snapshot` Pass with a resumable cursor.                                                                                                                                  |
+| Email purchase discovery                                         | Dirtying: an Email evidence row discovers its `emailState` scope and its `paymentMatch` keys.                                                                                       |
+| Mailbox discovery                                                | A source Ask per mailbox whose input carries `MailboxCursor`.                                                                                                                       |
+| `maintenance.purchase-discovery`                                 | A `purchase.discovery` Pass that owns sender-attribution learning, retained-Email import admission and mailbox-discovery admission; Email and Shipment UUIDs checkpoint the census. |
+| Field automation events                                          | `fields` scopes dirtied by keys.                                                                                                                                                    |
+| Re-asking after a model, prompt or policy revision               | The version sweep (section 11).                                                                                                                                                     |
+| Stopped-execution reconciliation                                 | Claim expiry in the claim module, and a `runs.reconcile` Pass for Run status.                                                                                                       |
+| Retention and pruning                                            | A `retention` Pass.                                                                                                                                                                 |
+| The Needs-you publication                                        | The list projection over `ScopeState` (section 10).                                                                                                                                 |
+| Calendar invalidation                                            | The post-commit fast path stays; a failed mark persists a `calendar.invalidate` Pass keyed by origin that retries the idempotent `markDirty` call.                                  |
 
 A `kernel.pass.page` trace measures one claim attempt through page execution,
 publication and failure settlement. It records the registered pass name, whether

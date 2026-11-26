@@ -28,6 +28,7 @@ import { append, evidenceRow } from "~/server/kernel/api";
 import { activeEmailPurchaseDecision } from "~/server/testing/email-link.fixtures";
 
 import { retrieveEmailConnectionCandidates as readConnectionCandidates } from "./email-connections";
+import { readEmailPurchaseDiscoveryPage } from "./email-purchase-cursor";
 import {
   prepareEntityConnectionEvidence,
   publishPreparedEntityConnections,
@@ -127,6 +128,10 @@ describe("fresh retained Email connection recommendations", () => {
 
   it("retrieves both endpoints, publishes pending only, and keeps UUID dependencies private", async () => {
     const f = await fixture();
+    expect(await readEmailPurchaseDiscoveryPage(ctx.db, null)).toMatchObject({
+      emails: [{ id: f.message.id }],
+      after: null,
+    });
     const candidates = await retrieveConnectionCandidates(ctx.db, f.source);
     expect(candidates).toHaveLength(1);
     expect(await retrieveConnectionCandidates(ctx.db, f.target)).toEqual(

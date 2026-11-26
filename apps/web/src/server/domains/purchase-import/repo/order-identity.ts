@@ -5,28 +5,23 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { textArrayParam, uuidArrayParam } from "~/server/db/helpers/query";
 import { expense, purchase } from "~/server/db/schema";
-import {
-  ID_LABEL,
-  HASH_LABEL,
-  normalizeOrderKey,
-} from "~/server/domains/purchase-import/policy/order-identity";
+import { normalizeOrderKey } from "~/server/domains/purchase-import/policy/order-identity";
+import { normalizedOrderIdSql } from "~/server/domains/purchase-import/repo/order-identity-sql";
 export {
   canonicalOrderId,
   normalizeOrderKey,
 } from "~/server/domains/purchase-import/policy/order-identity";
 
-/** `normalizeOrderKey` for a stored order id column. */
-export const normalizedOrderIdSql = (column: SQLWrapper) =>
-  sql<string>`upper(btrim(regexp_replace(btrim(regexp_replace(regexp_replace(${column}, ${ID_LABEL}, '', 'i'), ${HASH_LABEL}, '', 'i')), '^#+', '')))`;
-
 /** Stored order ids matching any of `orderIds` after `normalizeOrderKey`. */
 export const vendorOrderIdsSql = (
   column: SQLWrapper,
   orderIds: readonly string[],
-) =>
-  sql<boolean>`${normalizedOrderIdSql(column)} = ANY(${textArrayParam(
-    orderIds.map(normalizeOrderKey),
-  )})`;
+) => {
+  const keys = orderIds.map(normalizeOrderKey);
+  return sql<boolean>`${column} IS NOT NULL
+    AND md5(${normalizedOrderIdSql(column)}) = ANY(ARRAY(SELECT md5(k) FROM unnest(${textArrayParam(keys)}) AS keys(k)))
+    AND ${normalizedOrderIdSql(column)} = ANY(${textArrayParam(keys)})`;
+};
 
 export type VendorOrderOwner =
   | { kind: "none" }

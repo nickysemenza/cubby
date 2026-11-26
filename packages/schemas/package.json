@@ -219,6 +219,7 @@
     "./shipment-fields": "./src/shipment-fields.ts",
     "./shipment-evidence": "./src/shipment-evidence.ts",
     "./purchase-agent-services": "./src/purchase-agent-services.ts",
+    "./purchase-order-identity": "./src/purchase-order-identity.ts",
     "./purchase-import": "./src/purchase-import.ts",
     "./purchase-fields": "./src/purchase-fields.ts",
     "./financial-account": "./src/financial-account.ts",

@@ -52,6 +52,8 @@ import { getRunWorkProgress } from "~/server/domains/run/repo/work-progress";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
+import { createKernel, defineModule } from "~/server/kernel/api";
+import { runOnePass } from "~/server/kernel/pass";
 import { readPasses } from "~/server/kernel/pass.fixtures";
 import { createMcpServer } from "~/server/mcp/server";
 import {
@@ -63,7 +65,7 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
-import { discoverPurchases } from "~/server/workflows/catch-up";
+import { purchaseDiscoveryPass } from "~/server/workflows/purchase-discovery-pass";
 
 import { startControlledMailImport } from "../operations/gmail/controlled-import";
 import {
@@ -1270,7 +1272,7 @@ describe("mail research admission", () => {
     ).toHaveLength(3);
   });
 
-  it("queues continuation when enabling import has more than one admission page", async () => {
+  it("drains more than one retained Email admission page through the Pass", async () => {
     const { party } = await source();
     await getDb(ctx.db).insert(account).values({
       id: crypto.randomUUID(),
@@ -1294,12 +1296,11 @@ describe("mail research admission", () => {
       .spyOn(gmailProvider, "gmailOAuthConfigured")
       .mockReturnValue(true);
     try {
-      await discoverPurchases(ctx.db);
-      expect(
-        await getDb(ctx.db).execute(
-          sql`SELECT name FROM "Pass" WHERE name=${"purchase.discovery"}`,
-        ),
-      ).toMatchObject({ rows: [{ name: "purchase.discovery" }] });
+      const kernel = createKernel([
+        defineModule({ name: "discovery", passes: [purchaseDiscoveryPass] }),
+      ]);
+      await kernel.startPass(ctx.db, purchaseDiscoveryPass);
+      expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
       let owners = await getDb(ctx.db)
         .select()
         .from(run)
@@ -1309,7 +1310,7 @@ describe("mail research admission", () => {
           (owner) => mailResearchRunInput.parse(owner.input).sources,
         ),
       ).toHaveLength(50);
-      await discoverPurchases(ctx.db);
+      expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
       owners = await getDb(ctx.db)
         .select()
         .from(run)
@@ -1319,7 +1320,7 @@ describe("mail research admission", () => {
       );
       expect(sources).toHaveLength(51);
       expect(new Set(sources.map((item) => item.orderMailId)).size).toBe(51);
-      await discoverPurchases(ctx.db);
+      expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
       expect(
         await getDb(ctx.db)
           .select()

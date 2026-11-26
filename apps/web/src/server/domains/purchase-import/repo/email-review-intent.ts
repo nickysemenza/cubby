@@ -22,7 +22,10 @@ import {
   email,
   connectionCandidateEvidence,
 } from "~/server/db/retained-tables";
-import { emailReviewsRead } from "~/server/domains/email/repo/email-decision-sql";
+import {
+  emailReviewsRead,
+  emailReviewsForIntentSql,
+} from "~/server/domains/email/repo/email-decision-sql";
 import {
   assertEmailEvidenceScope,
   withEmailEvidenceWrite,
@@ -61,7 +64,7 @@ function emailIntentSubjectSql(id: SQL, originalId: SQL) {
 export function emailHasProtectingIntentSql(id: SQL, originalId: SQL) {
   const subject = emailIntentSubjectSql(id, originalId);
   const kind = sql`${emailReviewsRead.metadata}->>${suggestionProducer.keyof().enum.kind}`;
-  return sql`(EXISTS (SELECT 1 FROM ${emailReviewsRead}
+  return sql`(EXISTS (SELECT 1 FROM ${emailReviewsForIntentSql(id, originalId)} "EmailReview"
     WHERE ${subject} AND ((${emailReviewsRead.authority} = ${"member"}
       AND (${kind} IS NULL OR NOT (${kind} = ANY(${textArrayParam(correctionAuthorityReceiptKinds.options)}))))
       OR ${kind} IN (${"email_resolution"}, ${"email_link"}))) OR EXISTS (

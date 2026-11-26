@@ -15,6 +15,7 @@ import {
 import { withTrace } from "~/server/observability/tracing";
 
 import {
+  CLAIM_LEASE_MS,
   claimPass,
   fenceClaim,
   renewClaim,
@@ -87,6 +88,25 @@ export async function startPass(
   // A future start owns its deadline; an immediate wake would find nothing due.
   if (!row.due) await wakeAtDeadline(db, new Date(row.at), "kernel.pass-start");
   else await wakeAfterCommit(db);
+}
+
+/**
+ * Run database-only page work under a server-side timeout. Pass.run may use
+ * several transactions or make network calls, so it cannot own one outer
+ * transaction. Fenced publication already uses the household gate's limits.
+ */
+export function withPassPageTransaction<T>(
+  db: Database,
+  work: (tx: Database) => Promise<T>,
+): Promise<T> {
+  return repositoryTransactionDatabase(db, async (tx) => {
+    await repositoryQueries(tx).execute(sql`
+      SELECT set_config('statement_timeout', (
+        SELECT least(nullif(setting::int, 0), ${CLAIM_LEASE_MS - 30_000})::text
+        FROM pg_settings WHERE name = 'statement_timeout'
+      ), true)`);
+    return work(tx);
+  });
 }
 
 /**

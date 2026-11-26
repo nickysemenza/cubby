@@ -1,10 +1,5 @@
-// A printed field label before the identifier: `Trip ID: X`, `Order number: X`,
-// `Confirmation No.: X` or `Order #X`. Only a label ending in an id/number word
-// followed by `:`/`#`, or words followed by `#`, is removed, so `No. X` and
-// identifiers that merely contain letters (`INV-123`, `ID-9`) are unchanged.
-const LABEL_WORDS = String.raw`(?:[A-Za-z][A-Za-z.]*\s+){0,3}`;
-export const ID_LABEL = String.raw`^\s*${LABEL_WORDS}(?:id|no\.?|number|num)\s*[:#]\s*`;
-export const HASH_LABEL = String.raw`^\s*(?:[A-Za-z][A-Za-z.]*\s+){1,3}#\s*`;
+import { HASH_LABEL, ID_LABEL } from "@cubby/schemas/purchase-order-identity";
+
 const ID_LABEL_RE = new RegExp(ID_LABEL, "iu");
 const HASH_LABEL_RE = new RegExp(HASH_LABEL, "iu");
 

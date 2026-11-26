@@ -1,28 +1,42 @@
-import { emailLinkEvidenceKind } from "@cubby/schemas/email-fields";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
-import { emailPurchaseEvidenceSql } from "~/server/domains/email/repo/email-purchase-links";
+import { emailSuggestedEvidenceSql } from "~/server/domains/email/repo/email-purchase-links";
+import { withPassPageTransaction } from "~/server/kernel/api";
 
 export const EMAIL_PURCHASE_PAGE = 50;
 
-/** Emails whose retained evidence suggests a purchase link, in id order after the cursor. */
-export async function emailsWithSuggestedPurchases(
+/** Walk Email UUIDs first. The cursor advances even through pages without suggestions. */
+export async function readEmailPurchaseDiscoveryPage(
   db: Database,
   after: string | null,
 ) {
-  const rows = await getDb(db).execute(
-    sql`
-    SELECT DISTINCT "Email"."id" AS "id", "Email"."shortcode" AS "shortcode"
-    FROM "Email"
-    CROSS JOIN LATERAL (${emailPurchaseEvidenceSql()}) evidence
-    WHERE ${notDeleted("Email")} AND evidence."kind" = ${emailLinkEvidenceKind.enum.suggested}
-      ${after ? sql`AND "Email"."id" > ${after}::uuid` : sql``}
-    ORDER BY "Email"."id" LIMIT ${EMAIL_PURCHASE_PAGE}
-  `,
-    "objects",
+  const rows = await withPassPageTransaction(db, (tx) =>
+    getDb(tx).execute(
+      sql`
+      WITH page AS MATERIALIZED (
+        SELECT "id", "shortcode", "orderMailId", "ledgerPartyId", "receivedAt", "deletedAt"
+        FROM "Email"
+        ${after ? sql`WHERE "id" > ${after}::uuid` : sql``}
+        ORDER BY "id" LIMIT ${EMAIL_PURCHASE_PAGE}
+      )
+      SELECT "Email"."id", "Email"."shortcode",
+        CASE WHEN ${notDeleted("Email")} THEN EXISTS (${emailSuggestedEvidenceSql()})
+          ELSE false END AS suggested
+      FROM page "Email" ORDER BY "Email"."id"
+    `,
+      "objects",
+    ),
   );
-  return z.array(z.object({ id: z.uuid(), shortcode: z.string() })).parse(rows);
+  const page = z
+    .array(
+      z.object({ id: z.uuid(), shortcode: z.string(), suggested: z.boolean() }),
+    )
+    .parse(rows);
+  return {
+    emails: page.filter((row) => row.suggested),
+    after: page.length === EMAIL_PURCHASE_PAGE ? page.at(-1)!.id : null,
+  };
 }

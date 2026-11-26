@@ -5,15 +5,12 @@ import { z } from "zod";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
 import { retrieveEmailConnectionCandidates } from "~/server/domains/connection/repo/email-connections";
-import {
-  EMAIL_PURCHASE_PAGE,
-  emailsWithSuggestedPurchases,
-} from "~/server/domains/connection/repo/email-purchase-cursor";
+import { readEmailPurchaseDiscoveryPage } from "~/server/domains/connection/repo/email-purchase-cursor";
 import {
   prepareEntityConnectionEvidence,
   publishPreparedEntityConnections,
 } from "~/server/domains/connection/repo/entity-connections";
-import { definePass } from "~/server/kernel/api";
+import { definePass, withPassPageTransaction } from "~/server/kernel/api";
 
 const log = createLogger("email-purchase-discovery");
 
@@ -49,20 +46,34 @@ export const emailPurchaseDiscoveryPass = definePass({
     const cursor = z
       .object({ after: z.uuid().nullable().default(null) })
       .parse(raw ?? {});
-    const emails = await emailsWithSuggestedPurchases(db, cursor.after);
-    const next =
-      emails.length === EMAIL_PURCHASE_PAGE ? emails.at(-1)!.id : null;
-    return {
-      cursor: { after: next },
-      done: false,
-      availableAt: next ? new Date() : nextUtcHour(),
-      async publish(tx) {
-        for (const email of emails)
-          try {
-            await discoverEmailPurchaseConnections(tx, {
+    const { emails, after } = await readEmailPurchaseDiscoveryPage(
+      db,
+      cursor.after,
+    );
+    const prepared = emails.length
+      ? await withPassPageTransaction(db, async (tx) => {
+          const groups = [];
+          for (const email of emails) {
+            const candidates = await retrieveEmailConnectionCandidates(tx, {
               entityKind: "email",
               entityId: email.shortcode,
             });
+            if (candidates.length)
+              groups.push(
+                await prepareEntityConnectionEvidence(tx, candidates),
+              );
+          }
+          return groups;
+        })
+      : [];
+    return {
+      cursor: { after },
+      done: false,
+      availableAt: after ? new Date() : nextUtcHour(),
+      async publish(tx) {
+        for (const group of prepared)
+          try {
+            await publishPreparedEntityConnections(tx, group);
           } catch (error) {
             log.warn("Email purchase discovery skipped an Email", {
               error: scrubErrorMessage(String(error)),

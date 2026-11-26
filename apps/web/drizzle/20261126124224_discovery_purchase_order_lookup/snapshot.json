@@ -1,0 +1,56 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "52e48da4-65ee-437c-bcb6-821a2c012c88",
+  "prevIds": [
+    "b29632fe-e6f3-4890-842a-944f6a863043"
+  ],
+  "footprints": [
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "Purchase",
+        "Purchase_normalized_order_hash_idx"
+      ],
+      "writes": [
+        "s|idx|public.Purchase_normalized_order_hash_idx",
+        "n|idx|public.Purchase_normalized_order_hash_idx",
+        "e|idx|public.Purchase_normalized_order_hash_idx",
+        "n|rel|public.Purchase_normalized_order_hash_idx"
+      ],
+      "reads": [
+        "n|tbl|public.Purchase",
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Purchase",
+        "name": "Purchase_normalized_order_hash_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "md5(upper(btrim(regexp_replace(btrim(regexp_replace(regexp_replace(\"orderId\",'^\\s*(?:[A-Za-z][A-Za-z.]*\\s+){0,3}(?:id|no\\.?|number|num)\\s*[:#]\\s*', '', 'i'), '^\\s*(?:[A-Za-z][A-Za-z.]*\\s+){1,3}#\\s*', '', 'i')), '^#+', ''))))",
+            "isExpression": true,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": "\"orderId\" IS NOT NULL AND \"deletedAt\" IS NULL",
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    }
+  ]
+}

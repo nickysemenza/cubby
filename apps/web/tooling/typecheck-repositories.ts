@@ -37,6 +37,7 @@ export const repositoryOwners = [
   "src/server/domains/purchase-import/policy/payment-match.ts",
   "src/server/domains/purchase-import/policy/order-booking.ts",
   "src/server/domains/purchase-import/policy/order-identity.ts",
+  "src/server/domains/purchase-import/repo/order-identity-sql.ts",
   "src/server/domains/purchase-import/policy/payment-keys.ts",
   "src/server/domains/purchase-import/policy/combined-charge.ts",
 

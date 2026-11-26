@@ -285,9 +285,7 @@ export async function publishBackgroundTasks(
         const { purchaseDiscoveryPass } =
           await import("../purchase-discovery-pass");
         const { startPass } = await import("~/server/kernel/api");
-        await startPass(tx, purchaseDiscoveryPass, {
-          cursor: { senderAfter: task.senderAfter ?? null },
-        });
+        await startPass(tx, purchaseDiscoveryPass);
         continue;
       }
       if (task.kind === "calendar-feed.mark-dirty") {

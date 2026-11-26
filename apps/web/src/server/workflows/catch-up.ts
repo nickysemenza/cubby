@@ -1,5 +1,6 @@
-import { systemActor } from "@cubby/schemas/context";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { createLogger } from "@cubby/worker-tracing";
+import { z } from "zod";
 
 import {
   getPurchaseImportRunAgentNamespace,
@@ -83,16 +84,18 @@ export async function retireCoordinators(db: Database, before: Date) {
   );
 }
 
+export const purchaseDiscoveryCursor = z.object({
+  emailAfter: z.uuid().nullable().default(null),
+  shipmentAfter: z.uuid().nullable().default(null),
+});
+
 /**
- * Admit one Gmail discovery Pass per connected mailbox; Mail import Runs
- * follow from discovery. Product research is never started here: it is a
- * member's Burn-down (ADR 0010).
+ * Mailbox admission runs at the head of a census. Each subsequent page
+ * advances through UUIDs even when the current candidates are ineligible.
  */
 export async function discoverPurchases(
   db: Database,
-  options: {
-    senderAfter?: { mailboxId: string; afterId: string } | null;
-  } = {},
+  cursor: z.infer<typeof purchaseDiscoveryCursor>,
 ) {
   const [
     { startMailDiscovery },
@@ -105,38 +108,43 @@ export async function discoverPurchases(
   ]);
   if (!gmailOAuthConfigured()) {
     log.info("Gmail discovery skipped: Google OAuth is not configured");
-    return { mail: null, senderAfter: null, more: false };
+    return { cursor, done: true };
   }
-  // Project terminal execution before checking the mailbox admission slot.
-  await reconcileRunPasses(db);
-  const { learnAcceptedSenders } =
-    await import("~/server/domains/purchase-import/repo/sender-attribution");
-  const { readSenderAttributions } =
-    await import("~/server/domains/purchase-import/repo/sender-attribution-read");
-  const { withTransactionDatabase } = await import("~/server/db/helpers");
-  const knownAttributions = await readSenderAttributions(db);
-  const senders = await withTransactionDatabase(db, (tx) =>
-    learnAcceptedSenders(tx, systemActor(), knownAttributions),
-  );
-  const pending = await (
-    await import("~/server/domains/purchase-import/repo/mail-import-run")
-  ).importPendingEmails(db, {
-    knownAttributions,
-    senderAfter: options.senderAfter,
-  });
-  const mail = await startMailDiscovery(db, { knownAttributions });
-  log.info("purchase discovery", {
-    mailPassesStarted: mail.started,
-    mailPassesRunning: mail.running,
+  if (!cursor.emailAfter && !cursor.shipmentAfter) {
+    await recoverMissedWork(db);
+    // Project terminal execution before checking the mailbox admission slot.
+    await reconcileRunPasses(db);
+    const mail = await startMailDiscovery(db);
+    log.info("purchase discovery", {
+      mailPassesStarted: mail.started,
+      mailPassesRunning: mail.running,
+    });
+  }
+  if (!cursor.emailAfter) {
+    const { linkShipmentsByOrderIdPage } =
+      await import("~/server/domains/shipment/repo/evidence");
+    const shipmentAfter = await linkShipmentsByOrderIdPage(
+      db,
+      cursor.shipmentAfter
+        ? parseEntityId("shipment", cursor.shipmentAfter)
+        : null,
+    );
+    if (shipmentAfter)
+      return { cursor: { emailAfter: null, shipmentAfter }, done: false };
+  }
+  const { importPendingEmails } =
+    await import("~/server/domains/purchase-import/repo/mail-import-run");
+  const pending = await importPendingEmails(db, {
+    after: cursor.emailAfter,
+    learnSenders: true,
   });
   if (pending.errors.length)
     throw new AggregateError(
       pending.errors,
-      "Retained Email admission failed; discovery continued.",
+      "Retained Email admission failed.",
     );
   return {
-    mail,
-    senderAfter: pending.senderAfter ?? null,
-    more: senders.more || Boolean(pending.senderAfter),
+    cursor: { emailAfter: pending.after, shipmentAfter: null },
+    done: !pending.after,
   };
 }

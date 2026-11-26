@@ -28,7 +28,7 @@ describe("durable task intent", () => {
     ).rows;
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
-      cursor: { senderAfter: null },
+      cursor: null,
       doneAt: null,
     });
   });
@@ -45,7 +45,7 @@ describe("durable task intent", () => {
         sql`SELECT cursor, "runId" FROM "Pass" WHERE name = 'purchase.discovery'`,
       )
     ).rows;
-    expect(saved?.cursor).toEqual({ senderAfter: null });
+    expect(saved?.cursor).toBeNull();
     expect(saved?.runId).toBeNull();
   });
 

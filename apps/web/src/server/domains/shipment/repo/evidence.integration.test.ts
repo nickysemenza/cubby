@@ -65,7 +65,7 @@ import {
   reassignShipmentEvidence,
   editShipmentObservation,
   editShipmentReferences,
-  linkShipmentsByOrderId,
+  linkShipmentsByOrderIdPage,
 } from "./evidence";
 import { readShipmentTimeline } from "./timeline";
 
@@ -794,12 +794,13 @@ describe("Shipment retained evidence", () => {
       orderId: "SYN-SHIP-9",
     });
     // Order numbers are unique only per Vendor: a notice naming no Vendor never links.
-    expect(await linkShipmentsByOrderId(ctx.db)).toBe(0);
+    await linkShipmentsByOrderIdPage(ctx.db, null);
+    expect((await read()).purchaseId).toBeNull();
     await getDb(ctx.db)
       .update(orderMail)
       .set({ vendorId: seller.id })
       .where(eq(orderMail.id, message!.orderMailId!));
-    expect(await linkShipmentsByOrderId(ctx.db)).toBe(1);
+    await linkShipmentsByOrderIdPage(ctx.db, null);
     expect(await read()).toEqual({
       orderId: "SYN-SHIP-9",
       purchaseId: order.id,

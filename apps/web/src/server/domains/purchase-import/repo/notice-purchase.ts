@@ -15,9 +15,10 @@ import { purchase, vendorAccount } from "~/server/db/schema";
 import { emailLinkDecisionsSql } from "~/server/domains/email/repo/email-decision-sql";
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { acceptedOrdersBoundToSql } from "~/server/domains/purchase-import/repo/accepted-order-read";
+import { normalizedOrderIdSql } from "~/server/domains/purchase-import/repo/order-identity-sql";
 import { enterWriteTransaction } from "~/server/kernel/gate";
 
-import { normalizedOrderIdSql, normalizeOrderKey } from "./order-identity";
+import { normalizeOrderKey } from "./order-identity";
 import { recordRunWrites } from "./run-audit";
 import { lockPartySettlement } from "./settlement-lock";
 

@@ -36,16 +36,6 @@ const locationAiInventoryRefreshTaskSchema = z.object({
 const maintenancePurchaseDiscoveryTaskSchema = z.object({
   kind: z.literal("maintenance.purchase-discovery"),
   ...taskEnvelopeFields,
-  /**
-   * Keyset cursor for the sender scan. A full page resumes the same Pass
-   * with the last admitted Email id so the next pass does not reread it.
-   */
-  senderAfter: z
-    .object({
-      mailboxId: z.string().min(1),
-      afterId: z.uuid(),
-    })
-    .optional(),
 });
 
 /**
