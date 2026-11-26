@@ -99,7 +99,7 @@ export async function readRunPasses(
       ${iso("updatedAt")} AS "updatedAt",
       "doneAt" IS NOT NULL AS done, "cancelledAt" IS NOT NULL AS cancelled,
       ("claimToken" IS NOT NULL AND "claimDeadline" > now()) AS working,
-      ${passFreeAt(sql`"Pass"`)} <= now() AS due
+      "availableAt" <= now() AS due
     FROM "Pass"
     WHERE name = ANY(${textArrayParam(RUN_PASSES)}) AND key = ANY(${textArrayParam(runIds)})`);
   return new Map(

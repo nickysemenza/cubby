@@ -1374,6 +1374,9 @@ describe("mail research admission", () => {
         cursor: { retained: { finished: [`:${mail.id}`] } },
         lastError: expect.stringContaining("57014"),
       });
+      expect(await readPasses(ctx.db, { name: "runs.reconcile" })).toHaveLength(
+        1,
+      );
       expect(capture).toHaveBeenCalledWith(
         expect.any(AggregateError),
         expect.objectContaining({

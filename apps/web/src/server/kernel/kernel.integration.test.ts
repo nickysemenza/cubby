@@ -39,7 +39,11 @@ import {
 import { manualTransactionEvidence } from "~/server/domains/financial-transaction/repo/manual-evidence";
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { cancelRunWork } from "~/server/domains/run/repo/run-execution";
+import {
+  cancelRunWork,
+  readDuePassPositions,
+  RUN_EXECUTE_PASS,
+} from "~/server/domains/run/repo/run-execution";
 import { readWorkStatus } from "~/server/domains/work/service/work-status";
 import { findPgError } from "~/server/errors/db-errors";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
@@ -2126,7 +2130,8 @@ describe("evidence-facts kernel", () => {
   });
 
   it("exhausts a Pass that repeatedly loses its page lease", async () => {
-    const name = "fixture.pass-lapses";
+    const name = RUN_EXECUTE_PASS;
+    const key = crypto.randomUUID();
     let pages = 0;
     const pass = definePass({
       name,
@@ -2142,7 +2147,7 @@ describe("evidence-facts kernel", () => {
     const kernel = createKernel([
       defineModule({ name: "passes", passes: [pass] }),
     ]);
-    await seedPass(ctx.db, { name, key: "default", maxAttempts: 2 });
+    await seedPass(ctx.db, { name, key, maxAttempts: 2 });
 
     const read = async () =>
       (
@@ -2163,7 +2168,9 @@ describe("evidence-facts kernel", () => {
     expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
     expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
     expect(pages).toBe(1);
+    expect((await readDuePassPositions(ctx.db, [key])).has(key)).toBe(false);
     await elapseBackoff();
+    expect((await readDuePassPositions(ctx.db, [key])).has(key)).toBe(true);
     expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
     expect(await read()).toEqual({
       attempts: 0,
