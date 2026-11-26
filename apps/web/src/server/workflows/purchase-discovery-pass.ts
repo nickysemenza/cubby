@@ -6,11 +6,7 @@ import {
   type PassPageTransaction,
 } from "~/server/kernel/api";
 
-import {
-  discoverPurchases,
-  purchaseDiscoveryCursor,
-  recoverMissedWork,
-} from "./catch-up";
+import { discoverPurchases, recoverMissedWork } from "./catch-up";
 import { reconcileRunPasses } from "./runs/reconcile-pass";
 
 const log = createLogger("catch-up");
@@ -21,11 +17,7 @@ export const purchaseDiscoveryPass = definePass({
   activeStart: "restart",
   async run(db, raw, claim) {
     await recoverMissedWork(db);
-    return discoverPurchases(
-      db,
-      purchaseDiscoveryCursor.parse(raw ?? {}),
-      claim,
-    );
+    return discoverPurchases(db, raw, claim);
   },
 });
 

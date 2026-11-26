@@ -8,16 +8,13 @@ import {
 } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import {
-  importPendingEmails,
-  retainedAdmissionCursor,
-} from "~/server/domains/purchase-import/repo/mail-import-run";
-import {
   claimCatchUp,
   releaseCatchUpClaim,
 } from "~/server/generic/work-queue/repo/catch-up-claim";
 import {
   PassPageBudgetError,
   type Claim,
+  type Json,
   type PassResult,
 } from "~/server/kernel/api";
 
@@ -93,24 +90,27 @@ export async function retireCoordinators(db: Database, before: Date) {
   );
 }
 
-export const purchaseDiscoveryCursor = z.object({
-  emailAfter: z.uuid().nullable().default(null),
-  shipmentAfter: z.uuid().nullable().default(null),
-  retained: retainedAdmissionCursor.nullable().default(null),
-});
-
 /** Advance over Shipment and Email UUIDs even when a page is ineligible. */
 export async function discoverPurchases(
   db: Database,
-  cursor: z.infer<typeof purchaseDiscoveryCursor>,
+  raw: Json | null,
   claim: Claim,
 ): Promise<PassResult> {
   const { gmailOAuthConfigured } =
     await import("~/server/domains/purchase-import/repo/gmail/provider");
   if (!gmailOAuthConfigured()) {
     log.info("Gmail discovery skipped: Google OAuth is not configured");
-    return { cursor, done: true };
+    return { cursor: raw, done: true };
   }
+  const { importPendingEmails, retainedAdmissionCursor } =
+    await import("~/server/domains/purchase-import/repo/mail-import-run");
+  const cursor = z
+    .object({
+      emailAfter: z.uuid().nullable().default(null),
+      shipmentAfter: z.uuid().nullable().default(null),
+      retained: retainedAdmissionCursor.nullable().default(null),
+    })
+    .parse(raw ?? {});
   try {
     if (!cursor.emailAfter && !cursor.retained) {
       const { linkShipmentsByOrderIdPage } =

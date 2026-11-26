@@ -91,7 +91,7 @@ export async function startPass(
         THEN NULL ELSE "Pass"."lastError" END,
       "runId" = coalesce(excluded."runId", "Pass"."runId"),
       "doneAt" = NULL, "cancelledAt" = NULL,
-      "availableAt" = CASE WHEN ${finished} THEN excluded."availableAt" WHEN (${coalesceActive} AND NOT (${reviving})) OR "Pass"."waitCause" = ${kernelWaitCause.enum.funding} THEN "Pass"."availableAt" ELSE least("Pass"."availableAt", excluded."availableAt") END,
+      "availableAt" = CASE WHEN ${coalesceActive} AND (${finished}) THEN excluded."availableAt" WHEN (${coalesceActive} AND NOT (${reviving})) OR "Pass"."waitCause" = ${kernelWaitCause.enum.funding} THEN "Pass"."availableAt" ELSE least("Pass"."availableAt", excluded."availableAt") END,
       "wakeVersion" = CASE WHEN NOT (${finished}) AND (${coalesceActive} OR "Pass"."waitCause" = ${kernelWaitCause.enum.funding}) THEN "Pass"."wakeVersion" ELSE "Pass"."wakeVersion" + 1 END, "updatedAt" = now()
     ${
       pass.activeStart === "coalesce"
@@ -99,7 +99,8 @@ export async function startPass(
         : sql``
     }
     RETURNING ${isoText(sql`"availableAt"`)} AS at, "availableAt" <= now() AS due,
-      attempts < "maxAttempts" AS claimable`);
+      attempts < "maxAttempts" AND (NOT ${coalesceActive} OR "claimToken" IS NULL
+        OR "claimDeadline" <= now()) AS claimable`);
   const row = started.rows[0];
   // A pending Pass that spent its attempts keeps them until a member retries
   // it or a scheduled start revives it, so no runner can claim it and no wake
