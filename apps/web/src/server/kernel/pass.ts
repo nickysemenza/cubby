@@ -14,6 +14,7 @@ import {
   repositoryQueries,
   repositoryTransactionDatabase,
 } from "~/server/db/repository-access.boundary";
+import { classifyWorkFailure, stopsPage } from "~/server/kernel/failure";
 import { withTrace } from "~/server/observability/tracing";
 
 import {
@@ -27,7 +28,6 @@ import {
   type ClaimTarget,
 } from "./claim";
 import type { Claim, Json, Pass } from "./define";
-import { classifyWorkFailure, stopsPage } from "./failure";
 import { enterHouseholdGate } from "./gate";
 import type { KernelRegistry } from "./registry";
 import { isoText } from "./sql-time";
