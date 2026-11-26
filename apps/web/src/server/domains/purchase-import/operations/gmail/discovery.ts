@@ -265,21 +265,28 @@ async function liveMailDiscoveryBackfills(
   return row?.live ?? 0;
 }
 
-/** Query keys of a mailbox whose most recent Run, of any trigger, failed. */
+/**
+ * Query keys of a mailbox whose most recent Run, of any trigger, failed, with
+ * when that Run was created.
+ */
 async function failedMailDiscoveryQueries(
   db: Database,
   identity: { ledgerPartyId: string; mailboxId: string },
-): Promise<Set<string>> {
+): Promise<Map<string, number>> {
   const key = sql<string>`${discoveryScopeSql}->>'key'`;
   const latest = await getDb(db)
-    .selectDistinctOn([key], { key, status: runTable.status })
+    .selectDistinctOn([key], {
+      key,
+      status: runTable.status,
+      createdAt: runTable.createdAt,
+    })
     .from(runTable)
     .where(mailboxQueryRuns(identity))
     .orderBy(key, desc(runTable.createdAt));
-  return new Set(
+  return new Map(
     latest
       .filter((row) => ["failed", "dispatch_failed"].includes(row.status))
-      .map((row) => row.key),
+      .map((row) => [row.key, row.createdAt.getTime()]),
   );
 }
 
@@ -374,8 +381,9 @@ async function createDiscoveryPasses(
     // Backfill paces at creation; admission treats the Runs it creates as any
     // other search. A full budget creates nothing: the next completion's
     // continuation or the hourly cron offers again.
-    // A search whose latest Run failed goes behind the others, so one search
-    // that always fails cannot take every offer; it retries once it is first.
+    // A search whose latest Run failed goes behind the others, and failed
+    // searches take turns, least recently tried first, so one search that
+    // always fails cannot take every offer from the rest.
     const backfill =
       input.trigger === "scheduled" &&
       !input.frozen.controlled &&
@@ -386,8 +394,9 @@ async function createDiscoveryPasses(
       : Infinity;
     if (backfill && backfillBudget > 0) {
       const failed = await failedMailDiscoveryQueries(tx, identity);
+      // Untried and healthy searches keep roster order at rank zero.
       const lastFailed = (scope: MailboxDiscoveryScope) =>
-        scope.kind === "query" && failed.has(scope.key) ? 1 : 0;
+        (scope.kind === "query" ? failed.get(scope.key) : undefined) ?? 0;
       scopes.sort((left, right) => lastFailed(left) - lastFailed(right));
     }
     for (const scope of scopes) {
