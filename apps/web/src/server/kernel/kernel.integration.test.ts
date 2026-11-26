@@ -51,6 +51,7 @@ import { refusedBeforeSending } from "~/server/kernel/produce-ledger";
 import {
   WorkDeferredError,
   WorkEvidenceObsoleteError,
+  WorkRetryableError,
 } from "~/server/kernel/work-errors";
 import * as backgroundTasks from "~/server/workflows/background-tasks/publish";
 
@@ -128,6 +129,7 @@ import {
   type FixtureHooks,
 } from "./testing/kernel.fixtures";
 import { ASK } from "./vocab";
+import { loadRunPasses } from "./work";
 
 const RUN = { budgetMs: 20_000 };
 
@@ -2143,6 +2145,82 @@ describe("evidence-facts kernel", () => {
     expect(revived).toEqual({ attempts: 0, lastError: "synthetic failure" });
     expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
     expect(seen).toEqual([{ page: 3 }]);
+  });
+
+  it("backs off and exhausts a transient Pass page, resetting the streak on success", async () => {
+    const name = "fixture.transient-page";
+    const q = repositoryQueries(ctx.db);
+    let healthy = false;
+    const pass = definePass({
+      name,
+      async run(_db, cursor) {
+        if (!healthy) throw new WorkRetryableError("Synthetic database outage");
+        return { cursor, done: false };
+      },
+    });
+    const kernel = createKernel([
+      defineModule({ name: "passes", passes: [pass] }),
+    ]);
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "maintenance",
+      trigger: "manual",
+    });
+    await seedPass(ctx.db, { name, key: "default", maxAttempts: 2, runId });
+
+    const read = async () =>
+      (
+        await q.execute<{
+          attempts: number;
+          transientFailures: number;
+          delay: number;
+          lastError: string | null;
+        }>(sql`
+          SELECT attempts, "transientFailures", "lastError",
+            ceil(extract(epoch FROM "availableAt" - now()))::int AS delay
+          FROM "Pass" WHERE name = ${name}`)
+      ).rows[0]!;
+    const elapseBackoff = () =>
+      q.execute(
+        sql`UPDATE "Pass" SET "availableAt" = now() WHERE name = ${name}`,
+      );
+
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
+    expect(await read()).toMatchObject({ attempts: 0, transientFailures: 1 });
+    healthy = true;
+    await elapseBackoff();
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+    expect(await read()).toMatchObject({
+      attempts: 0,
+      transientFailures: 0,
+      lastError: null,
+    });
+
+    healthy = false;
+    const delays = [30, 60, 120, 240, 480, 960, 1920, 3600, 3600, 3600];
+    for (const [index, delay] of delays.entries()) {
+      expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+      const row = await read();
+      expect(row).toMatchObject({
+        attempts: Math.floor((index + 1) / 5),
+        transientFailures: index + 1,
+        lastError: expect.stringContaining("Synthetic database outage"),
+      });
+      expect(row.delay).toBeGreaterThan(delay - 5);
+      expect(row.delay).toBeLessThanOrEqual(delay);
+      await kernel.startPass(ctx.db, pass);
+      expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
+      await elapseBackoff();
+    }
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
+    const exhausted = (await loadRunPasses(q, runId)).find(
+      (row) => row.name === name,
+    );
+    expect(exhausted).toMatchObject({
+      stage: "stuck",
+      attempts: 2,
+      lastError: expect.stringContaining("Synthetic database outage"),
+    });
   });
 
   it("exhausts a Pass that repeatedly loses its page lease", async () => {

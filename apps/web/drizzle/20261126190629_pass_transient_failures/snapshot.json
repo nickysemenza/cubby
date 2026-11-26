@@ -1,0 +1,47 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "cf645d47-f849-4845-935d-a449507f6153",
+  "prevIds": [
+    "52e48da4-65ee-437c-bcb6-821a2c012c88"
+  ],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "Pass",
+        "transientFailures"
+      ],
+      "writes": [
+        "s|col|public.Pass.transientFailures",
+        "n|col|public.Pass.transientFailures",
+        "e|col|public.Pass.transientFailures"
+      ],
+      "reads": [
+        "n|tbl|public.Pass",
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Pass",
+        "name": "transientFailures",
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "0",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    }
+  ]
+}

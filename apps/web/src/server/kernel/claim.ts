@@ -29,6 +29,7 @@ import {
 } from "~/server/db/repository-access.boundary";
 import { classifyWorkFailure, type WorkFailure } from "~/server/kernel/failure";
 import {
+  backoffInterval,
   backoffMs,
   passFreeAt,
   passRecoveryAt,
@@ -62,6 +63,8 @@ export async function renewScopeClaims(
 export const UNREGISTERED_RECONCILER = "Unregistered reconciler: ";
 /** Non-transient failures before a dirty scope is Stuck. */
 export const MAX_SCOPE_ATTEMPTS = 5;
+/** A fresh Pass tolerates 7.5 minutes of transient retries before spending an attempt. */
+const PASS_TRANSIENT_FAILURES_PER_ATTEMPT = 5;
 const UNREGISTERED_CHECK_MS = 10 * 60_000;
 const lastUnregisteredCheck = new WeakMap<KernelRegistry, number>();
 /** Consecutive `seq`/`rev` conflicts before a scope runs locked. */
@@ -165,11 +168,11 @@ export async function cancelClaimable(
 }
 
 /**
- * Settle a failed claim through the single classifier. A wait or a transient
- * failure spends no attempt; a lost claim settles nothing; anything else
- * spends one and backs off. Pass admission charges an expired token under
+ * Settle a failed claim through the single classifier. Waits spend no
+ * attempt and lost claims settle nothing. Transient Pass failures spend one
+ * attempt per group of consecutive failures. Other transient claims back off
+ * without spending an attempt. Pass admission charges an expired token under
  * the row lock even when the old holder never reached settlement.
- * Returns the classification.
  */
 export async function settleFailure(
   q: Q,
@@ -210,18 +213,33 @@ export async function settleFailure(
         WHERE ${owned}`);
       return failure;
     }
-    case "transient":
+    case "transient": {
+      if (target.table === "Pass") {
+        const streak = sql`("transientFailures" + 1)`;
+        // Attempts already charged by this streak must not add a second backoff step.
+        const priorCharges = sql`"transientFailures" / ${PASS_TRANSIENT_FAILURES_PER_ATTEMPT}::int`;
+        await q.execute(sql`
+          UPDATE "Pass" SET "claimToken" = NULL, "claimDeadline" = NULL,
+            "transientFailures" = ${streak},
+            attempts = attempts + (${streak} % ${PASS_TRANSIENT_FAILURES_PER_ATTEMPT} = 0)::int,
+            "availableAt" = now() + ${backoffInterval(sql`attempts - ${priorCharges} + ${streak}`)},
+            "waitCause" = NULL, "lastError" = ${raw}
+          WHERE ${owned}`);
+        return failure;
+      }
       await q.execute(sql`
         UPDATE ${tableOf(target)} SET "claimToken" = NULL, "claimDeadline" = NULL,
           "availableAt" = now() + ${leaseInterval(backoffMs(attempts + 1))},
           "waitCause" = NULL, "lastError" = ${raw}
         WHERE ${owned}`);
       return failure;
+    }
     case "isolated":
     case "failed":
       await q.execute(sql`
         UPDATE ${tableOf(target)} SET "claimToken" = NULL, "claimDeadline" = NULL,
           attempts = attempts + 1,
+          ${target.table === "Pass" ? sql`"transientFailures" = 0,` : sql``}
           "availableAt" = now() + ${leaseInterval(backoffMs(attempts + 1))},
           "waitCause" = NULL, "lastError" = ${raw}
         WHERE ${owned}`);
@@ -725,6 +743,7 @@ async function claimPassGroup(
       FOR UPDATE SKIP LOCKED
     )
     UPDATE "Pass" p SET attempts = picked.spent,
+      "transientFailures" = CASE WHEN picked.lapsed THEN 0 ELSE p."transientFailures" END,
       "lastError" = CASE WHEN picked.lapsed THEN ${rawError(new ClaimLapsedError())} ELSE p."lastError" END,
       "claimToken" = CASE WHEN picked.spent < picked."maxAttempts" THEN ${token}::uuid END,
       "claimPartition" = ${pass.claimLimit?.partition ?? null},

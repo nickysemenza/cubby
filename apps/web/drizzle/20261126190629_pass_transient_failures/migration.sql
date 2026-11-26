@@ -1,0 +1,1 @@
+ALTER TABLE "Pass" ADD COLUMN "transientFailures" integer DEFAULT 0 NOT NULL;

@@ -40,7 +40,7 @@ async function dispatchRunEvent(
           ELSE coalesce("Pass".cursor->${EVENT_QUEUE}::text, '[]'::jsonb) || (excluded.cursor->${EVENT_QUEUE}::text) END),
       "claimToken" = CASE WHEN "Pass"."cancelledAt" IS NOT NULL THEN NULL ELSE "Pass"."claimToken" END,
       "claimDeadline" = CASE WHEN "Pass"."cancelledAt" IS NOT NULL THEN NULL ELSE "Pass"."claimDeadline" END,
-      "doneAt" = NULL, "cancelledAt" = NULL, "availableAt" = now(), attempts = 0,
+      "doneAt" = NULL, "cancelledAt" = NULL, "availableAt" = now(), attempts = 0, "transientFailures" = 0,
       "waitCause" = NULL, "wakeVersion" = "Pass"."wakeVersion" + 1, "updatedAt" = now()`);
   await runAfterCommit(db, (committed) => wakeAfterCommit(committed));
 }

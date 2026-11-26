@@ -26,7 +26,7 @@ export type WorkFailure =
   | { kind: "interrupted" }
   /** The item's own data: roll back, split the chunk, settle the item alone. */
   | { kind: "isolated" }
-  /** External and temporary: back off without exhausting. */
+  /** A retryable external failure; settlement owns the retry budget. */
   | { kind: "transient" }
   | { kind: "failed" };
 
@@ -64,9 +64,8 @@ export function classifyWorkFailure(
   )
     return { kind: "isolated" };
   // Classification never replays a committed transaction or its effects here.
-  // A Hyperdrive pool-slot timeout (58000), a lock wait (55P03), or a dropped
-  // connection (with or without a SQLSTATE) is capacity, not the work's fault:
-  // it backs off without spending attempts. Mail discovery also defers 55P03.
+  // A Hyperdrive pool-slot timeout (58000), lock wait (55P03), or dropped
+  // connection is retryable. Mail discovery also defers some lock waits.
   if (
     chain.some((cause) => cause instanceof WorkRetryableError) ||
     chain.some((cause) => findPgError(cause)?.code === "55P03") ||

@@ -609,7 +609,12 @@ Members can also request mailbox discovery directly.
 
 An expired Pass claim spends one attempt on the current page. The replacement
 claim waits the same backoff as a failed attempt, measured from lease expiry.
-Successful checkpointing resets the attempt budget. Starts of an active
+The Pass row counts consecutive transient failures of the current page and
+spends one attempt every five failures. Each transient retry adds a step to
+the normal attempt backoff, which doubles from 30 seconds up to one hour.
+Exhausted pages show as Stuck with their last error. Wait causes keep their
+own deadlines and spend no attempt. Successful checkpointing resets the
+attempt budget and transient streak. Starts of an active
 retained purchase census with attempts left record a single
 restart, due at the later of completion or 15 minutes after the current census
 started. A start after completion follows the same floor, and starts before
