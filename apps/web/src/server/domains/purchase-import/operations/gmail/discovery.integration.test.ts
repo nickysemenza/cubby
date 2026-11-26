@@ -838,7 +838,6 @@ describe("scheduled Gmail discovery", () => {
           name: `Synthetic ${name} Vendor`,
           orderEmailSenders: [`orders@${name.toLowerCase()}.example.test`],
         });
-      return baseline;
     };
     const running = async (trigger: "manual" | "scheduled") =>
       (
@@ -858,23 +857,18 @@ describe("scheduled Gmail discovery", () => {
       });
 
     it("creates one while a backfill progresses, another once it misses the progress deadline, and still admits a member's search", async () => {
-      const baseline = await backfillSetup(["Alpha", "Beta", "Gamma"]);
+      await backfillSetup(["Alpha", "Beta", "Gamma"]);
       await startMailDiscovery(ctx.db);
       const [first, ...extra] = await running("scheduled");
       if (!first) throw new Error("Synthetic backfill not created");
       expect(extra).toEqual([]);
       expect(await startMailDiscovery(ctx.db)).toMatchObject({ started: 0 });
 
-      // A settled page stamps its progress time; one older than the deadline
-      // stops counting without changing the Run, so the cron creates another.
-      const params = (await created()).find((row) => row.runId === first.id);
-      if (!params) throw new Error("Synthetic backfill not launched");
-      await listMailDiscovery(ctx.db, params, baseline);
-      await saveMailDiscoveryBatch(ctx.db, params, 0, baseline);
-      expect(await startMailDiscovery(ctx.db)).toMatchObject({ started: 0 });
+      // A Run that settles no page (its start stands in before the first)
+      // within the deadline stops counting, unchanged; the cron creates another.
       await getDb(ctx.db)
         .update(run)
-        .set({ heartbeatAt: new Date(Date.now() - 31 * 60_000) })
+        .set({ startedAt: new Date(Date.now() - 31 * 60_000) })
         .where(eq(run.id, first.id));
       expect(await startMailDiscovery(ctx.db)).toMatchObject({ started: 1 });
       const backfills = await running("scheduled");

@@ -198,7 +198,8 @@ const MAIL_DISCOVERY_BACKFILL_CAPACITY = 1;
  */
 const MAIL_DISCOVERY_BACKFILL_PROGRESS_DEADLINE_SECONDS = 30 * 60;
 
-const discoveryScopeSql = sql`${runTable.progress}->${mailboxDiscoveryProgress.keyof().enum.discoveryScope}`;
+// Literal keys: DISTINCT ON must match its ORDER BY text, which parameters break.
+const discoveryScopeSql = sql`${runTable.progress}->'discoveryScope'`;
 const mailboxQueryRuns = (identity: {
   ledgerPartyId: string;
   mailboxId: string;
