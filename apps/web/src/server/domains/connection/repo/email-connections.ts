@@ -1,5 +1,4 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { emailLinkEvidenceKind } from "@cubby/schemas/email-fields";
 import type { EntityRef } from "@cubby/schemas/entity";
 import type { ConnectionCandidate } from "@cubby/schemas/entity-connections";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
@@ -11,7 +10,7 @@ import { minorToDollarsSql } from "~/server/db/computed/money";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { email, orderMail, orderMailEvent, purchase } from "~/server/db/schema";
 import {
-  emailPurchaseEvidenceSql,
+  emailSuggestedEvidenceSql,
   foldPurchaseLinks,
   readEmailPurchaseEvidence,
 } from "~/server/domains/email/repo/email-purchase-links";
@@ -43,9 +42,9 @@ export async function retrieveEmailConnectionCandidates(
     sql`
     SELECT DISTINCT "Email"."shortcode" AS "emailCode", p."shortcode" AS "purchaseCode", "Email"."ledgerPartyId" AS "emailOwnerId"
     FROM "Email"
-    CROSS JOIN LATERAL (${emailPurchaseEvidenceSql()}) evidence
+    CROSS JOIN LATERAL (${emailSuggestedEvidenceSql()}) evidence
     INNER JOIN "Purchase" p ON p."id" = evidence."purchaseId" AND ${notDeleted("p")}
-    WHERE ${notDeleted("Email")} AND evidence."kind" = ${emailLinkEvidenceKind.enum.suggested}
+    WHERE ${notDeleted("Email")}
       AND ${source.entityKind === "email" ? sql`"Email"."id"=${id}::uuid` : sql`p."id"=${id}::uuid`}
     ORDER BY "emailCode", "purchaseCode" LIMIT 20
   `,

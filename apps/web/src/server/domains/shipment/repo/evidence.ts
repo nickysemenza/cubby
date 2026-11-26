@@ -16,7 +16,7 @@ import {
   type RecordShipmentEvidenceInput,
 } from "@cubby/schemas/shipment-evidence";
 import { type ShipmentExtraTrackingNumberRemovals } from "@cubby/schemas/shipment-fields";
-import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -26,6 +26,7 @@ import {
   withTransactionDatabase,
   withTransaction,
 } from "~/server/db/helpers";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import {
   shipment,
   shipmentObservation,
@@ -39,7 +40,7 @@ import {
 } from "~/server/db/schema";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { readEmailMailKeys } from "~/server/domains/purchase-import/repo/mail-rule-evidence";
-import { normalizedOrderIdSql } from "~/server/domains/purchase-import/repo/order-identity";
+import { matchingOrderIdSql } from "~/server/domains/purchase-import/repo/order-identity-sql";
 import {
   carrierCaptureEvidence,
   deliveryFieldCodes,
@@ -49,6 +50,7 @@ import { constraintViolation, createAppError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { finalizeMerge, mergeNotes } from "~/server/generic/merge/repo/core";
+import { withPassPageTransaction, type Claim } from "~/server/kernel/api";
 
 import {
   deduplicateShipmentTrackingReferences,
@@ -211,52 +213,52 @@ async function recordShipmentOrderId(
     ),
   ).then((rows) => rows.map((row) => ({ id: row.id })));
   if (!recorded.length) return;
-  await linkShipmentsByOrderId(db, {
-    shipmentIds: recorded.map((row) => row.id),
-  });
+  await linkShipmentsByOrderId(
+    db,
+    recorded.map((row) => row.id),
+  );
 }
 
 /**
  * Unlinked, unreviewed Shipments whose order number names exactly one live
  * Purchase join it: the same normalized order id, at the Vendor its source
  * Emails attribute when they name one, owned by those Emails' member.
- * Returns how many Shipments it linked.
  */
-export async function linkShipmentsByOrderId(
+async function linkShipmentsByOrderId(
   db: Database,
-  scope: {
-    shipmentIds?: readonly ShipmentId[];
-    purchaseIds?: readonly PurchaseId[];
-  } = {},
+  shipmentIds: readonly ShipmentId[],
 ) {
-  if (scope.shipmentIds?.length === 0 || scope.purchaseIds?.length === 0)
-    return 0;
+  if (!shipmentIds.length) return;
   const database = getDb(db);
-  const candidates = await database
+  const matching = database
     .select({
-      shipmentId: shipment.id,
-      purchaseId: sql<PurchaseId>`(array_agg(DISTINCT ${purchase.id}))[1]`,
+      id: purchase.id,
+      vendorId: purchase.vendorId,
+      vendorAccountId: purchase.vendorAccountId,
     })
-    .from(shipment)
-    .innerJoin(
-      purchase,
+    .from(purchase)
+    .where(
       and(
-        sql`${normalizedOrderIdSql(purchase.orderId)} = ${normalizedOrderIdSql(shipment.orderId)}`,
+        matchingOrderIdSql(purchase.orderId, shipment.orderId),
         notDeleted(purchase),
       ),
     )
+    .offset(0)
+    .as("matching_purchase");
+  const candidates = await database
+    .select({
+      shipmentId: shipment.id,
+      purchaseId: sql<PurchaseId>`(array_agg(DISTINCT ${matching.id}))[1]`,
+    })
+    .from(shipment)
+    .innerJoinLateral(matching, sql`true`)
     .where(
       and(
         isNull(shipment.purchaseId),
         eq(shipment.purchaseAssociationReviewed, false),
         isNotNull(shipment.orderId),
         notDeleted(shipment),
-        scope.shipmentIds
-          ? inArray(shipment.id, [...scope.shipmentIds])
-          : undefined,
-        scope.purchaseIds
-          ? inArray(purchase.id, [...scope.purchaseIds])
-          : undefined,
+        sql`${shipment.id} = ANY(${uuidArrayParam(shipmentIds)})`,
         // Order numbers are only unique per Vendor: a source Email must name
         // the Purchase's Vendor, and any source Vendor or member that
         // disagrees blocks the link.
@@ -266,23 +268,23 @@ export async function linkShipmentsByOrderId(
           JOIN ${email} source_email ON source_email.id = capture."emailId"
           JOIN "OrderMail" original ON original.id = source_email."orderMailId"
           WHERE observation."shipmentId" = ${shipment.id} AND ${notDeleted("source_email")}
-            AND original."vendorId" = ${purchase.vendorId}
+            AND original."vendorId" = ${matching.vendorId}
         )`,
         sql`NOT EXISTS (
           SELECT 1 FROM ${shipmentObservation} observation
           JOIN ${shipmentSourceCapture} capture ON capture.id = observation."sourceCaptureId"
           JOIN ${email} source_email ON source_email.id = capture."emailId"
           LEFT JOIN "OrderMail" original ON original.id = source_email."orderMailId"
-          LEFT JOIN "VendorAccount" account ON account.id = ${purchase.vendorAccountId} AND ${notDeleted("account")}
+          LEFT JOIN "VendorAccount" account ON account.id = ${matching.vendorAccountId} AND ${notDeleted("account")}
           WHERE observation."shipmentId" = ${shipment.id} AND ${notDeleted("source_email")}
-            AND ((original."vendorId" IS NOT NULL AND original."vendorId" IS DISTINCT FROM ${purchase.vendorId})
+            AND ((original."vendorId" IS NOT NULL AND original."vendorId" IS DISTINCT FROM ${matching.vendorId})
               OR (account."ledgerPartyId" IS NOT NULL AND account."ledgerPartyId" <> source_email."ledgerPartyId"))
         )`,
       ),
     )
     .groupBy(shipment.id)
-    .having(sql`count(DISTINCT ${purchase.id}) = 1`);
-  let linked = 0;
+    .having(sql`count(DISTINCT ${matching.id}) = 1`);
+  let linked = false;
   for (const candidate of candidates) {
     const [row] = await updateShipmentWhere(
       db,
@@ -294,11 +296,37 @@ export async function linkShipmentsByOrderId(
       ),
     ).then((rows) => rows.map((row) => ({ id: row.id })));
     if (!row) continue;
-    linked += 1;
+    linked = true;
   }
   if (linked)
     await recordChange(db, { kind: "source", categories: ["shipment"] });
-  return linked;
+}
+
+/** Bound late linking by Shipment UUIDs, even when a page has no eligible link. */
+export async function linkShipmentsByOrderIdPage(
+  db: Database,
+  after: ShipmentId | null,
+  claim?: Pick<Claim, "deadline">,
+) {
+  return withPassPageTransaction(
+    db,
+    async (tx) => {
+      const size = 50;
+      // includes-deleted: page by primary key before evaluating linking eligibility.
+      const page = await getDb(tx)
+        .select({ id: shipment.id })
+        .from(shipment)
+        .where(after ? gt(shipment.id, after) : undefined)
+        .orderBy(shipment.id)
+        .limit(size);
+      await linkShipmentsByOrderId(
+        tx,
+        page.map(({ id }) => id),
+      );
+      return page.length === size ? page.at(-1)!.id : null;
+    },
+    claim,
+  );
 }
 
 export async function editShipmentObservation(

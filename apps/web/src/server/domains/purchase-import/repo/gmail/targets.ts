@@ -58,10 +58,6 @@ export async function listGmailSyncTargets(
   db: Database,
   knownAttributions?: readonly SenderAttribution[],
 ): Promise<GmailSyncTarget[]> {
-  const attributions = knownAttributions ?? (await readSenderAttributions(db));
-  const trustedSenders = new Map(
-    attributions.map((row) => [row.sender, row.vendorId]),
-  );
   const [members, vendors, charges, receiptSenders] = await Promise.all([
     listMemberMailboxes(db),
     getDb(db)
@@ -116,6 +112,14 @@ export async function listGmailSyncTargets(
       .from(email)
       .where(and(notDeleted(email), eq(email.classification, "related"))),
   ]);
+  const attributions =
+    knownAttributions ??
+    (await readSenderAttributions(db, [
+      ...new Set(vendors.flatMap((row) => row.orderEmailSenders)),
+    ]));
+  const trustedSenders = new Map(
+    attributions.map((row) => [row.sender, row.vendorId]),
+  );
   const quote = (value: string) => `"${value.replaceAll('"', " ")}"`;
   // One search per distinct merchant (case- and space-insensitive): many
   // unallocated charges share a merchant, and Gmail search ignores case. The

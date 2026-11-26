@@ -1,0 +1,1 @@
+CREATE INDEX "Purchase_normalized_order_hash_idx" ON "Purchase" (md5(upper(btrim(regexp_replace(btrim(regexp_replace(regexp_replace("orderId",'^\s*(?:[A-Za-z][A-Za-z.]*\s+){0,3}(?:id|no\.?|number|num)\s*[:#]\s*', '', 'i'), '^\s*(?:[A-Za-z][A-Za-z.]*\s+){1,3}#\s*', '', 'i')), '^#+', ''))))) WHERE "orderId" IS NOT NULL AND "deletedAt" IS NULL;

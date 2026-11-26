@@ -45,14 +45,11 @@ async function runHourlyBackstop(
             await ringDueDeviceWork(db).catch((error: unknown) =>
               errors.push(error),
             );
-            // A scheduled start revives a Pass that spent its attempts.
             for (const pass of [runsReconcilePass, retentionPass])
               await startPass(db, pass, { revive: true }).catch(
                 (error: unknown) => errors.push(error),
               );
-            // A discovery page can outlive its claim lease, and a lapsed claim
-            // spends no attempt, so a revived one is claimed again while its
-            // statements still run. These stay spent until a member retries.
+            // Spent discovery Passes resume through a member retry in Work.
             for (const pass of [
               purchaseDiscoveryPass,
               "email.purchase-discovery",

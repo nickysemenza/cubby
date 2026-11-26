@@ -39,7 +39,11 @@ import {
 import { manualTransactionEvidence } from "~/server/domains/financial-transaction/repo/manual-evidence";
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { cancelRunWork } from "~/server/domains/run/repo/run-execution";
+import {
+  cancelRunWork,
+  readDuePassPositions,
+  RUN_EXECUTE_PASS,
+} from "~/server/domains/run/repo/run-execution";
 import { readWorkStatus } from "~/server/domains/work/service/work-status";
 import { findPgError } from "~/server/errors/db-errors";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
@@ -2058,6 +2062,53 @@ describe("evidence-facts kernel", () => {
     expect(result.rows).toEqual([{ cursor: { page: 1, legacyJobs } }]);
   });
 
+  it("coalesces starts during and after a census into one restart at the floor", async () => {
+    const pages: unknown[] = [];
+    const pass = definePass({
+      name: "fixture.restart-census",
+      activeStart: "restart",
+      restartFloorMs: 15 * 60_000,
+      async run(db, cursor) {
+        const page =
+          cursor && typeof cursor === "object" && "page" in cursor
+            ? cursor.page
+            : 0;
+        pages.push(page);
+        if (pages.length === 1) {
+          await kernel.startPass(db, pass);
+          await kernel.startPass(db, pass);
+        }
+        return { cursor: { page: 1 }, done: page === 1 };
+      },
+    });
+    const kernel = createKernel([
+      defineModule({ name: "passes", passes: [pass] }),
+    ]);
+    await kernel.startPass(ctx.db, pass);
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+    const q = repositoryQueries(ctx.db);
+    const {
+      rows: [first],
+    } = await q.execute<{ startedAt: string }>(sql`
+      SELECT cursor ->> 'censusStartedAt' AS "startedAt" FROM "Pass" WHERE name = ${pass.name}`);
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+    await kernel.startPass(ctx.db, pass);
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
+    const { rows } = await q.execute<{ atFloor: boolean }>(sql`
+      SELECT "availableAt" = ${first!.startedAt}::timestamp + interval '15 minutes' AS "atFloor"
+      FROM "Pass" WHERE name = ${pass.name}`);
+    expect(rows).toEqual([{ atFloor: true }]);
+    await q.execute(
+      sql`UPDATE "Pass" SET "availableAt" = now() WHERE name = ${pass.name}`,
+    );
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
+    expect(pages).toEqual([0, 1, 0, 1]);
+    await kernel.startPass(ctx.db, pass);
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
+  });
+
   it("a scheduled start revives a pass that spent its attempts", async () => {
     const seen: unknown[] = [];
     const pass = definePass({
@@ -2092,6 +2143,70 @@ describe("evidence-facts kernel", () => {
     expect(revived).toEqual({ attempts: 0, lastError: "synthetic failure" });
     expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
     expect(seen).toEqual([{ page: 3 }]);
+  });
+
+  it("exhausts a Pass that repeatedly loses its page lease", async () => {
+    const name = RUN_EXECUTE_PASS;
+    const key = crypto.randomUUID();
+    let pages = 0;
+    const pass = definePass({
+      name,
+      async run(db) {
+        pages++;
+        if (pages !== 2)
+          await repositoryQueries(db).execute(
+            sql`UPDATE "Pass" SET "claimDeadline" = now() - interval '1 second' WHERE name = ${name}`,
+          );
+        return { cursor: { page: 1 }, done: false };
+      },
+    });
+    const kernel = createKernel([
+      defineModule({ name: "passes", passes: [pass] }),
+    ]);
+    await seedPass(ctx.db, { name, key, maxAttempts: 2 });
+
+    const read = async () =>
+      (
+        await repositoryQueries(ctx.db).execute<{
+          attempts: number;
+          cursor: unknown;
+          claimToken: string | null;
+          doneAt: string | null;
+        }>(
+          sql`SELECT attempts, cursor, "claimToken", "doneAt" FROM "Pass" WHERE name = ${name}`,
+        )
+      ).rows[0];
+    const elapseBackoff = () =>
+      repositoryQueries(ctx.db).execute(
+        sql`UPDATE "Pass" SET "claimDeadline" = now() - interval '31 seconds' WHERE name = ${name}`,
+      );
+
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
+    expect(pages).toBe(1);
+    expect((await readDuePassPositions(ctx.db, [key])).has(key)).toBe(false);
+    await elapseBackoff();
+    expect((await readDuePassPositions(ctx.db, [key])).has(key)).toBe(true);
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+    expect(await read()).toEqual({
+      attempts: 0,
+      cursor: { page: 1 },
+      claimToken: null,
+      doneAt: null,
+    });
+
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
+    await elapseBackoff();
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
+    expect(pages).toBe(4);
+    expect(await read()).toEqual({
+      attempts: 2,
+      cursor: { page: 1 },
+      claimToken: null,
+      doneAt: null,
+    });
   });
 
   it("cannot publish a cancelled pass holder's cursor after the pass is restarted", async () => {
@@ -2170,7 +2285,7 @@ describe("evidence-facts kernel", () => {
       async run(db) {
         if (lapse) {
           await repositoryQueries(db).execute(
-            sql`UPDATE "Pass" SET "claimDeadline" = now() - interval '1 second' WHERE name = ${name}`,
+            sql`UPDATE "Pass" SET "claimDeadline" = now() - interval '31 seconds' WHERE name = ${name}`,
           );
         }
         return { cursor: { page: 1 }, done: true, durationSample: sample };

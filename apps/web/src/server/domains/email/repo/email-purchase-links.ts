@@ -40,6 +40,7 @@ import {
   emailLinkDecisionsSql,
 } from "~/server/domains/email/repo/email-decision-sql";
 import { emailAcceptedEvidenceSql } from "~/server/domains/email/repo/email-sql";
+import { matchingOrderIdSql } from "~/server/domains/purchase-import/repo/order-identity-sql";
 import type { PageStoredMeta } from "~/server/generic/derived/repo/read-context";
 
 /**
@@ -71,8 +72,14 @@ const SUGGESTION_WINDOW_DAYS = 45;
 const exactOrderPurchasesSql = (purchaseIds?: SQL): SQL => sql`
     SELECT p."id", p."vendorAccountId", p."deletedAt" FROM "Purchase" p
     WHERE p."orderId" = event."orderId"
+      AND ${matchingOrderIdSql(sql`p."orderId"`, sql`event."orderId"`)}
       ${purchaseIds ? sql`AND p."id" IN (${purchaseIds})` : sql``}
       AND (original."vendorId" IS NULL OR p."vendorId" = original."vendorId")`;
+
+/** Includes other subjects' decisions that explicitly name this Email's events. */
+const correlatedEmailLinkDecisionsSql = emailLinkDecisionsForEmailsSql(
+  sql`ARRAY["Email"."id"]`,
+);
 
 /**
  * Every piece of stored evidence relating the correlated `"Email"` row to a
@@ -89,6 +96,7 @@ const exactOrderPurchasesSql = (purchaseIds?: SQL): SQL => sql`
 export const emailPurchaseEvidenceSql = (
   accountOwnerScope: "respect" | "ignore" = "respect",
   purchaseIds?: SQL,
+  linkDecisions = correlatedEmailLinkDecisionsSql,
 ): SQL => sql`
   SELECT accepted."purchaseId", NULL::uuid AS "eventId", ${KIND.accepted}::text AS "kind",
     accepted."changed", ${PROPOSER.import}::text AS "proposedBy"
@@ -98,7 +106,7 @@ export const emailPurchaseEvidenceSql = (
     decision."evidenceChecksum" <> original."rawChecksum", decision."proposedBy"
   FROM "OrderMailEvent" event
   INNER JOIN "OrderMail" original ON original."id" = event."orderMailId"
-  INNER JOIN ${emailLinkDecisionsSql} decision ON decision."eventId" = event."id" AND decision.active
+  INNER JOIN ${linkDecisions} decision ON decision."eventId" = event."id" AND decision.active
   INNER JOIN "Purchase" p ON p."id" = decision."purchaseId" AND ${notDeleted(livePurchase)}
   LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND ${notDeleted(liveAccount)}
   WHERE original."id" = "Email"."orderMailId"
@@ -107,14 +115,14 @@ export const emailPurchaseEvidenceSql = (
     AND (event."supersededAt" IS NULL OR decision.authority=${feedbackAuthority.enum.member})
     AND ${accountOwnerScope === "respect" ? sql`(account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")` : sql`true`}
   UNION ALL
-  ${emailSuggestedEvidenceSql(accountOwnerScope, purchaseIds)}
+  ${emailSuggestedEvidenceSql(accountOwnerScope, purchaseIds, linkDecisions)}
 `;
 
 /** Undecided order matches share one source policy with the stored Email projection. */
 export const emailSuggestedEvidenceSql = (
   accountOwnerScope: "respect" | "ignore" = "respect",
   purchaseIds?: SQL,
-  linkDecisions = emailLinkDecisionsSql,
+  linkDecisions = correlatedEmailLinkDecisionsSql,
 ): SQL => sql`
   SELECT p."id" AS "purchaseId", event."id" AS "eventId", ${KIND.suggested}::text AS "kind", false AS "changed", ${PROPOSER.heuristic}::text AS "proposedBy"
   FROM "OrderMailEvent" event

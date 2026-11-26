@@ -1,3 +1,4 @@
+import { systemActor } from "@cubby/schemas/context";
 import { emailLinkEvidenceKind } from "@cubby/schemas/email-fields";
 import { MAIL_IMPORT_GAP_EXECUTOR } from "@cubby/schemas/email-fields";
 /**
@@ -38,6 +39,8 @@ import {
   asc,
   desc,
   eq,
+  gt,
+  lte,
   inArray,
   isNotNull,
   isNull,
@@ -47,6 +50,7 @@ import {
   sql,
   type SQL,
 } from "drizzle-orm";
+import { z } from "zod";
 
 import { senderAddress } from "~/lib/vendor/domains";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -55,8 +59,8 @@ import {
   databaseForTransaction,
   notDeleted,
   withTransaction,
-  withTransactionDatabase,
 } from "~/server/db/helpers";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { requestedRows } from "~/server/db/helpers/requested";
 import {
   ledgerParty,
@@ -69,14 +73,14 @@ import {
   runOperation,
 } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
-import { emailReviewsSql } from "~/server/domains/email/repo/email-decision-sql";
+import { emailReviewsForEmailSql } from "~/server/domains/email/repo/email-decision-sql";
 import { emailPurchaseEvidenceSql } from "~/server/domains/email/repo/email-purchase-links";
 import {
   readRetainedMail,
   type RetainedMail,
 } from "~/server/domains/mail/repo/retained-mail";
 import {
-  acceptedOrders,
+  acceptedOrdersBoundTo,
   acceptedOrdersBoundToSql,
 } from "~/server/domains/purchase-import/repo/accepted-order-read";
 import {
@@ -102,6 +106,8 @@ import {
   assertMailSourceIdentityReady,
   HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
 } from "~/server/domains/purchase-import/repo/mail-source-identity";
+import { matchingOrderIdSql } from "~/server/domains/purchase-import/repo/order-identity-sql";
+import { learnAcceptedSenders } from "~/server/domains/purchase-import/repo/sender-attribution";
 import { readSenderAttributions } from "~/server/domains/purchase-import/repo/sender-attribution-read";
 import { dispatchStartedRun } from "~/server/domains/run/repo/coordinator-dispatch";
 import {
@@ -110,9 +116,18 @@ import {
 } from "~/server/domains/run/repo/ensure-run";
 import { hasLiveRunPassClaim } from "~/server/domains/run/repo/run-execution";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
-import { linkShipmentsByOrderId } from "~/server/domains/shipment/repo/evidence";
+import { findPgError } from "~/server/errors/db-errors";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import {
+  checkPassPageTime,
+  limitPassPageTransaction,
+  PassPageBudgetError,
+  rethrowPassPageControl,
+  withPassPageTransaction,
+  type Claim,
+  type PassPageTransaction,
+} from "~/server/kernel/api";
 import { WorkDeferredError } from "~/server/kernel/work-errors";
 
 import { mailReadContent } from "./gmail/read-content";
@@ -121,11 +136,7 @@ import {
   readEmailMailKeysForMails,
   readMailRuleCandidates,
 } from "./mail-rule-evidence";
-import {
-  normalizedOrderIdSql,
-  normalizeOrderKey,
-  vendorOrderIdsSql,
-} from "./order-identity";
+import { normalizeOrderKey, vendorOrderIdsSql } from "./order-identity";
 
 const CLASSIFICATION_RUN_PURPOSES: (typeof run.$inferSelect.purpose)[] = [
   "mail_discovery",
@@ -288,19 +299,39 @@ async function importedPurchaseRechecks(
     (!requested.orderIds.length || !requested.vendorIds.length)
   )
     return [];
-  const rows = await getDb(db)
+  const client = getDb(db);
+  const requestedPurchases = client
+    .select({ id: purchase.id })
+    .from(purchase)
+    .innerJoin(vendor, eq(vendor.id, purchase.vendorId))
+    .where(
+      and(
+        notDeleted(purchase),
+        notDeleted(vendor),
+        "purchaseId" in requested
+          ? eq(purchase.shortcode, requested.purchaseId)
+          : and(
+              vendorOrderIdsSql(purchase.orderId, requested.orderIds),
+              inArray(vendor.shortcode, [...requested.vendorIds]),
+            ),
+      ),
+    );
+  const sources = acceptedOrdersBoundTo(
+    (id) => sql`${id} IN (${requestedPurchases})`,
+  );
+  const rows = await client
     .select({
       purchaseId: purchase.shortcode,
       orderId: purchase.orderId,
       vendorId: vendor.shortcode,
       vendorUuid: vendor.id,
-      sourceId: acceptedOrders.id,
-      checksum: acceptedOrders.checksum,
-      outputFingerprint: acceptedOrders.contentFingerprint,
-      evidenceAt: acceptedOrders.createdAt,
+      sourceId: sources.id,
+      checksum: sources.checksum,
+      outputFingerprint: sources.contentFingerprint,
+      evidenceAt: sources.createdAt,
     })
-    .from(acceptedOrders)
-    .innerJoin(purchase, eq(purchase.id, acceptedOrders.purchaseId))
+    .from(sources)
+    .innerJoin(purchase, eq(purchase.id, sources.purchaseId))
     .innerJoin(vendor, eq(vendor.id, purchase.vendorId))
     .innerJoin(
       vendorAccount,
@@ -316,15 +347,9 @@ async function importedPurchaseRechecks(
         notDeleted(purchase),
         notDeleted(vendor),
         notDeleted(vendorAccount),
-        "purchaseId" in requested
-          ? eq(purchase.shortcode, requested.purchaseId)
-          : and(
-              vendorOrderIdsSql(purchase.orderId, requested.orderIds),
-              inArray(vendor.shortcode, [...requested.vendorIds]),
-            ),
       ),
     )
-    .orderBy(asc(acceptedOrders.id));
+    .orderBy(asc(sources.id));
   const groups = new Map<string, typeof rows>();
   for (const row of rows)
     groups.set(row.purchaseId, [...(groups.get(row.purchaseId) ?? []), row]);
@@ -474,7 +499,7 @@ const untouchedAutomaticUnresolved = (
       })`
     : sql`true`
 } AND NOT EXISTS (
-  SELECT 1 FROM ${emailReviewsSql} reviewed
+  SELECT 1 FROM ${emailReviewsForEmailSql(sql`${emailTable.id}`)} reviewed
   WHERE reviewed.family = ${suggestionFamily.enum.mail_import_outcome}
     AND reviewed."emailId" = ${emailTable.id} AND reviewed.authority = ${feedbackAuthority.enum.member}
 ) AND NOT ${emailHasProtectingIntentSql(sql`${emailTable.id}`, sql`${emailTable.orderMailId}`)}`;
@@ -646,9 +671,24 @@ async function partitionOwnership(
   return { owners, fresh, transfers, reopened };
 }
 
+// After the gate wait, an isolated admission has an eight-second database
+// transaction timeout. A single slow statement can spend three seconds.
+const RETAINED_STATEMENT_MS = 3_000;
+const RETAINED_PAGE_TRANSACTION_MS = 8_000;
+
+async function limitRetainedAdmission(
+  tx: Database,
+  claim?: Pick<Claim, "deadline">,
+) {
+  if (!claim) return;
+  checkPassPageTime(claim);
+  await limitPassPageTransaction(tx, RETAINED_STATEMENT_MS);
+}
+
 export async function admitMailImport(
   db: Database,
   input: MailImportAdmission,
+  discoveryClaim?: Pick<Claim, "deadline">,
 ) {
   if (input.messageIds.length === 0) return [];
   if (
@@ -694,6 +734,7 @@ export async function admitMailImport(
       await (
         await import("~/server/kernel/api")
       ).enterHouseholdGate(databaseForTransaction(tx));
+      await limitRetainedAdmission(databaseForTransaction(tx), discoveryClaim);
       const [parent] = input.parentRunId
         ? await tx
             .select({
@@ -1128,25 +1169,6 @@ const newestHolderOutcome = sql`SELECT o.result, o."completedAt" FROM "RunOperat
 /** `sha256Hex(JSON.stringify(["waiting-on", outcomeId]))`, admission's waitRecheck revision. */
 const waitRecheckRevisionSql = sql`encode(sha256(convert_to('["waiting-on",' || to_json(newest.result #>> '{mailOutcome,id}')::text || ']', 'UTF8')), 'hex')`;
 
-/** Live Purchases grouped by normalized order id, so one hash join finds an awaited order. */
-const waitingOrderPurchasesSql = sql`
-  SELECT p.key, array_agg(p.id) AS ids, array_agg(p."createdAt") AS created,
-    array_agg(p."vendorId"::text) AS vendor_ids,
-    array_agg(account."ledgerPartyId") AS parties
-  FROM (
-    SELECT p.id, p."createdAt", p."vendorId", p."vendorAccountId",
-      ${normalizedOrderIdSql(sql`p."orderId"`)} AS key
-    FROM ${purchase} p WHERE ${notDeleted("p")} AND p."orderId" IS NOT NULL
-  ) p
-  LEFT JOIN ${vendorAccount} account ON account.id = p."vendorAccountId" AND ${notDeleted("account")}
-  GROUP BY p.key
-`;
-
-/** The awaited order's key, joined once to `order_purchase`: a per-row scan of that CTE is quadratic. */
-const awaitedOrderKeySql = normalizedOrderIdSql(
-  sql`newest.result #>> '{mailOutcome,judgment,waitingOn,orderId}'`,
-);
-
 /**
  * When the source an unresolved outcome waits on last settled: a live,
  * owner-eligible Purchase holding the awaited order (at the awaited Vendor
@@ -1154,12 +1176,15 @@ const awaitedOrderKeySql = normalizedOrderIdSql(
  * was imported or linked. Null while it has not.
  */
 const waitedSourceSettledSql = sql`SELECT max(at) AS at FROM (
-  SELECT greatest(x.created, (SELECT max(accepted."createdAt") FROM ${acceptedOrdersBoundToSql((id) => sql`${id} = x.id`)} accepted)) AS at
-  FROM unnest(keyed.ids, keyed.created, keyed.vendor_ids, keyed.parties) AS x(id, created, vendor_id, party)
+  SELECT greatest(p."createdAt", (SELECT max(accepted."createdAt") FROM ${acceptedOrdersBoundToSql((id) => sql`${id} = p.id`)} accepted)) AS at
+  FROM ${purchase} p
+  LEFT JOIN ${vendorAccount} account ON account.id = p."vendorAccountId" AND ${notDeleted("account")}
   WHERE newest.result #>> '{mailOutcome,judgment,waitingOn,kind}' = ${"order"}
+    AND ${notDeleted("p")}
+    AND ${matchingOrderIdSql(sql`p."orderId"`, sql`newest.result #>> '{mailOutcome,judgment,waitingOn,orderId}'`)}
     AND (newest.result #>> '{mailOutcome,judgment,waitingOn,vendorId}' IS NULL
-      OR x.vendor_id = newest.result #>> '{mailOutcome,judgment,waitingOn,vendorId}')
-    AND (x.party IS NULL OR x.party = ${emailTable.ledgerPartyId})
+      OR p."vendorId"::text = newest.result #>> '{mailOutcome,judgment,waitingOn,vendorId}')
+    AND (account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = ${emailTable.ledgerPartyId})
   UNION ALL
   SELECT awaited."completedAt" FROM "RunOperation" awaited
   WHERE newest.result #>> '{mailOutcome,judgment,waitingOn,kind}' = ${"email"}
@@ -1169,12 +1194,21 @@ const waitedSourceSettledSql = sql`SELECT max(at) AS at FROM (
     AND awaited.result #>> '{mailOutcome,judgment,kind}' IN (${"imported"}, ${"linked"})
 ) source`;
 
+export const retainedAdmissionCursor = z.object({
+  through: z.uuid(),
+  mailbox: z.string().nullable(),
+  stage: z.number().int().min(0).max(5),
+  finished: z.array(z.string()),
+  timedOut: z.array(z.string()).default([]),
+});
+
 export async function importPendingEmails(
   db: Database,
   options: {
-    knownAttributions?: Awaited<ReturnType<typeof readSenderAttributions>>;
-    /** Resume the sender scan after this Email in this mailbox. */
-    senderAfter?: { mailboxId: string; afterId: string } | null;
+    after?: string | null;
+    learnSenders?: boolean;
+    resume?: z.infer<typeof retainedAdmissionCursor> | null;
+    claim?: Pick<Claim, "deadline">;
   } = {},
 ) {
   const { listMemberMailboxes } =
@@ -1183,473 +1217,562 @@ export async function importPendingEmails(
     await import("~/server/domains/purchase-import/repo/mail-import-settings");
   const { retainedEmailImportContentCondition } =
     await import("~/server/domains/purchase-import/repo/email-content");
-  const identities = (
-    options.knownAttributions ?? (await readSenderAttributions(db))
-  ).filter((row) => row.state === "verified" && row.vendorId !== null);
-  const recheckIdentities = await Promise.all(
-    identities.map(async (row) => ({
-      sender: row.sender,
-      vendorId: row.vendorId,
-      revision: await senderRecheckRevision({
-        sender: row.sender,
-        vendorId: row.vendorId ?? "",
-      }),
-    })),
-  );
-  const errors: unknown[] = [];
-  const mailboxes = await listMemberMailboxes(db);
-  let resume = options.senderAfter ?? null;
-  if (resume && !mailboxes.some((row) => row.mailboxId === resume?.mailboxId))
-    resume = null;
-  let skipping = resume !== null;
-  let senderAfter: { mailboxId: string; afterId: string } | null = null;
-  try {
-    // A Purchase that gained a Shipment's order number holds that Shipment.
-    await withTransactionDatabase(db, (tx) => linkShipmentsByOrderId(tx));
-  } catch (error) {
-    errors.push(error);
-  }
-  for (const target of mailboxes) {
-    if (skipping) {
-      if (target.mailboxId !== resume?.mailboxId) continue;
-      skipping = false;
-    }
-    const actorId = target.userId;
-    if (!actorId) continue;
-    if (!(await mailImportEnabled(db, target.mailboxId))) continue;
-    if (await mailImportHeldBack(db, target.ledgerPartyId)) continue;
-    const pending = await getDb(db)
-      .select({ id: orderMail.id })
-      .from(emailTable)
-      .innerJoin(
-        orderMail,
-        and(
-          eq(orderMail.id, emailTable.orderMailId),
-          eq(orderMail.rawChecksum, emailTable.checksum),
-        ),
-      )
-      .leftJoin(run, eq(run.id, emailTable.runId))
-      .where(
-        and(
-          eq(
-            emailTable.ledgerPartyId,
-            parseEntityId("ledgerParty", target.ledgerPartyId),
-          ),
-          eq(emailTable.mailboxId, target.mailboxId),
-          eq(emailTable.classification, "related"),
-          or(
-            isNull(emailTable.classificationVersion),
-            ne(
-              emailTable.classificationVersion,
-              HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
-            ),
-          ),
-          retainedEmailImportContentCondition(),
-          or(
-            isNull(emailTable.runId),
-            and(
-              inArray(run.purpose, CLASSIFICATION_RUN_PURPOSES),
-              eq(run.ledgerPartyId, emailTable.ledgerPartyId),
-            ),
-          ),
-          notInArray(emailTable.status, ["excluded", "deleted"]),
-          sql`NOT ${importAttemptsExhaustedSql}`,
-          notDeleted(emailTable),
-        ),
-      )
-      .orderBy(asc(emailTable.createdAt), asc(emailTable.id))
-      .limit(50);
-    const admit = (messageIds: readonly string[]) =>
-      withTransactionDatabase(db, async (tx) => {
-        const admitted = await startMailImport(tx, {
-          ledgerPartyId: target.ledgerPartyId,
-          userId: actorId,
-          mailboxId: target.mailboxId,
-          automatic: true,
-          messageIds,
-        });
-        // Claiming a full page and its continuation are one durable commit.
-        // A switch-off race admits nothing and must not spin another pass.
-        if (messageIds.length === 50 && admitted.length > 0)
-          await (
-            await import("~/server/workflows/background-tasks/publish")
-          ).publishBackgroundTasks(
-            tx,
-            [
-              {
-                kind: "maintenance.purchase-discovery",
-                requestedAt: new Date().toISOString(),
-              },
-            ],
-            { source: "mail-import-backlog" },
-          );
-        return admitted;
-      });
-    try {
-      await admit(pending.map(({ id }) => id));
-    } catch {
-      // SILENT: retry each source below; persistent errors are returned and reported after discovery.
-      // A source may change after selection. Isolate it without abandoning
-      // other sources; admission replay preserves ownership on a retry.
-      for (const { id } of pending) {
-        try {
-          await admit([id]);
-        } catch (error) {
-          errors.push(error);
-        }
-      }
-    }
-    const changed = await getDb(db)
-      .select({ id: orderMail.id, checksum: orderMail.rawChecksum })
-      .from(emailTable)
-      .innerJoin(
-        orderMail,
-        and(
-          eq(orderMail.id, emailTable.orderMailId),
-          eq(orderMail.rawChecksum, emailTable.checksum),
-        ),
-      )
-      .innerJoin(run, eq(run.id, emailTable.runId))
-      .where(
-        and(
-          eq(
-            emailTable.ledgerPartyId,
-            parseEntityId("ledgerParty", target.ledgerPartyId),
-          ),
-          eq(emailTable.mailboxId, target.mailboxId),
-          eq(emailTable.status, "pending"),
-          eq(emailTable.classification, "related"),
-          eq(run.purpose, "mail_import"),
-          inArray(run.status, ENDED_MAIL_IMPORT_STATUSES),
-          notDeleted(run),
-          notDeleted(emailTable),
-          retainedEmailImportContentCondition(),
-          untouchedAutomaticUnresolved(true),
-        ),
-      )
-      .orderBy(asc(emailTable.createdAt), asc(emailTable.id))
-      .limit(50);
-    if (changed.length)
-      try {
-        const restarted = await admitMailImport(db, {
-          ledgerPartyId: target.ledgerPartyId,
-          userId: actorId,
-          mailboxId: target.mailboxId,
-          automatic: true,
-          sourceRecheck: true,
-          messageIds: changed.map((row) => row.id),
-          expectedChecksums: changed.map((row) => ({
-            orderMailId: row.id,
-            checksum: row.checksum,
-          })),
-        });
-        if (changed.length === 50 && restarted.some((result) => result.created))
-          await (
-            await import("~/server/workflows/background-tasks/publish")
-          ).publishBackgroundTasks(
-            db,
-            [
-              {
-                kind: "maintenance.purchase-discovery",
-                requestedAt: new Date().toISOString(),
-              },
-            ],
-            { source: "mail-source-recovery" },
-          );
-      } catch (error) {
-        errors.push(error);
-      }
-    const waitingQuery = getDb(db)
-      .select({
-        id: orderMail.id,
-        checksum: orderMail.rawChecksum,
-        outcomeId: sql<string>`newest.result #>> '{mailOutcome,id}'`.as(
-          "outcomeId",
-        ),
-        settledAt: sql<string>`settled.at`.as("settledAt"),
-      })
-      .from(emailTable)
-      .innerJoin(
-        orderMail,
-        and(
-          eq(orderMail.id, emailTable.orderMailId),
-          eq(orderMail.rawChecksum, emailTable.checksum),
-        ),
-      )
-      .innerJoin(run, eq(run.id, emailTable.runId))
-      .innerJoin(sql`LATERAL (${newestHolderOutcome}) newest`, sql`true`)
-      .leftJoin(
-        sql`order_purchase keyed`,
-        sql`keyed.key = ${awaitedOrderKeySql}`,
-      )
-      .innerJoin(sql`LATERAL (${waitedSourceSettledSql}) settled`, sql`true`)
-      .where(
-        and(
-          eq(
-            emailTable.ledgerPartyId,
-            parseEntityId("ledgerParty", target.ledgerPartyId),
-          ),
-          eq(emailTable.mailboxId, target.mailboxId),
-          heldUnsettledSql(),
-          eq(emailTable.classification, "related"),
-          eq(run.purpose, "mail_import"),
-          inArray(run.status, ENDED_MAIL_IMPORT_STATUSES),
-          notDeleted(run),
-          notDeleted(emailTable),
-          retainedEmailImportContentCondition(),
-          sql`settled.at > newest."completedAt"`,
-          // Admission's own eligibility: without it, a row admission refuses
-          // is re-admitted on every discovery pass.
-          untouchedAutomaticUnresolved(false, sql`settled.at`),
-          unattemptedSenderMapping(waitRecheckRevisionSql),
-        ),
-      )
-      .orderBy(asc(emailTable.createdAt), asc(emailTable.id))
-      .limit(50);
-    const waiting = await getDb(db).execute<{
-      id: typeof orderMail.$inferSelect.id;
-      rawChecksum: string;
-      outcomeId: string;
-      settledAt: string;
-    }>(
-      sql`WITH order_purchase AS MATERIALIZED (${waitingOrderPurchasesSql}) ${waitingQuery}`,
-      "objects",
+  const transaction: PassPageTransaction = (work) =>
+    withPassPageTransaction(
+      db,
+      work,
+      options.claim,
+      RETAINED_STATEMENT_MS,
+      RETAINED_PAGE_TRANSACTION_MS,
     );
-    for (const row of waiting)
-      try {
-        await admitMailImport(db, {
-          ledgerPartyId: target.ledgerPartyId,
-          userId: actorId,
-          mailboxId: target.mailboxId,
-          automatic: true,
-          messageIds: [row.id],
-          expectedChecksums: [
-            { orderMailId: row.id, checksum: row.rawChecksum },
-          ],
-          waitRecheck: {
-            outcomeId: row.outcomeId,
-            settledAt: new Date(row.settledAt.replace(" ", "T") + "Z"),
-          },
-        });
-      } catch (error) {
-        errors.push(error);
-      }
-    const outdated = await getDb(db)
-      .select({ id: orderMail.id, checksum: orderMail.rawChecksum })
-      .from(emailTable)
-      .innerJoin(
-        orderMail,
-        and(
-          eq(orderMail.id, emailTable.orderMailId),
-          eq(orderMail.rawChecksum, emailTable.checksum),
-        ),
-      )
-      .innerJoin(run, eq(run.id, emailTable.runId))
-      .innerJoin(sql`LATERAL (${newestUnresolvedOutcome}) newest`, sql`true`)
-      .where(
-        and(
-          eq(
-            emailTable.ledgerPartyId,
-            parseEntityId("ledgerParty", target.ledgerPartyId),
-          ),
-          eq(emailTable.mailboxId, target.mailboxId),
-          heldUnsettledSql(),
-          eq(emailTable.classification, "related"),
-          eq(run.purpose, "mail_import"),
-          inArray(run.status, ENDED_MAIL_IMPORT_STATUSES),
-          ne(run.skillRevision, MAIL_IMPORT_SKILL_REVISION),
-          notDeleted(run),
-          notDeleted(emailTable),
-          retainedEmailImportContentCondition(),
-          sql`coalesce(newest.result #>> '{mailOutcome,judgment,category}', ${"unknown"}) IN (${sql.join(
-            AGENT_GAP_CATEGORIES.map((category) => sql`${category}`),
-            sql`, `,
-          )})`,
-          unattemptedSenderMapping(sql`${await capabilityRevision()}`),
-        ),
-      )
-      .orderBy(asc(emailTable.createdAt), asc(emailTable.id))
-      .limit(50);
-    if (outdated.length)
-      try {
-        await admitMailImport(db, {
-          ledgerPartyId: target.ledgerPartyId,
-          userId: actorId,
-          mailboxId: target.mailboxId,
-          automatic: true,
-          capabilityRecheck: true,
-          messageIds: outdated.map((row) => row.id),
-          expectedChecksums: outdated.map((row) => ({
-            orderMailId: row.id,
-            checksum: row.checksum,
-          })),
-        });
-      } catch (error) {
-        errors.push(error);
-      }
-    if (!recheckIdentities.length) continue;
-    // Select the narrow metadata once; originals and accepted Purchase evidence
-    // stay in bounded pages. Admission rechecks current eligibility under locks.
-    const senderAfterId =
-      resume?.mailboxId === target.mailboxId ? resume.afterId : undefined;
-    if (resume?.mailboxId === target.mailboxId) resume = null;
-    const senderRows = await getDb(db)
+  const size = 50;
+  // includes-deleted: the UUID cursor advances past every row before eligibility checks.
+  const page = await transaction((tx) =>
+    getDb(tx)
       .select({
-        id: orderMail.id,
-        emailId: emailTable.id,
-        sender: sql<string>`sender_identity.sender`,
-        vendorId: sql<string>`sender_identity."vendorId"`,
-        revision: sql<string>`sender_identity.revision`,
-        senderEligible: sql<boolean>`${unattemptedSenderMapping(sql`sender_identity.revision`)} AND coalesce(${run.input}->>'evidenceRevision', '') <> sender_identity.revision AND NOT ${memberStoppedHolder} AND NOT ${claimedWithSenderVendor(sql`sender_identity."vendorId"`)}`,
-        // An outcome-free attempt dates from its holder's end; evidence must
-        // also postdate a member's cancel.
-        outcomeAt:
-          sql<Date | null>`greatest(coalesce((SELECT max(prior."completedAt") FROM "RunOperation" prior
-          WHERE prior."runId" = ${run.id} AND prior.kind = ${"target_outcome"} AND prior.state = ${runStatus.enum.completed}
-          AND prior.result->${runTargetOutcomeReceipt.keyof().enum.target}::text->>'entityId' = ${emailTable.id}::text
-          AND prior.result->${runTargetOutcomeReceipt.keyof().enum.target}::text->>'state' = ${"unresolved"}), ${run.endedAt}), CASE WHEN ${memberStoppedHolder} THEN ${run.endedAt} END)`.mapWith(
-            runOperation.completedAt,
-          ),
+        id: emailTable.id,
+        sender: emailTable.sender,
+        mailboxId: emailTable.mailboxId,
+        ledgerPartyId: emailTable.ledgerPartyId,
+        orderMailId: emailTable.orderMailId,
       })
       .from(emailTable)
-      .innerJoin(
-        orderMail,
-        and(
-          eq(orderMail.id, emailTable.orderMailId),
-          eq(orderMail.rawChecksum, emailTable.checksum),
-        ),
-      )
-      .innerJoin(run, eq(run.id, emailTable.runId))
-      // Normalize each sender once. As a join filter it ran for every
-      // Email × identity pair.
-      .innerJoin(
-        sql`LATERAL (SELECT lower(trim(coalesce(substring(${emailTable.sender} from '<([^>]+)>'), ${emailTable.sender}))) AS sender OFFSET 0) email_sender`,
-        sql`true`,
-      )
-      .innerJoin(
-        sql`jsonb_to_recordset(${JSON.stringify(recheckIdentities)}::jsonb) AS sender_identity(sender text, "vendorId" text, revision text)`,
-        sql`email_sender.sender = sender_identity.sender`,
-      )
       .where(
         and(
-          eq(
-            emailTable.ledgerPartyId,
-            parseEntityId("ledgerParty", target.ledgerPartyId),
-          ),
-          eq(emailTable.mailboxId, target.mailboxId),
-          heldUnsettledSql(),
-          eq(emailTable.classification, "related"),
-          or(
-            isNull(emailTable.classificationVersion),
-            ne(
-              emailTable.classificationVersion,
-              HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
-            ),
-          ),
-          eq(run.purpose, "mail_import"),
-          inArray(run.status, ENDED_MAIL_IMPORT_STATUSES),
-          notDeleted(run),
-          notDeleted(emailTable),
-          retainedEmailImportContentCondition(),
-          untouchedAutomaticUnresolved(false, undefined, false),
-          sql`NOT EXISTS (SELECT 1 FROM (${emailPurchaseEvidenceSql()}) evidence WHERE evidence.kind IN (${emailLinkEvidenceKind.enum.accepted}, ${emailLinkEvidenceKind.enum.linked}))`,
-          senderAfterId
-            ? sql`${emailTable.id} > ${senderAfterId}::uuid`
+          options.after
+            ? gt(emailTable.id, emailId.parse(options.after))
+            : undefined,
+          options.resume
+            ? lte(emailTable.id, emailId.parse(options.resume.through))
             : undefined,
         ),
       )
-      .orderBy(asc(emailTable.id))
-      .limit(50);
-    const page = senderRows;
-    const originals = await readRetainedMail(db, {
-      ledgerPartyIds: [parseEntityId("ledgerParty", target.ledgerPartyId)],
-      orderMailIds: page.map((row) => row.id),
-    });
-    const complete = originals.filter((original) => {
-      const content = mailReadContent(original.content, {});
-      return !content.truncated && content.nextByteOffset === null;
-    });
-    const identifiers = new Map(
-      [...(await readEmailMailKeysForMails(db, complete))].map(([id, keys]) => [
-        id,
-        keys.orderKeys,
+      .orderBy(emailTable.id)
+      .limit(size),
+  );
+  const after =
+    options.resume?.through ?? (page.length === size ? page.at(-1)!.id : null);
+  const errors: unknown[] = [];
+  const last = page.at(-1);
+  if (!last) return { errors, after, resume: null };
+  const checkpoint = options.resume
+    ? { ...options.resume }
+    : { through: last.id, mailbox: null, stage: 0, finished: [], timedOut: [] };
+  const finished = new Set(checkpoint.finished);
+  const timedOut = new Set(checkpoint.timedOut);
+  const pageIds = sql`${emailTable.id} = ANY(${uuidArrayParam(page.map(({ id }) => id))})`;
+  const admit = (input: MailImportAdmission) => {
+    checkPassPageTime(options.claim);
+    return admitMailImport(db, input, options.claim);
+  };
+  const recordItemError = (id: string, error: unknown) => {
+    rethrowPassPageControl(error);
+    errors.push(error);
+    const code = findPgError(error)?.code;
+    if (code === "57014" || code === "57P05" || code === "25P04")
+      timedOut.add(id);
+  };
+  const admitBatch = async <Row extends { id: string }>(
+    rows: readonly Row[],
+    admitItems: (items: readonly Row[]) => Promise<object>,
+    revision = "",
+  ) => {
+    const key = (row: Row) => `${revision}:${row.id}`;
+    const remaining = rows.filter(
+      (row) => !timedOut.has(row.id) && !finished.has(key(row)),
+    );
+    if (!remaining.length) return;
+    try {
+      await admitItems(remaining);
+      for (const row of remaining) finished.add(key(row));
+    } catch (error) {
+      if (remaining.length === 1) {
+        recordItemError(remaining[0]!.id, error);
+        finished.add(key(remaining[0]!));
+        return;
+      }
+      rethrowPassPageControl(error);
+      // The batch rolled back. Admit individually so healthy siblings can
+      // progress and a timed-out source is checkpointed like any other failure.
+      for (const row of remaining) {
+        try {
+          await admitItems([row]);
+        } catch (itemError) {
+          recordItemError(row.id, itemError);
+        }
+        finished.add(key(row));
+      }
+    }
+  };
+  const runStage = async (stage: number, work: () => Promise<void>) => {
+    if (checkpoint.stage > stage) return;
+    await work();
+    checkpoint.stage = stage + 1;
+    finished.clear();
+  };
+
+  try {
+    const knownAttributions = await transaction((tx) =>
+      readSenderAttributions(tx, [
+        ...new Set(
+          page.flatMap(({ sender }) => {
+            const address = senderAddress(sender);
+            return address ? [address] : [];
+          }),
+        ),
       ]),
     );
-    const imported = await importedPurchaseRechecks(db, target.ledgerPartyId, {
-      orderIds: [...new Set([...identifiers.values()].flat())],
-      vendorIds: [...new Set(page.map((row) => row.vendorId))],
-    });
-    const candidates: {
-      id: string;
-      sender: string;
-      vendorId: string;
-      revision: string;
-      purchase?: PurchaseRecheck;
-    }[] = [];
-    for (const row of page) {
-      const printed = new Set(identifiers.get(row.id) ?? []);
-      const relevant = imported.filter(
-        (candidate) =>
-          candidate.vendorId === row.vendorId &&
-          printed.has(normalizeOrderKey(candidate.orderId)) &&
-          row.outcomeAt &&
-          new Date(candidate.evidenceAt) > row.outcomeAt,
+    if (options.learnSenders && checkpoint.mailbox === null)
+      await transaction((tx) =>
+        learnAcceptedSenders(tx, systemActor(), knownAttributions),
       );
-      for (const candidate of relevant) {
-        const purchase = {
-          purchaseId: candidate.purchaseId,
-          orderId: candidate.orderId,
-          evidenceFingerprint: candidate.evidenceFingerprint,
-        };
-        candidates.push({
-          id: row.id,
+    const identities = knownAttributions.filter(
+      (row) => row.state === "verified" && row.vendorId !== null,
+    );
+    const recheckIdentities = await Promise.all(
+      identities.map(async (row) => ({
+        sender: row.sender,
+        vendorId: row.vendorId,
+        revision: await senderRecheckRevision({
           sender: row.sender,
-          vendorId: row.vendorId,
-          purchase,
-          revision: await senderRecheckRevision({
-            sender: row.sender,
-            vendorId: row.vendorId,
-            purchase,
+          vendorId: row.vendorId ?? "",
+        }),
+      })),
+    );
+    const importerRevision = await capabilityRevision();
+    const mailboxes = await transaction(listMemberMailboxes);
+    const mailboxKey = (target: (typeof mailboxes)[number]) =>
+      `${target.ledgerPartyId}:${target.mailboxId}`;
+    for (const target of mailboxes.sort((a, b) =>
+      mailboxKey(a).localeCompare(mailboxKey(b)),
+    )) {
+      const key = mailboxKey(target);
+      if (
+        checkpoint.mailbox !== null &&
+        key.localeCompare(checkpoint.mailbox) < 0
+      )
+        continue;
+      if (key !== checkpoint.mailbox) {
+        checkpoint.mailbox = key;
+        checkpoint.stage = 0;
+        finished.clear();
+      }
+      if (checkpoint.stage === 5) continue;
+      if (
+        !page.some(
+          (row) =>
+            row.orderMailId &&
+            row.ledgerPartyId === target.ledgerPartyId &&
+            row.mailboxId === target.mailboxId,
+        )
+      )
+        continue;
+      const actorId = target.userId;
+      if (!actorId) continue;
+      if (!(await transaction((tx) => mailImportEnabled(tx, target.mailboxId))))
+        continue;
+      if (
+        await transaction((tx) => mailImportHeldBack(tx, target.ledgerPartyId))
+      )
+        continue;
+      await runStage(0, async () => {
+        const pending = await transaction((tx) =>
+          getDb(tx)
+            .select({ id: orderMail.id })
+            .from(emailTable)
+            .innerJoin(
+              orderMail,
+              and(
+                eq(orderMail.id, emailTable.orderMailId),
+                eq(orderMail.rawChecksum, emailTable.checksum),
+              ),
+            )
+            .leftJoin(run, eq(run.id, emailTable.runId))
+            .where(
+              and(
+                pageIds,
+                eq(
+                  emailTable.ledgerPartyId,
+                  parseEntityId("ledgerParty", target.ledgerPartyId),
+                ),
+                eq(emailTable.mailboxId, target.mailboxId),
+                eq(emailTable.classification, "related"),
+                or(
+                  isNull(emailTable.classificationVersion),
+                  ne(
+                    emailTable.classificationVersion,
+                    HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
+                  ),
+                ),
+                retainedEmailImportContentCondition(),
+                or(
+                  isNull(emailTable.runId),
+                  and(
+                    inArray(run.purpose, CLASSIFICATION_RUN_PURPOSES),
+                    eq(run.ledgerPartyId, emailTable.ledgerPartyId),
+                  ),
+                ),
+                notInArray(emailTable.status, ["excluded", "deleted"]),
+                sql`NOT ${importAttemptsExhaustedSql}`,
+                notDeleted(emailTable),
+              ),
+            )
+            .orderBy(asc(emailTable.createdAt), asc(emailTable.id)),
+        );
+        await admitBatch(pending, (items) =>
+          admit({
+            ledgerPartyId: target.ledgerPartyId,
+            userId: actorId,
+            mailboxId: target.mailboxId,
+            automatic: true,
+            messageIds: items.map(({ id }) => id),
           }),
+        );
+      });
+      await runStage(1, async () => {
+        const changed = await transaction((tx) =>
+          getDb(tx)
+            .select({ id: orderMail.id, checksum: orderMail.rawChecksum })
+            .from(emailTable)
+            .innerJoin(
+              orderMail,
+              and(
+                eq(orderMail.id, emailTable.orderMailId),
+                eq(orderMail.rawChecksum, emailTable.checksum),
+              ),
+            )
+            .innerJoin(run, eq(run.id, emailTable.runId))
+            .where(
+              and(
+                pageIds,
+                eq(
+                  emailTable.ledgerPartyId,
+                  parseEntityId("ledgerParty", target.ledgerPartyId),
+                ),
+                eq(emailTable.mailboxId, target.mailboxId),
+                eq(emailTable.status, "pending"),
+                eq(emailTable.classification, "related"),
+                eq(run.purpose, "mail_import"),
+                inArray(run.status, ENDED_MAIL_IMPORT_STATUSES),
+                notDeleted(run),
+                notDeleted(emailTable),
+                retainedEmailImportContentCondition(),
+                untouchedAutomaticUnresolved(true),
+              ),
+            )
+            .orderBy(asc(emailTable.createdAt), asc(emailTable.id)),
+        );
+        await admitBatch(changed, (items) =>
+          admit({
+            ledgerPartyId: target.ledgerPartyId,
+            userId: actorId,
+            mailboxId: target.mailboxId,
+            automatic: true,
+            sourceRecheck: true,
+            messageIds: items.map((row) => row.id),
+            expectedChecksums: items.map((row) => ({
+              orderMailId: row.id,
+              checksum: row.checksum,
+            })),
+          }),
+        );
+      });
+      await runStage(2, async () => {
+        const waiting = await transaction((tx) =>
+          getDb(tx)
+            .select({
+              id: orderMail.id,
+              rawChecksum: orderMail.rawChecksum,
+              outcomeId: sql<string>`newest.result #>> '{mailOutcome,id}'`.as(
+                "outcomeId",
+              ),
+              settledAt: sql<string>`settled.at::text`.as("settledAt"),
+            })
+            .from(emailTable)
+            .innerJoin(
+              orderMail,
+              and(
+                eq(orderMail.id, emailTable.orderMailId),
+                eq(orderMail.rawChecksum, emailTable.checksum),
+              ),
+            )
+            .innerJoin(run, eq(run.id, emailTable.runId))
+            .innerJoin(sql`LATERAL (${newestHolderOutcome}) newest`, sql`true`)
+            .innerJoin(
+              sql`LATERAL (${waitedSourceSettledSql}) settled`,
+              sql`true`,
+            )
+            .where(
+              and(
+                pageIds,
+                eq(
+                  emailTable.ledgerPartyId,
+                  parseEntityId("ledgerParty", target.ledgerPartyId),
+                ),
+                eq(emailTable.mailboxId, target.mailboxId),
+                heldUnsettledSql(),
+                eq(emailTable.classification, "related"),
+                eq(run.purpose, "mail_import"),
+                inArray(run.status, ENDED_MAIL_IMPORT_STATUSES),
+                notDeleted(run),
+                notDeleted(emailTable),
+                retainedEmailImportContentCondition(),
+                sql`settled.at > newest."completedAt"`,
+                // Admission's own eligibility: without it, a row admission refuses
+                // is re-admitted on every discovery pass.
+                untouchedAutomaticUnresolved(false, sql`settled.at`),
+                unattemptedSenderMapping(waitRecheckRevisionSql),
+              ),
+            )
+            .orderBy(asc(emailTable.createdAt), asc(emailTable.id)),
+        );
+        for (const row of waiting)
+          await admitBatch([row], () =>
+            admit({
+              ledgerPartyId: target.ledgerPartyId,
+              userId: actorId,
+              mailboxId: target.mailboxId,
+              automatic: true,
+              messageIds: [row.id],
+              expectedChecksums: [
+                { orderMailId: row.id, checksum: row.rawChecksum },
+              ],
+              waitRecheck: {
+                outcomeId: row.outcomeId,
+                settledAt: new Date(row.settledAt.replace(" ", "T") + "Z"),
+              },
+            }),
+          );
+      });
+      await runStage(3, async () => {
+        const outdated = await transaction((tx) =>
+          getDb(tx)
+            .select({ id: orderMail.id, checksum: orderMail.rawChecksum })
+            .from(emailTable)
+            .innerJoin(
+              orderMail,
+              and(
+                eq(orderMail.id, emailTable.orderMailId),
+                eq(orderMail.rawChecksum, emailTable.checksum),
+              ),
+            )
+            .innerJoin(run, eq(run.id, emailTable.runId))
+            .innerJoin(
+              sql`LATERAL (${newestUnresolvedOutcome}) newest`,
+              sql`true`,
+            )
+            .where(
+              and(
+                pageIds,
+                eq(
+                  emailTable.ledgerPartyId,
+                  parseEntityId("ledgerParty", target.ledgerPartyId),
+                ),
+                eq(emailTable.mailboxId, target.mailboxId),
+                heldUnsettledSql(),
+                eq(emailTable.classification, "related"),
+                eq(run.purpose, "mail_import"),
+                inArray(run.status, ENDED_MAIL_IMPORT_STATUSES),
+                ne(run.skillRevision, MAIL_IMPORT_SKILL_REVISION),
+                notDeleted(run),
+                notDeleted(emailTable),
+                retainedEmailImportContentCondition(),
+                sql`coalesce(newest.result #>> '{mailOutcome,judgment,category}', ${"unknown"}) IN (${sql.join(
+                  AGENT_GAP_CATEGORIES.map((category) => sql`${category}`),
+                  sql`, `,
+                )})`,
+                unattemptedSenderMapping(sql`${importerRevision}`),
+              ),
+            )
+            .orderBy(asc(emailTable.createdAt), asc(emailTable.id)),
+        );
+        await admitBatch(outdated, (items) =>
+          admit({
+            ledgerPartyId: target.ledgerPartyId,
+            userId: actorId,
+            mailboxId: target.mailboxId,
+            automatic: true,
+            capabilityRecheck: true,
+            messageIds: items.map((row) => row.id),
+            expectedChecksums: items.map((row) => ({
+              orderMailId: row.id,
+              checksum: row.checksum,
+            })),
+          }),
+        );
+      });
+      await runStage(4, async () => {
+        if (!recheckIdentities.length) return;
+        const senderRows = await transaction((tx) =>
+          getDb(tx)
+            .select({
+              id: orderMail.id,
+              sender: sql<string>`sender_identity.sender`,
+              vendorId: sql<string>`sender_identity."vendorId"`,
+              revision: sql<string>`sender_identity.revision`,
+              senderEligible: sql<boolean>`${unattemptedSenderMapping(sql`sender_identity.revision`)} AND coalesce(${run.input}->>'evidenceRevision', '') <> sender_identity.revision AND NOT ${memberStoppedHolder} AND NOT ${claimedWithSenderVendor(sql`sender_identity."vendorId"`)}`,
+              // An outcome-free attempt dates from its holder's end; evidence must
+              // also postdate a member's cancel.
+              outcomeAt:
+                sql<Date | null>`greatest(coalesce((SELECT max(prior."completedAt") FROM "RunOperation" prior
+              WHERE prior."runId" = ${run.id} AND prior.kind = ${"target_outcome"} AND prior.state = ${runStatus.enum.completed}
+              AND prior.result->${runTargetOutcomeReceipt.keyof().enum.target}::text->>'entityId' = ${emailTable.id}::text
+              AND prior.result->${runTargetOutcomeReceipt.keyof().enum.target}::text->>'state' = ${"unresolved"}), ${run.endedAt}), CASE WHEN ${memberStoppedHolder} THEN ${run.endedAt} END)`.mapWith(
+                  runOperation.completedAt,
+                ),
+            })
+            .from(emailTable)
+            .innerJoin(
+              orderMail,
+              and(
+                eq(orderMail.id, emailTable.orderMailId),
+                eq(orderMail.rawChecksum, emailTable.checksum),
+              ),
+            )
+            .innerJoin(run, eq(run.id, emailTable.runId))
+            // Normalize each sender once. As a join filter it ran for every
+            // Email × identity pair.
+            .innerJoin(
+              sql`LATERAL (SELECT lower(trim(coalesce(substring(${emailTable.sender} from '<([^>]+)>'), ${emailTable.sender}))) AS sender OFFSET 0) email_sender`,
+              sql`true`,
+            )
+            .innerJoin(
+              sql`jsonb_to_recordset(${JSON.stringify(recheckIdentities)}::jsonb) AS sender_identity(sender text, "vendorId" text, revision text)`,
+              sql`email_sender.sender = sender_identity.sender`,
+            )
+            .where(
+              and(
+                pageIds,
+                eq(
+                  emailTable.ledgerPartyId,
+                  parseEntityId("ledgerParty", target.ledgerPartyId),
+                ),
+                eq(emailTable.mailboxId, target.mailboxId),
+                heldUnsettledSql(),
+                eq(emailTable.classification, "related"),
+                or(
+                  isNull(emailTable.classificationVersion),
+                  ne(
+                    emailTable.classificationVersion,
+                    HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
+                  ),
+                ),
+                eq(run.purpose, "mail_import"),
+                inArray(run.status, ENDED_MAIL_IMPORT_STATUSES),
+                notDeleted(run),
+                notDeleted(emailTable),
+                retainedEmailImportContentCondition(),
+                untouchedAutomaticUnresolved(false, undefined, false),
+                sql`NOT EXISTS (SELECT 1 FROM (${emailPurchaseEvidenceSql()}) evidence WHERE evidence.kind IN (${emailLinkEvidenceKind.enum.accepted}, ${emailLinkEvidenceKind.enum.linked}))`,
+              ),
+            )
+            .orderBy(asc(emailTable.id)),
+        );
+        if (!senderRows.length) return;
+        const originals = await transaction((tx) =>
+          readRetainedMail(tx, {
+            ledgerPartyIds: [
+              parseEntityId("ledgerParty", target.ledgerPartyId),
+            ],
+            orderMailIds: senderRows.map((row) => row.id),
+          }),
+        );
+        const complete = originals.filter((original) => {
+          const content = mailReadContent(original.content, {});
+          return !content.truncated && content.nextByteOffset === null;
         });
-      }
-      if (!relevant.length && row.senderEligible)
-        candidates.push({
-          id: row.id,
-          sender: row.sender,
-          vendorId: row.vendorId,
-          revision: row.revision,
-        });
+        const identifiers = new Map(
+          [
+            ...(await transaction((tx) =>
+              readEmailMailKeysForMails(tx, complete),
+            )),
+          ].map(([id, keys]) => [id, keys.orderKeys]),
+        );
+        const imported = await transaction((tx) =>
+          importedPurchaseRechecks(tx, target.ledgerPartyId, {
+            orderIds: [...new Set([...identifiers.values()].flat())],
+            vendorIds: [...new Set(senderRows.map((row) => row.vendorId))],
+          }),
+        );
+        const candidates: {
+          id: string;
+          sender: string;
+          vendorId: string;
+          revision: string;
+          purchase?: PurchaseRecheck;
+        }[] = [];
+        for (const row of senderRows) {
+          const printed = new Set(identifiers.get(row.id) ?? []);
+          const relevant = imported.filter(
+            (candidate) =>
+              candidate.vendorId === row.vendorId &&
+              printed.has(normalizeOrderKey(candidate.orderId)) &&
+              row.outcomeAt &&
+              new Date(candidate.evidenceAt) > row.outcomeAt,
+          );
+          for (const candidate of relevant) {
+            const purchase = {
+              purchaseId: candidate.purchaseId,
+              orderId: candidate.orderId,
+              evidenceFingerprint: candidate.evidenceFingerprint,
+            };
+            candidates.push({
+              id: row.id,
+              sender: row.sender,
+              vendorId: row.vendorId,
+              purchase,
+              revision: await senderRecheckRevision({
+                sender: row.sender,
+                vendorId: row.vendorId,
+                purchase,
+              }),
+            });
+          }
+          if (!relevant.length && row.senderEligible)
+            candidates.push({
+              id: row.id,
+              sender: row.sender,
+              vendorId: row.vendorId,
+              revision: row.revision,
+            });
+        }
+        const groups = new Map<string, typeof candidates>();
+        for (const row of candidates)
+          groups.set(row.revision, [...(groups.get(row.revision) ?? []), row]);
+        for (const group of groups.values()) {
+          const identity = group[0];
+          if (!identity) continue;
+          await admitBatch(
+            group,
+            (items) =>
+              admit({
+                ledgerPartyId: target.ledgerPartyId,
+                userId: actorId,
+                mailboxId: target.mailboxId,
+                automatic: true,
+                messageIds: items.map((row) => row.id),
+                senderRecheck: {
+                  sender: identity.sender,
+                  vendorId: identity.vendorId,
+                  ...(identity.purchase ? { purchase: identity.purchase } : {}),
+                },
+              }),
+            identity.revision,
+          );
+        }
+      });
     }
-    const groups = new Map<string, typeof candidates>();
-    for (const row of candidates)
-      groups.set(row.revision, [...(groups.get(row.revision) ?? []), row]);
-    for (const group of groups.values()) {
-      const identity = group[0];
-      if (!identity) continue;
-      try {
-        await admitMailImport(db, {
-          ledgerPartyId: target.ledgerPartyId,
-          userId: actorId,
-          mailboxId: target.mailboxId,
-          automatic: true,
-          messageIds: group.map((row) => row.id),
-          senderRecheck: {
-            sender: identity.sender,
-            vendorId: identity.vendorId,
-            ...(identity.purchase ? { purchase: identity.purchase } : {}),
-          },
-        });
-      } catch (error) {
-        errors.push(error);
-      }
-    }
-    if (senderRows.length === 50) {
-      const last = senderRows.at(-1);
-      if (last)
-        senderAfter = { mailboxId: target.mailboxId, afterId: last.emailId };
-      break;
-    }
+  } catch (error) {
+    if (!(error instanceof PassPageBudgetError)) throw error;
+    return {
+      errors,
+      after: options.after ?? null,
+      resume: {
+        ...checkpoint,
+        finished: [...finished],
+        timedOut: [...timedOut],
+      },
+    };
   }
-  return { errors, senderAfter };
+  return { errors, after, resume: null };
 }

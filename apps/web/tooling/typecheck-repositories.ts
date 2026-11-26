@@ -17,6 +17,7 @@ export const repositoryOwners = [
   "src/server/generic/push/repo/admission.ts",
   "src/server/kernel/publication.ts",
   "src/server/kernel/work-errors.ts",
+  "src/server/kernel/pass-timing.ts",
   "src/server/kernel/failure.ts",
   "src/server/kernel/page-work.ts",
   "src/server/domains/run/repo/run-rollup.ts",
@@ -37,6 +38,7 @@ export const repositoryOwners = [
   "src/server/domains/purchase-import/policy/payment-match.ts",
   "src/server/domains/purchase-import/policy/order-booking.ts",
   "src/server/domains/purchase-import/policy/order-identity.ts",
+  "src/server/domains/purchase-import/repo/order-identity-sql.ts",
   "src/server/domains/purchase-import/policy/payment-keys.ts",
   "src/server/domains/purchase-import/policy/combined-charge.ts",
 

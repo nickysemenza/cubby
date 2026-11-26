@@ -1,5 +1,7 @@
-import { systemActor } from "@cubby/schemas/context";
+import { parseEntityId } from "@cubby/schemas/identifiers";
+import type { KernelJson } from "@cubby/schemas/kernel/machinery";
 import { createLogger } from "@cubby/worker-tracing";
+import { z } from "zod";
 
 import {
   getPurchaseImportRunAgentNamespace,
@@ -10,6 +12,11 @@ import {
   claimCatchUp,
   releaseCatchUpClaim,
 } from "~/server/generic/work-queue/repo/catch-up-claim";
+import {
+  PassPageBudgetError,
+  type Claim,
+  type PassResult,
+} from "~/server/kernel/api";
 
 const log = createLogger("catch-up");
 
@@ -83,60 +90,65 @@ export async function retireCoordinators(db: Database, before: Date) {
   );
 }
 
-/**
- * Admit one Gmail discovery Pass per connected mailbox; Mail import Runs
- * follow from discovery. Product research is never started here: it is a
- * member's Burn-down (ADR 0010).
- */
+/** Advance over Shipment and Email UUIDs even when a page is ineligible. */
 export async function discoverPurchases(
   db: Database,
-  options: {
-    senderAfter?: { mailboxId: string; afterId: string } | null;
-  } = {},
-) {
-  const [
-    { startMailDiscovery },
-    { gmailOAuthConfigured },
-    { reconcileRunPasses },
-  ] = await Promise.all([
-    import("~/server/domains/purchase-import/operations/gmail/discovery"),
-    import("~/server/domains/purchase-import/repo/gmail/provider"),
-    import("~/server/workflows/runs/reconcile-pass"),
-  ]);
+  raw: KernelJson | null,
+  claim: Claim,
+): Promise<PassResult> {
+  const { gmailOAuthConfigured } =
+    await import("~/server/domains/purchase-import/repo/gmail/provider");
   if (!gmailOAuthConfigured()) {
     log.info("Gmail discovery skipped: Google OAuth is not configured");
-    return { mail: null, senderAfter: null, more: false };
+    return { cursor: raw, done: true };
   }
-  // Project terminal execution before checking the mailbox admission slot.
-  await reconcileRunPasses(db);
-  const { learnAcceptedSenders } =
-    await import("~/server/domains/purchase-import/repo/sender-attribution");
-  const { readSenderAttributions } =
-    await import("~/server/domains/purchase-import/repo/sender-attribution-read");
-  const { withTransactionDatabase } = await import("~/server/db/helpers");
-  const knownAttributions = await readSenderAttributions(db);
-  const senders = await withTransactionDatabase(db, (tx) =>
-    learnAcceptedSenders(tx, systemActor(), knownAttributions),
-  );
-  const pending = await (
-    await import("~/server/domains/purchase-import/repo/mail-import-run")
-  ).importPendingEmails(db, {
-    knownAttributions,
-    senderAfter: options.senderAfter,
-  });
-  const mail = await startMailDiscovery(db, { knownAttributions });
-  log.info("purchase discovery", {
-    mailPassesStarted: mail.started,
-    mailPassesRunning: mail.running,
-  });
-  if (pending.errors.length)
-    throw new AggregateError(
-      pending.errors,
-      "Retained Email admission failed; discovery continued.",
-    );
-  return {
-    mail,
-    senderAfter: pending.senderAfter ?? null,
-    more: senders.more || Boolean(pending.senderAfter),
-  };
+  const { importPendingEmails, retainedAdmissionCursor } =
+    await import("~/server/domains/purchase-import/repo/mail-import-run");
+  const cursor = z
+    .object({
+      emailAfter: z.uuid().nullable().default(null),
+      shipmentAfter: z.uuid().nullable().default(null),
+      retained: retainedAdmissionCursor.nullable().default(null),
+    })
+    .parse(raw ?? {});
+  try {
+    if (!cursor.emailAfter && !cursor.retained) {
+      const { linkShipmentsByOrderIdPage } =
+        await import("~/server/domains/shipment/repo/evidence");
+      const shipmentAfter = await linkShipmentsByOrderIdPage(
+        db,
+        cursor.shipmentAfter
+          ? parseEntityId("shipment", cursor.shipmentAfter)
+          : null,
+        claim,
+      );
+      if (shipmentAfter)
+        return { cursor: { emailAfter: null, shipmentAfter }, done: false };
+    }
+    const pending = await importPendingEmails(db, {
+      after: cursor.emailAfter,
+      learnSenders: true,
+      resume: cursor.retained,
+      claim,
+    });
+    return {
+      cursor: {
+        emailAfter: pending.after,
+        shipmentAfter: null,
+        ...(pending.resume ? { retained: pending.resume } : {}),
+      },
+      done: !pending.after && !pending.resume,
+      ...(pending.errors.length
+        ? {
+            itemError: new AggregateError(
+              pending.errors,
+              "Retained Email admission failed.",
+            ),
+          }
+        : {}),
+    };
+  } catch (error) {
+    if (!(error instanceof PassPageBudgetError)) throw error;
+    return { cursor, done: false };
+  }
 }

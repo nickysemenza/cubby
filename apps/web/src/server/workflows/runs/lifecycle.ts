@@ -42,6 +42,7 @@ import { createAppError } from "~/server/errors/app-error";
 import { findPgError } from "~/server/errors/db-errors";
 import { reportServerError } from "~/server/errors/report-error";
 import { classifyWorkFailure, stopsPage } from "~/server/kernel/failure";
+import type { PassPageTransaction } from "~/server/kernel/pass";
 import { wakeAfterCommit } from "~/server/kernel/wake";
 import {
   WorkDeferredError,
@@ -114,10 +115,13 @@ export async function releaseMailDiscoveryAdmission(
 export async function announceMailDiscoveryVacancy(
   db: Database,
   runId: RunId,
+  transaction?: PassPageTransaction,
 ): Promise<void> {
   await repositoryAfterCommit(db, async (committed) => {
+    const runTransaction: PassPageTransaction =
+      transaction ?? ((work) => withTransactionDatabase(committed, work));
     try {
-      await withTransactionDatabase(committed, async (tx) => {
+      await runTransaction(async (tx) => {
         const mailbox = await lockMailDiscoveryRunAdmission(tx, runId);
         if (mailbox) await releaseMailDiscoveryAdmission(tx, mailbox);
       });

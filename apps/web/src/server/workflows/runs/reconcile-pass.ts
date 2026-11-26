@@ -19,7 +19,11 @@ import {
 } from "~/server/db/repository-access.boundary";
 import { reconcileCoordinatorDispatches } from "~/server/domains/run/repo/coordinator-dispatch";
 import { RUN_EXECUTE_PASS } from "~/server/domains/run/repo/run-execution";
-import { definePass, startPass } from "~/server/kernel/api";
+import {
+  definePass,
+  startPass,
+  type PassPageTransaction,
+} from "~/server/kernel/api";
 
 import { announceMailDiscoveryVacancy } from "./lifecycle";
 
@@ -56,7 +60,10 @@ function failureTextOf(raw: string | null): string {
 }
 
 /** Fail Runs whose `run.execute` Pass spent its attempts; returns how many. */
-async function reconcileStuckRunPasses(db: Database): Promise<number> {
+async function reconcileStuckRunPasses(
+  db: Database,
+  transaction?: PassPageTransaction,
+): Promise<number> {
   return repositoryTransactionDatabase(db, async (tx) => {
     const q = repositoryQueries(tx);
     // Exhausted unfinished Passes first, then their Runs by primary key. The
@@ -110,16 +117,21 @@ async function reconcileStuckRunPasses(db: Database): Promise<number> {
     // One announcement per mailbox, after commit: the gate is this
     // transaction's first lock, so it cannot take the admission lock.
     for (const runId of vacated.values())
-      await announceMailDiscoveryVacancy(tx, runId);
+      await announceMailDiscoveryVacancy(tx, runId, transaction);
     return failed;
   });
 }
 
 /** Every stopped execution's Run, projected; returns how many Runs changed. */
-export async function reconcileRunPasses(db: Database): Promise<number> {
+export async function reconcileRunPasses(
+  db: Database,
+  transaction?: PassPageTransaction,
+): Promise<number> {
+  const runTransaction: PassPageTransaction =
+    transaction ?? ((work) => work(db));
   return (
-    (await reconcileCoordinatorDispatches(db)) +
-    (await reconcileStuckRunPasses(db))
+    (await runTransaction(reconcileCoordinatorDispatches)) +
+    (await runTransaction((tx) => reconcileStuckRunPasses(tx, transaction)))
   );
 }
 

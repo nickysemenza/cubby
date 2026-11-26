@@ -5,6 +5,7 @@ import {
   vendorShortcode,
 } from "@cubby/schemas/identifiers";
 import { coordinatorModelFor } from "@cubby/schemas/import-run-agent";
+import { emailStatus } from "@cubby/schemas/mailbox-research";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { gatewayFetchThrough } from "@cubby/shared/ai/gateway-request";
 import { pollUntil } from "@cubby/shared/retry";
@@ -16,6 +17,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
+import { db as invocationDb, withInvocationDb } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
 import {
   databaseForTransaction,
@@ -34,6 +36,7 @@ import {
   vendorAccount,
   purchase,
 } from "~/server/db/schema";
+import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { emailReviewsRead as emailReview } from "~/server/domains/email/repo/email-decision-sql";
 import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
@@ -51,7 +54,10 @@ import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { getRunWorkProgress } from "~/server/domains/run/repo/work-progress";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
+import { withErrorReporting } from "~/server/errors/report-error";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
+import { createKernel, defineModule } from "~/server/kernel/api";
+import { runOnePass } from "~/server/kernel/pass";
 import { readPasses } from "~/server/kernel/pass.fixtures";
 import { createMcpServer } from "~/server/mcp/server";
 import {
@@ -63,7 +69,11 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
-import { discoverPurchases } from "~/server/workflows/catch-up";
+import { publishBackgroundTasks } from "~/server/workflows/background-tasks/publish";
+import {
+  mailboxDiscoveryPass,
+  purchaseDiscoveryPass,
+} from "~/server/workflows/purchase-discovery-pass";
 
 import { startControlledMailImport } from "../operations/gmail/controlled-import";
 import {
@@ -1270,8 +1280,8 @@ describe("mail research admission", () => {
     ).toHaveLength(3);
   });
 
-  it("queues continuation when enabling import has more than one admission page", async () => {
-    const { party } = await source();
+  it("checkpoints a timed-out Email, resumes the census, and starts mailbox discovery from a maintenance task", async () => {
+    const { party, mail } = await source();
     await getDb(ctx.db).insert(account).values({
       id: crypto.randomUUID(),
       accountId: "synthetic-mailbox",
@@ -1290,44 +1300,147 @@ describe("mail research admission", () => {
         messageId: `synthetic-backlog-${index}`,
         checksum: "b".repeat(64),
       });
+    await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic mailbox seller",
+      orderEmailSenders: ["receipts@shop.example"],
+    });
+    await getDb(ctx.db).execute(sql`
+      CREATE FUNCTION synthetic_reject_email_admission() RETURNS trigger
+      LANGUAGE plpgsql AS $$
+      BEGIN
+        IF OLD."messageId" = 'synthetic-message' THEN
+          PERFORM pg_sleep(10);
+        END IF;
+        RETURN NEW;
+      END; $$
+    `);
+    await getDb(ctx.db).execute(sql`
+      CREATE TRIGGER synthetic_reject_email_admission BEFORE UPDATE OF status ON "Email"
+      FOR EACH ROW WHEN (NEW.status = ${sqlEnumConstant(emailStatus, emailStatus.enum.researching)})
+      EXECUTE FUNCTION synthetic_reject_email_admission();
+    `);
     const configured = vi
       .spyOn(gmailProvider, "gmailOAuthConfigured")
       .mockReturnValue(true);
+    let timedOutSourceAttempts = 0;
+    const verifySource = sourceIdentity.assertMailSourceIdentityReady;
+    const verification = vi
+      .spyOn(sourceIdentity, "assertMailSourceIdentityReady")
+      .mockImplementation(async (...args) => {
+        await verifySource(...args);
+        if (args[1].id === mail.id) timedOutSourceAttempts += 1;
+      });
+    const capture = vi.fn(() => "synthetic-error-event");
     try {
-      await discoverPurchases(ctx.db);
+      const pass = {
+        ...purchaseDiscoveryPass,
+        async run(
+          ...[db, cursor, claim]: Parameters<typeof purchaseDiscoveryPass.run>
+        ) {
+          const deadline = new Date(claim.deadline);
+          // Cut the first page's remaining time after the isolated retry starts.
+          if (timedOutSourceAttempts === 0)
+            vi.spyOn(deadline, "getTime").mockImplementation(() =>
+              timedOutSourceAttempts >= 2
+                ? Date.now() + 29_000
+                : claim.deadline.getTime(),
+            );
+          return purchaseDiscoveryPass.run(db, cursor, { ...claim, deadline });
+        },
+      };
+      const kernel = createKernel([
+        defineModule({ name: "discovery", passes: [pass] }),
+      ]);
+      await publishBackgroundTasks(
+        ctx.db,
+        [
+          {
+            kind: "maintenance.purchase-discovery",
+            requestedAt: new Date().toISOString(),
+          },
+        ],
+        { source: "synthetic-test" },
+      );
+      const connection = new URL(ctx.databaseUrl);
+      connection.searchParams.set("options", "-c transaction_timeout=2000");
       expect(
-        await getDb(ctx.db).execute(
-          sql`SELECT name FROM "Pass" WHERE name=${"purchase.discovery"}`,
+        await withInvocationDb(connection.toString(), () =>
+          withErrorReporting(
+            () => runOnePass(invocationDb, kernel.registry),
+            undefined,
+            capture,
+          ),
         ),
-      ).toMatchObject({ rows: [{ name: "purchase.discovery" }] });
-      let owners = await getDb(ctx.db)
-        .select()
-        .from(run)
-        .where(eq(run.purpose, "mail_import"));
+      ).toBe(true);
       expect(
-        owners.flatMap(
-          (owner) => mailResearchRunInput.parse(owner.input).sources,
-        ),
-      ).toHaveLength(50);
-      await discoverPurchases(ctx.db);
-      owners = await getDb(ctx.db)
+        (await readPasses(ctx.db, { name: purchaseDiscoveryPass.name }))[0],
+      ).toMatchObject({
+        attempts: 0,
+        cursor: {
+          retained: { finished: [`:${mail.id}`], timedOut: [mail.id] },
+        },
+        lastError: expect.stringContaining("25P04"),
+      });
+      expect(await readPasses(ctx.db, { name: "runs.reconcile" })).toHaveLength(
+        1,
+      );
+      expect(capture).toHaveBeenCalledWith(
+        expect.any(AggregateError),
+        expect.objectContaining({
+          tags: expect.objectContaining({ operation: "purchase.discovery" }),
+        }),
+      );
+      let mailboxPages = 0;
+      const mailbox = {
+        ...mailboxDiscoveryPass,
+        async run(...args: Parameters<typeof mailboxDiscoveryPass.run>) {
+          const result = await mailboxDiscoveryPass.run(...args);
+          if (++mailboxPages === 1) {
+            await mailboxKernel.startPass(ctx.db, mailbox);
+            await mailboxKernel.startPass(ctx.db, mailbox);
+          }
+          return result;
+        },
+      };
+      const mailboxKernel = createKernel([
+        defineModule({ name: "mailbox", passes: [mailbox] }),
+      ]);
+      await mailboxKernel.startPass(ctx.db, mailbox);
+      expect(await runOnePass(ctx.db, mailboxKernel.registry)).toBe(true);
+      expect(await runOnePass(ctx.db, mailboxKernel.registry)).toBe(true);
+      expect(await runOnePass(ctx.db, mailboxKernel.registry)).toBe(false);
+      expect(
+        await getDb(ctx.db)
+          .select({ id: run.id })
+          .from(run)
+          .where(eq(run.purpose, "mail_discovery")),
+      ).toHaveLength(1);
+      for (let page = 0; page < 3; page += 1)
+        await runOnePass(ctx.db, kernel.registry);
+      const owners = await getDb(ctx.db)
         .select()
         .from(run)
         .where(eq(run.purpose, "mail_import"));
       const sources = owners.flatMap(
         (owner) => mailResearchRunInput.parse(owner.input).sources,
       );
-      expect(sources).toHaveLength(51);
-      expect(new Set(sources.map((item) => item.orderMailId)).size).toBe(51);
-      await discoverPurchases(ctx.db);
-      expect(
-        await getDb(ctx.db)
-          .select()
-          .from(run)
-          .where(eq(run.purpose, "mail_import")),
-      ).toHaveLength(owners.length);
+      expect(sources).toHaveLength(50);
+      expect(new Set(sources.map((item) => item.orderMailId)).size).toBe(50);
+      expect(timedOutSourceAttempts).toBe(2);
+      expect((await readPasses(ctx.db, { name: pass.name }))[0]).toMatchObject({
+        lastError: null,
+        doneAt: expect.anything(),
+      });
+      expect(capture).toHaveBeenCalledTimes(1);
     } finally {
+      verification.mockRestore();
       configured.mockRestore();
+      await getDb(ctx.db).execute(
+        sql`DROP TRIGGER synthetic_reject_email_admission ON "Email"`,
+      );
+      await getDb(ctx.db).execute(
+        sql`DROP FUNCTION synthetic_reject_email_admission()`,
+      );
     }
   });
 

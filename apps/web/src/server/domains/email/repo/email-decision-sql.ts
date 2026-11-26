@@ -60,10 +60,14 @@ const emailLinkDecisionProjection = (
     UNION
     SELECT link.subject FROM "Email" scoped
     JOIN "OrderMailEvent" event ON event."orderMailId"=scoped."orderMailId"
-    JOIN "Decision" link ON link.field LIKE 'link:%' AND link.value->>'eventId'=event.id::text
-    WHERE scoped.id IN (SELECT ids.id FROM unnest(${subjects.emailIds}) AS ids(id))
-      AND link.channel=${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)}
-      AND link.subject LIKE 'email:%'`
+    JOIN LATERAL (
+      SELECT link.subject FROM "Decision" link
+      WHERE link.field LIKE 'link:%' AND link.value->>'eventId'=event.id::text
+        AND link.channel=${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)}
+        AND link.subject LIKE 'email:%'
+      OFFSET 0
+    ) link ON true
+    WHERE scoped.id IN (SELECT ids.id FROM unnest(${subjects.emailIds}) AS ids(id))`
         : sql`
     SELECT DISTINCT link.subject
     FROM link_targets target
@@ -87,10 +91,20 @@ const emailLinkDecisionProjection = (
   `
       : sql``
   }current AS (
+    ${
+      subjects
+        ? sql`
+    SELECT latest.* FROM relevant_subjects relevant CROSS JOIN LATERAL (
+      SELECT DISTINCT ON (slot) * FROM "Decision"
+      WHERE subject=relevant.subject AND channel=${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)}
+      ORDER BY slot, at DESC, id DESC
+    ) latest`
+        : sql`
     SELECT DISTINCT ON (subject, slot) * FROM "Decision"
     WHERE channel=${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)}
-      AND ${subjects ? sql`subject IN (SELECT subject FROM relevant_subjects)` : sql`(subject LIKE 'email:%' OR subject LIKE 'emailEvent:%')`}
-    ORDER BY subject, slot, at DESC, id DESC
+      AND (subject LIKE 'email:%' OR subject LIKE 'emailEvent:%')
+    ORDER BY subject, slot, at DESC, id DESC`
+    }
   ) SELECT DISTINCT ON (d.subject, coalesce(target."mergedIntoId",target.id,substring(d.field from 6)::uuid), coalesce(linked_event.id,(d.value->>'eventId')::uuid))
     d.id, coalesce(linked_event.id,(d.value->>'eventId')::uuid) AS "eventId",
     coalesce(target."mergedIntoId",target.id,substring(d.field from 6)::uuid) AS "purchaseId",
@@ -174,7 +188,7 @@ export const emailLinkDecisionHistoryRead = new QueryBuilder()
   .from(sql`${emailLinkDecisionHistorySql} "EmailPurchaseDecision"`)
   .as("EmailPurchaseDecision");
 
-const emailReviewProjection = (emailId?: SQL) => sql`(
+const emailReviewProjection = (subjectScope?: SQL) => sql`(
   SELECT d.id, d.at AS "createdAt", r.*
   FROM "Decision" d CROSS JOIN LATERAL jsonb_to_record(CASE WHEN jsonb_typeof(d.value)='object' THEN d.value ELSE '{}'::jsonb END) AS r(
     family text, "subjectId" uuid, "emailId" uuid, "originalId" uuid,
@@ -182,13 +196,21 @@ const emailReviewProjection = (emailId?: SQL) => sql`(
     correction jsonb, reason text, evidence jsonb, intent text, authority text,
     "actorUserId" text, subject jsonb, receipt jsonb, metadata jsonb)
   WHERE d.channel=${sqlEnumConstant(decisionChannel, decisionChannel.enum.assignment)} AND d.field LIKE 'review:%' AND d.kind=${sqlEnumConstant(decisionKind, decisionKind.enum.set)}
-    ${emailId ? sql`AND d.subject='email:'||${emailId} AND r."emailId"=${emailId}` : sql``}
+    ${subjectScope ? sql`AND ${subjectScope}` : sql``}
 )`;
 /** Decision history projected with the review contract; retained tables are not read. */
 export const emailReviewsSql = emailReviewProjection();
 /** Both authored and carried reviews with an Email id use its Email subject. */
 export const emailReviewsForEmailSql = (emailId: SQL) =>
-  emailReviewProjection(emailId);
+  emailReviewProjection(
+    sql`d.subject='email:'||${emailId} AND r."emailId"=${emailId}`,
+  );
+
+/** The original's review history can hold intent before it is attached to an Email. */
+export const emailReviewsForIntentSql = (emailId: SQL, originalId: SQL) =>
+  emailReviewProjection(
+    sql`d.subject IN ('email:'||${emailId}, 'mailOriginal:'||${originalId})`,
+  );
 const emailReviewsFrom = sql`${emailReviewsSql} "EmailReview"`;
 export const emailReviewsRead = new QueryBuilder()
   .select(decisionProjectionColumns(emailReview))

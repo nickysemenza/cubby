@@ -282,12 +282,11 @@ export async function publishBackgroundTasks(
     for (const task of parsed) {
       if (task.kind === "entity-embedding.refresh") continue;
       if (task.kind === "maintenance.purchase-discovery") {
-        const { purchaseDiscoveryPass } =
+        const { mailboxDiscoveryPass, purchaseDiscoveryPass } =
           await import("../purchase-discovery-pass");
         const { startPass } = await import("~/server/kernel/api");
-        await startPass(tx, purchaseDiscoveryPass, {
-          cursor: { senderAfter: task.senderAfter ?? null },
-        });
+        if (await startPass(tx, purchaseDiscoveryPass))
+          await startPass(tx, mailboxDiscoveryPass);
         continue;
       }
       if (task.kind === "calendar-feed.mark-dirty") {

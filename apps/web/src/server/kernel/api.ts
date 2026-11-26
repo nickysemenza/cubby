@@ -80,6 +80,14 @@ export {
   type ScopeRef,
   type SourceRef,
 } from "./define";
+export {
+  checkPassPageTime,
+  limitPassPageTransaction,
+  PassPageBudgetError,
+  rethrowPassPageControl,
+  withPassPageTransaction,
+  type PassPageTransaction,
+} from "./pass";
 export type { DecisionWriters, StoredDecision } from "./decide";
 export type { Reads, ScopeReads } from "./reads";
 export { effectiveBindings } from "./reads";
@@ -262,7 +270,7 @@ export async function approveDriftClass(
   return (await productionKernel()).approveDriftClass(db, actor, kind);
 }
 
-/** Start a pass instance (a Run's work, retention, a one-off rebuild). */
+/** Start a pass instance and return whether it has attempts left. */
 export async function startPass(
   db: Database,
   pass: Pass | string,
@@ -273,7 +281,7 @@ export async function startPass(
     availableAt?: Date;
     revive?: boolean;
   },
-): Promise<void> {
+): Promise<boolean> {
   const kernel = await productionKernel();
   const registered =
     typeof pass === "string" ? kernel.registry.passes.get(pass) : pass;

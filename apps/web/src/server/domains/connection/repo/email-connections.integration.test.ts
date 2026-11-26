@@ -2,9 +2,9 @@ import type { ConnectionCandidate } from "@cubby/schemas/entity-connections";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { importExtractionOutcome } from "@cubby/schemas/purchase-import";
 import { moneyToMinor } from "@cubby/shared";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db";
@@ -12,6 +12,7 @@ import { getDb } from "~/server/db/helpers";
 import { evidenceBinding, recordKey } from "~/server/db/schema";
 import { purchase as purchaseTable, vendorAccount } from "~/server/db/schema";
 import { email, orderMail, orderMailEvent } from "~/server/db/schema";
+import { emailPurchaseDiscoveryPass } from "~/server/domains/connection/service/email-purchase-discovery";
 import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { withEmailEvidenceWrite } from "~/server/domains/purchase-import/repo/email-evidence-write-scope";
 import { decideEmailPurchase } from "~/server/domains/purchase-import/repo/email-purchase-decision";
@@ -24,10 +25,19 @@ import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 // misses retained events; subject similarity invents identity; a changed checksum
 // or superseded event applies; foreign members/agents bypass purchase_import.mail_resolve;
 // a failed outer transaction leaks a link and a retry applies twice.
-import { append, evidenceRow } from "~/server/kernel/api";
+import {
+  append,
+  createKernel,
+  defineModule,
+  evidenceRow,
+} from "~/server/kernel/api";
+import { runOnePass } from "~/server/kernel/pass";
+import { readPasses } from "~/server/kernel/pass.fixtures";
 import { activeEmailPurchaseDecision } from "~/server/testing/email-link.fixtures";
 
+import * as emailConnections from "./email-connections";
 import { retrieveEmailConnectionCandidates as readConnectionCandidates } from "./email-connections";
+import { readEmailPurchaseDiscoveryPage } from "./email-purchase-cursor";
 import {
   prepareEntityConnectionEvidence,
   publishPreparedEntityConnections,
@@ -127,14 +137,47 @@ describe("fresh retained Email connection recommendations", () => {
 
   it("retrieves both endpoints, publishes pending only, and keeps UUID dependencies private", async () => {
     const f = await fixture();
+    expect(await readEmailPurchaseDiscoveryPage(ctx.db, null)).toMatchObject({
+      emails: [{ id: f.message.id }],
+      after: null,
+    });
     const candidates = await retrieveConnectionCandidates(ctx.db, f.source);
     expect(candidates).toHaveLength(1);
     expect(await retrieveConnectionCandidates(ctx.db, f.target)).toEqual(
       candidates,
     );
-    const candidate = candidates[0];
-    if (!candidate) throw new Error("Missing synthetic candidate");
-    const proposal = await publishEntityConnection(ctx.db, candidate);
+    const kernel = createKernel([
+      defineModule({ name: "discovery", passes: [emailPurchaseDiscoveryPass] }),
+    ]);
+    const slowEmail = vi
+      .spyOn(emailConnections, "retrieveEmailConnectionCandidates")
+      .mockImplementationOnce(async (tx) => {
+        await getDb(tx).execute(sql`
+          DO $$ BEGIN RAISE SQLSTATE '57014' USING MESSAGE = 'Synthetic Email statement timeout'; END $$
+        `);
+        return [];
+      });
+    try {
+      await kernel.startPass(ctx.db, emailPurchaseDiscoveryPass);
+      expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+      expect(
+        (
+          await readPasses(ctx.db, { name: emailPurchaseDiscoveryPass.name })
+        )[0],
+      ).toMatchObject({
+        attempts: 0,
+        cursor: { after: null },
+        lastError: null,
+      });
+      expect(slowEmail).toHaveBeenCalledOnce();
+      expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
+    } finally {
+      slowEmail.mockRestore();
+    }
+    await kernel.startPass(ctx.db, emailPurchaseDiscoveryPass);
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+    const [proposal] = await readEntityConnections(ctx.db, f.source);
+    if (!proposal) throw new Error("Synthetic Email proposal missing");
     expect(proposal).toMatchObject({
       relation: "email-purchase",
       source: f.source,

@@ -7,6 +7,7 @@ import {
   imageDescriptionInputs,
 } from "./image-description-inputs";
 import { labelField } from "./label-field.js";
+import { NORMALIZED_ORDER_ID_SQL } from "../purchase-order-identity";
 import { purchaseChildren } from "../child-tables/purchase.js";
 import { spendingCategorySummarySchema } from "../spending-classification";
 import { purchaseEvidenceCoverage } from "../purchase-evidence-policy";
@@ -1985,6 +1986,11 @@ export const { definition, readSchemas } = defineEntityModel({
       },
       { on: ["date"] },
       { trigram: "orderId" },
+      {
+        name: "Purchase_normalized_order_hash_idx",
+        on: [{ sql: `md5(${NORMALIZED_ORDER_ID_SQL.join("{orderId}")})` }],
+        where: "{orderId} IS NOT NULL AND {deletedAt} IS NULL",
+      },
       { trigram: "displayLabel" },
     ],
     checks: [
