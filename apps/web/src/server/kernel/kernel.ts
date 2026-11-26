@@ -48,7 +48,7 @@ import {
   approveDriftClass,
   versionSweepPass,
   type ApprovalOutcome,
-  type DriftClass,
+  type ApprovalScope,
 } from "./drift";
 import { enterHouseholdGate, householdWrite } from "./gate";
 import { mergeRecords, type MergeVerdict } from "./identity";
@@ -175,7 +175,7 @@ export type Kernel = {
     db: Database,
     actor: ActorContext,
     kind: string,
-    only?: DriftClass,
+    scope?: Exclude<ApprovalScope, "item">,
   ): Promise<Record<ApprovalOutcome, number>>;
   startPass(
     db: Database,
@@ -427,8 +427,8 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
       ),
     approveDrift: (db, actor, scope, proposalHash) =>
       approveDrift(db, bound, actor, scope, proposalHash),
-    approveDriftClass: (db, actor, kind, only) =>
-      approveDriftClass(db, bound, actor, kind, only),
+    approveDriftClass: (db, actor, kind, scope) =>
+      approveDriftClass(db, bound, actor, kind, scope),
     startPass,
     repointOwnedReference: (tx, request) =>
       [...bound.reconcilers.values()].some(

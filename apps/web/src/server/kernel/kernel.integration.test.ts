@@ -281,11 +281,11 @@ describe("evidence-facts kernel", () => {
       .select()
       .from(fixturePurchase)
       .orderBy(fixturePurchase.orderRef);
-  const dirtyCount = async (db: Database) =>
+  const dirtyCount = async (db: Database, kind?: string) =>
     Number(
       (
         await repositoryQueries(db).execute<{ n: number }>(
-          sql`SELECT count(*)::int AS n FROM "ScopeDirty"`,
+          sql`SELECT count(*)::int AS n FROM "ScopeDirty" WHERE ${kind ?? null}::text IS NULL OR "scopeKind" = ${kind ?? null}`,
         )
       ).rows[0]!.n,
     );
@@ -3676,9 +3676,12 @@ describe("evidence-facts kernel", () => {
         older!.proposalHash,
       ),
     ).resolves.toBe("stale");
-    // The dirty row the approval claimed and released is the runner's.
     expect(wake).toHaveBeenCalled();
     wake.mockRestore();
+    // The stale approval leaves no dirty row behind, so the runner publishes
+    // nothing on this baseline-free scope.
+    expect(await dirtyCount(ctx.db, PURCHASE_SCOPE)).toBe(0);
+    await settle(later);
     const [current] = await repositoryQueries(ctx.db)
       .select()
       .from(drift)
@@ -3794,16 +3797,12 @@ describe("evidence-facts kernel", () => {
     expect(await proposal()).toEqual({ askCount: 2, estimatedCostMicros: 70 });
   });
 
-  it("approves only a kind's Drift proposals that change no record", async () => {
-    const kept = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Synthetic kept",
-    });
-    const renamed = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Synthetic renamed",
-    });
-    const turned = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Synthetic turned",
-    });
+  it("approves a kind's record-free Drift proposals by filing their asks and keeping the baseline", async () => {
+    const [kept, renamed, turned, attacher, spare] = await Promise.all(
+      ["kept", "renamed", "turned", "attacher", "spare"].map((name) =>
+        insertWithShortcode(ctx.db, "vendor", { name: `Synthetic ${name}` }),
+      ),
+    );
     const kind = "fixture.unchangedDrift";
     const target = writes(vendor, ["name"], { entity: "vendor" });
     const asked = defineAsk({
@@ -3829,16 +3828,21 @@ describe("evidence-facts kernel", () => {
             load: (reads, keys) => reads.rows(vendor, keys),
             reconcile(row, c) {
               if (version > 1) {
-                c.answer(asked, { id: row.id });
-                if (row.id === renamed.id || row.aliases.includes("relabel"))
+                const answered = c.answer(asked, { id: row.id });
+                if (answered.status === "answered")
+                  c.patch(target, row.id, { name: answered.output.value });
+                if (row.id === renamed!.id || row.aliases.includes("relabel"))
                   c.patch(target, row.id, { name: "Synthetic derived name" });
+                // Attaching an existing record writes ownership, not a value.
+                if (row.id === attacher!.id)
+                  c.attach(target, "attached", spare!.id);
               }
               return c.done();
             },
           }),
         ],
       });
-    const ids = [kept, renamed, turned].map((row) => row.id);
+    const ids = [kept, renamed, turned, attacher].map((row) => row!.id);
     const first = createKernel([module(1)]);
     await first.emitWrites(ctx.db, {
       table: vendor,
@@ -3878,46 +3882,111 @@ describe("evidence-facts kernel", () => {
     await repositoryQueries(ctx.db)
       .update(vendor)
       .set({ aliases: ["relabel"] })
-      .where(eq(vendor.id, turned.id));
+      .where(eq(vendor.id, turned!.id));
     await expect(
-      next.approveDriftClass(ctx.db, ctx.actor, kind, "unchanged"),
+      next.approveDriftClass(ctx.db, ctx.actor, kind, "class_unchanged"),
     ).resolves.toEqual({ applied: 1, stale: 1, busy: 0, missing: 0 });
 
     const decided = await repositoryQueries(ctx.db).execute<{
-      value: { proposalHashes: string[] };
+      value: { scope: string; proposalHashes: string[] };
     }>(sql`SELECT value FROM "Decision" WHERE subject = ${`drift:${kind}`}`);
-    expect(decided.rows.map((row) => row.value.proposalHashes.sort())).toEqual([
-      [proposed.get(kept.id)!, proposed.get(turned.id)!].sort(),
+    expect(
+      decided.rows.map((row) => ({
+        scope: row.value.scope,
+        hashes: row.value.proposalHashes.sort(),
+      })),
+    ).toEqual([
+      {
+        scope: "class_unchanged",
+        hashes: [proposed.get(kept!.id)!, proposed.get(turned!.id)!].sort(),
+      },
     ]);
     const after = await stored();
-    expect(after.has(kept.id)).toBe(false);
-    expect(after.get(renamed.id)).toBe(proposed.get(renamed.id));
-    expect(after.get(turned.id)).not.toBe(proposed.get(turned.id));
+    expect(after.has(kept!.id)).toBe(false);
+    expect(after.get(renamed!.id)).toBe(proposed.get(renamed!.id));
+    expect(after.get(attacher!.id)).toBe(proposed.get(attacher!.id));
+    expect(after.get(turned!.id)).not.toBe(proposed.get(turned!.id));
+    // No ownership was attached, and the stale approval left no dirty row.
+    expect(
+      await repositoryQueries(ctx.db)
+        .select()
+        .from(recordKey)
+        .where(eq(recordKey.entityId, spare!.id)),
+    ).toEqual([]);
+    expect(await dirtyCount(ctx.db, kind)).toBe(0);
+    // Every baseline is kept, including the approved scope's.
     const baselines = await repositoryQueries(ctx.db)
       .select({ key: evidenceBinding.scopeKey })
       .from(evidenceBinding)
       .where(eq(evidenceBinding.scopeKind, kind));
-    expect(baselines.map((row) => row.key).sort()).toEqual(
-      [renamed.id, turned.id].sort(),
-    );
-    const filed = await repositoryQueries(ctx.db).execute<{ key: string }>(
-      sql`SELECT s."scopeKey" AS key FROM "AskScope" s JOIN "Ask" a ON a.id = s."askId"
+    expect(baselines.map((row) => row.key).sort()).toEqual([...ids].sort());
+    const filed = await repositoryQueries(ctx.db).execute<{
+      key: string;
+      inputHash: string;
+    }>(
+      sql`SELECT s."scopeKey" AS key, a."inputHash" FROM "AskScope" s JOIN "Ask" a ON a.id = s."askId"
         WHERE a.feature = ${asked.feature} AND s."scopeKind" = ${kind}`,
     );
-    expect(filed.rows.map((row) => row.key)).toEqual([kept.id]);
-    const names = await repositoryQueries(ctx.db)
-      .select({ name: vendor.name })
-      .from(vendor)
-      .where(inArray(vendor.id, ids));
-    expect(names.map((row) => row.name).sort()).toEqual([
+    expect(filed.rows.map((row) => row.key)).toEqual([kept!.id]);
+    const keptState = async () =>
+      (
+        await repositoryQueries(ctx.db).execute<{ stage: string }>(
+          sql`SELECT stage FROM "ScopeState" WHERE "scopeKind" = ${kind} AND "scopeKey" = ${kept!.id}`,
+        )
+      ).rows[0]?.stage;
+    expect(await keptState()).not.toBe("needs_you");
+    const names = async () =>
+      (
+        await repositoryQueries(ctx.db)
+          .select({ name: vendor.name })
+          .from(vendor)
+          .where(inArray(vendor.id, ids))
+      )
+        .map((row) => row.name)
+        .sort();
+    const original = [
+      "Synthetic attacher",
       "Synthetic kept",
       "Synthetic renamed",
       "Synthetic turned",
-    ]);
+    ];
+    expect(await names()).toEqual(original);
+
+    // A later run while the ask is owed holds nothing new.
+    await next.emitWrites(ctx.db, {
+      table: vendor,
+      ids: [kept!.id],
+      columns: ["name"],
+      discovers: [{ kind, key: kept!.id }],
+    });
+    await settle(next);
+    expect((await stored()).has(kept!.id)).toBe(false);
+
+    // An answer that would change the accepted name is a new proposal.
+    await repositoryQueries(ctx.db)
+      .insert(answer)
+      .values({
+        inputHash: filed.rows[0]!.inputHash,
+        feature: asked.feature,
+        producer: "model" as const,
+        promptVersion: "1",
+        output: { value: "Synthetic answered name" },
+        tier: "fast",
+      });
+    await next.emitWrites(ctx.db, {
+      table: vendor,
+      ids: [kept!.id],
+      columns: ["name"],
+      discovers: [{ kind, key: kept!.id }],
+    });
+    await settle(next);
+    expect((await stored()).has(kept!.id)).toBe(true);
+    expect(await keptState()).toBe("needs_you");
+    expect(await names()).toEqual(original);
 
     // Nothing qualifying left: no decision, no counts.
     await expect(
-      next.approveDriftClass(ctx.db, ctx.actor, kind, "unchanged"),
+      next.approveDriftClass(ctx.db, ctx.actor, kind, "class_unchanged"),
     ).resolves.toEqual({ applied: 0, stale: 0, busy: 0, missing: 0 });
     expect(
       (

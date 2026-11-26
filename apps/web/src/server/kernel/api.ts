@@ -32,7 +32,7 @@ import type {
   Pass,
   ScopeRef,
 } from "./define";
-import type { ApprovalOutcome, DriftClass } from "./drift";
+import type { ApprovalOutcome, ApprovalScope } from "./drift";
 import type { MergeVerdict } from "./identity";
 import { productionKernel } from "./kernel";
 import type { MachineryListRow } from "./projection";
@@ -262,14 +262,14 @@ export async function approveDrift(
   );
 }
 
-/** Approve every current proposal of one scope kind, or only those that change no record. */
+/** Approve up to 50 current proposals of one scope kind, or only those that change no record. */
 export async function approveDriftClass(
   db: Database,
   actor: ActorContext,
   kind: string,
-  only?: DriftClass,
+  scope?: Exclude<ApprovalScope, "item">,
 ): Promise<Record<ApprovalOutcome, number>> {
-  return (await productionKernel()).approveDriftClass(db, actor, kind, only);
+  return (await productionKernel()).approveDriftClass(db, actor, kind, scope);
 }
 
 /** Start a pass instance and return whether it has attempts left. */

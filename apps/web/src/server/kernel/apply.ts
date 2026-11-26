@@ -131,6 +131,11 @@ class KernelConflict extends Error {
 export type ApplyOptions = {
   /** Drift approval: the scope's baseline bindings give way to the derivation. */
   releaseBaseline: boolean;
+  /**
+   * Drift approval of a proposal that changes no record: its missing asks
+   * are filed while the baseline holds every accepted value.
+   */
+  fileAsks?: boolean;
 };
 
 /** Baseline-hidden computations of held scopes, by scope id. */
@@ -359,10 +364,40 @@ function citesDecisions(
   );
 }
 
+/**
+ * Missing asks already linked to their scope, by scope and input hash. An
+ * earlier unheld run or a Drift approval filed them, so owing them again
+ * spends nothing new and holds no baseline.
+ */
+async function filedAsks(
+  q: Q,
+  computed: readonly Computed[],
+): Promise<ReadonlySet<string>> {
+  const owing = computed.filter(
+    (item) =>
+      item.missing.length > 0 &&
+      item.storedBindings.some((binding) => binding.basis === "baseline"),
+  );
+  if (!owing.length) return new Set();
+  const rows = await q.execute<{
+    kind: string;
+    key: string;
+    inputHash: string;
+  }>(sql`
+    SELECT s."scopeKind" AS kind, s."scopeKey" AS key, a."inputHash"
+    FROM "AskScope" s JOIN "Ask" a ON a.id = s."askId"
+    JOIN unnest(${orderedTextArrayParam(owing.map((item) => item.scope.kind))}, ${orderedTextArrayParam(owing.map((item) => item.scope.key))}) AS wanted(kind, key)
+      ON s."scopeKind" = wanted.kind AND s."scopeKey" = wanted.key`);
+  return new Set(
+    rows.rows.map((row) => `${scopeId(row)}\u0000${row.inputHash}`),
+  );
+}
+
 function holdsBaseline(
   computed: Computed,
   proposed: Difference,
   options: ApplyOptions,
+  filed: ReadonlySet<string>,
 ): boolean {
   const desired = computed.desired!;
   const decisionIds = new Set(
@@ -381,7 +416,13 @@ function holdsBaseline(
         ) ||
         proposed.merges.length > 0 ||
         proposed.rejections.length > 0 ||
-        computed.missing.length > 0 ||
+        (!options.fileAsks &&
+          computed.missing.some(
+            (missing) =>
+              !filed.has(
+                `${scopeId(computed.scope)}\u0000${missing.inputHash}`,
+              ),
+          )) ||
         proposed.updates.some((update) =>
           Object.keys(update.set).some((field) => {
             const desiredRecord = desired.records.find(
@@ -903,11 +944,12 @@ async function heldProposals(
   options: ApplyOptions,
 ): Promise<Proposals> {
   if (options.releaseBaseline) return new Map();
+  const filed = await filedAsks(repositoryQueries(db), computed);
   const held = computed.filter((item) => {
     if (item.error !== null || !item.desired) return false;
     if (item.desired.disagreements.length) return false;
     try {
-      return holdsBaseline(item, difference(item, options), options);
+      return holdsBaseline(item, difference(item, options), options, filed);
     } catch {
       // SILENT: the apply reports this scope's contract error itself.
       return false;
@@ -966,6 +1008,14 @@ async function applyBatch(
       )),
     ];
   }
+  const filed = options.releaseBaseline
+    ? new Set<string>()
+    : await filedAsks(
+        q,
+        fenced.active.flatMap(({ computed }) =>
+          computed.error === null && computed.desired ? [computed] : [],
+        ),
+      );
   for (const item of fenced.active) {
     if (isConflict(item.computed.error)) {
       await releaseClaims(q, [item.claim], "conflict");
@@ -985,7 +1035,7 @@ async function applyBatch(
       continue;
     }
     const proposed = difference(item.computed, options);
-    const heldBaseline = holdsBaseline(item.computed, proposed, options);
+    const heldBaseline = holdsBaseline(item.computed, proposed, options, filed);
     const diff = heldBaseline
       ? decisionUpdates(item.computed, proposed)
       : proposed;

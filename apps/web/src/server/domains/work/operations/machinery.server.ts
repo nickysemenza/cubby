@@ -145,11 +145,8 @@ async function approveForRecord(
     return counts;
   }
   const scope = read.drift.scope;
-  if (input.scope === "class") {
-    return approveDriftClass(db, viewer, scope.kind);
-  }
-  if (input.scope === "class_unchanged")
-    return approveDriftClass(db, viewer, scope.kind, "unchanged");
+  if (input.scope !== "item")
+    return approveDriftClass(db, viewer, scope.kind, input.scope);
   const outcome = await approveDrift(db, viewer, scope, input.proposalHash);
   counts[outcome] += 1;
   return counts;

@@ -7,7 +7,8 @@
  * run files them; anything else becomes a `Drift` proposal that waits on
  * the member.
  * Approval is a decision bound to the proposal hash; it applies the
- * difference, files the asks and releases the scope's baseline bindings.
+ * difference and files the asks. Item and class approval release the scope's
+ * baseline bindings; unchanged-class approval keeps them.
  */
 import type { ActorContext } from "@cubby/schemas/context";
 import { resolveStage, nextActor } from "@cubby/schemas/kernel/stage";
@@ -23,7 +24,7 @@ import {
 } from "~/server/db/repository-access.boundary";
 
 import { applyComputed } from "./apply";
-import { CLAIM_LEASE_MS, releaseClaim, type ClaimedScope } from "./claim";
+import { CLAIM_LEASE_MS, type ClaimedScope } from "./claim";
 import { computeBatch, usedInputs, type Computed } from "./compute";
 import { decide } from "./decide";
 import {
@@ -209,14 +210,26 @@ const COST_HISTORY = 100;
 
 /**
  * What a member approves: the exact difference with the baseline released,
- * the disagreements and the ask count. Storage and approval derive the hash
- * here so an approval applies only the difference it was shown.
+ * the disagreements, the existing records the scope attaches (each a new
+ * `RecordKey`) and the ask count. Storage and approval derive the hash here
+ * so an approval applies only the difference it was shown. Attachments appear
+ * only when there are some, so a proposal without one keeps its hash.
  */
 async function proposalOf(computed: Computed, diff: Difference) {
+  const attachments = computed.desired?.attachments ?? [];
   const proposal = {
-    difference: Object.assign({}, describeDifference(diff), {
-      disagreements: computed.desired?.disagreements ?? [],
-    }),
+    difference: Object.assign(
+      {},
+      describeDifference(diff),
+      { disagreements: computed.desired?.disagreements ?? [] },
+      attachments.length && {
+        attachments: attachments.map((entry) => ({
+          table: entry.target.name,
+          naturalKey: entry.naturalKey,
+          id: entry.id,
+        })),
+      },
+    ),
     askCount: computed.missing.length,
   };
   return { ...proposal, proposalHash: await hashCanonical(proposal) };
@@ -392,50 +405,86 @@ export async function hasStaleScopes(
   return staleScopes;
 }
 
-/** Claim a scope for an approval, dirtying it if it was clean. */
+/**
+ * Claim a scope for an approval, dirtying it if it was clean. A row the claim
+ * inserts (`fresh`) is not available to the runner until the lease ends, so
+ * only this approval runs it, and {@link dropApprovalClaim} removes it again
+ * when the approval does not apply.
+ */
 async function claimForApproval(
   q: Q,
   registry: KernelRegistry,
   scope: ScopeRef,
-): Promise<ClaimedScope | null> {
+): Promise<{ claimed: ClaimedScope; fresh: boolean } | null> {
   const token = crypto.randomUUID();
+  const lease = sql`now() + make_interval(secs => ${CLAIM_LEASE_MS / 1000})`;
   const result = await q.execute<{
     seq: string | number;
     attempts: number;
     conflicts: number;
     updatedAt: string;
     deadline: string;
+    fresh: boolean;
   }>(sql`
-    INSERT INTO "ScopeDirty" ("scopeKind", "scopeKey", lane, seq, reason, "claimToken", "claimDeadline", "claimedSeq")
+    INSERT INTO "ScopeDirty" ("scopeKind", "scopeKey", lane, seq, reason, "claimToken", "claimDeadline", "claimedSeq", "availableAt")
     VALUES (${scope.kind}, ${scope.key}, ${registry.laneOf(scope.kind)}, 1, ${"drift-approved"},
-      ${token}::uuid, now() + make_interval(secs => ${CLAIM_LEASE_MS / 1000}), 1)
+      ${token}::uuid, ${lease}, 1, ${lease})
     ON CONFLICT ("scopeKind", "scopeKey") DO UPDATE SET "claimToken" = excluded."claimToken",
       "claimDeadline" = excluded."claimDeadline", "claimedSeq" = "ScopeDirty".seq
     WHERE "ScopeDirty"."claimToken" IS NULL OR "ScopeDirty"."claimDeadline" <= now()
-    RETURNING seq, attempts, conflicts, ${isoText(sql`"updatedAt"`)} AS "updatedAt", ${isoText(sql`"claimDeadline"`)} AS deadline`);
+    RETURNING seq, attempts, conflicts, ${isoText(sql`"updatedAt"`)} AS "updatedAt", ${isoText(sql`"claimDeadline"`)} AS deadline,
+      xmax = 0 AS fresh`);
   const row = result.rows[0];
-  if (row) await wakeClaimRecovery(new Date(row.deadline));
-  return row
-    ? {
-        kind: scope.kind,
-        key: scope.key,
-        seq: Number(row.seq),
-        attempts: row.attempts,
-        conflicts: row.conflicts,
-        dirtiedAt: fromIso(row.updatedAt) ?? new Date(),
-        deadline: new Date(row.deadline),
-        token,
-      }
-    : null;
+  if (!row) return null;
+  await wakeClaimRecovery(new Date(row.deadline));
+  return {
+    claimed: {
+      kind: scope.kind,
+      key: scope.key,
+      seq: Number(row.seq),
+      attempts: row.attempts,
+      conflicts: row.conflicts,
+      dirtiedAt: fromIso(row.updatedAt) ?? new Date(),
+      deadline: new Date(row.deadline),
+      token,
+    },
+    fresh: row.fresh,
+  };
+}
+
+/**
+ * End an approval that did not apply. A dirty row the approval inserted is
+ * deleted while no other writer has dirtied the scope since (same `seq`), so
+ * the runner never publishes a recomputation the member did not approve; a
+ * row that was dirty before only loses this claim.
+ */
+async function dropApprovalClaim(
+  q: Q,
+  { claimed, fresh }: { claimed: ClaimedScope; fresh: boolean },
+): Promise<void> {
+  const scope = sql`"scopeKind" = ${claimed.kind} AND "scopeKey" = ${claimed.key}`;
+  await q.execute(
+    fresh
+      ? sql`DELETE FROM "ScopeDirty" WHERE ${scope} AND seq = ${claimed.seq}
+          AND ("claimToken" IS NULL OR "claimToken" = ${claimed.token}::uuid)`
+      : sql`UPDATE "ScopeDirty" SET "claimToken" = NULL, "claimDeadline" = NULL
+          WHERE ${scope} AND "claimToken" = ${claimed.token}::uuid`,
+  );
 }
 
 export type ApprovalOutcome = "applied" | "stale" | "busy" | "missing";
 
 /**
- * Which proposals of a scope kind a class approval takes: every one, or only
- * those that change no accepted record ({@link changesNoRecord}).
+ * What an approval takes. `item`: one proposal by its hash. `class`: up to
+ * {@link CLASS_PAGE} proposals of a scope kind. `class_unchanged`: up to
+ * {@link CLASS_PAGE} proposals of a scope kind that change no record or
+ * ownership ({@link changesNoRecord}); these file their asks and keep the
+ * baseline. `item` and `class` release the baseline.
  */
-export type DriftClass = "all" | "unchanged";
+export type ApprovalScope = "item" | "class" | "class_unchanged";
+
+/** Proposals one class approval call takes. */
+const CLASS_PAGE = 50;
 
 const disagreementsOf = (difference: unknown): unknown[] =>
   z
@@ -448,13 +497,13 @@ const disagreementsOf = (difference: unknown): unknown[] =>
  * under the current rules with the baseline released; a proposal stored under
  * other rules, or whose re-derived proposal hash moved, is replaced and must
  * be approved again. A matching one applies exactly that difference under the
- * input fence and files the asks it counted.
+ * input fence and files the asks it counted, each proposal in its own gated
+ * transaction.
  *
  * Approval wakes the runner after commit however it ends: its decision
- * dirties the scopes that read it, its publication can file queued Asks
- * without dirtying anything, and a stale, conflicting or failed approval
- * releases or backs off the dirty row it claimed. None of those wakes on its
- * own outside a delivery.
+ * dirties the scopes that read it, and its publication can file queued Asks
+ * without dirtying anything. A stale, conflicting or failed approval leaves no
+ * dirty row of its own behind ({@link dropApprovalClaim}).
  */
 export async function approveDrift(
   db: Database,
@@ -501,12 +550,12 @@ async function approveOne(
         kind: "set",
         subject: driftSubject(scope),
         field: "approval",
-        value: { proposalHash },
+        value: { scope: "item" satisfies ApprovalScope, proposalHash },
         proposalHash,
       },
     ]);
-  const claimed = await claimForApproval(q, registry, scope);
-  if (!claimed) return "busy";
+  const claim = await claimForApproval(q, registry, scope);
+  if (!claim) return "busy";
   const reconciler = registry.reconcilers.get(scope.kind)!;
   const [computed] = await computeBatch(q, registry, reconciler, [scope], {
     db,
@@ -531,14 +580,10 @@ async function approveOne(
     !!computed!.desired.disagreements.length ||
     !(await rederives())
   ) {
-    await releaseClaim(
-      q,
-      { table: "ScopeDirty", kind: scope.kind, key: scope.key },
-      claimed.token,
-    );
-    await householdWrite(db, (tx) =>
-      proposeOrAdvance(tx, registry, [computed!]),
-    );
+    await householdWrite(db, async (tx) => {
+      await dropApprovalClaim(repositoryQueries(tx), claim);
+      await proposeOrAdvance(tx, registry, [computed!]);
+    });
     return "stale";
   }
   const [outcome] = await applyComputed(
@@ -546,32 +591,34 @@ async function approveOne(
     registry,
     reconciler,
     [computed!],
-    [claimed],
-    {
-      releaseBaseline: true,
-      mode: "member",
-    },
+    [claim.claimed],
+    // The unchanged class keeps every accepted value held: a later answer
+    // or evidence that would change one becomes a new proposal.
+    options.unchanged
+      ? { releaseBaseline: false, fileAsks: true, mode: "member" }
+      : { releaseBaseline: true, mode: "member" },
   );
-  return outcome!.status === "applied" || outcome!.status === "waiting"
-    ? "applied"
-    : "stale";
+  if (outcome!.status === "applied" || outcome!.status === "waiting")
+    return "applied";
+  await dropApprovalClaim(q, claim);
+  return "stale";
 }
 
 /**
- * Approve up to 50 current proposals of one scope kind: one decision, each
- * proposal applied, one wake. The `unchanged` class takes only proposals that
- * change no accepted record, in scope-key order, and records no decision
- * when none qualifies.
+ * Approve up to {@link CLASS_PAGE} current proposals of one scope kind: one
+ * decision naming the scope and hashes, then each proposal in its own gated
+ * transaction, one wake. `class_unchanged` takes only proposals that change
+ * no record, in scope-key order, and records no decision when none qualifies.
  */
 export async function approveDriftClass(
   db: Database,
   registry: KernelRegistry,
   actor: ActorContext,
   kind: string,
-  only: DriftClass = "all",
+  scope: Exclude<ApprovalScope, "item"> = "class",
 ): Promise<Record<ApprovalOutcome, number>> {
   try {
-    return await approveClass(db, registry, actor, kind, only);
+    return await approveClass(db, registry, actor, kind, scope);
   } finally {
     await wakeAfterCommit(db);
   }
@@ -582,9 +629,9 @@ async function approveClass(
   registry: KernelRegistry,
   actor: ActorContext,
   kind: string,
-  only: DriftClass,
+  scope: Exclude<ApprovalScope, "item">,
 ): Promise<Record<ApprovalOutcome, number>> {
-  const unchanged = only === "unchanged";
+  const unchanged = scope === "class_unchanged";
   const counts = { applied: 0, stale: 0, busy: 0, missing: 0 } satisfies Record<
     ApprovalOutcome,
     number
@@ -598,8 +645,10 @@ async function approveClass(
           sql`${drift.scopeKind} = ${kind} AND ${changesNoRecordSql(sql`${drift.difference}`)}`,
         )
         .orderBy(drift.scopeKey)
-        .limit(50)
-    : await selection.where(sql`${drift.scopeKind} = ${kind}`).limit(50);
+        .limit(CLASS_PAGE)
+    : await selection
+        .where(sql`${drift.scopeKind} = ${kind}`)
+        .limit(CLASS_PAGE);
   if (unchanged && !proposals.length) return counts;
   await decide(db, registry, actor, [
     {
@@ -608,6 +657,7 @@ async function approveClass(
       subject: driftSubject({ kind }),
       field: "approval",
       value: {
+        scope,
         proposalHashes: proposals.map((proposal) => proposal.proposalHash),
       },
     },

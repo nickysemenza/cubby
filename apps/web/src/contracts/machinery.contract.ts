@@ -101,7 +101,7 @@ export const machineryContract = defineContract(
     }),
     approveDrift: mutation({
       description:
-        "Approve a record's drift proposal by its hash (scope item), every current proposal of the same scope kind (scope class), or only the proposals of that kind that change no record: no insert, update, removal, merge or disagreement, and no binding change beyond a member's accepted snapshot (scope class_unchanged). A class approval takes up to 50 proposals per call. Approval applies the exact difference and files the asks it counted.",
+        "Approve a record's drift proposal by its hash (scope item), up to 50 current proposals of the same scope kind (scope class), or up to 50 of that kind that change no record or ownership: no insert, update, removal, merge, rejection, attachment or disagreement, and no binding change beyond re-deriving a member's accepted snapshot (scope class_unchanged). Item and class approval apply the exact difference, file the asks it counted and release the scope's baseline, so later answers and evidence write the record. Class_unchanged files the asks and keeps the baseline: a later change to an accepted value is a new proposal.",
       input: machineryRecord.extend({
         proposalHash: z.string().min(1),
         scope: z.enum(["item", "class", "class_unchanged"]),

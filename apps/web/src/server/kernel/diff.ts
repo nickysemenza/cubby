@@ -3,6 +3,7 @@
  * scope owns now. Pure; the apply turns the result into set-based writes and
  * the version sweep turns it into a Drift proposal.
  */
+import type { BindingBasis } from "@cubby/schemas/kernel/machinery";
 import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
@@ -284,7 +285,10 @@ export const isEmptyDifference = (diff: Difference) =>
   !diff.bindingsRemove.length &&
   !diff.merges.length;
 
-/** The exact difference as stored on a Drift proposal; inserts carry no minted ids. */
+/**
+ * The exact difference as stored on a Drift proposal; inserts carry no minted
+ * ids. Rejections stamp `RecordKey` rows, so they are part of it.
+ */
 export function describeDifference(diff: Difference): Json {
   return JSON.parse(
     canonicalJson({
@@ -320,72 +324,114 @@ export function describeDifference(diff: Difference): Json {
         keepId: entry.keepId,
         basis: entry.basis,
       })),
+      // Present only when non-empty, so a proposal without one keeps its hash.
+      ...(diff.rejections.length && {
+        rejections: diff.rejections.map((entry) => ({
+          table: entry.target.name,
+          id: entry.id,
+        })),
+      }),
     }),
   );
 }
 
 /**
- * Binding fact kinds whose change cannot move a record value or money amount.
- * A `manualEntry` binding is the accepted snapshot of a member's record (the
- * cutover baseline, or a member seed bound to the record it created); no
- * reconciler or read resolves ownership through it. Order observation,
- * retained payment, source occurrence and statement observation bindings
- * decide which Purchase or bank event owns that evidence, so changing one
- * relinks purchases, payments and allocations elsewhere.
+ * The only binding a record-free proposal may change: `manualEntry`, the
+ * accepted snapshot of a member's record (the cutover baseline, or a member
+ * seed bound to the record it created). No reconciler or read resolves
+ * ownership through it. Order observation, retained payment, source
+ * occurrence and statement observation bindings decide which Purchase or bank
+ * event owns that evidence, so changing one relinks purchases, payments and
+ * allocations elsewhere.
  */
-const RECORDLESS_BINDING_FACTS = ["manualEntry"] as const;
+const RECORDLESS_BINDING_FACT = "manualEntry";
+
+const storedBinding = z.object({
+  fact: z.object({ kind: z.string(), id: z.string() }),
+  eventKey: z.string(),
+  basis: z.string(),
+});
 
 const storedDifference = z
   .object({
-    inserts: z.array(z.unknown()),
-    updates: z.array(z.unknown()),
-    removals: z.array(z.unknown()),
-    merges: z.array(z.unknown()),
-    disagreements: z.array(z.unknown()),
+    inserts: z.array(z.unknown()).length(0),
+    updates: z.array(z.unknown()).length(0),
+    removals: z.array(z.unknown()).length(0),
+    merges: z.array(z.unknown()).length(0),
+    disagreements: z.array(z.unknown()).length(0),
+    attachments: z.array(z.unknown()).length(0).optional(),
+    rejections: z.array(z.unknown()).length(0).optional(),
     bindings: z.object({
-      add: z.array(z.object({ fact: z.object({ kind: z.string() }) })),
-      remove: z.array(z.object({ fact: z.object({ kind: z.string() }) })),
+      add: z.array(storedBinding),
+      remove: z.array(storedBinding),
     }),
   })
   .loose();
 
+const sameBinding = (
+  a: z.infer<typeof storedBinding>,
+  b: z.infer<typeof storedBinding>,
+) =>
+  a.fact.kind === b.fact.kind &&
+  a.fact.id === b.fact.id &&
+  a.eventKey === b.eventKey;
+
 /**
  * Whether a stored Drift difference ({@link describeDifference} plus its
- * disagreements) changes no accepted record: no insert, update, removal,
- * merge or disagreement, and every binding change names a fact kind in
- * {@link RECORDLESS_BINDING_FACTS}. {@link changesNoRecordSql} is the same
- * predicate over the stored column.
+ * disagreements and attachments) changes no accepted record or ownership: no
+ * insert, update, removal, merge, disagreement, rejection or attachment; every
+ * removed binding is a baseline {@link RECORDLESS_BINDING_FACT}; and every
+ * added binding re-derives a removed one (same fact and event). Applying such
+ * a proposal with its baseline kept writes no record and no `RecordKey`.
+ * {@link changesNoRecordSql} is the same predicate over the stored column.
  */
 export function changesNoRecord(stored: unknown): boolean {
   const parsed = storedDifference.safeParse(stored);
   if (!parsed.success) return false;
-  const diff = parsed.data;
+  const { add, remove } = parsed.data.bindings;
   return (
-    !diff.inserts.length &&
-    !diff.updates.length &&
-    !diff.removals.length &&
-    !diff.merges.length &&
-    !diff.disagreements.length &&
-    [...diff.bindings.add, ...diff.bindings.remove].every((binding) =>
-      RECORDLESS_BINDING_FACTS.some((kind) => kind === binding.fact.kind),
-    )
+    remove.every(
+      (binding) =>
+        binding.basis === ("baseline" satisfies BindingBasis) &&
+        binding.fact.kind === RECORDLESS_BINDING_FACT,
+    ) && add.every((binding) => remove.some((old) => sameBinding(old, binding)))
   );
 }
 
-/** {@link changesNoRecord} over a stored `Drift.difference` jsonb column. */
-export const changesNoRecordSql = (difference: SQL) => sql`(
-  ${sql.join(
-    ["inserts", "updates", "removals", "merges", "disagreements"].map(
-      (key) => sql`${difference}->${sql.raw(`'${key}'`)} = '[]'::jsonb`,
-    ),
-    sql` AND `,
-  )}
-  AND jsonb_typeof(${difference} #> '{bindings,add}') = 'array'
-  AND jsonb_typeof(${difference} #> '{bindings,remove}') = 'array'
-  AND NOT EXISTS (
-    SELECT 1 FROM jsonb_array_elements((${difference} #> '{bindings,add}') || (${difference} #> '{bindings,remove}')) AS binding
-    WHERE coalesce(binding #>> '{fact,kind}', '') <> ALL(ARRAY[${sql.join(
-      RECORDLESS_BINDING_FACTS.map((kind) => sql`${kind}`),
-      sql`, `,
-    )}]::text[])
-  ))`;
+/**
+ * {@link changesNoRecord} over a stored `Drift.difference` jsonb column. The
+ * CASE checks every shape before any array function reads it, whatever order
+ * the planner evaluates the selection's other conditions in.
+ */
+export const changesNoRecordSql = (difference: SQL) => {
+  const empty = ["inserts", "updates", "removals", "merges", "disagreements"];
+  const absentOrEmpty = ["attachments", "rejections"];
+  const field = (key: string) => sql`${difference}->${sql.raw(`'${key}'`)}`;
+  const add = sql`${difference} #> '{bindings,add}'`;
+  const remove = sql`${difference} #> '{bindings,remove}'`;
+  return sql`(CASE WHEN jsonb_typeof(${difference}) = 'object'
+    AND jsonb_typeof(${add}) = 'array' AND jsonb_typeof(${remove}) = 'array'
+    AND ${sql.join(
+      empty.map((key) => sql`${field(key)} = '[]'::jsonb`),
+      sql` AND `,
+    )}
+    AND ${sql.join(
+      absentOrEmpty.map(
+        (key) => sql`coalesce(${field(key)}, '[]'::jsonb) = '[]'::jsonb`,
+      ),
+      sql` AND `,
+    )}
+  THEN NOT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(${remove}) AS dropped
+    WHERE dropped->>'basis' IS DISTINCT FROM ${"baseline" satisfies BindingBasis}
+      OR dropped #>> '{fact,kind}' IS DISTINCT FROM ${RECORDLESS_BINDING_FACT}
+  ) AND NOT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(${add}) AS added
+    WHERE NOT EXISTS (
+      SELECT 1 FROM jsonb_array_elements(${remove}) AS dropped
+      WHERE dropped #>> '{fact,kind}' = added #>> '{fact,kind}'
+        AND dropped #>> '{fact,id}' = added #>> '{fact,id}'
+        AND dropped->>'eventKey' = added->>'eventKey'
+    )
+  ) ELSE false END)`;
+};

@@ -234,7 +234,7 @@ function Drift({
     >
       <h3 className="text-xs font-medium">Drift</h3>
       <p className="text-xs tabular-nums">
-        The current rules would change this record. Approving issues{" "}
+        The current rules would change this record. Approving this record issues{" "}
         {drift.askCount} {drift.askCount === 1 ? "ask" : "asks"}
         {drift.estimatedCostMicros === null
           ? " of unknown cost"
@@ -261,7 +261,7 @@ function Drift({
             disabled={pending}
             onClick={() => onApproveDrift("class")}
           >
-            Approve every change like this
+            Approve up to 50 like this
           </Button>
           <Button
             size="xs"
@@ -269,7 +269,8 @@ function Drift({
             disabled={pending}
             onClick={() => onApproveDrift("class_unchanged")}
           >
-            Approve every one like this that changes no record
+            Approve up to 50 like this that change no record, keeping accepted
+            values
           </Button>
         </div>
       ) : null}

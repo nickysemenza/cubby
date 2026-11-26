@@ -854,20 +854,37 @@ or a later run replaces its gaps. Each ask costs the
 median of the most recent priced Answers for its feature and requested tier,
 else its ask kind's declared estimate; a source ask is free. The estimate is
 unknown, stored as NULL, when any ask has neither, and it stays outside the
-proposal hash. Approval is a decision
-bound to the proposal hash, by item, by class, or by the unchanged class. A
-class approval takes up to 50 of a scope kind's proposals per call; the
-unchanged class takes, in scope-key order, only proposals that change no
-record: no insert, update, removal, merge or disagreement, and binding
-changes only to `manualEntry` facts, a member record's accepted snapshot.
-Bindings of order, payment, occurrence and statement evidence decide which
-Purchase or bank event owns that evidence, so changing one is a record
-change. With no such proposal it records no decision. Approval recomputes the scope
-with the baseline released and applies the difference and files the asks only
-when that computation re-derives the approved hash under the proposal's rules,
-and for the unchanged class only while the recomputed difference still changes
-no record; otherwise it stores the recomputed proposal, which must be approved
-again.
+proposal hash. The proposal also names every ownership write applying it
+makes: each existing record the scope attaches (a new `RecordKey`) and each
+rejection it stamps, so the hash covers them. Approval is a decision bound to
+the proposal hash that names its scope:
+
+- `item` approves one proposal. It applies the exact difference, files the
+  asks and releases the scope's baseline bindings. From then on the scope's
+  answers and evidence write its records on normal runs, including values the
+  baseline held (for a bank event, the full transaction with amount and
+  merchant, and the purchase or transfer reconciliation that follows).
+- `class` does the same for up to 50 of a scope kind's proposals per call.
+- `class_unchanged` takes, in scope-key order, up to 50 of a scope kind's
+  proposals that change no record or ownership: no insert, update, removal,
+  merge, rejection, attachment or disagreement; every removed binding a
+  baseline `manualEntry`, a member record's accepted snapshot; every added
+  binding re-deriving a removed one. Bindings of order, payment, occurrence
+  and statement evidence decide which Purchase or bank event owns that
+  evidence, so changing one is a record change. It files the asks and clears
+  the proposal but releases nothing: the baseline keeps every accepted value,
+  and a later answer or evidence that would change one is held as a new
+  proposal. With no such proposal it records no decision.
+
+Each approved proposal applies in its own gated transaction; a call files at
+most 50 proposals' asks. Approval recomputes the scope with the baseline
+released and applies only when that computation re-derives the approved hash
+under the proposal's rules, and for `class_unchanged` only while the
+recomputed proposal still changes no record or ownership; otherwise it stores
+the recomputed proposal, which must be approved again. A stale, conflicting or
+failed approval deletes the dirty row it inserted to claim the scope, unless
+another writer has dirtied the scope since, so the runner never publishes a
+recomputation the member did not approve.
 
 The sweep loads and computes a page outside any transaction, then publishes it
 with its cursor in the pass's fenced transaction: that transaction admits
@@ -889,13 +906,14 @@ without an ask while its basis and value are unchanged and no person has
 since ruled that value out on another record of the entity, so a
 correction's recheck asks again. The first sweep then proposes
 drift wherever the derivation without the baseline disagrees, files the asks
-for blank fields, and approving that drift releases the baseline for that
-scope. A scope with no stored
+for blank fields, and approving that drift by item or class releases the
+baseline for that scope. A scope with no stored
 records gets version 0 and an empty baseline.
 
 An input-triggered reconcile also protects accepted baselines. An automatic
 difference records a Drift proposal, computed as approval computes it, and
-applies no record changes or new asks. Decision changes still apply above the
+applies no record changes or new asks. An ask already linked to the scope,
+filed by an earlier unheld run or an approval, is not new. Decision changes still apply above the
 baseline, also while the scope has a gap, and are not part of the proposal: a
 field assignment on a record or patch whose exact proposed value cites the
 current Decision as its provenance, a new record whose supplied values all cite current
