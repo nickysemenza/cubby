@@ -729,8 +729,21 @@ async function claimPassGroup(
       "claimToken" = CASE WHEN picked.spent < picked."maxAttempts" THEN ${token}::uuid END,
       "claimPartition" = ${pass.claimLimit?.partition ?? null},
       "claimDeadline" = CASE WHEN picked.spent < picked."maxAttempts" THEN now() + ${leaseInterval(CLAIM_LEASE_MS)} END
+      ${
+        pass.restartFloorMs
+          ? sql`, cursor = CASE WHEN picked.spent < picked."maxAttempts"
+              AND NOT coalesce(p.cursor ? 'censusStartedAt', false)
+            THEN coalesce(nullif(p.cursor, 'null'::jsonb), '{}'::jsonb)
+              || jsonb_build_object('censusStartedAt', now()::timestamp)
+            ELSE p.cursor END`
+          : sql``
+      }
     FROM picked WHERE p.name = picked.name AND p.key = picked.key
-    RETURNING p.name, p.key, p.cursor, p."wakeVersion", p.attempts, ${isoText(sql`p."claimDeadline"`)} AS deadline,
+    RETURNING p.name, p.key, ${
+      pass.restartFloorMs
+        ? sql`CASE WHEN p.cursor ? 'censusStartedAt' THEN p.cursor - 'censusStartedAt' ELSE p.cursor END`
+        : sql`p.cursor`
+    } AS cursor, p."wakeVersion", p.attempts, ${isoText(sql`p."claimDeadline"`)} AS deadline,
       ${isoText(passRecoveryAt(sql`p`))} AS "recoveryAt"`);
       const row = result.rows[0];
       return row?.deadline

@@ -674,7 +674,7 @@ async function partitionOwnership(
 // After the gate wait, an isolated admission has an eight-second database
 // transaction timeout. A single slow statement can spend three seconds.
 const RETAINED_STATEMENT_MS = 3_000;
-const RETAINED_TRANSACTION_MS = 8_000;
+const RETAINED_PAGE_TRANSACTION_MS = 8_000;
 
 async function limitRetainedAdmission(
   tx: Database,
@@ -682,11 +682,7 @@ async function limitRetainedAdmission(
 ) {
   if (!claim) return;
   checkPassPageTime(claim);
-  await limitPassPageTransaction(
-    tx,
-    RETAINED_STATEMENT_MS,
-    RETAINED_TRANSACTION_MS,
-  );
+  await limitPassPageTransaction(tx, RETAINED_STATEMENT_MS);
 }
 
 export async function admitMailImport(
@@ -1227,7 +1223,7 @@ export async function importPendingEmails(
       work,
       options.claim,
       RETAINED_STATEMENT_MS,
-      RETAINED_TRANSACTION_MS,
+      RETAINED_PAGE_TRANSACTION_MS,
     );
   const size = 50;
   // includes-deleted: the UUID cursor advances past every row before eligibility checks.
@@ -1273,7 +1269,8 @@ export async function importPendingEmails(
     rethrowPassPageControl(error);
     errors.push(error);
     const code = findPgError(error)?.code;
-    if (code === "57014" || code === "57P05") timedOut.add(id);
+    if (code === "57014" || code === "57P05" || code === "25P04")
+      timedOut.add(id);
   };
   const admitBatch = async <Row extends { id: string }>(
     rows: readonly Row[],

@@ -2062,11 +2062,12 @@ describe("evidence-facts kernel", () => {
     expect(result.rows).toEqual([{ cursor: { page: 1, legacyJobs } }]);
   });
 
-  it("finishes the current census before coalescing active starts into one fresh census", async () => {
+  it("coalesces starts during and after a census into one restart at the floor", async () => {
     const pages: unknown[] = [];
     const pass = definePass({
       name: "fixture.restart-census",
       activeStart: "restart",
+      restartFloorMs: 15 * 60_000,
       async run(db, cursor) {
         const page =
           cursor && typeof cursor === "object" && "page" in cursor
@@ -2084,13 +2085,28 @@ describe("evidence-facts kernel", () => {
       defineModule({ name: "passes", passes: [pass] }),
     ]);
     await kernel.startPass(ctx.db, pass);
-    for (let page = 0; page < 4; page += 1)
-      expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+    const q = repositoryQueries(ctx.db);
+    const {
+      rows: [first],
+    } = await q.execute<{ startedAt: string }>(sql`
+      SELECT cursor ->> 'censusStartedAt' AS "startedAt" FROM "Pass" WHERE name = ${pass.name}`);
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+    await kernel.startPass(ctx.db, pass);
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
+    const { rows } = await q.execute<{ atFloor: boolean }>(sql`
+      SELECT "availableAt" = ${first!.startedAt}::timestamp + interval '15 minutes' AS "atFloor"
+      FROM "Pass" WHERE name = ${pass.name}`);
+    expect(rows).toEqual([{ atFloor: true }]);
+    await q.execute(
+      sql`UPDATE "Pass" SET "availableAt" = now() WHERE name = ${pass.name}`,
+    );
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
     expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
     expect(pages).toEqual([0, 1, 0, 1]);
     await kernel.startPass(ctx.db, pass);
-    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
-    expect(pages).toEqual([0, 1, 0, 1, 0]);
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
   });
 
   it("a scheduled start revives a pass that spent its attempts", async () => {

@@ -606,7 +606,8 @@ export type Pass = {
   readonly type: "pass";
   readonly claimLimit?: ClaimLimit;
   readonly name: string;
-  readonly activeStart?: "coalesce" | "restart";
+  readonly activeStart?: "restart";
+  readonly restartFloorMs?: number;
   readonly key?: (input: Json) => string;
   run(db: Database, cursor: Json | null, claim: Claim): Promise<PassResult>;
 };
@@ -615,7 +616,9 @@ export function definePass(spec: {
   name: string;
   claimLimit?: ClaimLimit;
   /** How a start affects an unfinished instance instead of waking its current page. */
-  activeStart?: "coalesce" | "restart";
+  activeStart?: "restart";
+  /** Minimum time between starts, measured from the first claim of a census. */
+  restartFloorMs?: number;
   key?(input: Json): string;
   run(db: Database, cursor: Json | null, claim: Claim): Promise<PassResult>;
 }): Pass {

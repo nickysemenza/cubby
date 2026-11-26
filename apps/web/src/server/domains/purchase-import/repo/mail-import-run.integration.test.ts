@@ -17,6 +17,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
+import { db as invocationDb, withInvocationDb } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
 import {
   databaseForTransaction,
@@ -1360,11 +1361,15 @@ describe("mail research admission", () => {
         ],
         { source: "synthetic-test" },
       );
+      const connection = new URL(ctx.databaseUrl);
+      connection.searchParams.set("options", "-c transaction_timeout=2000");
       expect(
-        await withErrorReporting(
-          () => runOnePass(ctx.db, kernel.registry),
-          undefined,
-          capture,
+        await withInvocationDb(connection.toString(), () =>
+          withErrorReporting(
+            () => runOnePass(invocationDb, kernel.registry),
+            undefined,
+            capture,
+          ),
         ),
       ).toBe(true);
       expect(
@@ -1374,7 +1379,7 @@ describe("mail research admission", () => {
         cursor: {
           retained: { finished: [`:${mail.id}`], timedOut: [mail.id] },
         },
-        lastError: expect.stringContaining("57014"),
+        lastError: expect.stringContaining("25P04"),
       });
       expect(await readPasses(ctx.db, { name: "runs.reconcile" })).toHaveLength(
         1,
@@ -1385,10 +1390,25 @@ describe("mail research admission", () => {
           tags: expect.objectContaining({ operation: "purchase.discovery" }),
         }),
       );
+      let mailboxPages = 0;
+      const mailbox = {
+        ...mailboxDiscoveryPass,
+        async run(...args: Parameters<typeof mailboxDiscoveryPass.run>) {
+          const result = await mailboxDiscoveryPass.run(...args);
+          if (++mailboxPages === 1) {
+            await mailboxKernel.startPass(ctx.db, mailbox);
+            await mailboxKernel.startPass(ctx.db, mailbox);
+          }
+          return result;
+        },
+      };
       const mailboxKernel = createKernel([
-        defineModule({ name: "mailbox", passes: [mailboxDiscoveryPass] }),
+        defineModule({ name: "mailbox", passes: [mailbox] }),
       ]);
+      await mailboxKernel.startPass(ctx.db, mailbox);
       expect(await runOnePass(ctx.db, mailboxKernel.registry)).toBe(true);
+      expect(await runOnePass(ctx.db, mailboxKernel.registry)).toBe(true);
+      expect(await runOnePass(ctx.db, mailboxKernel.registry)).toBe(false);
       expect(
         await getDb(ctx.db)
           .select({ id: run.id })

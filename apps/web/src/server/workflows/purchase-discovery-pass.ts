@@ -10,11 +10,13 @@ import { discoverPurchases, recoverMissedWork } from "./catch-up";
 import { reconcileRunPasses } from "./runs/reconcile-pass";
 
 const log = createLogger("catch-up");
+const PURCHASE_CENSUS_RESTART_FLOOR_MS = 15 * 60_000;
 
 /** One bounded admission page; domain repositories retain eligibility and evidence. */
 export const purchaseDiscoveryPass = definePass({
   name: "purchase.discovery",
   activeStart: "restart",
+  restartFloorMs: PURCHASE_CENSUS_RESTART_FLOOR_MS,
   async run(db, raw, claim) {
     await recoverMissedWork(db);
     return discoverPurchases(db, raw, claim);
@@ -24,7 +26,7 @@ export const purchaseDiscoveryPass = definePass({
 /** Mailbox admission is independent of either retained census cursor. */
 export const mailboxDiscoveryPass = definePass({
   name: "purchase.mailbox-discovery",
-  activeStart: "coalesce",
+  activeStart: "restart",
   async run(db, cursor, claim) {
     const { gmailOAuthConfigured } =
       await import("~/server/domains/purchase-import/repo/gmail/provider");

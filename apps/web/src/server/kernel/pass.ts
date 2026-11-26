@@ -5,7 +5,7 @@
  */
 import { kernelWaitCause } from "@cubby/schemas/kernel/machinery";
 import { createLogger } from "@cubby/worker-tracing";
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db/database";
@@ -36,6 +36,9 @@ import { wakeAfterCommit, wakeAtDeadline } from "./wake";
 
 const log = createLogger("kernel.pass");
 
+const censusFloor = (cursor: SQL, ms: number) =>
+  sql`(${cursor}->>'censusStartedAt')::timestamp + make_interval(secs => ${ms / 1000})`;
+
 /**
  * Start (or restart a finished) pass instance; a pending one keeps its cursor.
  * `revive` is a scheduled start: a pending instance that spent its attempts
@@ -58,7 +61,14 @@ export async function startPass(
     : sql`now()`;
   const finished = sql`"Pass"."doneAt" IS NOT NULL OR "Pass"."cancelledAt" IS NOT NULL`;
   const reviving = sql`${options.revive ?? false} AND "Pass".attempts >= "Pass"."maxAttempts"`;
-  const coalesceActive = pass.activeStart !== undefined;
+  const coalesceActive = pass.activeStart === "restart";
+  // A queued scan already covers new requests. Flag a rerun once it has started.
+  const recordRestart = sql`"Pass"."claimToken" IS NOT NULL OR "Pass".cursor ? 'restartCursor'
+    ${pass.restartFloorMs ? sql`OR "Pass".cursor ? 'censusStartedAt'` : sql``}`;
+  const freshAt = pass.restartFloorMs
+    ? sql`greatest(excluded."availableAt", CASE WHEN "Pass"."doneAt" IS NOT NULL
+        THEN ${censusFloor(sql`"Pass".cursor`, pass.restartFloorMs)} END)`
+    : sql`excluded."availableAt"`;
   const started = await repositoryQueries(db).execute<{
     at: string;
     due: boolean;
@@ -74,8 +84,10 @@ export async function startPass(
           ELSE excluded.cursor END
         ELSE ${
           pass.activeStart === "restart"
-            ? sql`coalesce(nullif("Pass".cursor, 'null'::jsonb), '{}'::jsonb)
-            || jsonb_build_object(${"restartCursor"}::text, excluded.cursor)`
+            ? sql`CASE WHEN ${recordRestart}
+            THEN coalesce(nullif("Pass".cursor, 'null'::jsonb), '{}'::jsonb)
+              || jsonb_build_object(${"restartCursor"}::text, excluded.cursor)
+            ELSE "Pass".cursor END`
             : sql`"Pass".cursor`
         } END,
       attempts = CASE WHEN "Pass"."doneAt" IS NOT NULL OR "Pass"."cancelledAt" IS NOT NULL
@@ -91,13 +103,8 @@ export async function startPass(
         THEN NULL ELSE "Pass"."lastError" END,
       "runId" = coalesce(excluded."runId", "Pass"."runId"),
       "doneAt" = NULL, "cancelledAt" = NULL,
-      "availableAt" = CASE WHEN ${coalesceActive} AND (${finished}) THEN excluded."availableAt" WHEN (${coalesceActive} AND NOT (${reviving})) OR "Pass"."waitCause" = ${kernelWaitCause.enum.funding} THEN "Pass"."availableAt" ELSE least("Pass"."availableAt", excluded."availableAt") END,
+      "availableAt" = CASE WHEN ${coalesceActive} AND (${finished}) THEN ${freshAt} WHEN (${coalesceActive} AND NOT (${reviving})) OR "Pass"."waitCause" = ${kernelWaitCause.enum.funding} THEN "Pass"."availableAt" ELSE least("Pass"."availableAt", excluded."availableAt") END,
       "wakeVersion" = CASE WHEN NOT (${finished}) AND (${coalesceActive} OR "Pass"."waitCause" = ${kernelWaitCause.enum.funding}) THEN "Pass"."wakeVersion" ELSE "Pass"."wakeVersion" + 1 END, "updatedAt" = now()
-    ${
-      pass.activeStart === "coalesce"
-        ? sql`WHERE (${finished}) OR (${reviving})`
-        : sql``
-    }
     RETURNING ${isoText(sql`"availableAt"`)} AS at, "availableAt" <= now() AS due,
       attempts < "maxAttempts" AND (NOT ${coalesceActive} OR "claimToken" IS NULL
         OR "claimDeadline" <= now()) AS claimable`);
@@ -139,21 +146,25 @@ export type PassPageTransaction = <T>(
   work: (tx: Database) => Promise<T>,
 ) => Promise<T>;
 
-/** Tighten the current transaction without extending limits set by its owner. */
+/** Cap statements. Supply a transaction cap only before another owner arms the timer. */
 export async function limitPassPageTransaction(
   tx: Database,
   statementMs: number,
-  transactionMs: number,
+  transactionMs?: number,
 ): Promise<void> {
   await repositoryQueries(tx).execute(sql`
     SELECT
       set_config('statement_timeout', lim.statement::text, true),
-      set_config('lock_timeout', least(lim.lock, greatest(1, lim.statement / 2))::text, true),
-      set_config('transaction_timeout', lim.transaction::text, true)
+      set_config('lock_timeout', least(lim.lock, greatest(1, lim.statement / 2))::text, true)
+      ${
+        transactionMs === undefined
+          ? sql``
+          : sql`, set_config('transaction_timeout',
+        least((SELECT nullif(setting::int, 0) FROM pg_settings WHERE name = 'transaction_timeout'), ${transactionMs})::text, true)`
+      }
     FROM (SELECT
       least((SELECT nullif(setting::int, 0) FROM pg_settings WHERE name = 'statement_timeout'), ${statementMs}) AS statement,
-      least((SELECT nullif(setting::int, 0) FROM pg_settings WHERE name = 'lock_timeout'), 500) AS lock,
-      least((SELECT nullif(setting::int, 0) FROM pg_settings WHERE name = 'transaction_timeout'), ${transactionMs}) AS transaction
+      least((SELECT nullif(setting::int, 0) FROM pg_settings WHERE name = 'lock_timeout'), 500) AS lock
     ) lim`);
 }
 
@@ -241,10 +252,18 @@ export async function runOnePass(
         const itemError = result.itemError ? rawError(result.itemError) : null;
         const restartPending =
           pass.activeStart === "restart"
-            ? sql`cursor ? ${"restartCursor"}`
+            ? sql`coalesce(cursor ? ${"restartCursor"}, false)`
             : sql`false`;
         const restart = sql`${result.done} AND (${restartPending})`;
-        const nextCursor = sql`${JSON.stringify(result.cursor)}::jsonb`;
+        const floor = pass.restartFloorMs;
+        const restartAt = floor
+          ? sql`greatest(now(), ${censusFloor(sql`cursor`, floor)})`
+          : sql`now()`;
+        const resultCursor = sql`${JSON.stringify(result.cursor)}::jsonb`;
+        const nextCursor = floor
+          ? sql`coalesce(nullif(${resultCursor}, 'null'::jsonb), '{}'::jsonb)
+              || jsonb_build_object('censusStartedAt', cursor->'censusStartedAt')`
+          : resultCursor;
         const checkpoint =
           pass.activeStart === "restart"
             ? sql`CASE
@@ -265,7 +284,7 @@ export async function runOnePass(
               ELSE ${checkpoint} END
             ELSE cursor END,
           "doneAt" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} AND ${result.done} AND NOT (${restartPending}) THEN now() ELSE NULL END,
-          "availableAt" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN CASE WHEN ${restart} THEN now() ELSE ${result.availableAt ? sql`${result.availableAt.toISOString()}::timestamp` : sql`now()`} END ELSE CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN "availableAt" ELSE least("availableAt", now()) END END,
+          "availableAt" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN CASE WHEN ${restart} THEN ${restartAt} ELSE ${result.availableAt ? sql`${result.availableAt.toISOString()}::timestamp` : sql`now()`} END ELSE CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN "availableAt" ELSE least("availableAt", now()) END END,
           attempts = 0, "claimToken" = NULL, "claimDeadline" = NULL,
           "waitCause" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${result.done ? null : (result.waitCause ?? null)} ELSE CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN "waitCause" END END, "lastError" = ${itemError}, "updatedAt" = now()
           ${
