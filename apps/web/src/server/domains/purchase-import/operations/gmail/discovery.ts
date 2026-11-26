@@ -18,6 +18,7 @@ import {
   MAIL_DISCOVERY_CAPACITY,
   MAIL_DISCOVERY_ADMISSION_WAIT,
 } from "@cubby/schemas/mailbox-research";
+import { RUN_ASK_OUTCOME_WAIT } from "@cubby/schemas/run-fields";
 import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -275,9 +276,13 @@ async function createDiscoveryPasses(
           scope.kind === "mailbox" && coverage
             ? await findQueuedAutomaticMailboxDiscovery(tx, identity)
             : null;
-        if (queued && input.paidGrant) {
-          await launch(queued);
-          scheduled.push(queued);
+        if (
+          queued &&
+          input.paidGrant &&
+          queued.failureCode !== RUN_ASK_OUTCOME_WAIT
+        ) {
+          await launch(queued.id);
+          scheduled.push(queued.id);
         } else if (scope.kind === "mailbox" && coverage && !queued) {
           const progress = mailboxDiscoveryProgress.parse({
             attempt: 0,
