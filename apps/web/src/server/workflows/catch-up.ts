@@ -8,10 +8,18 @@ import {
 } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import {
+  importPendingEmails,
+  retainedAdmissionCursor,
+} from "~/server/domains/purchase-import/repo/mail-import-run";
+import {
   claimCatchUp,
   releaseCatchUpClaim,
 } from "~/server/generic/work-queue/repo/catch-up-claim";
-import type { Claim, PassResult } from "~/server/kernel/api";
+import {
+  PassPageBudgetError,
+  type Claim,
+  type PassResult,
+} from "~/server/kernel/api";
 
 const log = createLogger("catch-up");
 
@@ -88,6 +96,7 @@ export async function retireCoordinators(db: Database, before: Date) {
 export const purchaseDiscoveryCursor = z.object({
   emailAfter: z.uuid().nullable().default(null),
   shipmentAfter: z.uuid().nullable().default(null),
+  retained: retainedAdmissionCursor.nullable().default(null),
 });
 
 /** Advance over Shipment and Email UUIDs even when a page is ineligible. */
@@ -102,36 +111,44 @@ export async function discoverPurchases(
     log.info("Gmail discovery skipped: Google OAuth is not configured");
     return { cursor, done: true };
   }
-  if (!cursor.emailAfter) {
-    const { linkShipmentsByOrderIdPage } =
-      await import("~/server/domains/shipment/repo/evidence");
-    const shipmentAfter = await linkShipmentsByOrderIdPage(
-      db,
-      cursor.shipmentAfter
-        ? parseEntityId("shipment", cursor.shipmentAfter)
-        : null,
+  try {
+    if (!cursor.emailAfter && !cursor.retained) {
+      const { linkShipmentsByOrderIdPage } =
+        await import("~/server/domains/shipment/repo/evidence");
+      const shipmentAfter = await linkShipmentsByOrderIdPage(
+        db,
+        cursor.shipmentAfter
+          ? parseEntityId("shipment", cursor.shipmentAfter)
+          : null,
+        claim,
+      );
+      if (shipmentAfter)
+        return { cursor: { emailAfter: null, shipmentAfter }, done: false };
+    }
+    const pending = await importPendingEmails(db, {
+      after: cursor.emailAfter,
+      learnSenders: true,
+      resume: cursor.retained,
       claim,
-    );
-    if (shipmentAfter)
-      return { cursor: { emailAfter: null, shipmentAfter }, done: false };
+    });
+    return {
+      cursor: {
+        emailAfter: pending.after,
+        shipmentAfter: null,
+        ...(pending.resume ? { retained: pending.resume } : {}),
+      },
+      done: !pending.after && !pending.resume,
+      ...(pending.errors.length
+        ? {
+            itemError: new AggregateError(
+              pending.errors,
+              "Retained Email admission failed.",
+            ),
+          }
+        : {}),
+    };
+  } catch (error) {
+    if (!(error instanceof PassPageBudgetError)) throw error;
+    return { cursor, done: false };
   }
-  const { importPendingEmails } =
-    await import("~/server/domains/purchase-import/repo/mail-import-run");
-  const pending = await importPendingEmails(db, {
-    after: cursor.emailAfter,
-    learnSenders: true,
-    claim,
-  });
-  return {
-    cursor: { emailAfter: pending.after, shipmentAfter: null },
-    done: !pending.after,
-    ...(pending.errors.length
-      ? {
-          itemError: new AggregateError(
-            pending.errors,
-            "Retained Email admission failed.",
-          ),
-        }
-      : {}),
-  };
 }

@@ -82,6 +82,8 @@ export {
 } from "./define";
 export {
   checkPassPageTime,
+  limitPassPageTransaction,
+  PassPageBudgetError,
   rethrowPassPageControl,
   withPassPageTransaction,
   type PassPageTransaction,

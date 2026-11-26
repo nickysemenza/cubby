@@ -138,26 +138,36 @@ export type PassPageTransaction = <T>(
   work: (tx: Database) => Promise<T>,
 ) => Promise<T>;
 
+/** Tighten the current transaction without extending limits set by its owner. */
+export async function limitPassPageTransaction(
+  tx: Database,
+  statementMs: number,
+  transactionMs: number,
+): Promise<void> {
+  await repositoryQueries(tx).execute(sql`
+    SELECT
+      set_config('statement_timeout', lim.statement::text, true),
+      set_config('lock_timeout', least(lim.lock, greatest(1, lim.statement / 2))::text, true),
+      set_config('transaction_timeout', lim.transaction::text, true)
+    FROM (SELECT
+      least((SELECT nullif(setting::int, 0) FROM pg_settings WHERE name = 'statement_timeout'), ${statementMs}) AS statement,
+      least((SELECT nullif(setting::int, 0) FROM pg_settings WHERE name = 'lock_timeout'), 500) AS lock,
+      least((SELECT nullif(setting::int, 0) FROM pg_settings WHERE name = 'transaction_timeout'), ${transactionMs}) AS transaction
+    ) lim`);
+}
+
 /** Bound DB-only work, including the gap between a Worker dying and its lease lapsing. */
 export function withPassPageTransaction<T>(
   db: Database,
   work: (tx: Database) => Promise<T>,
   claim?: Pick<Claim, "deadline">,
   statementMs = 20_000,
+  transactionMs = 22_000,
 ): Promise<T> {
   checkPassPageTime(claim);
   return repositoryTransactionDatabase(db, async (tx) => {
     checkPassPageTime(claim);
-    await repositoryQueries(tx).execute(sql`
-      SELECT
-        set_config('statement_timeout', lim.statement::text, true),
-        set_config('lock_timeout', least(lim.lock, greatest(1, lim.statement / 2))::text, true),
-        set_config('transaction_timeout', lim.transaction::text, true)
-      FROM (SELECT
-        least((SELECT nullif(setting::int, 0) FROM pg_settings WHERE name = 'statement_timeout'), ${statementMs}) AS statement,
-        least((SELECT nullif(setting::int, 0) FROM pg_settings WHERE name = 'lock_timeout'), 500) AS lock,
-        least((SELECT nullif(setting::int, 0) FROM pg_settings WHERE name = 'transaction_timeout'), 22000) AS transaction
-      ) lim`);
+    await limitPassPageTransaction(tx, statementMs, transactionMs);
     return work(tx);
   });
 }
@@ -233,10 +243,12 @@ export async function runOnePass(
             ? sql`cursor ? ${"restartCursor"}`
             : sql`false`;
         const restart = sql`${result.done} AND (${restartPending})`;
-        const nextCursor = sql`CASE WHEN ${restart} THEN cursor->${"restartCursor"} ELSE ${JSON.stringify(result.cursor)}::jsonb END`;
+        const nextCursor = sql`${JSON.stringify(result.cursor)}::jsonb`;
         const checkpoint =
           pass.activeStart === "restart"
-            ? sql`CASE WHEN NOT ${result.done} AND (${restartPending}) THEN
+            ? sql`CASE
+              WHEN ${restart} THEN cursor->${"restartCursor"}
+              WHEN ${restartPending} THEN
                 coalesce(nullif(${nextCursor}, 'null'::jsonb), '{}'::jsonb)
                 || jsonb_build_object(${"restartCursor"}::text, cursor->${"restartCursor"})
               ELSE ${nextCursor} END`

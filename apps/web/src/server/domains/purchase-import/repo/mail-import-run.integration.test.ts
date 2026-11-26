@@ -53,6 +53,7 @@ import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { getRunWorkProgress } from "~/server/domains/run/repo/work-progress";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
+import { withErrorReporting } from "~/server/errors/report-error";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { createKernel, defineModule } from "~/server/kernel/api";
 import { runOnePass } from "~/server/kernel/pass";
@@ -67,6 +68,7 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
+import { publishBackgroundTasks } from "~/server/workflows/background-tasks/publish";
 import {
   mailboxDiscoveryPass,
   purchaseDiscoveryPass,
@@ -1277,8 +1279,8 @@ describe("mail research admission", () => {
     ).toHaveLength(3);
   });
 
-  it("checkpoints retained Email admission errors and starts mailbox discovery independently", async () => {
-    const { party } = await source();
+  it("checkpoints a timed-out Email, resumes the census, and starts mailbox discovery from a maintenance task", async () => {
+    const { party, mail } = await source();
     await getDb(ctx.db).insert(account).values({
       id: crypto.randomUUID(),
       accountId: "synthetic-mailbox",
@@ -1305,8 +1307,8 @@ describe("mail research admission", () => {
       CREATE FUNCTION synthetic_reject_email_admission() RETURNS trigger
       LANGUAGE plpgsql AS $$
       BEGIN
-        IF OLD.id = (SELECT id FROM "Email" ORDER BY id LIMIT 1) THEN
-          RAISE EXCEPTION 'Synthetic Email admission failure';
+        IF OLD."messageId" = 'synthetic-message' THEN
+          PERFORM pg_sleep(10);
         END IF;
         RETURN NEW;
       END; $$
@@ -1319,33 +1321,68 @@ describe("mail research admission", () => {
     const configured = vi
       .spyOn(gmailProvider, "gmailOAuthConfigured")
       .mockReturnValue(true);
+    let timedOutSourceAttempts = 0;
+    const verifySource = sourceIdentity.assertMailSourceIdentityReady;
+    const verification = vi
+      .spyOn(sourceIdentity, "assertMailSourceIdentityReady")
+      .mockImplementation(async (...args) => {
+        await verifySource(...args);
+        if (args[1].id === mail.id) timedOutSourceAttempts += 1;
+      });
+    const capture = vi.fn(() => "synthetic-error-event");
     try {
+      const pass = {
+        ...purchaseDiscoveryPass,
+        async run(
+          ...[db, cursor, claim]: Parameters<typeof purchaseDiscoveryPass.run>
+        ) {
+          const deadline = new Date(claim.deadline);
+          // Cut the first page's remaining time after the isolated retry starts.
+          if (timedOutSourceAttempts === 0)
+            vi.spyOn(deadline, "getTime").mockImplementation(() =>
+              timedOutSourceAttempts >= 2
+                ? Date.now() + 29_000
+                : claim.deadline.getTime(),
+            );
+          return purchaseDiscoveryPass.run(db, cursor, { ...claim, deadline });
+        },
+      };
       const kernel = createKernel([
-        defineModule({ name: "discovery", passes: [purchaseDiscoveryPass] }),
+        defineModule({ name: "discovery", passes: [pass] }),
       ]);
-      await kernel.startPass(ctx.db, purchaseDiscoveryPass);
-      expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
-      let owners = await getDb(ctx.db)
-        .select()
-        .from(run)
-        .where(eq(run.purpose, "mail_import"));
+      await publishBackgroundTasks(
+        ctx.db,
+        [
+          {
+            kind: "maintenance.purchase-discovery",
+            requestedAt: new Date().toISOString(),
+          },
+        ],
+        { source: "synthetic-test" },
+      );
       expect(
-        owners.flatMap(
-          (owner) => mailResearchRunInput.parse(owner.input).sources,
+        await withErrorReporting(
+          () => runOnePass(ctx.db, kernel.registry),
+          undefined,
+          capture,
         ),
-      ).toHaveLength(49);
+      ).toBe(true);
       expect(
         (await readPasses(ctx.db, { name: purchaseDiscoveryPass.name }))[0],
       ).toMatchObject({
         attempts: 0,
-        lastError: expect.stringContaining("Synthetic Email admission failure"),
+        cursor: { retained: { finished: [`:${mail.id}`] } },
+        lastError: expect.stringContaining("57014"),
       });
+      expect(capture).toHaveBeenCalledWith(
+        expect.any(AggregateError),
+        expect.objectContaining({
+          tags: expect.objectContaining({ operation: "purchase.discovery" }),
+        }),
+      );
       const mailboxKernel = createKernel([
         defineModule({ name: "mailbox", passes: [mailboxDiscoveryPass] }),
       ]);
-      await mailboxKernel.startPass(ctx.db, mailboxDiscoveryPass, {
-        revive: true,
-      });
       expect(await runOnePass(ctx.db, mailboxKernel.registry)).toBe(true);
       expect(
         await getDb(ctx.db)
@@ -1353,8 +1390,9 @@ describe("mail research admission", () => {
           .from(run)
           .where(eq(run.purpose, "mail_discovery")),
       ).toHaveLength(1);
-      expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
-      owners = await getDb(ctx.db)
+      for (let page = 0; page < 3; page += 1)
+        await runOnePass(ctx.db, kernel.registry);
+      const owners = await getDb(ctx.db)
         .select()
         .from(run)
         .where(eq(run.purpose, "mail_import"));
@@ -1363,15 +1401,14 @@ describe("mail research admission", () => {
       );
       expect(sources).toHaveLength(50);
       expect(new Set(sources.map((item) => item.orderMailId)).size).toBe(50);
-      await kernel.startPass(ctx.db, purchaseDiscoveryPass);
-      expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
-      expect(
-        await getDb(ctx.db)
-          .select()
-          .from(run)
-          .where(eq(run.purpose, "mail_import")),
-      ).toHaveLength(owners.length);
+      expect(timedOutSourceAttempts).toBe(2);
+      expect((await readPasses(ctx.db, { name: pass.name }))[0]).toMatchObject({
+        lastError: null,
+        doneAt: expect.anything(),
+      });
+      expect(capture).toHaveBeenCalledTimes(1);
     } finally {
+      verification.mockRestore();
       configured.mockRestore();
       await getDb(ctx.db).execute(
         sql`DROP TRIGGER synthetic_reject_email_admission ON "Email"`,

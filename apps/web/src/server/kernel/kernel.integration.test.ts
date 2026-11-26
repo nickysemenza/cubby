@@ -2058,6 +2058,37 @@ describe("evidence-facts kernel", () => {
     expect(result.rows).toEqual([{ cursor: { page: 1, legacyJobs } }]);
   });
 
+  it("finishes the current census before coalescing active starts into one fresh census", async () => {
+    const pages: unknown[] = [];
+    const pass = definePass({
+      name: "fixture.restart-census",
+      activeStart: "restart",
+      async run(db, cursor) {
+        const page =
+          cursor && typeof cursor === "object" && "page" in cursor
+            ? cursor.page
+            : 0;
+        pages.push(page);
+        if (pages.length === 1) {
+          await kernel.startPass(db, pass);
+          await kernel.startPass(db, pass);
+        }
+        return { cursor: { page: 1 }, done: page === 1 };
+      },
+    });
+    const kernel = createKernel([
+      defineModule({ name: "passes", passes: [pass] }),
+    ]);
+    await kernel.startPass(ctx.db, pass);
+    for (let page = 0; page < 4; page += 1)
+      expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(false);
+    expect(pages).toEqual([0, 1, 0, 1]);
+    await kernel.startPass(ctx.db, pass);
+    expect(await runOnePass(ctx.db, kernel.registry)).toBe(true);
+    expect(pages).toEqual([0, 1, 0, 1, 0]);
+  });
+
   it("a scheduled start revives a pass that spent its attempts", async () => {
     const seen: unknown[] = [];
     const pass = definePass({
