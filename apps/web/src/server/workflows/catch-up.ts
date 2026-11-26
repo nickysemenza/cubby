@@ -90,8 +90,8 @@ export const purchaseDiscoveryCursor = z.object({
 });
 
 /**
- * Mailbox admission runs at the head of a census. Each subsequent page
- * advances through UUIDs even when the current candidates are ineligible.
+ * Advance over Shipment and Email UUIDs even when a page is ineligible.
+ * The first Email page also admits mailbox discovery.
  */
 export async function discoverPurchases(
   db: Database,
@@ -114,11 +114,6 @@ export async function discoverPurchases(
     await recoverMissedWork(db);
     // Project terminal execution before checking the mailbox admission slot.
     await reconcileRunPasses(db);
-    const mail = await startMailDiscovery(db);
-    log.info("purchase discovery", {
-      mailPassesStarted: mail.started,
-      mailPassesRunning: mail.running,
-    });
   }
   if (!cursor.emailAfter) {
     const { linkShipmentsByOrderIdPage } =
@@ -138,6 +133,13 @@ export async function discoverPurchases(
     after: cursor.emailAfter,
     learnSenders: true,
   });
+  if (!cursor.emailAfter) {
+    const mail = await startMailDiscovery(db);
+    log.info("purchase discovery", {
+      mailPassesStarted: mail.started,
+      mailPassesRunning: mail.running,
+    });
+  }
   if (pending.errors.length)
     throw new AggregateError(
       pending.errors,
