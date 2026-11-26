@@ -363,15 +363,20 @@ export async function routeGmailMessage(
     complete: incompleteReasons.length === 0,
     incompleteReasons,
   };
+  let abandoned = false;
   const choice = await choose(content).catch((error: unknown) => {
-    if (error instanceof AskAbandonedError) return "uncertain" as const;
-    throw error;
+    if (!(error instanceof AskAbandonedError)) throw error;
+    abandoned = true;
+    return "uncertain" as const;
   });
   return {
     decision: {
       classification: choice,
       stage: "decision",
-      reason: decisionReason(choice, view, senderDomain, cues),
+      // No model answered: the reason must not attribute a choice to one.
+      reason: abandoned
+        ? "A member gave up on the triage answer, so the message stays uncertain."
+        : decisionReason(choice, view, senderDomain, cues),
     },
     view,
   };
