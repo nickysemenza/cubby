@@ -2231,7 +2231,7 @@ describe("evidence-facts kernel", () => {
       async run(db) {
         if (lapse) {
           await repositoryQueries(db).execute(
-            sql`UPDATE "Pass" SET "claimDeadline" = now() - interval '1 second' WHERE name = ${name}`,
+            sql`UPDATE "Pass" SET "claimDeadline" = now() - interval '31 seconds' WHERE name = ${name}`,
           );
         }
         return { cursor: { page: 1 }, done: true, durationSample: sample };
