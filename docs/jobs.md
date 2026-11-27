@@ -133,7 +133,8 @@ wakes. APNs acceptance records provider acceptance, not device display; ambiguou
 retries can repeat a displayed alert.
 
 Alerts contain titles, details and amounts where available. An existing cover may
-supply a bounded thumbnail; image failure leaves complete text. Single-result taps
+supply a JPEG bounded to 2048 pixels on both axes for the expanded notification;
+image failure leaves complete text. Single-result taps
 wait for restored sign-in and open the live entity; missing targets and digests open Changes by Cubby. Neither
 image research nor enrichment delays an alert.
 

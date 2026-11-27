@@ -237,7 +237,7 @@ async function resultContent(
     ]);
     const image = [...covers.displayCovers.values()][0]?.image;
     if (image) {
-      imageUrl = analysisImageUrl(image.url, transformWidth(240));
+      imageUrl = analysisImageUrl(image.url, transformWidth(1024));
       if (imageUrl.length > 768) imageUrl = undefined;
     }
   } catch {
