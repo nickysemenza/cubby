@@ -15,7 +15,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-http-types", from: "1.8.0"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.2"),
         .package(url: "https://github.com/apple/swift-async-algorithms", from: "1.1.7"),
-        .package(url: "https://github.com/groue/GRDB.swift", from: "7.11.1"),
+        .package(url: "https://github.com/groue/GRDB.swift", from: "7.12.0"),
     ],
     targets: [
         // Rust FFI: the xcframework and the Swift shim in Sources/CubbyFFI are both produced by
